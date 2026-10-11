@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import studio.voxsum.core.asr.NemoModelFiles
@@ -23,6 +24,14 @@ import java.nio.ByteOrder
  */
 @RunWith(AndroidJUnit4::class)
 class NemoStreamEngineTest {
+
+    // audio.cpp unpacks the diarizer spec under $TMPDIR (default /data/local/tmp, not writable by apps on
+    // some phones); the service points it at cacheDir, so do the same here.
+    @Before
+    fun tmpDir() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        android.system.Os.setenv("TMPDIR", ctx.cacheDir.absolutePath, true)
+    }
 
     @Test
     fun streamsTwoSpeakerClip() = runBlocking {
