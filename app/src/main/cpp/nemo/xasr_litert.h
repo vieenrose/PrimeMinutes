@@ -37,7 +37,11 @@ public:
 
 private:
     std::unique_ptr<LiteRtGraph> graph_;
-    std::vector<std::vector<uint8_t>> state_;  // state_[i] feeds input i+1 and holds output i+1
+    // The states live in two sets of graph buffers, swapped every step: set cur_ feeds the inputs, the other
+    // set receives the outputs. No host copy per chunk.
+    int feat_h_ = -1, enc_h_ = -1;
+    int states_[2][116];
+    int cur_ = 0;
 };
 
 // C-callable hook for xasr_set_external_chunk_encoder.

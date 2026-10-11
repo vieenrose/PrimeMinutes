@@ -9,8 +9,9 @@ struct Utterance: Identifiable, Hashable, Codable {
 /// Swift face of the C bridge (nemo_c.h). Same wire format as nemo_jni.cpp.
 final class NemoEngine: @unchecked Sendable {
     private let h: OpaquePointer
-    init?(xasr: String, diar: String, threads: Int = 4, settle: Double = 5) {
-        guard let p = nemo_create(xasr, diar, Int32(threads), settle) else { return nil }
+    /// The LiteRT CPU backend: the X-ASR and Sortformer graphs are the .tflite files; the GGUFs still feed the host parts.
+    init?(xasr: String, diar: String, xasrTflite: String, diarTflite: String, threads: Int = 4, settle: Double = 5) {
+        guard let p = nemo_create_ex(xasr, diar, Int32(threads), settle, "litert_cpu", xasrTflite, diarTflite) else { return nil }
         h = p
     }
     private var closed = false

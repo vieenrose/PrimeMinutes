@@ -20,6 +20,11 @@ struct ReaderModel {
                       size: 168_189_920, sha256: "1ca120084a1517cf02d96e44cdd9a9544f0c887f6d0149c9f85d151be6833a61"),
             ModelFile(name: "nemotron-3-diarization-q8_0.gguf", remote: "https://huggingface.co/audio-cpp/Nemotron-3-Diarization-GGUF/resolve/\(d)/nemotron-3-diarization-q8_0.gguf",
                       size: 106_675_136, sha256: "9a737455bd10123bcf1e036d9a0b07b6e8c42e7d0dd1a5ee4141dc386db46d0b"),
+            // LiteRT CPU graphs (the speech engine's backend). Pinned to the Luigi/voxsum-nemo-litert revision below.
+            ModelFile(name: "xasr_stream_q8_octav.tflite", remote: "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/xasr_stream_q8_octav.tflite",
+                      size: 152_653_712, sha256: "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c"),
+            ModelFile(name: "sortformer_int8_f190.tflite", remote: "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/sortformer_int8_f190.tflite",
+                      size: 101_279_632, sha256: "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf"),
         ])
     }()
 

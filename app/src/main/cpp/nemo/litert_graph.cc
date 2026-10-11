@@ -77,6 +77,8 @@ struct LiteRtGraph::Impl {
     LiteRtCompiledModel cm = nullptr;
     LiteRtSignature sig = nullptr;
     std::vector<LiteRtTensorBuffer> in, out;
+    std::vector<LiteRtTensorBuffer> pool;   // alloc_input / alloc_output handles
+    std::vector<size_t> pool_bytes;
 
     Impl(const std::string & path, int threads, const std::string & backend) : map(path) {
         // (test) file-based load
@@ -110,6 +112,7 @@ struct LiteRtGraph::Impl {
     ~Impl() {
         for (auto b : in) if (b) LiteRtDestroyTensorBuffer(b);
         for (auto b : out) if (b) LiteRtDestroyTensorBuffer(b);
+        for (auto b : pool) if (b) LiteRtDestroyTensorBuffer(b);
         if (cm) LiteRtDestroyCompiledModel(cm);
         if (opts) LiteRtDestroyOptions(opts);
         if (model) LiteRtDestroyModel(model);
@@ -176,6 +179,43 @@ void LiteRtGraph::read_output(int i, void * dst, size_t bytes) {
 void LiteRtGraph::run() {
     LRT_CHECK(LiteRtRunCompiledModel(impl_->cm, 0, impl_->in.size(), impl_->in.data(),
                                      impl_->out.size(), impl_->out.data()));
+}
+
+int LiteRtGraph::alloc_input(int i) {
+    size_t bytes = 0;
+    impl_->pool.push_back(impl_->make(true, (LiteRtParamIndex) i, bytes));
+    impl_->pool_bytes.push_back(bytes);
+    return (int) impl_->pool.size() - 1;
+}
+
+int LiteRtGraph::alloc_output(int i) {
+    size_t bytes = 0;
+    impl_->pool.push_back(impl_->make(false, (LiteRtParamIndex) i, bytes));
+    impl_->pool_bytes.push_back(bytes);
+    return (int) impl_->pool.size() - 1;
+}
+
+void LiteRtGraph::write_buffer(int h, const void * src, size_t bytes) {
+    if (bytes != impl_->pool_bytes[(size_t) h]) throw std::runtime_error("LiteRtGraph: buffer size mismatch");
+    void * p = nullptr;
+    LRT_CHECK(LiteRtLockTensorBuffer(impl_->pool[(size_t) h], &p, kLiteRtTensorBufferLockModeWrite));
+    std::memcpy(p, src, bytes);
+    LiteRtUnlockTensorBuffer(impl_->pool[(size_t) h]);
+}
+
+void LiteRtGraph::read_buffer(int h, void * dst, size_t bytes) {
+    if (bytes != impl_->pool_bytes[(size_t) h]) throw std::runtime_error("LiteRtGraph: buffer size mismatch");
+    void * p = nullptr;
+    LRT_CHECK(LiteRtLockTensorBuffer(impl_->pool[(size_t) h], &p, kLiteRtTensorBufferLockModeRead));
+    std::memcpy(dst, p, bytes);
+    LiteRtUnlockTensorBuffer(impl_->pool[(size_t) h]);
+}
+
+void LiteRtGraph::run_bound(const std::vector<int> & in, const std::vector<int> & out) {
+    std::vector<LiteRtTensorBuffer> bi, bo;
+    for (int h : in) bi.push_back(impl_->pool[(size_t) h]);
+    for (int h : out) bo.push_back(impl_->pool[(size_t) h]);
+    LRT_CHECK(LiteRtRunCompiledModel(impl_->cm, 0, bi.size(), bi.data(), bo.size(), bo.data()));
 }
 
 }  // namespace nemo

@@ -226,7 +226,7 @@ final class Model: ObservableObject {
             if liveJob == nil && activeJob == nil && readerReady && Dev.env["VOX_LEGACYREC"] == nil { await recordLive(job, wav, r); return }
             let b = base
             Task.detached { [weak self] in
-                guard let self, let eng = NemoEngine(xasr: self.modelPath("x-asr-zh-en-q8_0.gguf", b), diar: self.modelPath("nemotron-3-diarization-q8_0.gguf", b), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay)) else {
+                guard let self, let eng = NemoEngine(xasr: self.modelPath("x-asr-zh-en-q8_0.gguf", b), diar: self.modelPath("nemotron-3-diarization-q8_0.gguf", b), xasrTflite: self.modelPath("xasr_stream_q8_octav.tflite", b), diarTflite: self.modelPath("sortformer_int8_f190.tflite", b), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay)) else {
                     await MainActor.run { self?.status = L("models_missing"); self?.recording = false }; return }
                 let agc = LiveAgc()
                 do { try r.start { [buffer = self.buffer] c in var c = c; agc.process(&c); wav.append(c); buffer.add(c) } }
@@ -309,7 +309,7 @@ final class Model: ObservableObject {
             let cached = resume != nil ? nil : job.flatMap { Checkpoint.load($0.id) }   // transcript done by an earlier attempt: only the reader is left
             let speechReady = cached != nil ? true : await self.downloadSpeech()
             guard speechReady else { await MainActor.run { self.status = L("load_failed") }; return }
-            let eng = cached != nil ? nil : NemoEngine(xasr: self.modelPath("x-asr-zh-en-q8_0.gguf", b), diar: self.modelPath("nemotron-3-diarization-q8_0.gguf", b), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay))
+            let eng = cached != nil ? nil : NemoEngine(xasr: self.modelPath("x-asr-zh-en-q8_0.gguf", b), diar: self.modelPath("nemotron-3-diarization-q8_0.gguf", b), xasrTflite: self.modelPath("xasr_stream_q8_octav.tflite", b), diarTflite: self.modelPath("sortformer_int8_f190.tflite", b), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay))
             if cached == nil && eng == nil { await MainActor.run { self.status = L("load_failed") }; return }
             let rm = Prefs.reader
             if Dev.env["VOX_READER_DIR"] == nil, !(await self.store.isComplete(rm)) {   // like Android: the notes model downloads on first use

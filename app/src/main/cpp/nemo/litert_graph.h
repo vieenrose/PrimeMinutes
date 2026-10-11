@@ -34,6 +34,15 @@ public:
     void read_output(int i, void * dst, size_t bytes);
     void run();
 
+    // Caller-owned tensor buffers, bound to the graph without a host copy. alloc_* returns a handle into a
+    // pool owned by the graph; run_bound takes handles in signature order. Used by streaming state (ping-pong:
+    // the buffers that held output k are passed as input k+1), see docs/pipeline-design.md 4(d).
+    int alloc_input(int i);
+    int alloc_output(int i);
+    void write_buffer(int h, const void * src, size_t bytes);
+    void read_buffer(int h, void * dst, size_t bytes);
+    void run_bound(const std::vector<int> & in, const std::vector<int> & out);
+
 private:
     struct Impl;
     Impl * impl_ = nullptr;
