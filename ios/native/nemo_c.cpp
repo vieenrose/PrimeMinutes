@@ -31,7 +31,15 @@ char* dup(const std::string& s) {
 extern "C" {
 
 nemo_handle* nemo_create(const char* xasr, const char* diar, int threads, double settle_s) {
+    return nemo_create_ex(xasr, diar, threads, settle_s, "ggml", nullptr, nullptr);
+}
+
+nemo_handle* nemo_create_ex(const char* xasr, const char* diar, int threads, double settle_s,
+                            const char* backend, const char* xasr_tflite, const char* diar_tflite) {
     nemo::Config cfg;
+    cfg.backend = backend ? backend : "ggml";
+    cfg.xasr_tflite = xasr_tflite ? xasr_tflite : "";
+    cfg.diar_tflite = diar_tflite ? diar_tflite : "";
     cfg.xasr_model = xasr;
     cfg.diar_model = diar;
     cfg.threads = threads;

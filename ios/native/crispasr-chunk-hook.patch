@@ -1,0 +1,78 @@
+diff --git a/src/xasr.cpp b/src/xasr.cpp
+index 15c9a94d..6124fa27 100644
+--- a/src/xasr.cpp
++++ b/src/xasr.cpp
+@@ -293,6 +293,10 @@ struct xasr_context {
+     ggml_cgraph* chunk_gf = nullptr;
+     ggml_context* chunk_ctx = nullptr;
+     std::vector<std::vector<float>> pes_cache;
++    // external chunk encoder (see xasr_set_external_chunk_encoder); null = ggml graph
++    xasr_chunk_fn ext_fn = nullptr;
++    xasr_reset_fn ext_reset = nullptr;
++    void* ext_user = nullptr;
+ };
+ 
+ namespace {
+@@ -899,6 +903,20 @@ bool run_chunks(xasr_context* c, std::vector<uint8_t>& meta, enc_state& st, cons
+     const int S = (int)hp.dims.size();
+     if (*pos + G.T >= n_rows)
+         return true;
++    if (c->ext_fn) {
++        // Same window/step arithmetic as the ggml loop below; the external encoder owns the caches.
++        const int F = hp.feature_dim, Eo = G.chunk / 2, Ed = hp.joiner_dim;
++        std::vector<float> enc_step((size_t)Eo * Ed);
++        for (; *pos + G.T < n_rows; *pos += G.decode_chunk_len) {
++            if (!c->ext_fn(c->ext_user, feats + (size_t)*pos * F, G.T, F, enc_step.data(), Eo, Ed)) {
++                fprintf(stderr, "xasr: external chunk encoder failed\n");
++                return false;
++            }
++            st.processed += G.chunk;
++            enc_out.insert(enc_out.end(), enc_step.begin(), enc_step.end());
++        }
++        return true;
++    }
+     const bool dump = dumps != nullptr;
+     const bool prof = xasr_prof::get().on;
+     const auto tb0 = prof ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+@@ -1439,6 +1457,8 @@ void stream_reset(xasr_stream* s) {
+     s->feats.clear();
+     s->n_frames = s->pos = 0;
+     s->st = enc_state();
++    if (s->c->ext_reset)
++        s->c->ext_reset(s->c->ext_user);
+     greedy_init(s->c->model, s->gs);
+     s->finished = false;
+ }
+@@ -1540,6 +1560,13 @@ extern "C" void xasr_stream_reset(struct xasr_stream* s) {
+     stream_reset(s);
+ }
+ 
++extern "C" void xasr_set_external_chunk_encoder(struct xasr_context* ctx, xasr_chunk_fn fn,
++                                                xasr_reset_fn reset, void* user) {
++    ctx->ext_fn = fn;
++    ctx->ext_reset = reset;
++    ctx->ext_user = user;
++}
++
+ extern "C" void xasr_stream_free(struct xasr_stream* s) {
+     delete s;
+ }
+diff --git a/src/xasr.h b/src/xasr.h
+index 81b9b804..85acbf76 100644
+--- a/src/xasr.h
++++ b/src/xasr.h
+@@ -37,6 +37,14 @@ char* xasr_transcribe(struct xasr_context* ctx, const float* samples, int n_samp
+ // full transcript so far (malloc'd, append-only). flush = end of input: the
+ // tail padding is added and the remaining frames are decoded. Pieces of any
+ // size give the same tokens as one call.
++// External chunk encoder (nemo-x-asr-diarizer LiteRT path). When set, run_chunks() calls fn once per
++// decode step instead of the ggml chunk graph; the encoder keeps its own streaming state. fn receives
++// the T x feature_dim window and writes enc_frames x enc_dim floats. reset is called on stream reset.
++typedef int (*xasr_chunk_fn)(void* user, const float* feats, int T, int feat_dim,
++                             float* enc_out, int enc_frames, int enc_dim);
++typedef void (*xasr_reset_fn)(void* user);
++void xasr_set_external_chunk_encoder(struct xasr_context* ctx, xasr_chunk_fn fn, xasr_reset_fn reset, void* user);
++
+ struct xasr_stream;
+ struct xasr_stream* xasr_stream_init(struct xasr_context* ctx);
+ char* xasr_stream_accept(struct xasr_stream* s, const float* samples, int n_samples, bool flush);

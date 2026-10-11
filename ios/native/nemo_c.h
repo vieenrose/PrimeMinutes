@@ -11,6 +11,9 @@ typedef struct nemo_handle nemo_handle;
 
 // NULL on failure (the reason goes to stderr).
 nemo_handle* nemo_create(const char* xasr_path, const char* diar_path, int threads, double settle_s);
+// backend: "ggml" | "litert_cpu" (CPU only). The tflite paths are read only when backend != ggml.
+nemo_handle* nemo_create_ex(const char* xasr_path, const char* diar_path, int threads, double settle_s,
+                            const char* backend, const char* xasr_tflite, const char* diar_tflite);
 int nemo_push(nemo_handle* h, const float* pcm, int n);                 // 1 = ok
 // Heap string, free with nemo_string_free.
 char* nemo_live(nemo_handle* h);
