@@ -103,6 +103,51 @@ class NemoStreamEngineTest {
         assertTrue("expected 2 speakers, got ${engine.speakerCount}", engine.speakerCount == 2)
     }
 
+    /**
+     * ggml vs LiteRT CPU on a long clip (files/clip.wav of the app, 16 kHz mono 16-bit, pushed by hand): RTF,
+     * turns, speakers and the word-level agreement of the two transcripts. Skipped when the clip or models are absent.
+     */
+    @Test
+    fun longClipGgmlVsLiteRtCpu() = runBlocking {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val dir = File(inst.targetContext.filesDir, "models/nemo-litert")
+        val clip = File(inst.targetContext.filesDir, "clip.wav")
+        val xt = File(dir, "xasr_stream_q8_octav.tflite")
+        val dt = File(dir, "sortformer_int8_f190.tflite")
+        val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
+        org.junit.Assume.assumeTrue("clip/models not pushed", (listOf(xt, dt, files.xasr, files.diar, clip)).all { it.exists() })
+        val pcm = readWav16kMono(clip.readBytes())
+        suspend fun run(tag: String, backend: String): List<TranscriptEvent.Utterance> {
+            val chunks = flow {
+                var i = 0
+                while (i < pcm.size) { val e = minOf(i + 2048, pcm.size); emit(pcm.copyOfRange(i, e)); i = e }
+            }
+            var last: List<TranscriptEvent.Utterance> = emptyList()
+            val t0 = System.nanoTime()
+            val engine = if (backend == "ggml") NemoStreamEngine(files, threads = 4)
+                else NemoStreamEngine(files, threads = 4, backend = backend, xasrTflite = xt, diarTflite = dt)
+            engine.use {
+                engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
+            }
+            val rtf = (System.nanoTime() - t0) / 1e9 / (pcm.size / 16000.0)
+            Log.i("NemoStreamEngineTest", "LONG $tag rtf=%.3f speakers=${engine.speakerCount} turns=${last.size} words=${last.sumOf { it.text.trim().split(Regex("\\s+")).size }}".format(rtf))
+            return last
+        }
+        val a = run("ggml", "ggml")
+        val b = run("litert_cpu", "litert_cpu")
+        fun words(u: List<TranscriptEvent.Utterance>) = u.joinToString(" ") { it.text }.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val wa = words(a); val wb = words(b)
+        // Word-level edit distance.
+        var prev = IntArray(wb.size + 1) { it }
+        for (i in 1..wa.size) {
+            val cur = IntArray(wb.size + 1); cur[0] = i
+            for (j in 1..wb.size) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (wa[i - 1] == wb[j - 1]) 0 else 1)
+            prev = cur
+        }
+        Log.i("NemoStreamEngineTest", "LONG word diff ggml vs litert: %d edits / %d words = %.2f%%".format(prev[wb.size], wa.size, 100.0 * prev[wb.size] / maxOf(1, wa.size)))
+        assertTrue("expected text", wb.isNotEmpty())
+    }
+
     private fun readWav16kMono(bytes: ByteArray): FloatArray {
         val bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         var pos = 12
