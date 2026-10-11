@@ -22,7 +22,7 @@ public:
     static constexpr int kEncFrames = 12; // output frames per step (chunk 24 / 2)
     static constexpr int kEncDim = 512;
 
-    XasrLiteRT(const std::string & tflite_path, int threads, const std::string & backend);
+    XasrLiteRT(const std::string & tflite_path, int threads);
     ~XasrLiteRT();
 
     XasrLiteRT(const XasrLiteRT &) = delete;

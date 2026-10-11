@@ -189,8 +189,7 @@ bool Engine::init(std::string& err) {
         if (cfg_.backend != "ggml") {
             if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
             try {
-                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads,
-                                                            "cpu");
+                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
             } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
             xasr_set_external_chunk_encoder((xasr_context*)asr_ctx_, nemo::xasr_litert_chunk_cb,
                                             nemo::xasr_litert_reset_cb, xasr_litert_.get());
@@ -238,8 +237,7 @@ bool Engine::init(std::string& err) {
         if (st != AUDIOCPP_OK) { err = std::string("diar session (streaming): ") + audiocpp_last_error(); return false; }
         if (cfg_.diar_native && cfg_.backend != "ggml") {
             try {
-                diar_litert_ = std::make_unique<DiarLiteRT>(cfg_.diar_tflite, cfg_.threads,
-                                                            "cpu");
+                diar_litert_ = std::make_unique<DiarLiteRT>(cfg_.diar_tflite, cfg_.threads);
             } catch (const std::exception& e) {
                 err = std::string("diar_native: DiarLiteRT load failed: ") + e.what();
                 return false;

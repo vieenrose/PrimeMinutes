@@ -8,8 +8,8 @@
 
 namespace nemo {
 
-DiarLiteRT::DiarLiteRT(const std::string & tflite_path, int threads, const std::string & backend)
-    : graph_(std::make_unique<LiteRtGraph>(tflite_path, threads, backend)) {
+DiarLiteRT::DiarLiteRT(const std::string & tflite_path, int threads)
+    : graph_(std::make_unique<LiteRtGraph>(tflite_path, threads)) {
     if (graph_->num_inputs() != 2 || graph_->num_outputs() != 1)
         throw std::runtime_error("DiarLiteRT: expected 2 inputs and 1 output, got " +
                                  std::to_string(graph_->num_inputs()) + "/" + std::to_string(graph_->num_outputs()));

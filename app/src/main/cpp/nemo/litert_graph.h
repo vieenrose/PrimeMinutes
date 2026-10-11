@@ -18,8 +18,8 @@ namespace nemo {
 
 class LiteRtGraph {
 public:
-    // backend: "cpu" (XNNPACK, num_threads) or "gpu". Throws std::runtime_error on any failure.
-    LiteRtGraph(const std::string & tflite_path, int threads, const std::string & backend);
+    // CPU only (XNNPACK, num_threads). Throws std::runtime_error on any failure.
+    LiteRtGraph(const std::string & tflite_path, int threads);
     ~LiteRtGraph();
 
     LiteRtGraph(const LiteRtGraph &) = delete;

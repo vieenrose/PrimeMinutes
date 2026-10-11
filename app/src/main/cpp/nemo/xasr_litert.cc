@@ -12,8 +12,8 @@ namespace {
 constexpr int kStates = 116;
 }
 
-XasrLiteRT::XasrLiteRT(const std::string & tflite_path, int threads, const std::string & backend)
-    : graph_(std::make_unique<LiteRtGraph>(tflite_path, threads, backend)) {
+XasrLiteRT::XasrLiteRT(const std::string & tflite_path, int threads)
+    : graph_(std::make_unique<LiteRtGraph>(tflite_path, threads)) {
     if (graph_->num_inputs() != 1 + kStates || graph_->num_outputs() != 1 + kStates)
         throw std::runtime_error("XasrLiteRT: expected 117 inputs and 117 outputs, got " +
                                  std::to_string(graph_->num_inputs()) + "/" + std::to_string(graph_->num_outputs()));

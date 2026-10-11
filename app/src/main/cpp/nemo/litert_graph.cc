@@ -1,11 +1,6 @@
 // litert_graph.cc - see litert_graph.h.
 #include "litert_graph.h"
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -30,22 +25,6 @@ namespace {
         if (s_ != kLiteRtStatusOk) throw std::runtime_error(std::string(#x) + " -> " + std::to_string((int) s_)); \
     } while (0)
 
-struct Mapping {
-    void * p = MAP_FAILED;
-    size_t n = 0;
-    explicit Mapping(const std::string & path) {
-        int fd = open(path.c_str(), O_RDONLY);
-        if (fd < 0) throw std::runtime_error("cannot open " + path);
-        struct stat st;
-        fstat(fd, &st);
-        n = (size_t) st.st_size;
-        // Private writable: the runtime may rewrite constant buffers at load (a read-only mapping crashes it).
-        p = mmap(nullptr, n, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-        close(fd);
-        if (p == MAP_FAILED) throw std::runtime_error("mmap " + path);
-    }
-    ~Mapping() { if (p != MAP_FAILED) munmap(p, n); }
-};
 
 LiteRtOpaqueOptions cpu_options(int threads) {
     char toml[64];
@@ -59,19 +38,10 @@ LiteRtOpaqueOptions cpu_options(int threads) {
     return oo;
 }
 
-// Same fp32 GPU options the mobile reader uses for its graphs (activations stay fp32).
-const char * kGpuOptions =
-    "precision = 2\n"
-    "enable_infinite_float_capping = true\n"
-    "external_tensors_mode = false\n"
-    "hint_fully_delegated_to_single_delegate = true\n"
-    "enable_constant_tensors_sharing = true\n";
-
 }  // namespace
 
 struct LiteRtGraph::Impl {
     LiteRtEnvironment env = nullptr;
-    Mapping map;
     LiteRtModel model = nullptr;
     LiteRtOptions opts = nullptr;
     LiteRtCompiledModel cm = nullptr;
@@ -80,26 +50,21 @@ struct LiteRtGraph::Impl {
     std::vector<LiteRtTensorBuffer> pool;   // alloc_input / alloc_output handles
     std::vector<size_t> pool_bytes;
 
-    Impl(const std::string & path, int threads, const std::string & backend) : map(path) {
+    Impl(const std::string & path, int threads) {
         // (test) file-based load
         LRT_CHECK(LiteRtCreateEnvironment(0, nullptr, &env));
+#ifdef NEMO_LITERT_ENV_API
+        // Android AAR libLiteRt.so (and the vendored headers): the environment is the first argument.
+        LRT_CHECK(LiteRtCreateModelFromFile(env, path.c_str(), &model));
+#else
         // The pip libLiteRt.so (ai_edge_litert 2.1.5) takes no environment here; the vendored header declares one.
         // Call it through the library's own signature.
-#ifdef NEMO_LITERT_ENV_API
-        LRT_CHECK(LiteRtCreateModelFromFile(env, path.c_str(), &model));   // iOS CLiteRTLM: environment first
-#else
         using CreateFromFile2 = LiteRtStatus (*)(const char*, LiteRtModel*);
         LRT_CHECK(reinterpret_cast<CreateFromFile2>(&LiteRtCreateModelFromFile)(path.c_str(), &model));
 #endif
         LRT_CHECK(LiteRtCreateOptions(&opts));
-        const bool gpu = backend == "gpu";
-        LRT_CHECK(LiteRtSetOptionsHardwareAccelerators(
-            opts, gpu ? kLiteRtHwAcceleratorGpu : kLiteRtHwAcceleratorCpu));
-        if (gpu) {
-            LiteRtOpaqueOptions go = nullptr;
-            LRT_CHECK(LiteRtCreateOpaqueOptions("gpu_options", strdup(kGpuOptions), [](void * p) { free(p); }, &go));
-            LRT_CHECK(LiteRtAddOpaqueOptions(opts, go));
-        } else if (LiteRtOpaqueOptions oo = cpu_options(threads)) {
+        LRT_CHECK(LiteRtSetOptionsHardwareAccelerators(opts, kLiteRtHwAcceleratorCpu));
+        if (LiteRtOpaqueOptions oo = cpu_options(threads)) {
             LRT_CHECK(LiteRtAddOpaqueOptions(opts, oo));
         }
         LRT_CHECK(LiteRtCreateCompiledModel(env, model, opts, &cm));
@@ -141,8 +106,8 @@ struct LiteRtGraph::Impl {
     }
 };
 
-LiteRtGraph::LiteRtGraph(const std::string & tflite_path, int threads, const std::string & backend)
-    : impl_(new Impl(tflite_path, threads, backend)) {
+LiteRtGraph::LiteRtGraph(const std::string & tflite_path, int threads)
+    : impl_(new Impl(tflite_path, threads)) {
     LiteRtParamIndex ni = 0, no = 0;
     LRT_CHECK(LiteRtGetNumSignatureInputs(impl_->sig, &ni));
     LRT_CHECK(LiteRtGetNumSignatureOutputs(impl_->sig, &no));

@@ -21,8 +21,8 @@ public:
     static constexpr int64_t kSpeakers = 8;
     static constexpr int64_t kUpsample = 8;
 
-    // backend: "cpu" (XNNPACK, `threads`) or "gpu". Throws std::runtime_error on failure.
-    DiarLiteRT(const std::string & tflite_path, int threads, const std::string & backend);
+    // CPU only (XNNPACK, `threads`). Throws std::runtime_error on failure.
+    DiarLiteRT(const std::string & tflite_path, int threads);
     ~DiarLiteRT();
 
     DiarLiteRT(const DiarLiteRT &) = delete;
