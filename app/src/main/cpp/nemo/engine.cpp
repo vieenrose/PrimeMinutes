@@ -21,6 +21,8 @@
 
 #include "xasr.h"                       // CrispASR (MIT) - x-asr streaming Zipformer2
 #include "audiocpp.h"                   // audio.cpp (Apache-2.0) - Nemotron-3 diarization stream
+#include "diar_litert.h"               // LiteRT bench path (backend != ggml)
+#include "xasr_litert.h"
 
 namespace nemo {
 
@@ -34,6 +36,27 @@ static int diar_native_encode(
     const int64_t* valid_frames,
     float** out_probabilities, int64_t* out_len) {
     auto* diar = static_cast<DiarCrispASR*>(user_data);
+    try {
+        std::vector<float> emb(embeddings, embeddings + batch * frames * hidden);
+        std::vector<int64_t> vf(valid_frames, valid_frames + batch);
+        auto probs = diar->encode(emb, batch, frames, vf);
+        float* buf = static_cast<float*>(std::malloc(probs.size() * sizeof(float)));
+        if (!buf) return 1;
+        std::memcpy(buf, probs.data(), probs.size() * sizeof(float));
+        *out_probabilities = buf;
+        *out_len = static_cast<int64_t>(probs.size());
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+static int diar_litert_encode(
+    void* user_data,
+    const float* embeddings, int64_t batch, int64_t frames, int64_t hidden,
+    const int64_t* valid_frames,
+    float** out_probabilities, int64_t* out_len) {
+    auto* diar = static_cast<DiarLiteRT*>(user_data);
     try {
         std::vector<float> emb(embeddings, embeddings + batch * frames * hidden);
         std::vector<int64_t> vf(valid_frames, valid_frames + batch);
@@ -162,6 +185,15 @@ bool Engine::init(std::string& err) {
         ::setenv("CRISPASR_GGUF_PREFIX", cfg_.asr_gguf_prefix.c_str(), 1);
         asr_ctx_ = xasr_init_from_file(cfg_.xasr_model.c_str(), p);
         if (!asr_ctx_) { err = "x-asr model failed to load: " + cfg_.xasr_model; return false; }
+        if (cfg_.backend == "litert_gpu" || cfg_.backend == "litert_mixed") { err = "LiteRT GPU is not supported: use litert_cpu"; return false; }
+        if (cfg_.backend != "ggml") {
+            if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
+            try {
+                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
+            } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
+            xasr_set_external_chunk_encoder((xasr_context*)asr_ctx_, nemo::xasr_litert_chunk_cb,
+                                            nemo::xasr_litert_reset_cb, xasr_litert_.get());
+        }
         asr_stream_ = xasr_stream_init((xasr_context*)asr_ctx_);
         if (!asr_stream_) { err = "xasr_stream_init failed"; return false; }
     }
@@ -203,7 +235,20 @@ bool Engine::init(std::string& err) {
         if (sopts) audiocpp_options_free(sopts);   // the API copies the map into the session
     if (dbg_thr) std::fprintf(stderr, "[threads] after session_create: %d\n", nthr());
         if (st != AUDIOCPP_OK) { err = std::string("diar session (streaming): ") + audiocpp_last_error(); return false; }
-        if (cfg_.diar_native) {
+        if (cfg_.diar_native && cfg_.backend != "ggml") {
+            try {
+                diar_litert_ = std::make_unique<DiarLiteRT>(cfg_.diar_tflite, cfg_.threads);
+            } catch (const std::exception& e) {
+                err = std::string("diar_native: DiarLiteRT load failed: ") + e.what();
+                return false;
+            }
+            st = audiocpp_nemotron3_diar_set_external_encoder(
+                (audiocpp_session*)session_, &diar_litert_encode, diar_litert_.get());
+            if (st != AUDIOCPP_OK) {
+                err = std::string("diar_native: set_external_encoder: ") + audiocpp_last_error();
+                return false;
+            }
+        } else if (cfg_.diar_native) {
             try {
                 diar_crispasr_ = std::make_unique<DiarCrispASR>(cfg_.diar_model, cfg_.threads);
             } catch (const std::exception& e) {

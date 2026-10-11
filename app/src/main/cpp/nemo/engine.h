@@ -17,9 +17,12 @@
 #include <vector>
 
 #include "diar_crispasr.h"
+#include "diar_litert.h"
+#include "xasr_litert.h"
 #include "fusion.h"
 
 namespace nemo {
+
 
 struct Config {
     // Push this much SILENCE to the diarizer only, just before stream_finish. The final flush costs a fixed
@@ -40,6 +43,11 @@ struct Config {
     bool diar_no_finish = false;
     std::string xasr_model;         // x-asr-zh-en-q8_0.gguf
     std::string diar_model;         // nemotron-3-diarization-q8_0.gguf
+    // LiteRT bench path (iOS): "ggml" (default) | "litert_cpu" (CPU only; GPU was dropped). The tflite files are used only
+    // when backend != ggml. The GPU is dev-only until it is measured against CPU on the device.
+    std::string backend = "ggml";
+    std::string xasr_tflite;        // xasr_stream_q8_octav.tflite
+    std::string diar_tflite;        // sortformer_int8_f190.tflite
     std::string audio;              // 16 kHz mono PCM16 wav
     int  threads      = 2;
     int  piece_ms     = 100;
@@ -242,6 +250,8 @@ private:
     size_t turns_seen_ = 0;
     double t0_ = 0;
     std::unique_ptr<DiarCrispASR> diar_crispasr_;   // set only when cfg_.diar_native
+    std::unique_ptr<DiarLiteRT> diar_litert_;       // set when backend != ggml (replaces DiarCrispASR)
+    std::unique_ptr<XasrLiteRT> xasr_litert_;       // set when backend != ggml (replaces the ggml chunk graph)
 };
 
 double rss_mb();      // VmHWM, peak resident set of this process

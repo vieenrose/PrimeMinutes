@@ -8,9 +8,11 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import studio.voxsum.core.asr.NemoModelFiles
 import studio.voxsum.core.asr.NemoStreamEngine
 import studio.voxsum.core.events.TranscriptEvent
 import studio.voxsum.core.models.ModelManager
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -59,6 +61,36 @@ class NemoStreamEngineTest {
             snapshots >= audioSec.toInt() / 2)
         assertTrue("stable prefix must never shrink during the live view", !stableDecreased)
         assertTrue("final snapshot must be fully stable", lastStable == last.size)
+        assertTrue("expected 2 speakers, got ${engine.speakerCount}", engine.speakerCount == 2)
+    }
+
+    /**
+     * LiteRT CPU backend (the X-ASR and Sortformer graphs are the .tflite files). Needs the four files pushed to
+     * files/models/nemo-litert/ of the app (adb shell run-as); skipped when they are absent.
+     */
+    @Test
+    fun streamsTwoSpeakerClipOnLiteRtCpu() = runBlocking {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val dir = File(inst.targetContext.filesDir, "models/nemo-litert")
+        val xt = File(dir, "xasr_stream_q8_octav.tflite")
+        val dt = File(dir, "sortformer_int8_f190.tflite")
+        val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
+        org.junit.Assume.assumeTrue("litert models not pushed", listOf(xt, dt, files.xasr, files.diar).all { it.exists() })
+        val pcm = readWav16kMono(inst.context.assets.open("two-speaker.wav").use { it.readBytes() })
+        val chunks = flow {
+            var i = 0
+            while (i < pcm.size) { val e = minOf(i + 2048, pcm.size); emit(pcm.copyOfRange(i, e)); i = e }
+        }
+        var last: List<TranscriptEvent.Utterance> = emptyList()
+        val t0 = System.nanoTime()
+        val engine = NemoStreamEngine(files, threads = 4, backend = "litert_cpu", xasrTflite = xt, diarTflite = dt)
+        engine.use {
+            engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
+        }
+        val rtf = (System.nanoTime() - t0) / 1e9 / (pcm.size / 16000.0)
+        Log.i("NemoStreamEngineTest", "litert_cpu rtf=%.3f speakers=${engine.speakerCount} text=%s"
+            .format(rtf, last.joinToString(" | ") { "${it.speaker}: ${it.text}" }))
+        assertTrue("expected text", last.any { it.text.isNotBlank() })
         assertTrue("expected 2 speakers, got ${engine.speakerCount}", engine.speakerCount == 2)
     }
 

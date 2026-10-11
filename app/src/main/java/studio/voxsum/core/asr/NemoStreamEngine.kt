@@ -19,9 +19,21 @@ data class NemoModelFiles(val xasr: File, val diar: File)
  */
 /** [speakerDelaySec]: how far behind the audio a line must be before the live view freezes it with
  *  its speaker (TranscriptionConfig.speakerDelaySec). Longer = more precise live speaker tags. */
-class NemoStreamEngine(files: NemoModelFiles, threads: Int, speakerDelaySec: Int = 15) : AutoCloseable {
+class NemoStreamEngine(
+    files: NemoModelFiles,
+    threads: Int,
+    speakerDelaySec: Int = 15,
+    /** "ggml" (default, the shipped path) or "litert_cpu" (bench, CPU only). */
+    backend: String = "ggml",
+    /** LiteRT graphs, read only when [backend] is "litert_cpu". */
+    xasrTflite: File? = null,
+    diarTflite: File? = null,
+) : AutoCloseable {
 
-    private var handle: Long = NemoNative.nativeCreate(files.xasr.path, files.diar.path, threads, speakerDelaySec.toDouble())
+    private var handle: Long = NemoNative.nativeCreate(
+        files.xasr.path, files.diar.path, threads, speakerDelaySec.toDouble(),
+        backend, xasrTflite?.path.orEmpty(), diarTflite?.path.orEmpty(),
+    )
         .also { check(it != 0L) { "nemo engine failed to load ${files.xasr.name} / ${files.diar.name}" } }
 
     /** Distinct speakers in the final snapshot; null until the stream has finished. */
@@ -100,7 +112,10 @@ class NemoStreamEngine(files: NemoModelFiles, threads: Int, speakerDelaySec: Int
 internal object NemoNative {
     init { System.loadLibrary("voxsum-nemo") }
 
-    @JvmStatic external fun nativeCreate(xasr: String, diar: String, threads: Int, settleSec: Double): Long
+    @JvmStatic external fun nativeCreate(
+        xasr: String, diar: String, threads: Int, settleSec: Double,
+        backend: String, xasrTflite: String, diarTflite: String,
+    ): Long
     @JvmStatic external fun nativePush(handle: Long, pcm: FloatArray, n: Int): Boolean
     @JvmStatic external fun nativeLive(handle: Long): String
     @JvmStatic external fun nativeFinish(handle: Long): String?

@@ -54,10 +54,14 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_studio_voxsum_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring xasr, jstring diar, jint threads,
-                                                      jdouble settle_s) {
+                                                      jdouble settle_s, jstring backend, jstring xasr_tflite,
+                                                      jstring diar_tflite) {
     nemo::Config cfg;
     cfg.xasr_model = from_jstring(env, xasr);
     cfg.diar_model = from_jstring(env, diar);
+    cfg.backend = from_jstring(env, backend);
+    cfg.xasr_tflite = from_jstring(env, xasr_tflite);
+    cfg.diar_tflite = from_jstring(env, diar_tflite);
     cfg.threads = threads;
     cfg.max_segment_s = 10.0;   // one transcript line per ~10 s sentence group
     cfg.live_settle_s = settle_s;

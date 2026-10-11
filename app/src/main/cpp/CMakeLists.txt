@@ -75,6 +75,9 @@ set(CRISP_LIBS
 ExternalProject_Add(crispasr_ext
     SOURCE_DIR ${NATIVE_DIR}/crispasr
     BINARY_DIR ${CRISP_BIN}
+    # The chunk hook (xasr_set_external_chunk_encoder) that the LiteRT X-ASR path plugs into.
+    # Applied once; re-running the build sees it already applied and skips it.
+    PATCH_COMMAND sh -c "git -C ${NATIVE_DIR}/crispasr apply --reverse --check ${CMAKE_CURRENT_SOURCE_DIR}/nemo/crispasr-chunk-hook.patch >/dev/null 2>&1 || git -C ${NATIVE_DIR}/crispasr apply ${CMAKE_CURRENT_SOURCE_DIR}/nemo/crispasr-chunk-hook.patch"
     CMAKE_ARGS ${NEMO_COMMON_ARGS}
         -DCMAKE_PROJECT_crispasr_INCLUDE=${CMAKE_CURRENT_SOURCE_DIR}/nemo/crispasr_ggml.cmake
         -DNEMO_GGML_SRC=${NATIVE_DIR}/crispasr-ggml
@@ -90,14 +93,25 @@ ExternalProject_Add(crispasr_ext
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS ${CRISP_LIBS})
 
+# LiteRT C API for the nemo LiteRT backends (CPU only). The stock libLiteRt.so of the LiteRT AAR,
+# extracted by the Gradle task extractLiteRt into LITERT_SO_DIR; headers vendored in mfa/third_party.
+if(NOT DEFINED LITERT_SO_DIR OR NOT EXISTS "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.so")
+    message(FATAL_ERROR "libLiteRt.so not found under LITERT_SO_DIR (run extractLiteRt)")
+endif()
+add_library(litert SHARED IMPORTED)
+set_target_properties(litert PROPERTIES IMPORTED_LOCATION "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.so")
+
 add_library(voxsum-nemo SHARED
     nemo/nemo_jni.cpp
     nemo/engine.cpp
     nemo/fusion.cpp
-    nemo/diar_crispasr.cpp)
+    nemo/diar_crispasr.cpp
+    nemo/litert_graph.cc
+    nemo/diar_litert.cc
+    nemo/xasr_litert.cc)
 add_dependencies(voxsum-nemo crispasr_ext audiocpp_ext)
 target_compile_features(voxsum-nemo PRIVATE cxx_std_17)
-target_compile_definitions(voxsum-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES)
+target_compile_definitions(voxsum-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES NEMO_WITH_LITERT NEMO_LITERT_ENV_API)
 target_compile_options(voxsum-nemo PRIVATE -O2 -w)
 target_include_directories(voxsum-nemo PRIVATE
     nemo
@@ -109,7 +123,8 @@ target_include_directories(voxsum-nemo PRIVATE
 target_link_options(voxsum-nemo PRIVATE
     -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/nemo/nemo_jni.map
     -fopenmp -static-openmp)   # CrispASR's x-asr kernels use OpenMP; link the NDK's libomp statically
-target_link_libraries(voxsum-nemo ${CRISP_LIBS} audiocpp android log dl m)
+target_include_directories(voxsum-nemo PRIVATE mfa/third_party)
+target_link_libraries(voxsum-nemo ${CRISP_LIBS} audiocpp litert android log dl m)
 
 
 # ---------------------------------------------------------------------------
@@ -128,9 +143,6 @@ if(DEFINED LITERT_SO_DIR AND EXISTS "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.s
     # calls __android_log_write, so every target from here on links liblog.
     link_libraries(log)
     add_subdirectory("${NATIVE_DIR}/sentencepiece" sentencepiece-build EXCLUDE_FROM_ALL)
-
-    add_library(litert SHARED IMPORTED)
-    set_target_properties(litert PROPERTIES IMPORTED_LOCATION "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.so")
 
     add_library(voxsum-mfa SHARED mfa/mfa_jni.cpp mfa/mfa_engine.cc mfa/i8_attn.cc)
     target_compile_features(voxsum-mfa PRIVATE cxx_std_17)
