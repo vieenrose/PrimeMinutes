@@ -18,7 +18,9 @@ namespace nemo {
 
 class LiteRtGraph {
 public:
-    // CPU only (XNNPACK, num_threads). Throws std::runtime_error on any failure.
+    // CPU only (XNNPACK, num_threads). The XNNPACK weight cache is kept next to the model (<tflite>.wcache, set
+    // NEMO_LITERT_NO_WCACHE to disable): the repacked weights are file-backed and shared instead of a second private
+    // copy, which takes the peak RSS from +200 MB to +0 against ggml on the 152 MB X-ASR graph. Throws std::runtime_error on any failure.
     LiteRtGraph(const std::string & tflite_path, int threads);
     ~LiteRtGraph();
 

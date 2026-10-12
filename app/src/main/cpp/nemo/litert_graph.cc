@@ -26,9 +26,10 @@ namespace {
     } while (0)
 
 
-LiteRtOpaqueOptions cpu_options(int threads) {
-    char toml[64];
-    snprintf(toml, sizeof toml, "num_threads = %d\n", threads);
+LiteRtOpaqueOptions cpu_options(int threads, const std::string & cache) {
+    char toml[1024];
+    int off = snprintf(toml, sizeof toml, "num_threads = %d\n", threads);
+    if (!cache.empty()) snprintf(toml + off, sizeof toml - off, "weight_cache_file_path = \"%s\"\n", cache.c_str());
     char * payload = strdup(toml);
     LiteRtOpaqueOptions oo = nullptr;
     if (LiteRtCreateOpaqueOptions("xnnpack", payload, [](void * p) { free(p); }, &oo) != kLiteRtStatusOk) {
@@ -64,7 +65,7 @@ struct LiteRtGraph::Impl {
 #endif
         LRT_CHECK(LiteRtCreateOptions(&opts));
         LRT_CHECK(LiteRtSetOptionsHardwareAccelerators(opts, kLiteRtHwAcceleratorCpu));
-        if (LiteRtOpaqueOptions oo = cpu_options(threads)) {
+        if (LiteRtOpaqueOptions oo = cpu_options(threads, getenv("NEMO_LITERT_NO_WCACHE") ? std::string() : path + ".wcache")) {
             LRT_CHECK(LiteRtAddOpaqueOptions(opts, oo));
         }
         LRT_CHECK(LiteRtCreateCompiledModel(env, model, opts, &cm));
