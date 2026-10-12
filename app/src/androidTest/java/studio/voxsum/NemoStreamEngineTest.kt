@@ -115,7 +115,11 @@ class NemoStreamEngineTest {
         val xt = File(dir, "xasr_stream_q8_octav.tflite")
         val dt = File(dir, "sortformer_int8_f190.tflite")
         val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
-        org.junit.Assume.assumeTrue("clip/models not pushed", (listOf(xt, dt, files.xasr, files.diar, clip)).all { it.exists() })
+        val hostFiles = NemoModelFiles(File(dir, "xasr_host.bin"), File(dir, "diar_host.bin"))
+        // -e backends ggml,litert_cpu (default) | litert_host,litert_cpu ...: the first two entries are compared.
+        val backends = (InstrumentationRegistry.getArguments().getString("backends") ?: "ggml,litert_cpu").split(",")
+        val needGguf = backends.any { it == "ggml" || it == "litert_cpu" }
+        org.junit.Assume.assumeTrue("clip/models not pushed", (listOf(xt, dt, clip) + (if (needGguf) listOf(files.xasr, files.diar) else listOf()) + (if ("litert_host" in backends) listOf(hostFiles.xasr, hostFiles.diar) else listOf())).all { it.exists() })
         // -e noPre true: ablation, LiteRT without the pre-encode hook (audio.cpp ggml linear instead).
         val noPre = InstrumentationRegistry.getArguments().getString("noPre") == "true"
         val pre = if (noPre) null else ModelManager(inst.targetContext).asrLitertFiles()?.preEncode
@@ -130,7 +134,7 @@ class NemoStreamEngineTest {
             try { File("/proc/self/clear_refs").writeText("5") } catch (_: Exception) {}   // reset the peak RSS (VmHWM)
             val t0 = System.nanoTime()
             val engine = if (backend == "ggml") NemoStreamEngine(files, threads = 4)
-                else NemoStreamEngine(files, threads = 4, backend = backend, xasrTflite = xt, diarTflite = dt, diarPreF32 = pre)
+                else NemoStreamEngine(if (backend == "litert_host") hostFiles else files, threads = 4, backend = backend, xasrTflite = xt, diarTflite = dt, diarPreF32 = pre)
             engine.use {
                 engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
             }
@@ -138,8 +142,8 @@ class NemoStreamEngineTest {
             Log.i("NemoStreamEngineTest", "LONG $tag rtf=%.3f speakers=${engine.speakerCount} turns=${last.size} words=${last.sumOf { it.text.trim().split(Regex("\\s+")).size }} ${File("/proc/self/status").readLines().first { it.startsWith("VmHWM") } + File("/proc/self/status").readLines().filter { it.startsWith("RssAnon") || it.startsWith("RssFile") }}".format(rtf))
             return last
         }
-        val a = run("ggml", "ggml")
-        val b = run("litert_cpu", "litert_cpu")
+        val a = run(backends[0], backends[0])
+        val b = run(backends[1], backends[1])
         fun words(u: List<TranscriptEvent.Utterance>) = u.joinToString(" ") { it.text }.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
         val wa = words(a); val wb = words(b)
         // Word-level edit distance.
@@ -151,6 +155,32 @@ class NemoStreamEngineTest {
         }
         Log.i("NemoStreamEngineTest", "LONG word diff ggml vs litert: %d edits / %d words = %.2f%%".format(prev[wb.size], wa.size, 100.0 * prev[wb.size] / maxOf(1, wa.size)))
         assertTrue("expected text", wb.isNotEmpty())
+    }
+
+    /** Peak RSS of the whole app path: E2B reader loaded (mfa-e2b) while the litert_host engine streams the clip. */
+    @Test
+    fun peakRssEngineWithReader() = runBlocking {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val ctx = inst.targetContext
+        val dir = File(ctx.filesDir, "models/nemo-litert")
+        val clip = File(ctx.filesDir, "clip.wav")
+        val e2b = File(ctx.filesDir, "mfa-e2b")
+        val xt = File(dir, "xasr_stream_q8_octav.tflite"); val dt = File(dir, "sortformer_int8_f190.tflite")
+        val hostFiles = NemoModelFiles(File(dir, "xasr_host.bin"), File(dir, "diar_host.bin"))
+        val pre = ModelManager(ctx).asrLitertFiles()?.preEncode
+        org.junit.Assume.assumeTrue("not pushed", listOf(xt, dt, clip, hostFiles.xasr, hostFiles.diar, File(e2b, "prefill_decode_fused.tflite")).all { it.exists() } && pre != null)
+        fun mem() = File("/proc/self/status").readLines().filter { it.startsWith("VmHWM") || it.startsWith("RssAnon") || it.startsWith("RssFile") }.joinToString(" ") { it.replace(Regex("\\s+"), " ") }
+        val pcm = readWav16kMono(clip.readBytes())
+        val chunks = flow { var i = 0; while (i < pcm.size) { val e = minOf(i + 2048, pcm.size); emit(pcm.copyOfRange(i, e)); i = e } }
+        try { File("/proc/self/clear_refs").writeText("5") } catch (_: Exception) {}
+        studio.voxsum.core.llm.MfaEngine.load(e2b.path, ctx = 4096, threads = 4, weightCache = File(ctx.cacheDir, "mfa-e2b.wcache").path).use { reader ->
+            Log.i("NemoStreamEngineTest", "RSS reader loaded: ${mem()}")
+            val engine = NemoStreamEngine(hostFiles, threads = 4, backend = "litert_host", xasrTflite = xt, diarTflite = dt, diarPreF32 = pre)
+            var turns = 0
+            engine.use { engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) turns = e.utterances.size } }
+            Log.i("NemoStreamEngineTest", "RSS reader + litert_host engine done (turns=$turns): ${mem()}")
+        }
+        Unit
     }
 
     /**
@@ -210,7 +240,7 @@ class NemoStreamEngineTest {
     fun appPathDownloadsAndRunsLiteRt() = runBlocking {
         val inst = InstrumentationRegistry.getInstrumentation()
         val models = ModelManager(inst.targetContext)
-        models.deleteAsr()
+        if (InstrumentationRegistry.getArguments().getString("seeded") != "true") models.deleteAsr()   // -e seeded true: files pushed by hand, no download
         val t0 = System.nanoTime()
         models.ensureAsrModels { }
         val tDl = (System.nanoTime() - t0) / 1e9
@@ -227,7 +257,7 @@ class NemoStreamEngineTest {
         }
         var last: List<TranscriptEvent.Utterance> = emptyList()
         val t2 = System.nanoTime()
-        NemoStreamEngine(models.asrFiles(), threads = 4, backend = "litert_cpu", xasrTflite = lit!!.xasr, diarTflite = lit.diar).use { engine ->
+        NemoStreamEngine(models.asrFiles(), threads = 4, backend = "litert_host", xasrTflite = lit!!.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).use { engine ->
             engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
             Log.i("NemoStreamEngineTest", "APP litert run %.2fs speakers=%s turns=%d".format((System.nanoTime() - t2) / 1e9, engine.speakerCount, last.size))
         }

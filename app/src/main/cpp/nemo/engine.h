@@ -16,7 +16,10 @@
 #include <string>
 #include <vector>
 
+#ifndef NEMO_NO_GGML
 #include "diar_crispasr.h"
+#endif
+#include "diar_host.h"
 #include "diar_litert.h"
 #include "diar_pre_encode.h"
 #include "xasr_litert.h"
@@ -251,7 +254,10 @@ private:
     int64_t fed_ = 0, charged_upto_ = 0;
     size_t turns_seen_ = 0;
     double t0_ = 0;
-    std::unique_ptr<DiarCrispASR> diar_crispasr_;   // set only when cfg_.diar_native
+#ifndef NEMO_NO_GGML
+    std::unique_ptr<DiarCrispASR> diar_crispasr_;
+#endif
+    std::unique_ptr<DiarHost> diar_host_;           // backend litert_host (no ggml)   // set only when cfg_.diar_native
     std::unique_ptr<DiarLiteRT> diar_litert_;       // set when backend != ggml (replaces DiarCrispASR)
     std::unique_ptr<DiarPreEncode> diar_pre_;       // set when diar_pre_f32 is given (litert_* only)
     std::unique_ptr<XasrLiteRT> xasr_litert_;       // set when backend != ggml (replaces the ggml chunk graph)

@@ -59,7 +59,7 @@ class ModelManager(context: Context) {
     val nemoDir: File get() = File(modelsDir, NEMO_DIR)
 
     fun asrFiles(): NemoModelFiles =
-        NemoModelFiles(xasr = File(nemoDir, XASR_FILE), diar = File(nemoDir, DIAR_FILE))
+        NemoModelFiles(xasr = File(nemoDir, HOST_XASR_FILE), diar = File(nemoDir, HOST_DIAR_FILE))
 
     /** The LiteRT CPU graphs of the same two models (same weights, int8). Null until they are downloaded. */
     fun asrLitertFiles(): NemoLitertFiles? {
@@ -72,13 +72,13 @@ class ModelManager(context: Context) {
      *  load maps that cache instead of repacking, which keeps the peak RSS at the ggml level. */
     fun warmLitertCache(threads: Int) {
         val lit = asrLitertFiles() ?: return
-        runCatching { NemoStreamEngine(asrFiles(), threads, backend = "litert_cpu", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).close() }
+        runCatching { NemoStreamEngine(asrFiles(), threads, backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).close() }
     }
 
     /** Both GGUFs present at their pinned size and stamped with the pinned revision set. Cheap (no
      *  hashing): the SHA-256 check happens once, at download. */
-    /** Bytes the speech engine's two files weigh — the weight of its share in a combined progress bar. */
-    fun asrDownloadBytes(): Long = NEMO_FILES.values.sumOf { it.bytes }
+    /** Bytes the speech engine's files weigh — the weight of its share in a combined progress bar. */
+    fun asrDownloadBytes(): Long = (NEMO_FILES + LITERT_FILES).values.sumOf { it.bytes }
 
     fun asrReady(): Boolean =
         (NEMO_FILES + LITERT_FILES).all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } &&
@@ -119,6 +119,8 @@ class ModelManager(context: Context) {
     private fun reclaimRetired() {
         DROPPED_BACKEND_DIRS.forEach { File(modelsDir, it).takeIf(File::exists)?.deleteRecursively() }
         DROPPED_FILES.forEach { File(modelsDir, it).takeIf(File::exists)?.delete() }
+        // The ggml engine's GGUFs (270 MB), replaced by the packed host weights.
+        listOf(XASR_FILE, DIAR_FILE).forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
     }
 
     /** Superseded reader models, deleted only once the current one verifies (a failed download
@@ -521,7 +523,6 @@ class ModelManager(context: Context) {
         private const val LITERT_DIAR_FILE = "sortformer_int8_f190.tflite"
         private const val PRE_ENCODE_F32 = "pre_encode_512x1024.f32"
         private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
-        private const val NEMO_REVISION = "$XASR_REV+$DIAR_REV+$LITERT_REV"
         private val LITERT_FILES = linkedMapOf(
             LITERT_XASR_FILE to Pinned(
                 "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$LITERT_REV/$LITERT_XASR_FILE",
@@ -532,14 +533,21 @@ class ModelManager(context: Context) {
                 101_279_632L, "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf",
             ),
         )
+        // Host weights of the ggml-free engine (tools/nemo-host/*_pack.py): the X-ASR decoder/joiner/tokens/fbank and the
+        // Sortformer mel bank + silence embedding. The neural graphs are the .tflite files above.
+        /** TODO before release: the Luigi/voxsum-nemo-litert commit that holds the two .bin files (unpublished: not yet pushed). */
+        private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
+        private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV"
+        private const val HOST_XASR_FILE = "xasr_host.bin"
+        private const val HOST_DIAR_FILE = "diar_host.bin"
         private val NEMO_FILES = linkedMapOf(
-            XASR_FILE to Pinned(
-                "https://huggingface.co/cstr/x-asr-zh-en-GGUF/resolve/$XASR_REV/$XASR_FILE",
-                168_189_920L, "1ca120084a1517cf02d96e44cdd9a9544f0c887f6d0149c9f85d151be6833a61",
+            HOST_XASR_FILE to Pinned(
+                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$HOST_REV/$HOST_XASR_FILE",
+                16_497_008L, "88c79ec952ef16c866880d450eabfa936a9b96a49346a765ebfc33a202d688b2",
             ),
-            DIAR_FILE to Pinned(
-                "https://huggingface.co/audio-cpp/Nemotron-3-Diarization-GGUF/resolve/$DIAR_REV/$DIAR_FILE",
-                106_675_136L, "9a737455bd10123bcf1e036d9a0b07b6e8c42e7d0dd1a5ee4141dc386db46d0b",
+            HOST_DIAR_FILE to Pinned(
+                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
+                133_648L, "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36",
             ),
         )
     }

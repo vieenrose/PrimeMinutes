@@ -49,6 +49,10 @@ set(NEMO_COMMON_ARGS
     -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF
     -DGGML_CPU_ARM_ARCH=${NEMO_ARCH})
 
+# NEMO_NO_GGML (default ON): X-ASR and Sortformer host parts are plain C++ (nemo/xasr_host.cc, diar_host.cc) around the
+# LiteRT graphs, so no ggml, CrispASR or audio.cpp is built. OFF restores the ggml engine (backend ggml / litert_cpu).
+option(NEMO_NO_GGML "nemo engine without ggml (LiteRT graphs + C++ host parts)" ON)
+if(NOT NEMO_NO_GGML)
 set(AUDIOCPP_BIN ${CMAKE_CURRENT_BINARY_DIR}/audiocpp-build)
 ExternalProject_Add(audiocpp_ext
     SOURCE_DIR ${NATIVE_DIR}/audiocpp
@@ -95,6 +99,8 @@ ExternalProject_Add(crispasr_ext
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS ${CRISP_LIBS})
 
+endif()
+
 # LiteRT C API for the nemo LiteRT backends (CPU only). The stock libLiteRt.so of the LiteRT AAR,
 # extracted by the Gradle task extractLiteRt into LITERT_SO_DIR; headers vendored in mfa/third_party.
 if(NOT DEFINED LITERT_SO_DIR OR NOT EXISTS "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.so")
@@ -107,27 +113,35 @@ add_library(voxsum-nemo SHARED
     nemo/nemo_jni.cpp
     nemo/engine.cpp
     nemo/fusion.cpp
-    nemo/diar_crispasr.cpp
     nemo/litert_graph.cc
     nemo/diar_litert.cc
     nemo/diar_pre_encode.cc
     nemo/xasr_litert.cc)
-add_dependencies(voxsum-nemo crispasr_ext audiocpp_ext)
 target_compile_features(voxsum-nemo PRIVATE cxx_std_17)
 target_compile_definitions(voxsum-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES NEMO_WITH_LITERT NEMO_LITERT_ENV_API)
 target_compile_options(voxsum-nemo PRIVATE -O2 -w)
-target_include_directories(voxsum-nemo PRIVATE
-    nemo
-    ${NATIVE_DIR}/crispasr/src
-    ${NATIVE_DIR}/audiocpp/include
-    ${NATIVE_DIR}/crispasr-ggml/include
-    ${NATIVE_DIR}/crispasr-ggml/src
-    ${NATIVE_DIR}/crispasr-ggml/src/ggml-cpu)
+target_include_directories(voxsum-nemo PRIVATE nemo)
+if(NEMO_NO_GGML)
+    target_sources(voxsum-nemo PRIVATE nemo/xasr_host.cc nemo/kaldi_fbank.cpp nemo/diar_host.cc)
+    target_compile_definitions(voxsum-nemo PRIVATE NEMO_NO_GGML)
+    target_include_directories(voxsum-nemo PRIVATE nemo/hostxasr)
+    set(NEMO_NATIVE_LIBS "")
+else()
+    target_sources(voxsum-nemo PRIVATE nemo/diar_crispasr.cpp)
+    add_dependencies(voxsum-nemo crispasr_ext audiocpp_ext)
+    target_include_directories(voxsum-nemo PRIVATE
+        ${NATIVE_DIR}/crispasr/src
+        ${NATIVE_DIR}/audiocpp/include
+        ${NATIVE_DIR}/crispasr-ggml/include
+        ${NATIVE_DIR}/crispasr-ggml/src
+        ${NATIVE_DIR}/crispasr-ggml/src/ggml-cpu)
+    set(NEMO_NATIVE_LIBS ${CRISP_LIBS} audiocpp)
+endif()
 target_link_options(voxsum-nemo PRIVATE
     -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/nemo/nemo_jni.map
-    -fopenmp -static-openmp)   # CrispASR's x-asr kernels use OpenMP; link the NDK's libomp statically
+    $<$<NOT:$<BOOL:${NEMO_NO_GGML}>>:-fopenmp -static-openmp>)   # CrispASR's x-asr kernels use OpenMP; link the NDK's libomp statically
 target_include_directories(voxsum-nemo PRIVATE mfa/third_party)
-target_link_libraries(voxsum-nemo ${CRISP_LIBS} audiocpp litert android log dl m)
+target_link_libraries(voxsum-nemo ${NEMO_NATIVE_LIBS} litert android log dl m)
 
 
 # ---------------------------------------------------------------------------

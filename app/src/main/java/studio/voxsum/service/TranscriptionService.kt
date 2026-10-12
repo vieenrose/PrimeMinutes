@@ -1535,7 +1535,7 @@ class TranscriptionService : LifecycleService() {
         runCatching { android.system.Os.setenv("TMPDIR", cacheDir.absolutePath, true) }
         val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
         return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
-            backend = "litert_cpu", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
+            backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
     }
 
     /** Raw PCM16 of one of our own 16 kHz mono work WAVs, as float blocks. */

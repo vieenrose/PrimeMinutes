@@ -20,11 +20,15 @@
 #include <ctime>
 
 #include "xasr.h"                       // CrispASR (MIT) - x-asr streaming Zipformer2
+#ifndef NEMO_NO_GGML
 #include "audiocpp.h"                   // audio.cpp (Apache-2.0) - Nemotron-3 diarization stream
+#endif
+#include "diar_host.h"               // ggml-free Sortformer host (backend litert_host)
 #include "diar_litert.h"               // LiteRT bench path (backend != ggml)
 #include "xasr_litert.h"
 
 namespace nemo {
+#ifndef NEMO_NO_GGML
 
 // Trampoline for audiocpp_nemotron3_diar_set_external_encoder's C function-pointer contract (see
 // diar_crispasr.h / docs/one-runtime-merge.md): user_data is the DiarCrispASR instance this Engine owns.
@@ -91,6 +95,7 @@ static int diar_litert_encode(
         return 1;
     }
 }
+#endif
 
 double now_s() {
     timespec ts;
@@ -113,10 +118,12 @@ double rss_mb() {
 Engine::~Engine() {
     if (asr_stream_) xasr_stream_free((xasr_stream*)asr_stream_);
     if (asr_ctx_) xasr_free((xasr_context*)asr_ctx_);
+#ifndef NEMO_NO_GGML
     if (diar_request_) audiocpp_request_free((audiocpp_request*)diar_request_);
     if (session_) audiocpp_session_free((audiocpp_session*)session_);
     if (model_) audiocpp_model_free((audiocpp_model*)model_);
     if (registry_) audiocpp_registry_free((audiocpp_registry*)registry_);
+#endif
 }
 
 // Apply cpu affinity per thread. Affinity is per-thread on Linux, so taskset on the process applies to
@@ -142,6 +149,7 @@ static int apply_affinity(long main_mask, long engine_mask) {
 }
 
 // Turns carried by a diar result, in the shape fusion_ wants. Shared by the per-piece drain and the tail push.
+#ifndef NEMO_NO_GGML
 void harvest_turns(const audiocpp_result* r, std::vector<Turn>& out) {
     if (!r) return;
     const size_t k = audiocpp_result_speaker_turn_count(r);
@@ -152,6 +160,7 @@ void harvest_turns(const audiocpp_result* r, std::vector<Turn>& out) {
         }
     }
 }
+#endif
 
 namespace {
 // Read the file in strides so the page cache holds it. A plain read() of the whole file into a buffer would
@@ -217,7 +226,13 @@ bool Engine::init(std::string& err) {
         asr_stream_ = xasr_stream_init((xasr_context*)asr_ctx_);
         if (!asr_stream_) { err = "xasr_stream_init failed"; return false; }
     }
-    if (!cfg_.skip_diar) {
+    if (!cfg_.skip_diar && cfg_.backend == "litert_host") {
+        DiarHostConfig dc; dc.host_bin = cfg_.diar_model; dc.pre_f32 = cfg_.diar_pre_f32; dc.tflite = cfg_.diar_tflite; dc.threads = cfg_.threads;
+        if (dc.host_bin.empty() || dc.pre_f32.empty() || dc.tflite.empty()) { err = "litert_host needs diar_model (diar_host.bin), diar_pre_f32 and diar_tflite"; return false; }
+        try { diar_host_ = std::make_unique<DiarHost>(dc); } catch (const std::exception& e) { err = std::string("diar host: ") + e.what(); return false; }
+    }
+#ifndef NEMO_NO_GGML
+    else if (!cfg_.skip_diar) {
         if (cfg_.diar_model.empty()) { err = "--diar-model required (or --no-diar)"; return false; }
         audiocpp_status st = audiocpp_registry_create(nullptr, (audiocpp_registry**)&registry_);
     if (dbg_thr) std::fprintf(stderr, "[threads] after registry: %d\n", nthr());
@@ -319,10 +334,12 @@ bool Engine::init(std::string& err) {
         }
         if (st != AUDIOCPP_OK) { err = std::string("diar stream_start: ") + audiocpp_last_error(); return false; }
     }
+#endif
     if (cfg_.prefault) prefault_file(cfg_.xasr_model), prefault_file(cfg_.diar_model);
     stats_.load_s = now_s() - t0;   // the prefault is deliberately INSIDE this: the point is to charge it
     double latency = cfg_.asr_latency_ms;
     if (latency < 0) latency = cfg_.chunk_ms;    // the encoder's own window is its floor
+    if (getenv("NEMO_TRACE")) std::fprintf(stderr, "[nemo] init done %.2fs\n", now_s() - init_t0);
     fusion_ = Fusion(16000, latency / 1000.0);
     fusion_.set_char_dur_ms(cfg_.char_dur_ms);
     fusion_.set_gap_snap_ms(cfg_.gap_snap_ms);
@@ -619,8 +636,21 @@ bool Engine::push_piece(const float* pcm, size_t n, bool last, std::string& err)
     const bool prof_on = getenv("NEMO_PROF") != nullptr;
     const double a0 = now_s();
 
+    if (getenv("NEMO_TRACE") && piece_idx < 5) std::fprintf(stderr, "[nemo] piece %zu start\n", piece_idx);
     // 1. diarizer first: attribution needs the turn that covers this audio
-    if (!cfg_.skip_diar && n > 0) {
+    if (!cfg_.skip_diar && n > 0 && diar_host_) {
+        const double d0 = now_s();
+        std::vector<Turn> snapshot;
+        for (const auto& t : diar_host_->push(pcm, n)) snapshot.push_back(Turn{t.start_sample, t.end_sample, "speaker_" + std::to_string(t.speaker), t.confidence});
+        if (!snapshot.empty()) {
+            if (first_turn_audio_ < 0) first_turn_audio_ = double(off + n) / rate;
+            fusion_.update_turns(snapshot);
+            turns_seen_ = fusion_.turns().size();
+        }
+        stats_.diar_compute_s += now_s() - d0;
+    }
+#ifndef NEMO_NO_GGML
+    else if (!cfg_.skip_diar && n > 0) {
         const double d0 = now_s();
         audiocpp_event* ev = nullptr;
         audiocpp_status st = audiocpp_stream_push((audiocpp_session*)session_, pcm, n, rate, 1, off, &ev);
@@ -641,6 +671,7 @@ bool Engine::push_piece(const float* pcm, size_t n, bool last, std::string& err)
         }
         stats_.diar_compute_s += now_s() - d0;
     }
+#endif
 
     // 2. transcriber
     std::string delta;
@@ -666,6 +697,7 @@ bool Engine::push_piece(const float* pcm, size_t n, bool last, std::string& err)
         stats_.deltas++;
         if (stats_.first_partial_s < 0) stats_.first_partial_s = now_s() - t0_;
     }
+    if (getenv("NEMO_TRACE") && piece_idx < 5) std::fprintf(stderr, "[nemo] piece %zu done\n", piece_idx);
     piece_ms_.push_back((now_s() - a0) * 1000.0);
     stats_.wall_s = now_s() - t0_;
     return true;
@@ -680,7 +712,14 @@ bool Engine::finish(const std::function<void(const Segment&)>& on_segment, std::
     const bool prof_on = getenv("NEMO_PROF") != nullptr;
 
     // Diarizer-only tail: the ASR never sees it, so text cannot shift from this side.
-    if (cfg_.diar_tail_ms > 0 && !cfg_.skip_diar) {
+    if (cfg_.diar_tail_ms > 0 && !cfg_.skip_diar && diar_host_) {
+        std::vector<float> zeros(size_t(cfg_.diar_tail_ms) * rate / 1000, 0.0f);
+        std::vector<Turn> snapshot;
+        for (const auto& t : diar_host_->push(zeros.data(), zeros.size())) snapshot.push_back(Turn{t.start_sample, t.end_sample, "speaker_" + std::to_string(t.speaker), t.confidence});
+        if (!snapshot.empty()) fusion_.update_turns(snapshot);
+    }
+#ifndef NEMO_NO_GGML
+    else if (cfg_.diar_tail_ms > 0 && !cfg_.skip_diar) {
         std::vector<float> zeros(size_t(cfg_.diar_tail_ms) * rate / 1000, 0.0f);
         const double d0 = now_s();
         audiocpp_event* ev = nullptr;
@@ -699,10 +738,17 @@ bool Engine::finish(const std::function<void(const Segment&)>& on_segment, std::
         if (!snapshot.empty()) fusion_.update_turns(snapshot);
         stats_.diar_compute_s += now_s() - d0;
     }
+#endif
 
     const double drain0 = prof_on ? now_s() : 0.0;
     // Drain the diarizer's final turns (this also closes the turn still open at end-of-audio).
-    if (!cfg_.skip_diar && !cfg_.diar_no_finish) {
+    if (!cfg_.skip_diar && !cfg_.diar_no_finish && diar_host_) {
+        std::vector<Turn> snapshot;
+        for (const auto& t : diar_host_->finish()) snapshot.push_back(Turn{t.start_sample, t.end_sample, "speaker_" + std::to_string(t.speaker), t.confidence});
+        if (!snapshot.empty()) fusion_.update_turns(snapshot);
+    }
+#ifndef NEMO_NO_GGML
+    else if (!cfg_.skip_diar && !cfg_.diar_no_finish) {
         audiocpp_result* res = nullptr;
         if (audiocpp_stream_finish((audiocpp_session*)session_, &res) == AUDIOCPP_OK && res) {
             std::vector<Turn> snapshot;
@@ -711,6 +757,7 @@ bool Engine::finish(const std::function<void(const Segment&)>& on_segment, std::
             audiocpp_result_free(res);
         }
     }
+#endif
     if (prof_on) stats_.prof_drain_s = now_s() - drain0;
     attribute(on_segment, true);
 
