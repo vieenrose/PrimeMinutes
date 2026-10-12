@@ -53,6 +53,8 @@ set(AUDIOCPP_BIN ${CMAKE_CURRENT_BINARY_DIR}/audiocpp-build)
 ExternalProject_Add(audiocpp_ext
     SOURCE_DIR ${NATIVE_DIR}/audiocpp
     BINARY_DIR ${AUDIOCPP_BIN}
+    # The pre-encode hook (audiocpp_nemotron3_diar_set_external_pre_encoder) the LiteRT diarizer plugs into.
+    PATCH_COMMAND sh -c "git -C ${NATIVE_DIR}/audiocpp apply --reverse --check ${CMAKE_CURRENT_SOURCE_DIR}/nemo/audiocpp-pre-encode-hook.patch >/dev/null 2>&1 || git -C ${NATIVE_DIR}/audiocpp apply ${CMAKE_CURRENT_SOURCE_DIR}/nemo/audiocpp-pre-encode-hook.patch"
     CMAKE_ARGS ${NEMO_COMMON_ARGS}
         -DAUDIOCPP_BUILD_C_API=ON
         -DAUDIOCPP_MODEL_SET=custom -DAUDIOCPP_MODELS=nemotron_3_diar
@@ -108,6 +110,7 @@ add_library(voxsum-nemo SHARED
     nemo/diar_crispasr.cpp
     nemo/litert_graph.cc
     nemo/diar_litert.cc
+    nemo/diar_pre_encode.cc
     nemo/xasr_litert.cc)
 add_dependencies(voxsum-nemo crispasr_ext audiocpp_ext)
 target_compile_features(voxsum-nemo PRIVATE cxx_std_17)

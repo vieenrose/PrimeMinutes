@@ -28,11 +28,13 @@ class NemoStreamEngine(
     /** LiteRT graphs, read only when [backend] is "litert_cpu". */
     xasrTflite: File? = null,
     diarTflite: File? = null,
+    /** Pre-encode [512,1024] fp32 matrix, read only when [backend] is "litert_cpu". */
+    diarPreF32: File? = null,
 ) : AutoCloseable {
 
     private var handle: Long = NemoNative.nativeCreate(
         files.xasr.path, files.diar.path, threads, speakerDelaySec.toDouble(),
-        backend, xasrTflite?.path.orEmpty(), diarTflite?.path.orEmpty(),
+        backend, xasrTflite?.path.orEmpty(), diarTflite?.path.orEmpty(), diarPreF32?.path.orEmpty(),
     )
         .also { check(it != 0L) { "nemo engine failed to load ${files.xasr.name} / ${files.diar.name}" } }
 
@@ -114,7 +116,7 @@ internal object NemoNative {
 
     @JvmStatic external fun nativeCreate(
         xasr: String, diar: String, threads: Int, settleSec: Double,
-        backend: String, xasrTflite: String, diarTflite: String,
+        backend: String, xasrTflite: String, diarTflite: String, diarPreF32: String,
     ): Long
     @JvmStatic external fun nativePush(handle: Long, pcm: FloatArray, n: Int): Boolean
     @JvmStatic external fun nativeLive(handle: Long): String
@@ -122,3 +124,6 @@ internal object NemoNative {
     @JvmStatic external fun nativeFedSec(handle: Long): Double
     @JvmStatic external fun nativeFree(handle: Long)
 }
+
+/** LiteRT graphs of the same models (the `.tflite` pair, read by the `litert_cpu` backend). */
+data class NemoLitertFiles(val xasr: File, val diar: File, val preEncode: File? = null)

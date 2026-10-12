@@ -1,0 +1,115 @@
+diff --git a/include/audiocpp.h b/include/audiocpp.h
+index c14e0466..24588b37 100644
+--- a/include/audiocpp.h
++++ b/include/audiocpp.h
+@@ -278,6 +278,22 @@ typedef int (*audiocpp_nemotron3_diar_encode_fn)(
+     const int64_t * valid_frames,
+     float ** out_probabilities, int64_t * out_len);
+ 
++/*
++ * Pre-encode hook (same ownership rule as the encoder hook): fn receives the stacked mel
++ * `stacked` [batch, frames, stacked_dim] (stacked_dim = subsampling_factor * num_mel_bins, frame-major) and writes
++ * `batch * frames * hidden` floats to a malloc()'d `*out_probabilities`, with `*out_len` set to that count.
++ * A nonzero return fails the call. Pass fn == NULL to restore the library's ggml linear.
++ */
++typedef int (*audiocpp_nemotron3_diar_pre_encode_fn)(
++    void * user_data,
++    const float * stacked, int64_t batch, int64_t frames, int64_t stacked_dim,
++    float ** out_embeddings, int64_t * out_len);
++
++AUDIOCPP_API audiocpp_status audiocpp_nemotron3_diar_set_external_pre_encoder(
++    audiocpp_session * session,
++    audiocpp_nemotron3_diar_pre_encode_fn fn,
++    void * user_data);
++
+ AUDIOCPP_API audiocpp_status audiocpp_nemotron3_diar_set_external_encoder(
+     audiocpp_session * session,
+     audiocpp_nemotron3_diar_encode_fn fn,
+diff --git a/include/engine/models/nemotron_3_diar/session.h b/include/engine/models/nemotron_3_diar/session.h
+index c74721be..6cf2e064 100644
+--- a/include/engine/models/nemotron_3_diar/session.h
++++ b/include/engine/models/nemotron_3_diar/session.h
+@@ -42,6 +42,11 @@ public:
+         const std::vector<int64_t> & valid_frames)>;
+     void set_external_encoder(ExternalEncoder fn) { external_encoder_ = std::move(fn); }
+ 
++    // Pre-encode (stacked mel [batch, frames, stacked_dim] -> embeddings [batch, frames, hidden]). Unset = ggml linear.
++    using ExternalPreEncoder = std::function<std::vector<float>(
++        const std::vector<float> & stacked, int64_t batch, int64_t frames, int64_t stacked_dim)>;
++    void set_external_pre_encoder(ExternalPreEncoder fn) { external_pre_encoder_ = std::move(fn); }
++
+     std::string family() const override;
+     runtime::VoiceTaskKind task_kind() const override;
+     runtime::RunMode run_mode() const override;
+@@ -112,6 +117,7 @@ private:
+     size_t graph_arena_bytes_ = 1024ull * 1024ull * 1024ull;
+     size_t weight_context_bytes_ = 1024ull * 1024ull * 1024ull;
+     ExternalEncoder external_encoder_;
++    ExternalPreEncoder external_pre_encoder_;
+     bool external_encoder_only_ = false;   // encoder+head weights were never loaded
+ };
+ 
+diff --git a/src/capi/audiocpp.cpp b/src/capi/audiocpp.cpp
+index d1039d37..14065b0f 100644
+--- a/src/capi/audiocpp.cpp
++++ b/src/capi/audiocpp.cpp
+@@ -535,6 +535,42 @@ void audiocpp_session_free(audiocpp_session * session) {
+     delete session;
+ }
+ 
++audiocpp_status audiocpp_nemotron3_diar_set_external_pre_encoder(
++    audiocpp_session * session,
++    audiocpp_nemotron3_diar_pre_encode_fn fn,
++    void * user_data) {
++    if (session == nullptr) return fail(AUDIOCPP_ERR_INVALID_ARGUMENT, "session must be non-null");
++    if (session->family != "nemotron_3_diar") {
++        return fail(AUDIOCPP_ERR_INVALID_ARGUMENT,
++                    "audiocpp_nemotron3_diar_set_external_pre_encoder requires a nemotron_3_diar session");
++    }
++    return guard([&] {
++        auto * diar = dynamic_cast<engine::models::nemotron_3_diar::Session *>(session->session.get());
++        if (diar == nullptr) {
++            throw std::runtime_error("nemotron_3_diar session did not downcast to its own Session type");
++        }
++        if (fn == nullptr) {
++            diar->set_external_pre_encoder(nullptr);
++            return AUDIOCPP_OK;
++        }
++        diar->set_external_pre_encoder(
++            [fn, user_data](
++                const std::vector<float> & stacked, int64_t batch, int64_t frames,
++                int64_t stacked_dim) -> std::vector<float> {
++                float * out = nullptr;
++                int64_t out_len = 0;
++                const int rc = fn(user_data, stacked.data(), batch, frames, stacked_dim, &out, &out_len);
++                if (rc != 0 || out == nullptr) {
++                    throw std::runtime_error("nemotron_3_diar external pre-encoder callback failed");
++                }
++                std::vector<float> result(out, out + out_len);
++                std::free(out);
++                return result;
++            });
++        return AUDIOCPP_OK;
++    });
++}
++
+ audiocpp_status audiocpp_nemotron3_diar_set_external_encoder(
+     audiocpp_session * session,
+     audiocpp_nemotron3_diar_encode_fn fn,
+diff --git a/src/models/nemotron_3_diar/session.cpp b/src/models/nemotron_3_diar/session.cpp
+index 40b49616..e1888a70 100644
+--- a/src/models/nemotron_3_diar/session.cpp
++++ b/src/models/nemotron_3_diar/session.cpp
+@@ -208,6 +208,12 @@ Session::DecodeConfig Session::decode_config(
+ }
+ 
+ std::vector<float> Session::pre_encode(const FeatureBatch & features) {
++    if (external_pre_encoder_) {
++        const auto & config = assets_->model_config.encoder;
++        return external_pre_encoder_(
++            features.stacked, features.batch, features.encoder_frames,
++            config.feature_size * config.subsampling_factor);
++    }
+     const bool prof_p = diar_prof::on();
+     const auto tp0 = prof_p ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+     ensure_pre_encode_graph(

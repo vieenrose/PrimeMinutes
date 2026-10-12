@@ -51,6 +51,26 @@ static int diar_native_encode(
     }
 }
 
+// Pre-encode trampoline (audiocpp_nemotron3_diar_set_external_pre_encoder): malloc() return, audio.cpp frees it.
+static int diar_native_pre_encode(
+    void* user_data,
+    const float* stacked, int64_t batch, int64_t frames, int64_t stacked_dim,
+    float** out_embeddings, int64_t* out_len) {
+    auto* pre = static_cast<DiarPreEncode*>(user_data);
+    try {
+        std::vector<float> in(stacked, stacked + batch * frames * stacked_dim);
+        auto emb = pre->encode(in, batch, frames, stacked_dim);
+        float* buf = static_cast<float*>(std::malloc(emb.size() * sizeof(float)));
+        if (!buf) return 1;
+        std::memcpy(buf, emb.data(), emb.size() * sizeof(float));
+        *out_embeddings = buf;
+        *out_len = static_cast<int64_t>(emb.size());
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
 static int diar_litert_encode(
     void* user_data,
     const float* embeddings, int64_t batch, int64_t frames, int64_t hidden,
@@ -247,6 +267,20 @@ bool Engine::init(std::string& err) {
             if (st != AUDIOCPP_OK) {
                 err = std::string("diar_native: set_external_encoder: ") + audiocpp_last_error();
                 return false;
+            }
+            if (!cfg_.diar_pre_f32.empty()) {
+                try {
+                    diar_pre_ = std::make_unique<DiarPreEncode>(cfg_.diar_pre_f32);
+                } catch (const std::exception& e) {
+                    err = std::string("diar_native: DiarPreEncode load failed: ") + e.what();
+                    return false;
+                }
+                st = audiocpp_nemotron3_diar_set_external_pre_encoder(
+                    (audiocpp_session*)session_, &diar_native_pre_encode, diar_pre_.get());
+                if (st != AUDIOCPP_OK) {
+                    err = std::string("diar_native: set_external_pre_encoder: ") + audiocpp_last_error();
+                    return false;
+                }
             }
         } else if (cfg_.diar_native) {
             try {

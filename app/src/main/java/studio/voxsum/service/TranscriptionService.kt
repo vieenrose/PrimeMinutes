@@ -1533,7 +1533,9 @@ class TranscriptionService : LifecycleService() {
         // not on others (Galaxy Note 10+, Android 12: "create_directories: Permission denied"),
         // where the engine never loaded and nothing was transcribed. Point it at our own cache.
         runCatching { android.system.Os.setenv("TMPDIR", cacheDir.absolutePath, true) }
-        return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec)
+        val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
+        return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
+            backend = "litert_cpu", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
     }
 
     /** Raw PCM16 of one of our own 16 kHz mono work WAVs, as float blocks. */

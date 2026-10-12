@@ -18,6 +18,7 @@
 
 #include "diar_crispasr.h"
 #include "diar_litert.h"
+#include "diar_pre_encode.h"
 #include "xasr_litert.h"
 #include "fusion.h"
 
@@ -48,6 +49,7 @@ struct Config {
     std::string backend = "ggml";
     std::string xasr_tflite;        // xasr_stream_q8_octav.tflite
     std::string diar_tflite;        // sortformer_int8_f190.tflite
+    std::string diar_pre_f32;       // pre-encode [512,1024] fp32 (litert_* only; empty = audio.cpp ggml linear)
     std::string audio;              // 16 kHz mono PCM16 wav
     int  threads      = 2;
     int  piece_ms     = 100;
@@ -251,6 +253,7 @@ private:
     double t0_ = 0;
     std::unique_ptr<DiarCrispASR> diar_crispasr_;   // set only when cfg_.diar_native
     std::unique_ptr<DiarLiteRT> diar_litert_;       // set when backend != ggml (replaces DiarCrispASR)
+    std::unique_ptr<DiarPreEncode> diar_pre_;       // set when diar_pre_f32 is given (litert_* only)
     std::unique_ptr<XasrLiteRT> xasr_litert_;       // set when backend != ggml (replaces the ggml chunk graph)
 };
 

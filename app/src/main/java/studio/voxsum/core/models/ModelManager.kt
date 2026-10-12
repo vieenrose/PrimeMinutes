@@ -8,7 +8,9 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import studio.voxsum.core.asr.NemoLitertFiles
 import studio.voxsum.core.asr.NemoModelFiles
+import studio.voxsum.core.asr.NemoStreamEngine
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
@@ -29,6 +31,17 @@ import java.util.concurrent.ConcurrentHashMap
 class ModelManager(context: Context) {
 
     val modelsDir: File = File(context.filesDir, "models").apply { mkdirs() }
+    private val assets = context.assets
+
+    /** The diarizer pre-encode matrix ships inside the APK (assets/nemo); copied once next to the graphs. */
+    private fun preEncodeF32(): File? = runCatching {
+        val out = File(nemoDir, PRE_ENCODE_F32)
+        if (out.length() != PRE_ENCODE_F32_BYTES) {
+            nemoDir.mkdirs()
+            assets.open("nemo/$PRE_ENCODE_F32").use { i -> out.outputStream().use { i.copyTo(it) } }
+        }
+        out.takeIf { it.length() == PRE_ENCODE_F32_BYTES }
+    }.getOrNull()
 
     init {
         // Reclaim long-dropped backends' models on construction. The engines retired by the
@@ -48,13 +61,27 @@ class ModelManager(context: Context) {
     fun asrFiles(): NemoModelFiles =
         NemoModelFiles(xasr = File(nemoDir, XASR_FILE), diar = File(nemoDir, DIAR_FILE))
 
+    /** The LiteRT CPU graphs of the same two models (same weights, int8). Null until they are downloaded. */
+    fun asrLitertFiles(): NemoLitertFiles? {
+        val x = File(nemoDir, LITERT_XASR_FILE); val d = File(nemoDir, LITERT_DIAR_FILE)
+        return if (x.length() == LITERT_FILES.getValue(LITERT_XASR_FILE).bytes && d.length() == LITERT_FILES.getValue(LITERT_DIAR_FILE).bytes)
+            NemoLitertFiles(x, d, preEncodeF32()) else null
+    }
+
+    /** Builds the LiteRT engine once so XNNPACK writes its weight cache next to the graphs; the next
+     *  load maps that cache instead of repacking, which keeps the peak RSS at the ggml level. */
+    fun warmLitertCache(threads: Int) {
+        val lit = asrLitertFiles() ?: return
+        runCatching { NemoStreamEngine(asrFiles(), threads, backend = "litert_cpu", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).close() }
+    }
+
     /** Both GGUFs present at their pinned size and stamped with the pinned revision set. Cheap (no
      *  hashing): the SHA-256 check happens once, at download. */
     /** Bytes the speech engine's two files weigh — the weight of its share in a combined progress bar. */
     fun asrDownloadBytes(): Long = NEMO_FILES.values.sumOf { it.bytes }
 
     fun asrReady(): Boolean =
-        NEMO_FILES.all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } &&
+        (NEMO_FILES + LITERT_FILES).all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } &&
             runCatching { File(nemoDir, REVISION_MARKER).readText().trim() }.getOrNull() == NEMO_REVISION
 
     /** Remove the model directory so the next run re-downloads a clean copy (load failure recovery). */
@@ -67,9 +94,10 @@ class ModelManager(context: Context) {
         if (asrReady()) { reclaimRetired(); onProgress(1f); return@withContext }
         nemoDir.mkdirs()
         val marked = runCatching { File(nemoDir, REVISION_MARKER).readText().trim() }.getOrNull() == NEMO_REVISION
-        val total = NEMO_FILES.values.sumOf { it.bytes }
+        val all = NEMO_FILES + LITERT_FILES
+        val total = all.values.sumOf { it.bytes }
         var done = 0L
-        NEMO_FILES.forEach { (name, meta) ->
+        all.forEach { (name, meta) ->
             val dest = File(nemoDir, name)
             if (dest.length() != meta.bytes || !marked) {
                 dest.delete()
@@ -83,6 +111,7 @@ class ModelManager(context: Context) {
         runCatching { File(nemoDir, REVISION_MARKER).writeText(NEMO_REVISION) }
         check(asrReady()) { "ASR model files missing after provisioning" }
         reclaimRetired()
+        warmLitertCache(threads = 4)
     }
 
     /** Only once the new models verify (also when they were already present — seeded or from an
@@ -487,7 +516,22 @@ class ModelManager(context: Context) {
         private const val XASR_REV = "acb1a95eac809719a2c86d1048471f96fc6444ad"
         private const val DIAR_REV = "647d39feaa0e91dca5ce355a95403837b76dff56"
         /** Stamped into [REVISION_MARKER]: a re-pin of either file forces a fresh fetch. */
-        private const val NEMO_REVISION = "$XASR_REV+$DIAR_REV"
+        private const val LITERT_REV = "ec1b218f4d152e09bf30733de0836afc3f6b686b"
+        private const val LITERT_XASR_FILE = "xasr_stream_q8_octav.tflite"
+        private const val LITERT_DIAR_FILE = "sortformer_int8_f190.tflite"
+        private const val PRE_ENCODE_F32 = "pre_encode_512x1024.f32"
+        private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
+        private const val NEMO_REVISION = "$XASR_REV+$DIAR_REV+$LITERT_REV"
+        private val LITERT_FILES = linkedMapOf(
+            LITERT_XASR_FILE to Pinned(
+                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$LITERT_REV/$LITERT_XASR_FILE",
+                152_653_712L, "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c",
+            ),
+            LITERT_DIAR_FILE to Pinned(
+                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
+                101_279_632L, "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf",
+            ),
+        )
         private val NEMO_FILES = linkedMapOf(
             XASR_FILE to Pinned(
                 "https://huggingface.co/cstr/x-asr-zh-en-GGUF/resolve/$XASR_REV/$XASR_FILE",
