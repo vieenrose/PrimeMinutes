@@ -14,12 +14,13 @@ struct ReaderModel {
 
     /// Speech engine (ASR + diarization), the two pins of Android `ModelManager.NEMO_FILES`; CPU only.
     static let speech: ReaderModel = {
-        let x = "acb1a95eac809719a2c86d1048471f96fc6444ad", d = "647d39feaa0e91dca5ce355a95403837b76dff56"
+        let host = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
         return ReaderModel(id: "nemo", repo: "", rev: "", files: [
-            ModelFile(name: "x-asr-zh-en-q8_0.gguf", remote: "https://huggingface.co/cstr/x-asr-zh-en-GGUF/resolve/\(x)/x-asr-zh-en-q8_0.gguf",
-                      size: 168_189_920, sha256: "1ca120084a1517cf02d96e44cdd9a9544f0c887f6d0149c9f85d151be6833a61"),
-            ModelFile(name: "nemotron-3-diarization-q8_0.gguf", remote: "https://huggingface.co/audio-cpp/Nemotron-3-Diarization-GGUF/resolve/\(d)/nemotron-3-diarization-q8_0.gguf",
-                      size: 106_675_136, sha256: "9a737455bd10123bcf1e036d9a0b07b6e8c42e7d0dd1a5ee4141dc386db46d0b"),
+            // Host weights of the ggml-free engine (backend litert_host): no GGUF is downloaded any more.
+            ModelFile(name: "xasr_host.bin", remote: "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/\(host)/xasr_host.bin",
+                      size: 16_497_008, sha256: "88c79ec952ef16c866880d450eabfa936a9b96a49346a765ebfc33a202d688b2"),
+            ModelFile(name: "diar_host.bin", remote: "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/\(host)/diar_host.bin",
+                      size: 133_648, sha256: "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36"),
             // LiteRT CPU graphs (the speech engine's backend). Pinned to the Luigi/voxsum-nemo-litert revision below.
             ModelFile(name: "xasr_stream_q8_octav.tflite", remote: "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/xasr_stream_q8_octav.tflite",
                       size: 152_653_712, sha256: "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c"),

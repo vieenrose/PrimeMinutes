@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <mutex>
 #include <vector>
 
 #ifdef _OPENMP
@@ -153,6 +154,9 @@ LiteRtStatus Destroy(void*) { return kLiteRtStatusOk; }
 
 LiteRtStatus Run(void* user_data, size_t num_inputs, const LiteRtTensorBuffer* inputs,
                  size_t num_outputs, LiteRtTensorBuffer* outputs) {
+  // The static scratch buffers below are shared: two graphs running at once (reader + a second session) would race on them.
+  static std::mutex run_mu;
+  std::lock_guard<std::mutex> lock(run_mu);
   if (num_inputs != 7 || num_outputs != 1) {
     fprintf(stderr, "i8_attention: %zu inputs, %zu outputs\n", num_inputs, num_outputs);
     return kLiteRtStatusErrorInvalidArgument;

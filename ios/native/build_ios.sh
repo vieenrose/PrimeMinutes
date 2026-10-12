@@ -32,6 +32,8 @@ sed -i "" "s/push_back(ru.ru_minflt)/push_back(0)/" $NATIVE/audiocpp/src/models/
 sed -i "" "s/constexpr int kGraphNodes = 32768;/constexpr int kGraphNodes = 8192;/" $NATIVE/crispasr/src/xasr.cpp
 # xasr: the chunk hook (xasr_set_external_chunk_encoder) the LiteRT X-ASR path plugs into — applied idempotently.
 git -C $NATIVE/crispasr apply --reverse --check $ROOT/ios/native/crispasr-chunk-hook.patch >/dev/null 2>&1 || git -C $NATIVE/crispasr apply $ROOT/ios/native/crispasr-chunk-hook.patch
+# audio.cpp: the Sortformer pre-encode hook (audiocpp_nemotron3_diar_set_external_pre_encoder) the LiteRT path plugs into — idempotent.
+git -C $NATIVE/audiocpp apply --reverse --check $ROOT/ios/native/audiocpp-pre-encode-hook.patch >/dev/null 2>&1 || git -C $NATIVE/audiocpp apply $ROOT/ios/native/audiocpp-pre-encode-hook.patch
 # audio.cpp as a dylib with its ggml hidden (src/capi/audiocpp.symbols) — never share symbols with CrispASR's ggml.
 $CMAKE -S $NATIVE/audiocpp -B $OUT/audiocpp "${COMMON[@]}" \
   -DCMAKE_PROJECT_INCLUDE=$ROOT/ios/native/ios_stub.cmake -DAUDIOCPP_BUILD_C_API=ON -DAUDIOCPP_MODEL_SET=custom -DAUDIOCPP_MODELS=nemotron_3_diar \
