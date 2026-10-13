@@ -60,12 +60,20 @@ fun renderMarkdown(
  */
 private val ANCHOR_RE = Regex("""\[(\d+):(\d{2})(?::(\d{2}))?]""")
 
+/** "[1:48, 12:00]": several times in one bracket, which the model sometimes writes; split into one anchor each. */
+private val MULTI_RE = Regex("""\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、;；]\s*\d+:\d{2}(?::\d{2})?)+)]""")
+private val SEP_RE = Regex("""\s*[,，、;；]\s*""")
+
+internal fun splitAnchors(text: String): String =
+    MULTI_RE.replace(text) { m -> m.groupValues[1].split(SEP_RE).joinToString(" ") { "[$it]" } }
+
 private fun AnnotatedString.Builder.appendWithAnchors(
-    text: String,
+    raw: String,
     anchorColor: Color?,
     onSeek: ((Int) -> Unit)?,
 ) {
-    if (anchorColor == null || onSeek == null) { appendInline(text); return }
+    if (anchorColor == null || onSeek == null) { appendInline(raw); return }
+    val text = splitAnchors(raw)
     var last = 0
     var prevAnchor = -1
     for (m in ANCHOR_RE.findAll(text)) {
