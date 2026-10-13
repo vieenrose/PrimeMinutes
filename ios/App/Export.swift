@@ -47,18 +47,26 @@ enum Export {
         }
     }
 
-    /// Android TranscriptExport.cues: a long turn is cut at punctuation into ≤32-char subtitles, timed by length.
+    /// Android TranscriptExport.cues: a long turn is cut at punctuation into subtitles of ≤64 display cells
+    /// (a CJK character is 2: 32 Chinese characters or 64 Latin ones), timed by length. A cut forced by
+    /// length backs off to the last space so no word is split.
     static func cues(_ ls: [Utterance]) -> [Utterance] {
         ls.flatMap { u -> [Utterance] in
             let text = oneCue(u.text)
             if text.isEmpty { return [] }
             var u0 = u; u0.text = text
-            if text.count <= 32 { return [u0] }
-            var pieces: [String] = [], sb = ""
+            if width(text) <= 64 { return [u0] }
+            var pieces: [String] = [], sb = "", w = 0
             for c in text {
-                sb.append(c)
-                let soft = "，、,；;：:".contains(c) && sb.count >= 16, hard = "。？！?!.".contains(c) || sb.count >= 32
-                if hard || soft { pieces.append(sb.trimmingCharacters(in: .whitespaces)); sb = "" }
+                sb.append(c); w += width(c)
+                let soft = "，、,；;：:".contains(c) && w >= 32, hard = "。？！?!.".contains(c)
+                if hard || soft { pieces.append(sb.trimmingCharacters(in: .whitespaces)); sb = ""; w = 0 }
+                else if w >= 64 {
+                    if let cut = sb.lastIndex(of: " "), cut > sb.startIndex {
+                        pieces.append(String(sb[..<cut]).trimmingCharacters(in: .whitespaces))
+                        sb = String(sb[sb.index(after: cut)...]); w = width(sb)
+                    } else { pieces.append(sb.trimmingCharacters(in: .whitespaces)); sb = ""; w = 0 }
+                }
             }
             if !sb.trimmingCharacters(in: .whitespaces).isEmpty { pieces.append(sb.trimmingCharacters(in: .whitespaces)) }
             pieces = pieces.filter { !$0.isEmpty }
@@ -69,6 +77,12 @@ enum Export {
         }
     }
     static func endOf(_ u: Utterance) -> Double { u.end > u.start ? u.end : u.start + 1 }
+    /// Display cells: CJK ideographs, kana, hangul and fullwidth forms take 2, anything else 1.
+    static func width(_ c: Character) -> Int {
+        guard let v = c.unicodeScalars.first?.value else { return 1 }
+        return (0x2E80...0x9FFF).contains(v) || (0xAC00...0xD7A3).contains(v) || (0xF900...0xFAFF).contains(v) || (0xFF00...0xFF60).contains(v) ? 2 : 1
+    }
+    static func width(_ s: String) -> Int { s.reduce(0) { $0 + width($1) } }
     /// A blank line inside a cue ends it early and desyncs every later cue.
     static func oneCue(_ s: String) -> String { s.replacingOccurrences(of: #"\n\s*\n+"#, with: "\n", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) }
     static func vtt(_ s: String) -> String { s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;") }
