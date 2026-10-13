@@ -5,6 +5,17 @@ import SwiftUI
 /// word before it) that opens `vox://<seconds>`, and speaker names in their transcript colour.
 enum Markdown {
     private static let anchor = try! NSRegularExpression(pattern: #"\[(\d+):(\d{2})(?::(\d{2}))?\]"#)
+    /// "[1:48, 12:00]": several times in one bracket, which the model sometimes writes; split into one anchor each.
+    private static let multi = try! NSRegularExpression(pattern: #"\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、;；]\s*\d+:\d{2}(?::\d{2})?)+)\]"#)
+    static func splitAnchors(_ text: String) -> String {
+        var out = "", last = text.startIndex
+        for m in multi.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let r = Range(m.range, in: text), let g = Range(m.range(at: 1), in: text) else { continue }
+            out += text[last..<r.lowerBound]; last = r.upperBound
+            out += text[g].split(whereSeparator: { ",，、;；".contains($0) }).map { "[\($0.trimmingCharacters(in: .whitespaces))]" }.joined(separator: " ")
+        }
+        return out + text[last...]
+    }
 
     static func render(_ md: String, anchors: Color? = nil, speakers: [(String, Color)] = []) -> AttributedString {
         var out = AttributedString()
@@ -24,8 +35,9 @@ enum Markdown {
         return out
     }
 
-    private static func withAnchors(_ text: String, _ color: Color?) -> AttributedString {
-        guard let color else { return inline(text) }
+    private static func withAnchors(_ raw: String, _ color: Color?) -> AttributedString {
+        guard let color else { return inline(raw) }
+        let text = splitAnchors(raw)
         var out = AttributedString(), last = text.startIndex, prevAnchor = false
         for m in anchor.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             guard let r = Range(m.range, in: text), let a = Range(m.range(at: 1), in: text), let b = Range(m.range(at: 2), in: text),
