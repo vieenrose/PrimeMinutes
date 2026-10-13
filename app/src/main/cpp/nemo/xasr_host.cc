@@ -232,8 +232,11 @@ struct xasr_context {
 
 struct xasr_stream {
     xasr_context* c = nullptr;
+    // Only the audio and fbank frames still needed are kept (a 45-min stream used to hold all of it, ~260 MB):
+    // pcm[0] is sample pcm_base of the stream, feats[0] is frame feat_base. n_frames and pos stay absolute.
     std::vector<float> pcm, feats;
-    int n_frames = 0, pos = 0;
+    int64_t pcm_base = 0;
+    int n_frames = 0, pos = 0, feat_base = 0;
     Greedy gs;
     bool finished = false;
 };
@@ -242,7 +245,7 @@ namespace {
 
 void stream_reset(xasr_stream* s) {
     s->pcm.clear(); s->feats.clear();
-    s->n_frames = s->pos = 0;
+    s->pcm_base = 0; s->n_frames = s->pos = s->feat_base = 0;
     if (s->c->ext_reset) s->c->ext_reset(s->c->ext_user);
     greedy_init(s->c->m, s->gs);
     s->finished = false;
@@ -253,17 +256,21 @@ void stream_reset(xasr_stream* s) {
 void extend_frames(xasr_stream* s, bool flush) {
     const auto p = fbank_params(s->c->m.F);
     const int F = p.n_mels, hop = 160, win = 400, lead = win / 2 - hop / 2;
-    const int n = (int)s->pcm.size();
+    const int64_t n = s->pcm_base + (int64_t)s->pcm.size();   // samples received so far
     if (flush) {
+        // The remaining frames, from the kept audio. It starts one frame before n_frames on a hop boundary, so its
+        // frame k is stream frame first + k with the same samples; only k = 0 is mirrored at the cut, and it is skipped.
+        const int first = s->n_frames > 0 ? s->n_frames - 1 : 0;
+        const int64_t a = (int64_t)first * hop;
         int T = 0;
-        const auto fb = core_kaldi::compute_fbank(s->pcm.data(), n, p, T);
-        if (T > s->n_frames) {
-            s->feats.insert(s->feats.end(), fb.begin() + (size_t)s->n_frames * F, fb.begin() + (size_t)T * F);
-            s->n_frames = T;
+        const auto fb = core_kaldi::compute_fbank(s->pcm.data() + (a - s->pcm_base), (int)(n - a), p, T);
+        if (first + T > s->n_frames) {
+            s->feats.insert(s->feats.end(), fb.begin() + (size_t)(s->n_frames - first) * F, fb.begin() + (size_t)T * F);
+            s->n_frames = first + T;
         }
         return;
     }
-    const int ready = n >= win - lead ? (n - (win - lead)) / hop + 1 : 0;
+    const int ready = n >= win - lead ? (int)((n - (win - lead)) / hop) + 1 : 0;
     if (ready <= s->n_frames) return;
     if (s->n_frames == 0) {
         int T0 = 0;
@@ -273,9 +280,10 @@ void extend_frames(xasr_stream* s, bool flush) {
     }
     if (ready > s->n_frames) {
         auto q = p; q.snip_edges = true;
-        const int start = s->n_frames * hop - lead, len = (ready - 1 - s->n_frames) * hop + win;
+        const int64_t start = (int64_t)s->n_frames * hop - lead;
+        const int len = (ready - 1 - s->n_frames) * hop + win;
         int T = 0;
-        const auto fb = core_kaldi::compute_fbank(s->pcm.data() + start, len, q, T);
+        const auto fb = core_kaldi::compute_fbank(s->pcm.data() + (start - s->pcm_base), len, q, T);
         s->feats.insert(s->feats.end(), fb.begin(), fb.end());
         s->n_frames = ready;
     }
@@ -295,13 +303,24 @@ bool stream_accept(xasr_stream* s, const float* pcm, int n, bool flush) {
     const int F = s->c->m.F, Ed = s->c->m.J;
     std::vector<float> enc, step((size_t)kEncFrames * Ed);
     for (; s->pos + kWindow < s->n_frames; s->pos += kShift) {
-        if (!s->c->ext_fn(s->c->ext_user, s->feats.data() + (size_t)s->pos * F, kWindow, F, step.data(), kEncFrames, Ed)) {
+        if (!s->c->ext_fn(s->c->ext_user, s->feats.data() + (size_t)(s->pos - s->feat_base) * F, kWindow, F, step.data(), kEncFrames, Ed)) {
             fprintf(stderr, "xasr: external chunk encoder failed\n");
             return false;
         }
         enc.insert(enc.end(), step.begin(), step.end());
     }
     greedy_run(s->c->m, s->gs, enc.data(), (int)(enc.size() / (size_t)Ed));
+    // Drop what no later step reads, in ~30 s batches: frames before the next window, and audio before the frame
+    // the flush restarts from (n_frames - 1, which is also before the next frame's window start).
+    if (s->pos - s->feat_base >= 3000) {
+        s->feats.erase(s->feats.begin(), s->feats.begin() + (size_t)(s->pos - s->feat_base) * F);
+        s->feat_base = s->pos;
+    }
+    const int64_t keep = s->n_frames > 0 ? (int64_t)(s->n_frames - 1) * 160 : 0;
+    if (keep - s->pcm_base >= 16000 * 30) {
+        s->pcm.erase(s->pcm.begin(), s->pcm.begin() + (size_t)(keep - s->pcm_base));
+        s->pcm_base = keep;
+    }
     s->finished = flush;
     return true;
 }

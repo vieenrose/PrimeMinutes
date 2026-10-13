@@ -344,7 +344,7 @@ final class Model: ObservableObject {
             func full(_ fresh: [Utterance], stable: Int) -> ([Utterance], Int) {
                 SeamStitcher.stitch(prior, seam: seam, sk.restore(fresh).map { var u = $0; u.start += offset; u.end += offset; return u }, stable: stable)
             }
-            var kept: [Utterance] = prior, snapshot: [Utterance] = prior, offered = 0, frozen: [Utterance] = []
+            var kept: [Utterance] = prior, snapshot: [Utterance] = prior, offered = 0, frozen: [Utterance] = [], savedAt = 0.0
             if resume != nil { for u in prior { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }; offered = prior.count; StatusLog.add("trace resume at \(Int(seam)) s, \(prior.count) utterances kept") }
             do {
                 if cached == nil, let eng { try feed { chunk in
@@ -357,6 +357,11 @@ final class Model: ObservableObject {
                     for u in kept.dropFirst(offered) { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }   // original-audio times: notes need no restore
                     offered = max(offered, kept.count)
                     let j = worker.journal, fed = eng.fedSeconds
+                    // Every minute, the same resume point a Stop leaves: a kill (swipe-away, jetsam) then resumes after it
+                    // instead of transcribing the whole file again.
+                    if let job, fed - savedAt >= 60, snapshot.count > prior.count, let last = snapshot.last {
+                        Checkpoint.savePartial(.init(lines: snapshot, seam: last.end), job.id); savedAt = fed
+                    }
                     Task { @MainActor in
                         self.lines = conv.utterances(all); self.notes = conv.notes(j)
                         if live { if self.recording { self.status = L("recording_s", Int(fed)) }; return }
@@ -435,7 +440,7 @@ final class Model: ObservableObject {
                 let left = await queue.count; pending = left; activeJob = job.id; await syncQueue()
                 if left > 1 { status = L("queue_n", left) }
                 let skipper = SilenceSkipper()
-                let partial = Checkpoint.loadPartial(job.id)   // only a Stop leaves one: Resume continues after its seam
+                let partial = Checkpoint.loadPartial(job.id)   // left by a Stop, or saved every minute (a kill): continue after its seam
                 let from = partial.map { max(0, $0.seam - SeamStitcher.preroll) } ?? 0
                 await process(seconds: secs, job: job, skipper: skipper, resume: partial, offset: from) { sink in try AudioPrep.stream(url, skipper: skipper, from: from, onChunk: sink) }
                 if StopFlag.on { StopFlag.on = false; parked.insert(job.id); status = L("status_stopped") }
