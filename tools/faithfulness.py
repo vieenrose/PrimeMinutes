@@ -1,7 +1,7 @@
 import urllib.request, json, sys, time
 
 URL = "http://127.0.0.1:8088/v1/chat/completions"
-SC = "/tmp/claude-1000/-home-luigi-VoxSum-bak/c9f25bf5-ffa6-4fbf-8821-25f0890030a1/scratchpad"
+SC = "/tmp/claude-1000/-home-luigi-Prime Minutes-bak/c9f25bf5-ffa6-4fbf-8821-25f0890030a1/scratchpad"
 PHASE = sys.argv[1] if len(sys.argv) > 1 else "gen"
 SOURCES = {"zh": "transcript.txt", "en": "transcript_en.txt", "ja": "transcript_ja.txt",
            "ko": "transcript_ko.txt", "fr": "transcript_fr.txt"}

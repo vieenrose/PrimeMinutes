@@ -147,10 +147,9 @@ private fun RecentList(recents: List<RecentSession>, onOpen: (RecentSession) -> 
 @Composable
 private fun Hero(iconSize: Int) {
     val pal = LocalPrimeMinutesPalette.current
-    Icon(
-        Icons.Filled.GraphicEq,
+    androidx.compose.foundation.Image(
+        androidx.compose.ui.res.painterResource(R.drawable.ic_brand),
         contentDescription = null,
-        tint = pal.Sky,
         modifier = Modifier.size(iconSize.dp),
     )
     Text(

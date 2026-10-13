@@ -1,6 +1,6 @@
 // nemo_eval - host driver for the streaming engine exactly as the app uses it: a 16 kHz WAV pushed in
 // 2048-sample blocks (the recorder's block size) through Engine::push, then finish(). Writes the final
-// segments as JSON [{spk,start,end,text}] (the ~/voxsum-public-eval score.py hypothesis format),
+// segments as JSON [{spk,start,end,text}] (the ~/primeminutes-public-eval score.py hypothesis format),
 // and the diarizer's own turns beside it as <out>.turns.json.
 //
 //   nemo_eval <xasr.gguf> <diar.gguf> <in.wav> <out.json> [threads] [--max-seg S] [--live]

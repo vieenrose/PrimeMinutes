@@ -1,7 +1,7 @@
 import urllib.request, json, time, sys, re, csv
 
 URL = "http://127.0.0.1:8088/v1/chat/completions"
-SC = "/tmp/claude-1000/-home-luigi-VoxSum-bak/c9f25bf5-ffa6-4fbf-8821-25f0890030a1/scratchpad"
+SC = "/tmp/claude-1000/-home-luigi-Prime Minutes-bak/c9f25bf5-ffa6-4fbf-8821-25f0890030a1/scratchpad"
 MODEL = sys.argv[1] if len(sys.argv) > 1 else "qwen3.5-0.8b"
 TASK = sys.argv[2] if len(sys.argv) > 2 else "summarize"   # summarize | title | actions | speakers
 

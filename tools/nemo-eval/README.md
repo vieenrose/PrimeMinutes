@@ -45,7 +45,7 @@ Host RTF (x86, 4 threads, 5 runs in parallel) was 0.27–0.69; peak RSS 530 MB f
 Phone figures: see `bench_on_device.sh` (the app's own arm64 build, `armv8.2-a+dotprod` like upstream's
 RTF 0.60 measurement on 2 A78 cores).
 
-## Speaker count on labelled clips (`~/voxsum-testdata`, truth confirmed by ear)
+## Speaker count on labelled clips (`~/primeminutes-testdata`, truth confirmed by ear)
 
 | clip | truth | previous (segmentation-first, the shipped default) | nemo |
 |---|---:|---:|---:|

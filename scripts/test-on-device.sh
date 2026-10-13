@@ -3,11 +3,11 @@
 #
 #   scripts/test-on-device.sh [adb-serial] [-- extra am instrument args]
 #
-# The problem this solves: instrumented tests need a debug-signed studio.voxsum, and Android
+# The problem this solves: instrumented tests need a debug-signed studio.primeminutes, and Android
 # refuses to install that over a release-signed one. Gradle's connectedAndroidTest resolves the
 # clash by UNINSTALLING first, which deletes the session library and every downloaded model.
 #
-# So this installs under its own application id (-PisolatedTestId -> studio.voxsum.androidtest),
+# So this installs under its own application id (-PisolatedTestId -> studio.primeminutes.androidtest),
 # which coexists with the real app. Two details make that work:
 #   * androidTestImplementation of compose ui-test-manifest — with a suffixed id the Compose
 #     rules launch ComponentActivity from the TEST package, so it must be declared there too.
@@ -35,7 +35,7 @@ SERIAL="${1:-}"
 [ "${1:-}" = "--" ] && shift || true
 
 ADB="${ADB:-$HOME/Android/Sdk/platform-tools/adb}"
-APP_ID=studio.voxsum.androidtest   # -PisolatedTestId suffixes the real id with .androidtest
+APP_ID=studio.primeminutes.androidtest   # -PisolatedTestId suffixes the real id with .androidtest
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ -z "$SERIAL" ]; then
@@ -51,13 +51,13 @@ ABI="$("$ADB" -s "$SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
 echo ">> device $SERIAL ($ABI)"
 
 "$ROOT/gradlew" -p "$ROOT" :app:assembleDebug :app:assembleDebugAndroidTest \
-  -PisolatedTestId -PvoxsumAbi="$ABI"
+  -PisolatedTestId -PprimeminutesAbi="$ABI"
 
 APK="$ROOT/app/build/outputs/apk/debug/app-debug.apk"
 TEST_APK="$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 # The isolated app may already be in use for manual testing (its sessions and ~1.7 GB of models):
 # keep it afterwards if it was there before this run.
-had_app=$("$ADB" -s "$SERIAL" shell pm list packages studio.voxsum.androidtest | grep -cx 'package:studio.voxsum.androidtest' || true)
+had_app=$("$ADB" -s "$SERIAL" shell pm list packages studio.primeminutes.androidtest | grep -cx 'package:studio.primeminutes.androidtest' || true)
 echo ">> installing (alongside any release build)"
 "$ADB" -s "$SERIAL" install -r -t "$APK" >/dev/null
 "$ADB" -s "$SERIAL" install -r -t "$TEST_APK" >/dev/null
@@ -66,16 +66,16 @@ echo ">> installing (alongside any release build)"
 # provision what they need rather than skipping (ActionItemExtractorTest calls ensureLlmModel), and
 # a 2.6 GB summarizer over a tablet's wifi does not finish inside the 20-minute test timeout — the
 # class then fails on TestTimedOutException, which looks like a product bug and is not one.
-# Point VOXSUM_SEED_MODELS at a directory laid out like the app's files/models:
+# Point PRIMEMINUTES_SEED_MODELS at a directory laid out like the app's files/models:
 #   nemo/{x-asr-zh-en-q8_0.gguf,nemotron-3-diarization-q8_0.gguf,.revision}
 #   qwen35-gguf/...   (the summarizer; see LlmRegistry)
 # nemo/.revision must hold ModelManager's NEMO_REVISION, or the app re-downloads over the seed.
-if [ -n "${VOXSUM_SEED_MODELS:-}" ] && [ -d "$VOXSUM_SEED_MODELS" ]; then
-  echo ">> seeding models from $VOXSUM_SEED_MODELS (skips the on-device download)"
-  "$ADB" -s "$SERIAL" shell "rm -rf /data/local/tmp/voxsum-seed && mkdir -p /data/local/tmp/voxsum-seed"
-  "$ADB" -s "$SERIAL" push "$VOXSUM_SEED_MODELS/." /data/local/tmp/voxsum-seed >/dev/null
-  "$ADB" -s "$SERIAL" shell "run-as ${APP_ID} sh -c 'mkdir -p files/models && cp -r /data/local/tmp/voxsum-seed/. files/models/'"
-  "$ADB" -s "$SERIAL" shell "rm -rf /data/local/tmp/voxsum-seed"
+if [ -n "${PRIMEMINUTES_SEED_MODELS:-}" ] && [ -d "$PRIMEMINUTES_SEED_MODELS" ]; then
+  echo ">> seeding models from $PRIMEMINUTES_SEED_MODELS (skips the on-device download)"
+  "$ADB" -s "$SERIAL" shell "rm -rf /data/local/tmp/primeminutes-seed && mkdir -p /data/local/tmp/primeminutes-seed"
+  "$ADB" -s "$SERIAL" push "$PRIMEMINUTES_SEED_MODELS/." /data/local/tmp/primeminutes-seed >/dev/null
+  "$ADB" -s "$SERIAL" shell "run-as ${APP_ID} sh -c 'mkdir -p files/models && cp -r /data/local/tmp/primeminutes-seed/. files/models/'"
+  "$ADB" -s "$SERIAL" shell "rm -rf /data/local/tmp/primeminutes-seed"
 fi
 
 # Boox (and other aggressively-managed devices) DISABLE a package after it crashes: the state shows
@@ -91,19 +91,19 @@ echo ">> running the suite (models not seeded above are downloaded on first use 
 # Per class, not one big run: a test that gets OOM-killed takes the whole instrumentation with it
 # (the runner dies, and every class after it silently never reports). Isolating them means one
 # crash costs one class. Pass -e class ... yourself to run a single one.
-RUNNER=studio.voxsum.androidtest.test/androidx.test.runner.AndroidJUnitRunner
+RUNNER=studio.primeminutes.androidtest.test/androidx.test.runner.AndroidJUnitRunner
 if [ $# -gt 0 ]; then
   "$ADB" -s "$SERIAL" shell am instrument -w -r "$@" "$RUNNER"
 else
   # Enumerate DECLARED class names, not filenames: LlmEngineTest.kt declares TextGenTest, and a
   # filename-derived list silently never ran it while reporting a phantom ClassNotFoundException
   # failure for the file's name. Only files that actually contain @Test are considered.
-  CLASSES=$(grep -l '@Test' "$ROOT"/app/src/androidTest/java/studio/voxsum/*.kt \
+  CLASSES=$(grep -l '@Test' "$ROOT"/app/src/androidTest/java/studio/primeminutes/*.kt \
     | xargs -r grep -hoP '^\s*class\s+\K\w+' | sort -u)
   pass=0; fail=0; crash=0
   for c in $CLASSES; do
     printf '\n=== %s ===\n' "$c"
-    out=$("$ADB" -s "$SERIAL" shell am instrument -w -r -e class "studio.voxsum.$c" "$RUNNER" 2>&1) || true
+    out=$("$ADB" -s "$SERIAL" shell am instrument -w -r -e class "studio.primeminutes.$c" "$RUNNER" 2>&1) || true
     echo "$out" | grep -E '^(OK|FAILURES|Tests run|INSTRUMENTATION_RESULT: shortMsg)' || true
     if echo "$out" | grep -q 'Process crashed'; then
       crash=$((crash+1))
@@ -125,10 +125,10 @@ fi
 
 # Clean up so the isolated copy's models do not sit on the device forever.
 echo ">> uninstalling the isolated test build"
-"$ADB" -s "$SERIAL" uninstall studio.voxsum.androidtest.test >/dev/null 2>&1 || true
+"$ADB" -s "$SERIAL" uninstall studio.primeminutes.androidtest.test >/dev/null 2>&1 || true
 if [ "$had_app" = 0 ]; then
-  "$ADB" -s "$SERIAL" uninstall studio.voxsum.androidtest >/dev/null 2>&1 || true
+  "$ADB" -s "$SERIAL" uninstall studio.primeminutes.androidtest >/dev/null 2>&1 || true
 else
-  echo ">> kept studio.voxsum.androidtest (installed before this run, with its data)"
+  echo ">> kept studio.primeminutes.androidtest (installed before this run, with its data)"
 fi
 echo ">> done — the installed release build was never touched"

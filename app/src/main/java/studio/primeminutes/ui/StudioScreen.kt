@@ -310,12 +310,10 @@ fun StudioScreen(
                 if (firstRun) {
                     // First run: a clear invitation, not a faint glyph in a void. Record is the big
                     // button below; importing a file is the other way in, so it gets a button here.
-                    Box(
-                        Modifier.size(88.dp).clip(CircleShape).background(pal.ActiveTint),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Filled.GraphicEq, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(44.dp))
-                    }
+                    androidx.compose.foundation.Image(
+                        androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
+                        modifier = Modifier.size(72.dp),
+                    )
                     Spacer(Modifier.height(20.dp))
                     Text(
                         stringResource(R.string.studio_empty_title),
