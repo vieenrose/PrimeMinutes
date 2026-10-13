@@ -460,14 +460,14 @@ Engine::SegCounts Engine::build_segments(
         open_b = cur_b;
     };
     for (TaggedPiece& p : pieces) {
-        // VoxSumDroid: punctuation the ASR emitted at a turn start ends the PREVIOUS speaker's
+        // Prime Minutes: punctuation the ASR emitted at a turn start ends the PREVIOUS speaker's
         // sentence ("？ 你有那么好抓吗") - hand it back before the speaker change closes that segment.
         if (!open.text.empty() && !p.speaker.empty() && p.speaker != open.speaker_id) {
             const size_t k = leading_punct_bytes(p.text);
             if (k) { take(p.text.substr(0, k)); p.text.erase(0, k); }
             if (p.text.empty()) continue;
         }
-        // VoxSumDroid: a long single-speaker run becomes several segments, cut after a sentence end once
+        // Prime Minutes: a long single-speaker run becomes several segments, cut after a sentence end once
         // it is max_segment_s long (hard cut at 2x without punctuation) - one tap-to-seek line per
         // sentence group instead of a minutes-long monologue.
         if (cfg_.max_segment_s > 0 && !open.text.empty() && p.speaker == open.speaker_id) {

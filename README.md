@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/screenshots/app-icon.png" width="96" alt="VoxSum" />
+  <img src="docs/screenshots/app-icon.png" width="96" alt="Prime Minutes" />
 </p>
 
-<h1 align="center">VoxSum for Android</h1>
+<h1 align="center">Prime Minutes for Android</h1>
 
 <p align="center">
   <b>會議錄音 → 標註語者的逐字稿 → 摘要。<br>全程在手機上完成，完全離線。</b>
@@ -48,7 +48,7 @@
 
 **匯出與重新處理**（場次右上 **⋮**）：
 
-- **VoxSum 場次（.m4a）**：音訊、逐字稿、語者與摘要合為一檔，任何播放器都能播放，也可在 VoxSum 重新開啟。
+- **Prime Minutes 場次（.m4a）**：音訊、逐字稿、語者與摘要合為一檔，任何播放器都能播放，也可在 Prime Minutes 重新開啟。
 - **文件**：PDF、Markdown、純文字。**字幕**：SRT、VTT、LRC（含語者）。
 - **重新轉錄**（重跑語音辨識與語者分離）或**重新摘要**（保留逐字稿）。
 
@@ -89,7 +89,7 @@
 
 錄音時，語音辨識優先（它落後就會漏音）；AI 筆記在背景把已確定的句子讀進上下文，每累積約 1,500 token（數分鐘的語音）才真正閱讀一次並寫筆記。停止後只剩最後一段要讀，所以摘要很快完成。在 Galaxy Note 10+（Snapdragon 855）上，約 7 分半的示範會議即時錄音，摘要於停止後約 77 秒完成，記憶體峰值 2.4 GB；改用 E4B 約 3 分鐘、4.0 GB。
 
-AI 筆記（閱讀代理）的設計——閱讀協定、筆記類型、約 1,500 token 的閱讀窗、4k 上下文（每段從精簡過的筆記重新開始）、標題與摘要的呼叫——見 meeting-summarizer 的 [`docs/voxsumdroid-integration.md`](https://github.com/vieenrose/meeting-summarizer/blob/main/docs/voxsumdroid-integration.md)。VoxSum 與該協定只有兩處不同：每窗筆記超過上限時優先保留決議與待辦；錄音停止後即使即時辨識漏掉部分音訊，也直接以即時逐字稿寫摘要。
+AI 筆記（閱讀代理）的設計——閱讀協定、筆記類型、約 1,500 token 的閱讀窗、4k 上下文（每段從精簡過的筆記重新開始）、標題與摘要的呼叫——見 meeting-summarizer 的 [`docs/voxsumdroid-integration.md`](https://github.com/vieenrose/meeting-summarizer/blob/main/docs/voxsumdroid-integration.md)。Prime Minutes 與該協定只有兩處不同：每窗筆記超過上限時優先保留決議與待辦；錄音停止後即使即時辨識漏掉部分音訊，也直接以即時逐字稿寫摘要。
 
 完整操作說明（含介面測試地圖）見 [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)。模組對應見 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，準確度評測見 [`tools/nemo-eval`](tools/nemo-eval/README.md)。
 
@@ -100,7 +100,7 @@ AI 筆記（閱讀代理）的設計——閱讀協定、筆記類型、約 1,50
 ```bash
 git clone https://github.com/vieenrose/VoxSum.git && cd VoxSum
 git submodule update --init           # 不要加 --recursive
-./gradlew :app:assembleDebug          # arm64-v8a；模擬器用 -PvoxsumAbi=x86_64
+./gradlew :app:assembleDebug          # arm64-v8a；模擬器用 -PprimeminutesAbi=x86_64
 ./gradlew :app:testDebugUnitTest
 scripts/test-on-device.sh             # 裝置上的儀器測試（獨立 app ID，不影響正式版）
 ```

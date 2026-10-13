@@ -40,7 +40,7 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:theme="@style/Theme.VoxSum"
+        android:theme="@style/Theme.PrimeMinutes"
         tools:targetApi="34">
         <!-- The reader's GPU backend (ML Drift) needs the vendor OpenCL driver; since Android 12 an
              app sees it only when declared. Optional: without it the GPU test fails, the CPU reads. -->
@@ -55,7 +55,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- "Share to VoxSum": receive an audio/video file from any app (LINE / WhatsApp voice
+            <!-- "Share to Prime Minutes": receive an audio/video file from any app (LINE / WhatsApp voice
                  notes, call recorders, Gmail attachments, browsers…). Receiving a file to transcribe
                  locally is the opposite of an upload — fully on-device, no account. -->
             <intent-filter>
@@ -64,7 +64,7 @@
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <!-- "Open with VoxSum" from a file manager / browser download. -->
+            <!-- "Open with Prime Minutes" from a file manager / browser download. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

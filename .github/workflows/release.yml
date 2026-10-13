@@ -75,10 +75,10 @@ jobs:
       # still validates the native build end to end.
       - name: Build APK
         env:
-          VOXSUM_KEYSTORE: ${{ runner.temp }}/release.keystore
-          VOXSUM_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          VOXSUM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          VOXSUM_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          PRIMEMINUTES_KEYSTORE: ${{ runner.temp }}/release.keystore
+          PRIMEMINUTES_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          PRIMEMINUTES_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          PRIMEMINUTES_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ "$HAS_KEYSTORE" = "true" ]; then
             ./gradlew :app:assembleRelease --no-daemon --stacktrace
@@ -89,7 +89,7 @@ jobs:
       - name: Upload APK artifact (always — proves the build works)
         uses: actions/upload-artifact@v4
         with:
-          name: voxsum-apk
+          name: primeminutes-apk
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
@@ -98,8 +98,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk "voxsum-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "primeminutes-${GITHUB_REF_NAME}.apk"
           NOTES="Offline on-device transcription + diarization + summarization. Download and install the APK."
-          gh release create "$GITHUB_REF_NAME" "voxsum-${GITHUB_REF_NAME}.apk" \
-            --title "VoxSum $GITHUB_REF_NAME" --notes "$NOTES" \
-          || gh release upload "$GITHUB_REF_NAME" "voxsum-${GITHUB_REF_NAME}.apk" --clobber
+          gh release create "$GITHUB_REF_NAME" "primeminutes-${GITHUB_REF_NAME}.apk" \
+            --title "Prime Minutes $GITHUB_REF_NAME" --notes "$NOTES" \
+          || gh release upload "$GITHUB_REF_NAME" "primeminutes-${GITHUB_REF_NAME}.apk" --clobber

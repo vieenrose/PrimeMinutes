@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(voxsum)
+project(primeminutes)
 
 # ---------------------------------------------------------------------------
-# Native layer for VoxSumDroid.
+# Native layer for Prime Minutes.
 #
 #   ASR + diarization -> nemo-x-asr-diarizer (CrispASR x-asr + audio.cpp
 #                        Nemotron-3 diarization, ggml), built from the
@@ -24,7 +24,7 @@ set(NATIVE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../native")
 # and they must never bind to each other:
 #   * audio.cpp builds as libaudiocpp.so with its ggml hidden behind a version
 #     script (checked: no exported ggml_/gguf_ symbols);
-#   * CrispASR + its ggml link STATICALLY into libvoxsum-nemo.so, which exports
+#   * CrispASR + its ggml link STATICALLY into libprimeminutes-nemo.so, which exports
 #     only its JNI entry points (nemo/nemo_jni.map).
 # Both are ExternalProjects because their ggml targets would collide in one CMake
 # tree. ARMv8.2-A+dotprod floor (no i8mm: the Dimensity reference phones lack it);
@@ -34,11 +34,11 @@ include(ExternalProject)
 # The CPU floor for every ggml copy in the app: ARMv8.2-A with the int8 dot-product extension.
 # Only on arm64: ggml turns GGML_CPU_ARM_ARCH into -march, which breaks the x86_64 emulator build.
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    set(VOXSUM_ARM_ARCH armv8.2-a+dotprod)
+    set(PRIMEMINUTES_ARM_ARCH armv8.2-a+dotprod)
 else()
-    set(VOXSUM_ARM_ARCH "")
+    set(PRIMEMINUTES_ARM_ARCH "")
 endif()
-set(NEMO_ARCH ${VOXSUM_ARM_ARCH})
+set(NEMO_ARCH ${PRIMEMINUTES_ARM_ARCH})
 set(NEMO_COMMON_ARGS
     -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
     -DANDROID_ABI=${ANDROID_ABI}
@@ -109,7 +109,7 @@ endif()
 add_library(litert SHARED IMPORTED)
 set_target_properties(litert PROPERTIES IMPORTED_LOCATION "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.so")
 
-add_library(voxsum-nemo SHARED
+add_library(primeminutes-nemo SHARED
     nemo/nemo_jni.cpp
     nemo/engine.cpp
     nemo/fusion.cpp
@@ -117,19 +117,19 @@ add_library(voxsum-nemo SHARED
     nemo/diar_litert.cc
     nemo/diar_pre_encode.cc
     nemo/xasr_litert.cc)
-target_compile_features(voxsum-nemo PRIVATE cxx_std_17)
-target_compile_definitions(voxsum-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES NEMO_WITH_LITERT NEMO_LITERT_ENV_API)
-target_compile_options(voxsum-nemo PRIVATE -O2 -w)
-target_include_directories(voxsum-nemo PRIVATE nemo)
+target_compile_features(primeminutes-nemo PRIVATE cxx_std_17)
+target_compile_definitions(primeminutes-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES NEMO_WITH_LITERT NEMO_LITERT_ENV_API)
+target_compile_options(primeminutes-nemo PRIVATE -O2 -w)
+target_include_directories(primeminutes-nemo PRIVATE nemo)
 if(NEMO_NO_GGML)
-    target_sources(voxsum-nemo PRIVATE nemo/xasr_host.cc nemo/kaldi_fbank.cpp nemo/diar_host.cc)
-    target_compile_definitions(voxsum-nemo PRIVATE NEMO_NO_GGML)
-    target_include_directories(voxsum-nemo PRIVATE nemo/hostxasr)
+    target_sources(primeminutes-nemo PRIVATE nemo/xasr_host.cc nemo/kaldi_fbank.cpp nemo/diar_host.cc)
+    target_compile_definitions(primeminutes-nemo PRIVATE NEMO_NO_GGML)
+    target_include_directories(primeminutes-nemo PRIVATE nemo/hostxasr)
     set(NEMO_NATIVE_LIBS "")
 else()
-    target_sources(voxsum-nemo PRIVATE nemo/diar_crispasr.cpp)
-    add_dependencies(voxsum-nemo crispasr_ext audiocpp_ext)
-    target_include_directories(voxsum-nemo PRIVATE
+    target_sources(primeminutes-nemo PRIVATE nemo/diar_crispasr.cpp)
+    add_dependencies(primeminutes-nemo crispasr_ext audiocpp_ext)
+    target_include_directories(primeminutes-nemo PRIVATE
         ${NATIVE_DIR}/crispasr/src
         ${NATIVE_DIR}/audiocpp/include
         ${NATIVE_DIR}/crispasr-ggml/include
@@ -137,11 +137,11 @@ else()
         ${NATIVE_DIR}/crispasr-ggml/src/ggml-cpu)
     set(NEMO_NATIVE_LIBS ${CRISP_LIBS} audiocpp)
 endif()
-target_link_options(voxsum-nemo PRIVATE
+target_link_options(primeminutes-nemo PRIVATE
     -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/nemo/nemo_jni.map
     $<$<NOT:$<BOOL:${NEMO_NO_GGML}>>:-fopenmp -static-openmp>)   # CrispASR's x-asr kernels use OpenMP; link the NDK's libomp statically
-target_include_directories(voxsum-nemo PRIVATE mfa/third_party)
-target_link_libraries(voxsum-nemo ${NEMO_NATIVE_LIBS} litert android log dl m)
+target_include_directories(primeminutes-nemo PRIVATE mfa/third_party)
+target_link_libraries(primeminutes-nemo ${NEMO_NATIVE_LIBS} litert android log dl m)
 
 
 # ---------------------------------------------------------------------------
@@ -161,15 +161,15 @@ if(DEFINED LITERT_SO_DIR AND EXISTS "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.s
     link_libraries(log)
     add_subdirectory("${NATIVE_DIR}/sentencepiece" sentencepiece-build EXCLUDE_FROM_ALL)
 
-    add_library(voxsum-mfa SHARED mfa/mfa_jni.cpp mfa/mfa_engine.cc mfa/i8_attn.cc)
-    target_compile_features(voxsum-mfa PRIVATE cxx_std_17)
-    target_compile_options(voxsum-mfa PRIVATE -O3 -fexceptions -fopenmp)
+    add_library(primeminutes-mfa SHARED mfa/mfa_jni.cpp mfa/mfa_engine.cc mfa/i8_attn.cc)
+    target_compile_features(primeminutes-mfa PRIVATE cxx_std_17)
+    target_compile_options(primeminutes-mfa PRIVATE -O3 -fexceptions -fopenmp)
     if(ANDROID_ABI STREQUAL "arm64-v8a")
-        target_compile_options(voxsum-mfa PRIVATE -march=${VOXSUM_ARM_ARCH})
+        target_compile_options(primeminutes-mfa PRIVATE -march=${PRIMEMINUTES_ARM_ARCH})
     endif()
-    target_include_directories(voxsum-mfa PRIVATE mfa mfa/third_party "${NATIVE_DIR}/sentencepiece/src")
-    target_link_options(voxsum-mfa PRIVATE -fopenmp -static-openmp)
-    target_link_libraries(voxsum-mfa litert sentencepiece-static android log)
+    target_include_directories(primeminutes-mfa PRIVATE mfa mfa/third_party "${NATIVE_DIR}/sentencepiece/src")
+    target_link_options(primeminutes-mfa PRIVATE -fopenmp -static-openmp)
+    target_link_libraries(primeminutes-mfa litert sentencepiece-static android log)
 else()
     message(WARNING "libLiteRt.so not found under LITERT_SO_DIR — the mobile reader is not built")
 endif()

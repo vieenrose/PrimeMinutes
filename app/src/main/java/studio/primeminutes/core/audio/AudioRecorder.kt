@@ -1,0 +1,153 @@
+package studio.primeminutes.core.audio
+
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.util.Log
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
+import java.io.File
+
+/**
+ * Microphone capture for live transcription — the source counterpart of [AudioDecoder].
+ *
+ * Records 16 kHz mono PCM from the mic, **streams each block straight to a WAV file** (for the synced
+ * player and the queue re-run) AND emits it as a [Flow] of float chunks for the
+ * live ASR/VAD path. Nothing is accumulated in RAM, so a multi-hour meeting records without OOM
+ * (the old version held the whole waveform — ~230 MB/hour).
+ *
+ * Read blocks are a multiple of the Silero VAD window so the live ASR can feed them straight through.
+ */
+class AudioRecorder(private val sampleRate: Int = 16_000, private val feed: File? = null) {
+
+    @Volatile var totalSamples: Long = 0L
+        private set
+
+    /** Total seconds captured so far — for the live recording timer. */
+    val seconds: Double get() = totalSamples.toDouble() / sampleRate
+
+    /**
+     * Cold flow that records to [dest] (16 kHz mono WAV) until [shouldStop] returns true (or the
+     * coroutine is cancelled), emitting float chunks in [-1, 1]. Throws if the mic won't init.
+     */
+    fun record(dest: File, shouldStop: () -> Boolean): Flow<FloatArray> =
+        if (feed != null) replay(feed, dest, shouldStop) else capture(dest, shouldStop)
+
+    /**
+     * Test builds only: plays a canonical 16 kHz mono WAV in place of the mic, at real-time pace,
+     * then silence until stopped — so demos and live end-to-end tests are reproducible (the
+     * emulator's host mic drops out after a few seconds). Same AGC, WAV write and emit as the mic.
+     */
+    private fun replay(src: File, dest: File, shouldStop: () -> Boolean): Flow<FloatArray> = flow {
+        dest.parentFile?.mkdirs()
+        val writer = WavWriter(dest)
+        val agc = LiveAgc()
+        val bytes = ByteArray(BLOCK * 2)
+        val t0 = System.nanoTime()
+        try {
+            java.io.BufferedInputStream(src.inputStream()).use { input ->
+                input.skip(44)
+                while (!shouldStop() && currentCoroutineContext().isActive) {
+                    var got = 0
+                    while (got < bytes.size) {
+                        val r = input.read(bytes, got, bytes.size - got)
+                        if (r < 0) break
+                        got += r
+                    }
+                    val n = if (got >= 2) got / 2 else BLOCK
+                    val f = FloatArray(n) {
+                        if (got >= 2) ((bytes[2 * it].toInt() and 0xFF) or (bytes[2 * it + 1].toInt() shl 8)) / 32768f else 0f
+                    }
+                    agc.process(f, n)
+                    writer.write(f, n)
+                    totalSamples += n
+                    emit(f)
+                    val due = t0 + totalSamples * 1_000_000_000L / sampleRate
+                    val wait = (due - System.nanoTime()) / 1_000_000L
+                    if (wait > 0) kotlinx.coroutines.delay(wait)
+                }
+            }
+        } finally {
+            writer.close()
+        }
+    }
+
+    private fun capture(dest: File, shouldStop: () -> Boolean): Flow<FloatArray> = flow {
+        val minBuf = AudioRecord.getMinBufferSize(
+            sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+        )
+        val bufBytes = maxOf(minBuf, BLOCK * 2 * 2)
+        @Suppress("MissingPermission") // caller checks RECORD_AUDIO before starting the service
+        val rec = AudioRecord(
+            MediaRecorder.AudioSource.MIC, sampleRate,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufBytes,
+        )
+        if (rec.state != AudioRecord.STATE_INITIALIZED) {
+            rec.release()
+            throw IllegalStateException("Microphone unavailable")
+        }
+        dest.parentFile?.mkdirs()
+        val writer = WavWriter(dest)
+        // Live AGC: a speaker far from the mic would otherwise starve the VAD/ASR (the import
+        // normalizer can't help — it needs lookahead). Applied before the WAV write AND the
+        // emit, so recognizer, file, level bars and playback all hear the same signal.
+        val agc = LiveAgc()
+        val shorts = ShortArray(BLOCK)
+        var sinceCheckpoint = 0L
+        rec.startRecording()
+        // startRecording() can silently fail (mic held by another client / HAL hiccup on some
+        // devices): state stays STOPPED, or read() returns 0 forever. Both used to produce a
+        // header-only WAV after minutes of "recording" — fail fast and loudly instead.
+        if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            runCatching { rec.stop() }; rec.release()
+            throw IllegalStateException("Microphone busy (recording did not start)")
+        }
+        var zeroReads = 0
+        try {
+            while (!shouldStop() && currentCoroutineContext().isActive) {
+                val n = rec.read(shorts, 0, shorts.size)
+                when {
+                    n > 0 -> {
+                        val f = FloatArray(n) { shorts[it] / 32768f }
+                        agc.process(f, n)
+                        writer.write(f, n)          // stream straight to disk
+                        totalSamples += n
+                        emit(f)                      // and to the live ASR
+                        // Periodically flush + finalize the header so a process kill mid-meeting
+                        // (OEM freeze, OOM, swipe-away) leaves a recoverable file, losing at most the
+                        // last CHECKPOINT_SEC of audio instead of the whole recording.
+                        sinceCheckpoint += n
+                        zeroReads = 0
+                        if (sinceCheckpoint >= sampleRate.toLong() * CHECKPOINT_SEC) {
+                            writer.checkpoint(); sinceCheckpoint = 0
+                        }
+                    }
+                    // A negative count is a persistent AudioRecord error (e.g. ERROR_DEAD_OBJECT
+                    // after the audio server/HAL dies, or the mic device — BT SCO / USB / wired —
+                    // disconnects). Without this break the loop spins at 100% CPU re-calling read()
+                    // and emitting nothing: the live timer freezes, the ASR flow starves, and the
+                    // pipeline never finishes. Break so the finally block releases the recorder and
+                    // closes the WAV; the caller then diarizes/summarizes whatever was captured.
+                    n < 0 -> { Log.w(TAG, "AudioRecord.read error $n; ending capture"); break }
+                    // n == 0 occasionally is harmless — but 0 forever with nothing ever captured is
+                    // a silently-dead mic (seen on-device: a whole take produced a 44-byte WAV).
+                    n == 0 -> if (totalSamples == 0L && ++zeroReads > 200) {
+                        throw IllegalStateException("Microphone produced no audio")
+                    }
+                }
+            }
+        } finally {
+            runCatching { rec.stop() }
+            rec.release()
+            writer.close()                       // patches the WAV header with the final size
+        }
+    }
+
+    private companion object {
+        const val BLOCK = 2048 // 4 × Silero VAD window (512); ~128 ms at 16 kHz
+        const val CHECKPOINT_SEC = 3L  // flush + finalize the WAV header this often (crash-safety window)
+        const val TAG = "AudioRecorder"
+    }
+}

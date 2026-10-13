@@ -5,7 +5,7 @@
 `1ca654c` (Apache-2.0, see `LICENSE`). Its dependency pins (`deps.lock`) match this repo's submodules:
 `native/crispasr` 657bc15, `native/crispasr-ggml` 512a020, `native/audiocpp` 8344bbe.
 
-Modified for VoxSumDroid (marked "VoxSumDroid" in the source):
+Modified for Prime Minutes (marked "Prime Minutes" in the source):
 - `Engine::run` split into a push API — `begin()`, `push()`, `finish()` — so microphone and file
   audio stream through the same loop. Output is byte-identical to upstream's `run()` on the
   reference clip (checked with `tools/nemo-eval`).

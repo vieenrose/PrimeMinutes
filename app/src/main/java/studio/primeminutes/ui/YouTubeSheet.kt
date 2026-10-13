@@ -1,0 +1,162 @@
+package studio.primeminutes.ui
+
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import kotlinx.coroutines.launch
+import studio.primeminutes.R
+import studio.primeminutes.online.ImportDownloads
+import studio.primeminutes.online.YouTube
+import studio.primeminutes.ui.components.DownloadStatusBar
+import studio.primeminutes.ui.components.GradientButton
+import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+
+/**
+ * Search YouTube by keyword (or paste a link) → pick a result → resolve the audio stream,
+ * download it, and feed the pipeline. Search isn't token-gated; stream resolution can be, so
+ * a video that won't resolve surfaces a clean error.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun YouTubeSheet(onDismiss: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<YouTube.YouTubeVideo>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    var statusRes by remember { mutableIntStateOf(R.string.dl_searching) }
+    var progress by remember { mutableStateOf<Float?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    // The download runs in the foreground service (ImportDownloads), not in this sheet's scope:
+    // dismissing the sheet no longer cancels it, and MainActivity picks the file up when it is ready.
+    fun transcribe(url: String) {
+        error = null
+        val started = ImportDownloads.start(
+            context,
+            ImportDownloads.Request(null) { stage, progress ->
+                val audio = YouTube.resolve(context, url)
+                stage(R.string.dl_downloading)
+                YouTube.download(context, audio, progress) to audio.title
+            },
+            R.string.dl_resolving,
+        )
+        if (started) onDismiss() else error = context.getString(R.string.import_busy)
+    }
+    fun go() {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        if (YouTube.looksLikeUrl(q)) { transcribe(q); return }
+        busy = true; error = null; results = emptyList(); progress = null; statusRes = R.string.dl_searching
+        scope.launch {
+            runCatching { YouTube.search(q) }
+                .onSuccess { busy = false; results = it; if (it.isEmpty()) error = context.getString(R.string.youtube_no_videos) }
+                .onFailure { busy = false; error = it.userMessage(context) ?: context.getString(R.string.youtube_search_failed) }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = { if (!busy) onDismiss() },  // busy = searching only; a download outlives the sheet,
+        sheetState = sheetState,
+        containerColor = pal.Slate800,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(stringResource(R.string.source_youtube), style = MaterialTheme.typography.titleLarge,
+                color = pal.Slate200, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it; error = null },
+                    label = { Text(stringResource(R.string.youtube_search_hint)) },
+                    singleLine = true,
+                    enabled = !busy,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (query.isNotBlank() && !busy) go() }),
+                    colors = primeMinutesTextFieldColors(),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                GradientButton(
+                    if (YouTube.looksLikeUrl(query)) stringResource(R.string.youtube_go) else stringResource(R.string.youtube_search),
+                    enabled = query.isNotBlank() && !busy,
+                    onClick = { go() },
+                )
+            }
+            if (busy) {
+                DownloadStatusBar(statusRes, progress)
+            }
+            error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = PrimeMinutesPalette.Red) }
+
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                results.forEach { v ->
+                    Surface(
+                        color = pal.InsetSurface,
+                        shape = MaterialTheme.shapes.medium,
+                        border = BorderStroke(1.dp, pal.Hairline),
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { transcribe(v.url) },
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(v.title, style = MaterialTheme.typography.bodyMedium,
+                                color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                listOfNotNull(v.uploader.ifBlank { null }, v.durationText.ifBlank { null })
+                                    .joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A network failure's own text ("Connection reset") is neither localized nor actionable. */
+internal fun Throwable.userMessage(context: android.content.Context): String? =
+    if (this is java.net.SocketException || this is java.net.SocketTimeoutException ||
+        this is java.net.UnknownHostException || this is javax.net.ssl.SSLException)
+        context.getString(R.string.network_error)
+    else message

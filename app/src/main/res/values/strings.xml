@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">VoxSum</string>
+    <string name="app_name">Prime Minutes</string>
 
     <!-- Top bar -->
     <string name="cd_settings">Settings</string>
@@ -172,8 +172,8 @@
     <string name="export_interrupted">Export was interrupted — please try again.</string>
     <string name="export_sheet_title">Export</string>
     <string name="export_menu_entry">Export &amp; share…</string>
-    <string name="export_group_session">VoxSum session (.m4a)</string>
-    <string name="export_group_session_desc">Audio, transcript, speakers, summary and actions in one file. Reopens in VoxSum; plays anywhere.</string>
+    <string name="export_group_session">Prime Minutes session (.m4a)</string>
+    <string name="export_group_session_desc">Audio, transcript, speakers, summary and actions in one file. Reopens in Prime Minutes; plays anywhere.</string>
     <string name="export_group_document">Document</string>
     <string name="export_group_document_desc">Title, summary, action items and the timestamped transcript.</string>
     <string name="export_group_subtitles">Subtitles</string>
@@ -221,7 +221,7 @@
     <string name="bg_battery_exempt">Ignoring battery optimization ✓</string>
     <string name="bg_battery_optimized">Battery optimization is active — screen-off runs may be paused.</string>
     <string name="bg_allow">Allow background activity</string>
-    <string name="bg_oem_hint">%1$s aggressively freezes background apps. Also turn off auto-start / auto-freeze for VoxSum in the device settings.</string>
+    <string name="bg_oem_hint">%1$s aggressively freezes background apps. Also turn off auto-start / auto-freeze for Prime Minutes in the device settings.</string>
     <string name="bg_open_oem">Open device settings</string>
 
     <!-- Interrupted-recording recovery dialog -->
@@ -241,8 +241,8 @@
     <string name="source_process_all">Process pending (%d)</string>
     <string name="svc_processing_queue">Processing %1$s (%2$d left)</string>
     <string name="svc_queue_item_failed">Could not process %s — kept in the library</string>
-    <string name="svc_queue_item_failed_hint">Tap to open VoxSum and try again.</string>
-    <string name="svc_paused_time_limit">Processing paused by the system time limit — reopen VoxSum to resume.</string>
+    <string name="svc_queue_item_failed_hint">Tap to open Prime Minutes and try again.</string>
+    <string name="svc_paused_time_limit">Processing paused by the system time limit — reopen Prime Minutes to resume.</string>
 
     <string name="library_empty">No saved recordings yet — every recording is saved here automatically.</string>
 
@@ -342,7 +342,7 @@
         <item quantity="one">%d note</item>
         <item quantity="other">%d notes</item>
     </plurals>
-    <string name="cpu_unsupported">This device\'s processor is not supported: VoxSum needs an ARMv8.2 CPU with dot-product instructions (most phones from 2019 on).</string>
+    <string name="cpu_unsupported">This device\'s processor is not supported: Prime Minutes needs an ARMv8.2 CPU with dot-product instructions (most phones from 2019 on).</string>
     <string name="studio_empty_title">Your meetings, summarized on your phone</string>
     <string name="studio_empty_import">Add an audio file</string>
     <plurals name="agent_outcome">

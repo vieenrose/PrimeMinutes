@@ -1,4 +1,4 @@
-// mfa_jni.cpp - JNI surface of the mobile reader engine (studio.voxsum.core.llm.MfaEngine) and of
+// mfa_jni.cpp - JNI surface of the mobile reader engine (studio.primeminutes.core.llm.MfaEngine) and of
 // its SentencePiece tokenizer. One engine handle per loaded model; every call on a handle comes
 // from the reader's single LLM thread, except nativeCancel.
 #include <jni.h>
@@ -16,7 +16,7 @@
 #include "mfa_engine.h"
 #include "sentencepiece_processor.h"
 
-#define LOG_TAG "voxsum-mfa"
+#define LOG_TAG "primeminutes-mfa"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
@@ -69,7 +69,7 @@ sentencepiece::SentencePieceProcessor* tok(jlong h) { return reinterpret_cast<se
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeLoad(JNIEnv* env, jclass, jstring dir, jstring main, jint ctx,
+Java_studio_primeminutes_core_llm_MfaEngine_nativeLoad(JNIEnv* env, jclass, jstring dir, jstring main, jint ctx,
                                                 jint threads, jstring cache, jint backend) {
     try {
         auto* e = new mfa::Engine(str(env, dir), str(env, main), ctx, threads, str(env, cache), backend);
@@ -84,7 +84,7 @@ Java_studio_voxsum_core_llm_MfaEngine_nativeLoad(JNIEnv* env, jclass, jstring di
 
 // Returns the generated ids; streams each one to callback.onToken(int): Boolean (false stops).
 JNIEXPORT jintArray JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeGenerate(JNIEnv* env, jclass, jlong h, jintArray jids, jint maxNew,
+Java_studio_primeminutes_core_llm_MfaEngine_nativeGenerate(JNIEnv* env, jclass, jlong h, jintArray jids, jint maxNew,
                                                     jfloat temp, jint topK, jfloat topP, jint seed, jobject cb,
                                                     jdoubleArray jstats) {
     if (!h) { throwJava(env, "engine not loaded"); return nullptr; }
@@ -118,7 +118,7 @@ Java_studio_voxsum_core_llm_MfaEngine_nativeGenerate(JNIEnv* env, jclass, jlong 
 }
 
 JNIEXPORT jint JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeAgree(JNIEnv* env, jclass, jlong h, jintArray jids, jintArray jforced) {
+Java_studio_primeminutes_core_llm_MfaEngine_nativeAgree(JNIEnv* env, jclass, jlong h, jintArray jids, jintArray jforced) {
     if (!h) { throwJava(env, "engine not loaded"); return 0; }
     auto vec = [&](jintArray a) {
         std::vector<int> v(env->GetArrayLength(a));
@@ -130,18 +130,18 @@ Java_studio_voxsum_core_llm_MfaEngine_nativeAgree(JNIEnv* env, jclass, jlong h, 
 }
 
 JNIEXPORT void JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeCancel(JNIEnv*, jclass, jlong h) { if (h) engine(h)->cancel(); }
+Java_studio_primeminutes_core_llm_MfaEngine_nativeCancel(JNIEnv*, jclass, jlong h) { if (h) engine(h)->cancel(); }
 
 JNIEXPORT void JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeFree(JNIEnv*, jclass, jlong h) { delete engine(h); }
+Java_studio_primeminutes_core_llm_MfaEngine_nativeFree(JNIEnv*, jclass, jlong h) { delete engine(h); }
 
 JNIEXPORT jint JNICALL
-Java_studio_voxsum_core_llm_MfaEngine_nativeContext(JNIEnv*, jclass, jlong h) { return h ? engine(h)->context() : 0; }
+Java_studio_primeminutes_core_llm_MfaEngine_nativeContext(JNIEnv*, jclass, jlong h) { return h ? engine(h)->context() : 0; }
 
 // ---- tokenizer -------------------------------------------------------------------------------
 
 JNIEXPORT jlong JNICALL
-Java_studio_voxsum_core_llm_SpTokenizer_nativeLoad(JNIEnv* env, jclass, jstring path) {
+Java_studio_primeminutes_core_llm_SpTokenizer_nativeLoad(JNIEnv* env, jclass, jstring path) {
     auto* sp = new sentencepiece::SentencePieceProcessor();
     const auto st = sp->Load(str(env, path));
     if (!st.ok()) { delete sp; throwJava(env, "tokenizer: " + st.ToString()); return 0; }
@@ -149,7 +149,7 @@ Java_studio_voxsum_core_llm_SpTokenizer_nativeLoad(JNIEnv* env, jclass, jstring 
 }
 
 JNIEXPORT jintArray JNICALL
-Java_studio_voxsum_core_llm_SpTokenizer_nativeEncode(JNIEnv* env, jclass, jlong h, jstring text) {
+Java_studio_primeminutes_core_llm_SpTokenizer_nativeEncode(JNIEnv* env, jclass, jlong h, jstring text) {
     std::vector<int> ids;
     tok(h)->Encode(str(env, text), &ids);
     jintArray arr = env->NewIntArray((jsize)ids.size());
@@ -160,7 +160,7 @@ Java_studio_voxsum_core_llm_SpTokenizer_nativeEncode(JNIEnv* env, jclass, jlong 
 // UTF-8 bytes, not a jstring: a partial reply can end inside a character, and NewStringUTF
 // (modified UTF-8) aborts on that and on 4-byte sequences. Kotlin decodes them.
 JNIEXPORT jbyteArray JNICALL
-Java_studio_voxsum_core_llm_SpTokenizer_nativeDecode(JNIEnv* env, jclass, jlong h, jintArray jids) {
+Java_studio_primeminutes_core_llm_SpTokenizer_nativeDecode(JNIEnv* env, jclass, jlong h, jintArray jids) {
     const jsize n = env->GetArrayLength(jids);
     std::vector<int> ids(n);
     env->GetIntArrayRegion(jids, 0, n, reinterpret_cast<jint*>(ids.data()));
@@ -172,6 +172,6 @@ Java_studio_voxsum_core_llm_SpTokenizer_nativeDecode(JNIEnv* env, jclass, jlong 
 }
 
 JNIEXPORT void JNICALL
-Java_studio_voxsum_core_llm_SpTokenizer_nativeFree(JNIEnv*, jclass, jlong h) { delete tok(h); }
+Java_studio_primeminutes_core_llm_SpTokenizer_nativeFree(JNIEnv*, jclass, jlong h) { delete tok(h); }
 
 }  // extern "C"

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "studio.voxsum"
+    namespace = "studio.primeminutes"
     compileSdk = 37
 
     // Pin the NDK so F-Droid's build server uses the same toolchain we test with.
@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         manifestPlaceholders["appLabel"] = "@string/app_name"
-        applicationId = "studio.voxsum"
+        applicationId = "studio.primeminutes"
         minSdk = 26          // MediaCodec PCM-float output + reasonable native perf
         targetSdk = 35
         versionCode = 173
@@ -21,12 +21,12 @@ android {
 
         ndk {
             // arm64 is the only ABI worth shipping for on-device LLM perf. Override with
-            // -PvoxsumAbi=x86_64 to build for an emulator (provide a matching ORT via
-            abiFilters += ((project.findProperty("voxsumAbi") as String?) ?: "arm64-v8a")
+            // -PprimeminutesAbi=x86_64 to build for an emulator (provide a matching ORT via
+            abiFilters += ((project.findProperty("primeminutesAbi") as String?) ?: "arm64-v8a")
         }
         externalNativeBuild {
             cmake {
-                // Build the LiteRT MOSS engine (voxsum-mosslite) from source.
+                // Build the LiteRT MOSS engine (primeminutes-mosslite) from source.
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
                     "-DCMAKE_BUILD_TYPE=Release",
@@ -46,14 +46,14 @@ android {
 
     // Release signing is driven by env vars so CI can inject a keystore from secrets and
     // local/debug builds still work without any.
-    val keystorePath = System.getenv("VOXSUM_KEYSTORE")
+    val keystorePath = System.getenv("PRIMEMINUTES_KEYSTORE")
     signingConfigs {
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("VOXSUM_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("VOXSUM_KEY_ALIAS")
-                keyPassword = System.getenv("VOXSUM_KEY_PASSWORD")
+                storePassword = System.getenv("PRIMEMINUTES_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PRIMEMINUTES_KEY_ALIAS")
+                keyPassword = System.getenv("PRIMEMINUTES_KEY_PASSWORD")
             }
         }
     }
@@ -66,7 +66,7 @@ android {
             if (project.hasProperty("isolatedTestId")) applicationIdSuffix = ".androidtest"
             // ...and under a name of its own, so the share sheet and launcher tell the two apart.
             manifestPlaceholders["appLabel"] =
-                if (project.hasProperty("isolatedTestId")) "VoxSum test" else "@string/app_name"
+                if (project.hasProperty("isolatedTestId")) "Prime Minutes test" else "@string/app_name"
             // -PminifyDebug runs the debug build through R8 with the RELEASE keep rules, so
             // JNI-by-name breakage — which cannot reproduce in a normal debug build — is testable
             // on device. This is how the LiteRT-LM SamplerConfig abort was caught; without it the
@@ -101,7 +101,7 @@ android {
     buildFeatures { compose = true; buildConfig = true }
 
     // Only libLiteRt.so is taken from the LiteRT AAR (no Java API, no GPU accelerator): the
-    // mobile reader's engine links it, so it is packaged as a jniLib next to libvoxsum-mfa.so.
+    // mobile reader's engine links it, so it is packaged as a jniLib next to libprimeminutes-mfa.so.
     sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("litert/jni").get().asFile)
 
     packaging {

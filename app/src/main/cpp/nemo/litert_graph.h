@@ -1,7 +1,7 @@
 // litert_graph.h - minimal LiteRT (C API) wrapper for one single-signature .tflite model: CPU (XNNPACK) or GPU.
 //
 // Used by DiarLiteRT (the Sortformer graph). Pattern copied from the mobile reader's wrapper
-// (VoxSumDroid mfa/mfa_engine.cc): private writable mapping of the model file, TOML options for XNNPACK,
+// (Prime Minutes mfa/mfa_engine.cc): private writable mapping of the model file, TOML options for XNNPACK,
 // managed tensor buffers, RunCompiledModel. Dev-only path for now (behind Config::backend).
 #pragma once
 

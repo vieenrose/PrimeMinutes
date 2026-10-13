@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">VoxSum</string>
+    <string name="app_name">Prime Minutes</string>
 
     <!-- Top bar -->
     <string name="cd_settings">设置</string>
@@ -202,7 +202,7 @@
     <string name="bg_battery_exempt">已略过电池优化 ✓</string>
     <string name="bg_battery_optimized">电池优化仍启用中 — 屏幕关闭时的处理可能被暂停。</string>
     <string name="bg_allow">允许后台运行</string>
-    <string name="bg_oem_hint">%1$s 会强制冻结后台应用程序。请另于设备设置中关闭 VoxSum 的自动启动／自动冻结。</string>
+    <string name="bg_oem_hint">%1$s 会强制冻结后台应用程序。请另于设备设置中关闭 Prime Minutes 的自动启动／自动冻结。</string>
     <string name="bg_open_oem">打开设备设置</string>
 
     <!-- 中斷錄音的復原 -->
@@ -222,8 +222,8 @@
     <string name="source_process_all">处理待办（%d）</string>
     <string name="svc_processing_queue">正在处理 %1$s（剩余 %2$d）</string>
     <string name="svc_queue_item_failed">无法处理 %s——已保留在列表中</string>
-    <string name="svc_queue_item_failed_hint">点击打开 VoxSum 再试一次。</string>
-    <string name="svc_paused_time_limit">处理已因系统时间限制而暂停——重新打开 VoxSum 即可继续。</string>
+    <string name="svc_queue_item_failed_hint">点击打开 Prime Minutes 再试一次。</string>
+    <string name="svc_paused_time_limit">处理已因系统时间限制而暂停——重新打开 Prime Minutes 即可继续。</string>
 
     <string name="library_empty">尚无录音——每段录音都会自动保存在这里。</string>
 
@@ -322,7 +322,7 @@
     <plurals name="agent_notes_count">
         <item quantity="other">%d 则笔记</item>
     </plurals>
-    <string name="cpu_unsupported">不支持此设备的处理器：VoxSum 需要支持点积指令的 ARMv8.2 处理器（大多数 2019 年以后的手机）。</string>
+    <string name="cpu_unsupported">不支持此设备的处理器：Prime Minutes 需要支持点积指令的 ARMv8.2 处理器（大多数 2019 年以后的手机）。</string>
     <string name="studio_empty_title">在手机上整理你的会议</string>
     <string name="studio_empty_import">添加音频文件</string>
     <plurals name="agent_outcome">
@@ -334,8 +334,8 @@
     <string name="actions_verify_hint">约五分之一的项目可能与转写文本不符——点时间即可听原话核对。</string>
     <string name="export_interrupted">导出中断，请再试一次。</string>
     <string name="export_sheet_title">导出</string>
-    <string name="export_group_session">VoxSum 场次（.m4a）</string>
-    <string name="export_group_session_desc">音频、转写文本、说话人、摘要与待办事项合为一个文件。可在 VoxSum 重新打开，任何播放器都能播放。</string>
+    <string name="export_group_session">Prime Minutes 场次（.m4a）</string>
+    <string name="export_group_session_desc">音频、转写文本、说话人、摘要与待办事项合为一个文件。可在 Prime Minutes 重新打开，任何播放器都能播放。</string>
     <string name="export_group_document">文件</string>
     <string name="export_group_document_desc">标题、摘要、待办事项与含时间戳的转写文本。</string>
     <string name="export_group_subtitles">字幕</string>

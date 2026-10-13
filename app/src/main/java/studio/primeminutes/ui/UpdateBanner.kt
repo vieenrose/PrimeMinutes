@@ -1,0 +1,102 @@
+package studio.primeminutes.ui
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import studio.primeminutes.R
+import studio.primeminutes.ui.components.DownloadStatusBar
+import studio.primeminutes.ui.components.GradientButton
+import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+
+/**
+ * Dismissible "a newer version is available" card. While downloading it shows the progress bar
+ * instead of the action buttons. [versionTag] is the release tag (e.g. "v0.2.3"); [notes] is the
+ * release body (rendered as markdown, scrollable). [progress] non-null => downloading.
+ */
+@Composable
+fun UpdateBanner(
+    versionTag: String,
+    notes: String,
+    progress: Float?,
+    onUpdate: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = pal.PanelSurface),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, pal.Hairline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = pal.Sky,
+                    modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.update_available, versionTag),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = pal.Slate200,
+                    modifier = Modifier.weight(1f),
+                )
+                if (progress == null) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.update_later),
+                            tint = pal.Slate400, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            val shown = remember(notes) { cleanReleaseNotes(notes) }
+            if (shown.isNotBlank()) {
+                // The whole body, rendered (headings, bullets, bold, code), in a box that scrolls past ~8 lines.
+                Text(
+                    remember(shown) { renderMarkdown(shown) },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = pal.Slate400,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 170.dp).verticalScroll(rememberScrollState()),
+                )
+            }
+            if (progress != null) {
+                DownloadStatusBar(R.string.update_downloading, progress)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GradientButton(text = stringResource(R.string.update_now), icon = Icons.Filled.Download, onClick = onUpdate)
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.update_later), color = pal.Slate400)
+                    }
+                }
+            }
+        }
+    }
+}

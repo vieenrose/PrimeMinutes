@@ -1,4 +1,4 @@
-VoxSum transcribes and summarizes audio entirely on your device — no account, no server,
+Prime Minutes transcribes and summarizes audio entirely on your device — no account, no server,
 no cloud. Pick a local audio file and get a speaker-labelled transcript and a concise
 summary, all computed locally.
 

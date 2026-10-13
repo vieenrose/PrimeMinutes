@@ -1,15 +1,15 @@
-# Architecture — VoxSum Python → Android
+# Architecture — Prime Minutes Python → Android
 
 How each piece of the original FastAPI app maps onto the on-device Android app, and how the
 Android-only parts (live meeting reader, session library, queue) fit together.
 
 ## The core inversion: HTTP streaming → Kotlin Flow
 
-VoxSum's defining pattern is the **NDJSON streaming contract**: long endpoints return a
+Prime Minutes's defining pattern is the **NDJSON streaming contract**: long endpoints return a
 `StreamingResponse` of typed JSON lines, and `frontend/app.js` renders incrementally.
 
 On-device there is no HTTP. The same typed events become
-[`TranscriptEvent`](../app/src/main/java/studio/voxsum/core/events/TranscriptEvent.kt), emitted
+[`TranscriptEvent`](../app/src/main/java/studio/primeminutes/core/events/TranscriptEvent.kt), emitted
 as a `Flow` from a **foreground service** and collected by Compose. Incremental rendering
 (append new utterances, never full rebuild) is preserved.
 
@@ -73,7 +73,7 @@ changes when the booth freezes a line's speaker, not the saved transcript.
 
 Two ggml copies share the process (CrispASR's, audio.cpp's). audio.cpp builds as
 `libaudiocpp.so` with its ggml hidden behind a version script; CrispASR and its ggml link
-statically into `libvoxsum-nemo.so`, which exports only JNI symbols. Both are CMake
+statically into `libprimeminutes-nemo.so`, which exports only JNI symbols. Both are CMake
 ExternalProjects from the `native/audiocpp`, `native/crispasr` and `native/crispasr-ggml`
 submodules, compiled for `armv8.2-a+dotprod` (ARMv8.0 devices are unsupported,
 checked by `core/power/CpuSupport.kt`).
@@ -115,9 +115,9 @@ E2B mobile-v1 by default, E4B on 8 GB phones (pinned in `LlmRegistry`; the weigh
 - **Processing queue** (`core/library/ProcessingQueue.kt`): persistent, survives app kills, and
   batches work so each model loads once per batch. "Next talk" saves and starts the next
   recording while the previous one waits in the queue.
-- **Session files** (`core/session/VoxsumSession.kt`): a finished session embeds transcript,
+- **Session files** (`core/session/PrimeMinutesSession.kt`): a finished session embeds transcript,
   speakers, summary, action items and notes into the `.m4a`, which plays anywhere and reopens in
-  VoxSum (legacy `.ogg` sessions still open, but are no longer written). Autosave (`SessionAutosave`) keeps edits.
+  Prime Minutes (legacy `.ogg` sessions still open, but are no longer written). Autosave (`SessionAutosave`) keeps edits.
 - **Exports** (`core/export/`): PDF, Markdown, plain text and SRT/VTT/LRC subtitles.
 - **Edits** (`data/SpeakerEdits.kt`): reassign a line to another speaker, merge two speakers,
   rename; these are pure relabels, the saved file round-trips them.

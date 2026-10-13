@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VoxSum"
+rootProject.name = "PrimeMinutes"
 include(":app")

@@ -54,7 +54,7 @@ namespace {
 // MFA_NO_PIN=1 disables it. Android only (no affinity API on iOS).
 void pin_upper_cores() {
 #ifdef __ANDROID__
-    { char v[8] = {0}; __system_property_get("debug.voxsum.nopin", v); if (getenv("MFA_NO_PIN") || v[0] == '1') return; }
+    { char v[8] = {0}; __system_property_get("debug.primeminutes.nopin", v); if (getenv("MFA_NO_PIN") || v[0] == '1') return; }
     long f[64]; int n = 0; long lo = 0;
     for (; n < 64; ++n) {
         char path[96]; snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", n);
@@ -255,7 +255,7 @@ void drop_mapped_pages(const std::string& path) {
 // pages read stay resident (0.84 GB of PLE table for E4B; more of it resident as the vocabulary seen
 // grows). Their private read-only mappings are clean, so dropping them loses nothing: a later lookup
 // reads the page back from the page cache. Upstream fork commit bd9d499 (E4B peak 2.97 -> 2.65 GB on
-// a Reno7, same output and speed). Older VoxSum fix: the same idea, once, for shared mappings above.
+// a Reno7, same output and speed). Older Prime Minutes fix: the same idea, once, for shared mappings above.
 struct Range { void* a; size_t n; };
 std::vector<Range> clean_ranges(const std::string& path) {
     std::vector<Range> out;

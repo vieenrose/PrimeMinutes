@@ -1,4 +1,4 @@
-# VoxSum 使用說明（含介面測試地圖）
+# Prime Minutes 使用說明（含介面測試地圖）
 
 這份文件有兩個用途：
 
@@ -97,7 +97,7 @@ flowchart TD
 
 <img src="guide/07-add-source.png" width="270" alt="加入音訊"> <img src="guide/08-podcast.png" width="270" alt="Podcast"> <img src="guide/09-youtube.png" width="270" alt="YouTube">
 
-處理事先錄好的音訊。也可以從其他 App 把音訊「分享」給 VoxSum。
+處理事先錄好的音訊。也可以從其他 App 把音訊「分享」給 Prime Minutes。
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -106,8 +106,8 @@ flowchart TD
 
 <img src="guide/27-podcast-episodes.png" width="270" alt="Podcast 單集">
 | YouTube → 搜尋或貼上連結 | ＋ → YouTube | 搜尋結果或直接前往影片，下載音訊並轉錄；直播顯示「直播無法轉錄，請選擇一般影片。」 | ✅ 手動、✅ 自動（SourceSheetsTest，搜尋） |
-| 開啟場次（.ogg / .m4a） | ＋ → 開啟場次 | 開啟先前匯出的 VoxSum 檔，含逐字稿與摘要 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
-| 從其他 App 分享 | 其他 App → 分享 → VoxSum | 閒置時直接轉錄；處理中時詢問「匯入這個檔案？」（匯入會中斷處理） | ✅ 手動 |
+| 開啟場次（.ogg / .m4a） | ＋ → 開啟場次 | 開啟先前匯出的 Prime Minutes 檔，含逐字稿與摘要 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
+| 從其他 App 分享 | 其他 App → 分享 → Prime Minutes | 閒置時直接轉錄；處理中時詢問「匯入這個檔案？」（匯入會中斷處理） | ✅ 手動 |
 
 <img src="guide/26-import-confirm.png" width="270" alt="匯入確認">
 
@@ -231,7 +231,7 @@ flowchart TD
 ### 如何重跑自動測試
 
 ```bash
-scripts/test-on-device.sh <實機序號> -- -e class studio.voxsum.AddSourceSheetTest,studio.voxsum.SourceSheetsTest,studio.voxsum.UiComponentsTest,studio.voxsum.SettingsContentTest,studio.voxsum.ExportSheetTest,studio.voxsum.TranscriptUiTest,studio.voxsum.TranscriptFlowTest
+scripts/test-on-device.sh <實機序號> -- -e class studio.primeminutes.AddSourceSheetTest,studio.primeminutes.SourceSheetsTest,studio.primeminutes.UiComponentsTest,studio.primeminutes.SettingsContentTest,studio.primeminutes.ExportSheetTest,studio.primeminutes.TranscriptUiTest,studio.primeminutes.TranscriptFlowTest
 ```
 
 Compose 介面測試需在實機上執行（x86_64 模擬器上會出現 “Unable to resolve activity”，見腳本開頭說明）。
