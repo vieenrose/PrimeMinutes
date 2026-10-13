@@ -46,8 +46,6 @@ fun HwStatusLine(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Gauge("CPU", s.cpuPct, s.cpuPct > 90)
-        s.gpuPct?.let { Gauge("GPU", it, it > 90) }
-        if (s.npuActive) Gauge("NPU", 100, false)
         Gauge("RAM", s.ramPct, s.ramPct > 90)
         if (s.batteryPct >= 0) Gauge(if (s.charging) "BAT\u2009+" else "BAT", s.batteryPct,
             hot || (!s.charging && s.batteryPct < 15))

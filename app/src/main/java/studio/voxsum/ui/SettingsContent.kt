@@ -49,7 +49,6 @@ import androidx.compose.material.icons.filled.Delete
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import studio.voxsum.core.models.ModelManager
 import studio.voxsum.core.power.BackgroundReliability
 import androidx.compose.ui.Alignment
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import studio.voxsum.BuildConfig
 import studio.voxsum.R
 import studio.voxsum.core.config.AppLanguage
@@ -165,6 +165,7 @@ fun SettingsContent(
 
         Section(stringResource(R.string.settings_inference)) {
             InferencePanel(enabled)
+            AiBenchmark(enabled)
         }
 
         Section(stringResource(R.string.settings_experimental)) {
@@ -585,8 +586,45 @@ private fun SliderRow(
     }
 }
 
+/**
+ * Times each AI component on this phone: the ASR and diarizer on a shipped 60 s meeting clip, and the
+ * summarizer on a fixed prompt. The components run one after the other, so each is measured alone.
+ */
+@Composable
+private fun AiBenchmark(enabled: Boolean) {
+    val pal = LocalVoxSumPalette.current
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var running by remember { mutableStateOf(false) }
+    var lines by remember { mutableStateOf<List<String>>(emptyList()) }
+    Text(stringResource(R.string.settings_ai_bench_hint), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
+    OutlinedButton(
+        enabled = enabled && !running,
+        onClick = {
+            running = true; lines = emptyList()
+            scope.launch {
+                lines = runCatching {
+                    val asr = studio.voxsum.core.bench.ComponentBench.asr(ctx)
+                    val sum = studio.voxsum.core.bench.ComponentBench.summarizer(ctx)
+                    listOf(
+                        "ASR  RTF %.3f · %.1f s audio in %.1f s · first partial %.2f s · piece p95 %.0f ms"
+                            .format(asr.rtf, asr.audioSec, asr.wallSec, asr.firstPartialSec, asr.pieceP95Ms),
+                        "Diarizer  %.1f s compute (%.0f%% of wall) · %d speakers · %d turns"
+                            .format(asr.diarSec, 100 * asr.diarSec / asr.wallSec, asr.speakers, asr.turns),
+                        "ASR graph  %.1f s · load %.1f s · peak RSS %.0f MB"
+                            .format(asr.asrSec, asr.loadSec, asr.peakRssMb),
+                        "Summarizer  prefill %.0f tok/s (%d tok, %.1f s) · decode %.1f tok/s (%d tok, %.1f s)"
+                            .format(sum.prefillTps, sum.prefilled, sum.prefillSec, sum.decodeTps, sum.generated, sum.decodeSec),
+                    )
+                }.getOrElse { listOf(ctx.getString(R.string.settings_ai_bench_failed, it.message ?: it.javaClass.simpleName)) }
+                running = false
+            }
+        },
+    ) { Text(stringResource(if (running) R.string.settings_ai_bench_running else R.string.settings_ai_bench_run)) }
+    lines.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = pal.Slate400) }
+}
+
 /** Detected hardware, the thread count the engines use, a manual override and the benchmark. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InferencePanel(enabled: Boolean) {
     val pal = LocalVoxSumPalette.current
@@ -608,103 +646,20 @@ private fun InferencePanel(enabled: Boolean) {
         },
     ) { draft = it }
     if (profile.capped) Text(stringResource(R.string.settings_inference_capped), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
-    // The reader on each backend: a card per backend, GPU selectable only once their test passed.
-    val hwKey = remember { studio.voxsum.core.hw.HwInfo.benchKey(ctx) }
-    var results by remember { mutableStateOf(studio.voxsum.core.hw.BackendBench.results(ctx, hwKey)) }
-    var chosen by remember { mutableStateOf(studio.voxsum.core.hw.HwInfo.backend(ctx)) }
-    var testing by remember { mutableStateOf<studio.voxsum.core.hw.Backend?>(null) }
-    var needModel by remember { mutableStateOf(false) }
-    var gpuFetch by remember { mutableStateOf<Float?>(null) }   // the GPU graph's download, before its test
-    val multiBackend = studio.voxsum.core.hw.Backend.offered.size > 1
-    if (multiBackend) Section(stringResource(R.string.settings_backend_title))
-    if (multiBackend) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        studio.voxsum.core.hw.Backend.offered.forEach { b ->
-            val usable = b == studio.voxsum.core.hw.Backend.CPU || results[b]?.passed == true
-            FilterChip(
-                selected = chosen == b,
-                enabled = enabled && usable && !running,
-                onClick = { studio.voxsum.core.hw.BackendBench.choose(ctx, b); chosen = b },
-                label = { Text(backendLabel(b)) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = pal.Sky.copy(alpha = 0.15f),
-                    selectedLabelColor = pal.Sky,
-                    labelColor = pal.Slate400,
-                ),
-            )
-        }
-    }
-    val cpuDecode = results[studio.voxsum.core.hw.Backend.CPU]?.takeIf { it.passed }?.decodeTps
-    if (multiBackend) studio.voxsum.core.hw.Backend.offered.forEach { b ->
-        val r = results[b]
-        val line = when {
-            b == studio.voxsum.core.hw.Backend.GPU && gpuFetch != null ->
-                stringResource(R.string.backend_downloading, (gpuFetch!! * 100).roundToInt())
-            testing == b -> stringResource(R.string.backend_testing, backendLabel(b))
-            r == null -> stringResource(R.string.backend_untested)
-            r.passed -> stringResource(R.string.backend_ok, r.decodeTps, r.prefillTps.roundToInt(),
-                if (b != studio.voxsum.core.hw.Backend.CPU && cpuDecode != null && cpuDecode > 0)
-                    stringResource(R.string.backend_vs_cpu, r.decodeTps / cpuDecode) else "")
-            else -> stringResource(R.string.backend_fail, stringResource(when (r.note) {
-                "no_runtime" -> R.string.backend_why_runtime
-                "crashed" -> R.string.backend_why_crashed
-                "no_output" -> R.string.backend_why_output
-                "wrong_output" -> R.string.backend_why_wrong
-                "no_model" -> R.string.backend_why_model
-                else -> R.string.backend_why_unsupported
-            }))
-        }
-        Text("${backendLabel(b)}  ${if (r?.passed == true) "✓" else if (r != null) "✗" else "·"}  $line",
-            style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
-    }
-    if (multiBackend && needModel) Text(stringResource(R.string.backend_need_model), style = MaterialTheme.typography.labelSmall, color = pal.Slate400)
     androidx.compose.material3.OutlinedButton(
         enabled = enabled && !running,
         onClick = {
-            running = true; needModel = false
+            running = true
             scope.launch {
                 studio.voxsum.core.hw.HwInfo.setMode(ctx, studio.voxsum.core.hw.ThreadMode.AUTO)
                 profile = runCatching { studio.voxsum.core.hw.HwInfo.ensureBench(ctx, force = true) }.getOrDefault(profile)
-                val models = studio.voxsum.core.models.ModelManager(ctx)
-                val spec = studio.voxsum.core.models.LlmRegistry.byId(
-                    studio.voxsum.core.config.TranscriptionConfig.Holder.config.llmModelId)
-                val dir = models.llmDir(spec)
-                if (!multiBackend) {
-                } else if (java.io.File(dir, spec.mainFile).exists() && java.io.File(dir, "weights.xnnpack_cache").exists()) {
-                    // The GPU graph (~800 MB) is fetched only here, when the user asks to test the GPU.
-                    if (spec.gpuGraph != null) {
-                        gpuFetch = 0f
-                        runCatching { models.ensureLlmGpu(spec) { gpuFetch = it } }
-                        gpuFetch = null
-                    }
-                    val gpuMain = models.llmGpuFile(spec)?.path
-                    results = withContext(kotlinx.coroutines.Dispatchers.Default) {
-                        runCatching {
-                            studio.voxsum.core.hw.BackendBench.run(
-                                ctx, hwKey, java.io.File(dir, spec.mainFile).parentFile!!.path, java.io.File(dir, spec.tokenizerFile).path, spec.maxCtx, profile.threads,
-                                java.io.File(dir, "weights.xnnpack_cache").path, gpuMain,
-                            ) { testing = it }
-                        }.getOrDefault(results)
-                    }
-                    testing = null
-                    chosen = studio.voxsum.core.hw.HwInfo.backend(ctx)
-                } else needModel = true
                 running = false
             }
         },
     ) { Text(stringResource(if (running) R.string.settings_inference_running else R.string.settings_inference_run)) }
-    if (multiBackend) Text(stringResource(R.string.backend_hint), style = MaterialTheme.typography.labelSmall, color = pal.Slate400)
     Text(
         stringResource(R.string.settings_inference_hint),
         style = MaterialTheme.typography.labelSmall,
         color = pal.Slate400,
     )
 }
-
-@Composable
-private fun backendLabel(b: studio.voxsum.core.hw.Backend): String = stringResource(
-    when (b) {
-        studio.voxsum.core.hw.Backend.CPU -> R.string.backend_cpu
-        studio.voxsum.core.hw.Backend.GPU -> R.string.backend_gpu
-        studio.voxsum.core.hw.Backend.NPU -> R.string.backend_npu
-    },
-)

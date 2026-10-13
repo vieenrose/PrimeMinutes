@@ -11,9 +11,9 @@ enum class Backend(val id: Int) {
     CPU(0), GPU(1), NPU(2);
 
     companion object {
-        /** The GPU runs the reader's GPU graph (E2B only; ML Drift), unlocked by its test. NPU stays
-         *  hidden: no NPU runtime ships (docs/GPU_NPU.md). */
-        val offered: List<Backend> = listOf(CPU, GPU)
+        /** CPU only: GPU (ML Drift) and NPU gave no gain on Android or iOS, so neither is offered
+         *  (decision 2026-10-13); a GPU choice saved by an older build falls back to the CPU. */
+        val offered: List<Backend> = listOf(CPU)
     }
 }
 

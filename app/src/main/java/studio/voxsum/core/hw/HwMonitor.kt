@@ -17,10 +17,6 @@ import java.io.File
 data class HwSample(
     /** This process's share of the whole CPU: the ASR and the reader both run in it. */
     val cpuPct: Int,
-    /** Only while the reader runs on the GPU (Adreno sysfs); null otherwise. */
-    val gpuPct: Int?,
-    /** The reader runs on the NPU: no app-readable load figure exists, so only its presence is shown. */
-    val npuActive: Boolean,
     val ramPct: Int,
     val batteryPct: Int,
     val charging: Boolean,
@@ -30,7 +26,7 @@ data class HwSample(
 /**
  * Samples every [periodMs] while collected — cold, so nothing runs once the UI stops looking.
  * `/proc/stat` is closed to apps since Android 8, so CPU is our own process time (`/proc/self/stat`)
- * over wall time and cores; there is no GPU API, so it is read from Adreno's sysfs when readable.
+ * over wall time and cores.
  */
 fun hwSamples(context: Context, periodMs: Long = 2000): Flow<HwSample> = flow {
     val app = context.applicationContext
@@ -53,8 +49,6 @@ fun hwSamples(context: Context, periodMs: Long = 2000): Flow<HwSample> = flow {
         val temp = bat?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
         emit(HwSample(
             cpuPct = cpu,
-            gpuPct = if (HwInfo.activeBackend == Backend.GPU) readGpu() else null,
-            npuActive = HwInfo.activeBackend == Backend.NPU,
             ramPct = (100 - mi.availMem * 100 / mi.totalMem).toInt(),
             batteryPct = if (level >= 0 && scale > 0) level * 100 / scale else -1,
             charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL,
@@ -75,9 +69,3 @@ internal fun parseStatTicks(stat: String): Long {
 internal fun cpuPercent(dTicks: Long, tickHz: Double, dMs: Long, cores: Int): Int =
     if (dMs <= 0 || cores <= 0) 0
     else (dTicks / tickHz * 1000.0 / dMs / cores * 100).toInt().coerceIn(0, 100)
-
-private val GPU_BUSY = File("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")
-
-private fun readGpu(): Int? = runCatching {
-    GPU_BUSY.readText().trim().removeSuffix("%").trim().toInt().coerceIn(0, 100)
-}.getOrNull()
