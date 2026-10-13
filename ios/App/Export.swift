@@ -13,9 +13,14 @@ enum Export {
         let x = max(0, Int(t)), h = x / 3600, m = x % 3600 / 60, s = x % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
     }
-    static func mmss(_ t: Double) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+    static func mmss(_ t: Double) -> String { let x = max(0, Int(t)); return x >= 3600 ? String(format: "%d:%02d:%02d", x / 3600, x % 3600 / 60, x % 60) : String(format: "%d:%02d", x / 60, x % 60) }
 
-    static func text(_ s: Session, _ f: Format) -> String {
+    /// Android: exported title, summary, notes and action items carry speaker names, not the raw S1/S2 refs the screen resolves.
+    private static func refs(_ t: String, _ s: Session) -> String { SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker))) }
+    static func text(_ s0: Session, _ f: Format) -> String {
+        var s = s0
+        s.title = refs(s0.title, s0); s.summary = refs(s0.summary, s0); let acts = s0.actionItems.map { refs($0, s0) }
+        s.notes = s0.notes.map { var n = $0; n.text = refs($0.text, s0); return n }
         switch f {
         case .srt:
             return cues(s.lines).enumerated().map { i, l in "\(i + 1)\n\(clock(l.start, comma: true)) --> \(clock(endOf(l), comma: true))\n\(oneCue(s.name(l.speaker))): \(l.text)\n" }.joined(separator: "\n")
@@ -30,13 +35,13 @@ enum Export {
         case .txt, .pdf:
             var o = s.title + "\n\n"
             if !s.summary.isEmpty { o += s.summary + "\n\n" }
-            if Prefs.showActions, let a = s.actionItems { o += L("export_heading_actions") + "\n" + a + "\n\n" }
+            if Prefs.showActions, let a = acts { o += L("export_heading_actions") + "\n" + a + "\n\n" }
             if !s.notes.isEmpty { o += s.notes.map { ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
             return o + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "[\(hms(l.start))] \(s.name(l.speaker)): \(x)" }.joined(separator: "\n")
         case .md:
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
             if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + s.summary + "\n\n" }
-            if Prefs.showActions, let a = s.actionItems { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
+            if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
             if !s.notes.isEmpty { o += "## " + L("agent") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
             return o + "## " + L("export_heading_transcript") + "\n\n" + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "- `\(hms(l.start))` **\(s.name(l.speaker))** \(x)" }.joined(separator: "\n") + "\n"
         }

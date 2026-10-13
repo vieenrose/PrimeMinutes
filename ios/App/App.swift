@@ -262,7 +262,7 @@ final class Model: ObservableObject {
             let b = base
             Task.detached { [weak self] in
                 guard let self, let eng = NemoEngine(xasr: self.modelPath("xasr_host.bin", b), diar: self.modelPath("diar_host.bin", b), xasrTflite: self.modelPath("xasr_stream_q8_octav.tflite", b), diarTflite: self.modelPath("sortformer_int8_f190.tflite", b), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay)) else {
-                    await MainActor.run { self?.status = L("models_missing"); self?.recording = false }; return }
+                    await MainActor.run { self?.status = L("models_missing"); self?.recording = false; UIApplication.shared.isIdleTimerDisabled = false }; return }
                 let agc = LiveAgc()
                 do { try r.start { [buffer = self.buffer] c in var c = c; agc.process(&c); wav.append(c); buffer.add(c) } }
                 catch { await MainActor.run { self.status = L("mic_error", "\(error)"); self.recording = false }; return }
@@ -450,9 +450,10 @@ final class Model: ObservableObject {
         guard let a = s.audio else { return }
         let j = Job(id: s.id, date: s.date, audio: a, title: s.title)
         guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { return }
+        Task { guard !(await queue.contains(s.id)) else { return }   // already queued (double tap): one row, one run
         if transcribe { Checkpoint.remove(s.id); resummarized[s.id] = nil } else { Checkpoint.save(s.lines, s.id); resummarized[s.id] = s }
         status = L("status_starting")   // Android: shown until the first model line
-        Task { await queue.add(j); await syncQueue(); drain() }
+        await queue.add(j); await syncQueue(); drain() }
     }
     func drain() {
         guard !draining, liveJob == nil else { return }
@@ -473,7 +474,7 @@ final class Model: ObservableObject {
                 if !enroll.clips.isEmpty { StatusLog.add("trace resume enrollment: \(enroll.clips.count) clips, \(Int(enroll.length)) s") }
                 await process(seconds: secs, job: job, skipper: skipper, resume: partial, offset: from, enroll: enroll) { sink in try AudioPrep.stream(url, skipper: skipper, from: from, clips: enroll.clips, onChunk: sink) }
                 if StopFlag.on { StopFlag.on = false; parked.insert(job.id); status = L("status_stopped") }
-                else if await queue.first(skipping: recordingJob)?.id == job.id { parked.insert(job.id); failed[job.id] = status; Notifier.failed(job.title ?? L("meeting")) }   // failed run: parked with its error and a Retry (Android), never looped on
+                else if await queue.contains(job.id) { parked.insert(job.id); failed[job.id] = status; Notifier.failed(job.title ?? L("meeting")) }   // failed run (still queued: a saved one leaves the queue): parked with its error and a Retry (Android), never looped on — whatever sits ahead of it (a parked job, a promoted one)
                 activeJob = nil; await syncQueue()
             }
             draining = false
@@ -489,7 +490,7 @@ final class Model: ObservableObject {
     /// Cancel keeps the `.part`, so the same episode resumes where it stopped.
     func cancelDownload() { downloadTask?.cancel() }
     func addEpisode(_ ep: Episode) {
-        guard downloading == nil else { return }
+        guard downloading == nil else { status = L("import_busy"); return }   // the sheet is already gone: say why nothing starts (as addYouTube does)
         let j = Job(audio: UUID().uuidString + "." + Podcast.ext(ep.audioUrl), title: ep.title)
         downloading = ep.title; downloadFraction = nil; status = L("podcast_downloading", 0)
         downloadTask = Task {
@@ -569,7 +570,7 @@ struct ContentView: View {
             .fullScreenCover(isPresented: Binding(get: { m.recording }, set: { _ in })) { CaptureView(m: m) }
             .sheet(isPresented: $showPodcast) { PodcastView { m.addEpisode($0) } }
             .sheet(isPresented: $showYouTube) { YouTubeSheet { m.addYouTube($0) } }
-            .sheet(isPresented: $showSettings) { SettingsView(language: $language, theme: $theme) }
+            .sheet(isPresented: $showSettings) { SettingsView(m: m, language: $language, theme: $theme) }
             .onOpenURL { m.importAudio($0) }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mpeg4Audio]) { if case .success(let u) = $0 { m.importAudio(u) } }
         }
@@ -579,6 +580,7 @@ struct ContentView: View {
 }
 
 struct SettingsView: View {
+    @ObservedObject var m: Model
     private var inferenceFooter: String {
         let capped: String = Prefs.capped ? "\n" + L("settings_inference_capped") : ""
         return L("threads_note", Prefs.effectiveThreads, Prefs.cores) + capped + "\n" + L("settings_inference_hint")
@@ -640,7 +642,7 @@ struct SettingsView: View {
                     ForEach(models) { i in
                         HStack { VStack(alignment: .leading) { Text(i.label); Text(L(i.kind)).font(.caption2).foregroundStyle(.secondary)
                             if i.cacheBytes > 0 { Text(L("storage_compile_cache", ByteCountFormatter.string(fromByteCount: i.cacheBytes, countStyle: .file))).font(.caption2).foregroundStyle(.secondary) } }; Spacer(); Text(ByteCountFormatter.string(fromByteCount: i.bytes, countStyle: .file)).foregroundStyle(.secondary) }
-                            .swipeActions { Button(L("storage_delete"), role: .destructive) { toDelete = i } }
+                            .swipeActions { if m.activeJob == nil && !m.recording { Button(L("storage_delete"), role: .destructive) { toDelete = i } } }   // not under a run: its models are mmaped
                     }
                 } header: { Text(L("settings_storage")) } footer: { if !models.isEmpty { Text(L("storage_total", ByteCountFormatter.string(fromByteCount: models.reduce(0) { $0 + $1.bytes }, countStyle: .file))) } }
                 Section(L("settings_about")) {
@@ -653,7 +655,7 @@ struct SettingsView: View {
             }
             .confirmationDialog(L("storage_delete_title"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
                 Button(L("storage_delete"), role: .destructive) { if let i = toDelete { Storage.delete(i); models = Storage.models() } }
-            } message: { if let i = toDelete { Text(L("storage_delete_body", i.name, ByteCountFormatter.string(fromByteCount: i.bytes, countStyle: .file))) } }
+            } message: { if let i = toDelete { Text(L("storage_delete_body", i.label, ByteCountFormatter.string(fromByteCount: i.bytes, countStyle: .file))) } }
             .navigationTitle(L("settings"))
             .toolbar { Button(L("done")) { dismiss() } }
         }

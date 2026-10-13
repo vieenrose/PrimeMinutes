@@ -198,7 +198,7 @@ struct LibraryView: View {
         .background(Color(.systemGroupedBackground))
         .alert(L("rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("title"), text: $draft)
-            Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft; m.update(s) } }
+            Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.update(s) } }
             Button(L("cancel"), role: .cancel) {}
         }
         .confirmationDialog(L("delete_confirm_many", selected.count), isPresented: $deletingMany, titleVisibility: .visible) {
