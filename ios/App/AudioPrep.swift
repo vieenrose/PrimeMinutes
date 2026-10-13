@@ -117,7 +117,8 @@ final class SilenceSkipper: @unchecked Sendable {
 
 /// File decode → gain → silence skipping, in ~1 s chunks.
 enum AudioPrep {
-    static func stream(_ url: URL, skipper: SilenceSkipper, from: Double = 0, onChunk: ([Float]) -> Bool) throws {
+    /// `clips`: original (start, end) seconds fed before `from` (SeamEnrollment).
+    static func stream(_ url: URL, skipper: SilenceSkipper, from: Double = 0, clips: [(Double, Double)] = [], onChunk: ([Float]) -> Bool) throws {
         let gain = GainNormalizer()
         var pending: [Float] = []
         var stopped = false
@@ -127,6 +128,11 @@ enum AudioPrep {
                 let n = min(16000, pending.count); let c = Array(pending.prefix(n)); pending.removeFirst(n)
                 if let o = skipper.apply(c), !onChunk(o) { stopped = true }
             }
+        }
+        for (a, b) in clips where !stopped {
+            var left = Int((b - a) * 16000)
+            try AudioDecode.stream(url, from: a) { c in let p = Array(c.prefix(left)); left -= p.count; emit(gain.add(p)); return left > 0 && !stopped }
+            emit([Float](repeating: 0, count: Int(SeamEnrollment.gap * 16000)))   // silence: the ASR ends its line at the clip edge
         }
         try AudioDecode.stream(url, from: from) { c in emit(gain.add(c)); return !stopped }
         if !stopped { emit(gain.finish(), flush: true) }

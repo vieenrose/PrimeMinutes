@@ -93,6 +93,48 @@ enum Checkpoint {
 
 /// Android SeamStitcher: a resumed run restarts the diarizer PREROLL seconds before the seam; the overlap maps its
 /// fresh speaker ids onto the saved ones (greedy by overlapping seconds), and only fresh lines centred after the seam are kept.
+/// Android SeamEnrollment: before the preroll the restarted diarizer hears a few seconds of every saved speaker, in order
+/// of first appearance, cut from saved lines that end before the preroll. Their re-recognised lines map back onto those saved
+/// lines, so a speaker silent in the preroll keeps its id (a 45-min import killed at 1000 s came back with 10 speakers, not 8).
+/// Engine timeline: [clip, `gap` s of silence]… then the audio from `offset` on. The gap ends the ASR line at each clip edge;
+/// a line still running past one is cut at that clip's end: mapped whole, a line spanning two clips 300 s apart overlapped
+/// minutes of saved speech and outvoted the preroll (the two main speakers swapped).
+struct SeamEnrollment {
+    static let perSpeaker = 6.0, maxTotal = 60.0, minClip = 1.0, gap = 1.0
+    let clips: [(Double, Double)], offset: Double
+    var length: Double { clips.reduce(0) { $0 + $1.1 - $1.0 + Self.gap } }
+    static func none(_ offset: Double) -> SeamEnrollment { .init(clips: [], offset: offset) }
+    /// (clip start, clip end, engine time where it starts) of the clip or gap holding `t`; nil past the clips.
+    private func segment(_ t: Double) -> (Double, Double, Double)? {
+        var at = 0.0
+        for (s, e) in clips { if t < at + (e - s) + Self.gap { return (s, e, at) }; at += e - s + Self.gap }
+        return nil
+    }
+    /// Engine time (silence skip already restored) → original audio time; a gap maps to its clip's end.
+    func toOriginal(_ t: Double) -> Double { segment(t).map { min($0.0 + (t - $0.2), $0.1) } ?? t - length + offset }
+    /// An engine-time line → original times, cut at the end of the clip it starts in.
+    func toOriginal(_ start: Double, _ end: Double) -> (Double, Double) {
+        guard let (s, e, at) = segment(start) else { return (toOriginal(start), toOriginal(end)) }
+        return (s + (start - at), min(e, s + (end - at)))
+    }
+    static func plan(_ prior: [Utterance], offset: Double) -> SeamEnrollment {
+        guard !prior.isEmpty, offset > 0 else { return .none(offset) }
+        let usable = prior.filter { $0.end <= offset && $0.end - $0.start >= minClip }
+        var order: [Int] = []; for u in prior where !order.contains(u.speaker) { order.append(u.speaker) }
+        var clips: [(Double, Double)] = [], total = 0.0
+        for spk in order {
+            var got = 0.0
+            for u in usable.filter({ $0.speaker == spk }).sorted(by: { $0.end - $0.start > $1.end - $1.start }) {
+                if got >= perSpeaker || total >= maxTotal { break }
+                let len = min(u.end - u.start, perSpeaker - got, maxTotal - total)
+                if len < minClip { break }
+                clips.append((u.start, u.start + len)); got += len; total += len
+            }
+        }
+        return .init(clips: clips, offset: offset)
+    }
+}
+
 enum SeamStitcher {
     static let preroll = 30.0
     static func stitch(_ prior: [Utterance], seam: Double, _ fresh: [Utterance], stable: Int) -> ([Utterance], Int) {

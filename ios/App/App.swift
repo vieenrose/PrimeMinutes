@@ -342,7 +342,7 @@ final class Model: ObservableObject {
     }
 
     /// Transcribe + read a source of 16 kHz mono chunks (a file, the bundled sample). `feed` pushes chunks until done or false.
-    func process(seconds: Double, job: Job? = nil, skipper: SilenceSkipper? = nil, resume: Checkpoint.Partial? = nil, offset: Double = 0, live: Bool = false, feed: @escaping @Sendable (([Float]) -> Bool) throws -> Void) async {
+    func process(seconds: Double, job: Job? = nil, skipper: SilenceSkipper? = nil, resume: Checkpoint.Partial? = nil, offset: Double = 0, enroll: SeamEnrollment? = nil, live: Bool = false, feed: @escaping @Sendable (([Float]) -> Bool) throws -> Void) async {
         status = L("loading_models"); lines = []; notes = []; title = ""; summary = ""; StopFlag.on = false
         let b = base
         await Task.detached {
@@ -367,8 +367,9 @@ final class Model: ObservableObject {
             // Resume: the saved prefix goes to the reader first; fresh lines are mapped to original-audio time (offset + skipped
             // silence) and stitched onto it, so the reader sees original times and nothing is restored twice.
             let prior = resume?.lines ?? [], seam = resume?.seam ?? 0
+            let en = enroll ?? .none(offset)
             func full(_ fresh: [Utterance], stable: Int) -> ([Utterance], Int) {
-                SeamStitcher.stitch(prior, seam: seam, sk.restore(fresh).map { var u = $0; u.start += offset; u.end += offset; return u }, stable: stable)
+                SeamStitcher.stitch(prior, seam: seam, sk.restore(fresh).map { var u = $0; (u.start, u.end) = en.toOriginal(u.start, u.end); return u }, stable: stable)
             }
             var kept: [Utterance] = prior, snapshot: [Utterance] = prior, offered = 0, frozen: [Utterance] = [], savedAt = 0.0
             if resume != nil { for u in prior { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }; offered = prior.count; StatusLog.add("trace resume at \(Int(seam)) s, \(prior.count) utterances kept") }
@@ -391,7 +392,7 @@ final class Model: ObservableObject {
                     Task { @MainActor in
                         self.lines = conv.utterances(all); self.notes = conv.notes(j)
                         if live { if self.recording { self.status = L("recording_s", Int(fed)) }; return }
-                        self.status = L("transcribing_s", Int(fed + offset), Int(seconds))
+                        self.status = L("transcribing_s", Int(max(0, fed - en.length) + offset), Int(seconds))
                     }
                     Stage.set("idle")
                     return true
@@ -468,7 +469,9 @@ final class Model: ObservableObject {
                 let skipper = SilenceSkipper()
                 let partial = Checkpoint.loadPartial(job.id)   // left by a Stop, or saved every minute (a kill): continue after its seam
                 let from = partial.map { max(0, $0.seam - SeamStitcher.preroll) } ?? 0
-                await process(seconds: secs, job: job, skipper: skipper, resume: partial, offset: from) { sink in try AudioPrep.stream(url, skipper: skipper, from: from, onChunk: sink) }
+                let enroll = partial.map { SeamEnrollment.plan($0.lines, offset: from) } ?? .none(from)
+                if !enroll.clips.isEmpty { StatusLog.add("trace resume enrollment: \(enroll.clips.count) clips, \(Int(enroll.length)) s") }
+                await process(seconds: secs, job: job, skipper: skipper, resume: partial, offset: from, enroll: enroll) { sink in try AudioPrep.stream(url, skipper: skipper, from: from, clips: enroll.clips, onChunk: sink) }
                 if StopFlag.on { StopFlag.on = false; parked.insert(job.id); status = L("status_stopped") }
                 else if await queue.first(skipping: recordingJob)?.id == job.id { parked.insert(job.id); failed[job.id] = status; Notifier.failed(job.title ?? L("meeting")) }   // failed run: parked with its error and a Retry (Android), never looped on
                 activeJob = nil; await syncQueue()
