@@ -165,7 +165,7 @@ fun SettingsContent(
 
         Section(stringResource(R.string.settings_inference)) {
             InferencePanel(enabled)
-            AiBenchmark(enabled)
+            if (BuildConfig.DEBUG) AiBenchmark(enabled)   // its 60 s clip ships in debug builds only
         }
 
         Section(stringResource(R.string.settings_experimental)) {
