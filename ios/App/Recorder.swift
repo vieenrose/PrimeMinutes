@@ -7,13 +7,19 @@ final class Recorder {
     private let out = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
 
     static func requestPermission() async -> Bool {
-        await withCheckedContinuation { c in AVAudioApplication.requestRecordPermission { c.resume(returning: $0) } }
+        if Dev.env["VOX_MICFILE"] != nil { return true }   // the file stands in for the mic
+        return await withCheckedContinuation { c in AVAudioApplication.requestRecordPermission { c.resume(returning: $0) } }
     }
 
     private var feeding = false
 
     func start(_ onChunk: @escaping ([Float]) -> Void) throws {
-        if let f = Dev.env["VOX_MICFILE"] { return try feed(f, onChunk) }
+        // VOX_MICFILE=a.wav[,b.wav…]: each recording plays the next file; at the end of one that has a successor
+        // the app moves on with "Next talk", after the last one it stops (demo of consecutive meetings).
+        if let fs = Dev.env["VOX_MICFILE"]?.split(separator: ",").map(String.init), !fs.isEmpty {
+            let f = fs[min(Recorder.micIndex, fs.count - 1)]; Recorder.micIndex += 1
+            return try feed(f, more: Recorder.micIndex < fs.count, onChunk)
+        }
         let s = AVAudioSession.sharedInstance()
         try s.setCategory(.record, mode: .measurement); try s.setActive(true)
         let input = engine.inputNode, inFmt = input.outputFormat(forBus: 0)
@@ -32,7 +38,8 @@ final class Recorder {
 
     /// DEV demo/test feed: an audio file played into the pipeline in real time as if it were the mic (the
     /// simulator mic is silent); stops the recording itself at the end of the file.
-    private func feed(_ path: String, _ onChunk: @escaping ([Float]) -> Void) throws {
+    static var micIndex = 0
+    private func feed(_ path: String, more: Bool, _ onChunk: @escaping ([Float]) -> Void) throws {
         let file = try AVAudioFile(forReading: URL(fileURLWithPath: path.hasPrefix("/") ? path : NSHomeDirectory() + "/" + path))
         guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
               let conv = AVAudioConverter(from: file.processingFormat, to: out) else { return }
@@ -49,7 +56,10 @@ final class Recorder {
                 let due = t0.addingTimeInterval(Double(i) / 16000); let d = due.timeIntervalSinceNow
                 if d > 0 { Thread.sleep(forTimeInterval: d) }
             }
-            if self?.feeding == true { Task { @MainActor in if BackgroundWork.model?.recording == true { BackgroundWork.model?.toggleRecord() } } }
+            if self?.feeding == true { Task { @MainActor in
+                guard let m = BackgroundWork.model, m.recording else { return }
+                if more { m.nextTalk() } else { m.toggleRecord() }
+            } }
         }
     }
 
