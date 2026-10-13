@@ -19,7 +19,11 @@ struct ReaderSummarizer {
         let first = raw.components(separatedBy: "<turn|>")[0].split(whereSeparator: \.isNewline)
             .map(String.init).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let junk = CharacterSet(charactersIn: "「」\"*# ")
-        guard let t = first?.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: junk) else { return nil }
+        guard var t = first?.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: junk) else { return nil }
+        // "會議：…" / "標題：…" — the model labels its answer now and then.
+        if let r = t.range(of: "^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*", options: .regularExpression) {
+            t = String(t[r.upperBound...]).trimmingCharacters(in: junk)
+        }
         let cut = String(t.prefix(40))
         return cut.isEmpty ? nil : cut
     }
