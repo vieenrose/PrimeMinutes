@@ -2,9 +2,14 @@ import Foundation
 
 /// One finished (or stopped) meeting, saved as `<id>.json`.
 /// Action items (Android ReaderLane.actions): the reader's ACTION notes after proposal reclassification,
-/// one "- text [m:ss]" line each; nil when there are none.
+/// one "- text [m:ss]" line each; nil when there are none. A user edit (Android editingActions) replaces them
+/// until the next reading, which builds a fresh Session.
 extension Session {
     var actionItems: String? {
+        if let e = actionsEdited { let t = e.trimmingCharacters(in: .whitespacesAndNewlines); return t.isEmpty || t == "-" ? nil : t }
+        return derivedActions
+    }
+    var derivedActions: String? {
         let a = notes.map(ReaderProtocol.reclassify).filter { $0.tag?.uppercased() == "ACTION" }
         return a.isEmpty ? nil : a.map { "- \($0.text.trimmingCharacters(in: CharacterSet(charactersIn: "。"))) [\($0.ts)]" }.joined(separator: "\n")
     }
@@ -21,6 +26,8 @@ struct Session: Identifiable, Codable, Hashable {
     var audio: String? = nil      // file name in Application Support/audio
     var speakerNames: [String: String]? = nil   // speaker index -> custom name
     var reader: String? = nil     // reader model id that wrote the summary (Android sessionModels.first)
+    var actionsEdited: String? = nil   // the action items as the user edited them; nil = derived from the notes
+    var legacyNotes: String? = nil     // v2 NOTES text of a session written by the older summarizer (MeetingNotes)
     func name(_ spk: Int) -> String { speakerNames?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
     static func == (a: Session, b: Session) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }

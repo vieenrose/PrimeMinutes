@@ -50,6 +50,7 @@ struct SessionView: View {
     @State private var transcriptDirty = false
     @State private var toast: String?
     @State private var editingSummary = false
+    @State private var editingActions = false
     @State private var summaryStale = false
     @State private var undoable: Session?
     @State private var exporting = false
@@ -120,7 +121,8 @@ struct SessionView: View {
     }
     private var summaryTab: some View {
         VStack(spacing: 12) {
-            card {
+            // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
+            if !s.notes.isEmpty { card {
                 HStack {
                     Circle().fill(Color.green).frame(width: 9, height: 9)
                     VStack(alignment: .leading) {
@@ -131,20 +133,20 @@ struct SessionView: View {
                     Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Color.green.opacity(0.15), in: Capsule()).foregroundStyle(.green)
                 }
-                if !s.notes.isEmpty {
-                    Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
-                    if showProcess {
-                        Text(L("agent_notes_caution")).font(.caption2).foregroundStyle(.secondary)
-                        ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
-                    }
+                // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
+                if showProcess {
+                    ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
+                    Text(L("agent_notes_caution")).font(.caption2).foregroundStyle(.secondary)
                 }
-            }
+                Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
+            } }
             if !s.summary.isEmpty {
                 card {
-                    HStack { Text(L("card_summary")).font(.headline); Spacer()
-                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil") }.accessibilityLabel(L("cd_edit"))
-                        Button { UIPasteboard.general.string = s.summary; toast = L("summary_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_summary")) }
-                    Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: Color.secondary, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
+                    // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
+                    HStack(spacing: 16) { Spacer()
+                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_summary"))
+                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil") }.accessibilityLabel(L("cd_edit")) }
+                    Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
                         return .systemAction })
                     Text(L("ai_disclaimer")).font(.caption2).foregroundStyle(.secondary)
@@ -152,19 +154,39 @@ struct SessionView: View {
             }
             if showActions, let a = s.actionItems {
                 card {
-                    HStack {
+                    HStack(spacing: 16) {
                         Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { UIPasteboard.general.string = a; toast = L("action_items_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_actions"))
+                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_actions"))
+                        Button { draft = a; editingActions = true } label: { Image(systemName: "pencil") }.accessibilityLabel(L("cd_edit"))
                     }
-                    Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: .blue, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
+                    Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
                         return .systemAction })
-                    Text(L("actions_verify_hint")).font(.caption2).foregroundStyle(.secondary)
+                    Text(L("actions_verify_hint")).font(.caption2).foregroundStyle(.orange)
                 }
+            }
+            // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
+            if let n = s.legacyNotes.flatMap(MeetingNotes.parse) {
+                notesSection(L("notes_decisions"), n.decisions)
+                notesSection(L("notes_open"), n.open)
+                notesSection(L("notes_topics"), n.topics)
+                ForEach(n.extra) { notesSection($0.key, $0.lines) }
             }
             if !s.lines.isEmpty { SpeakerStats(s: s, palette: Self.palette).id("stats") }
             if s.summary.isEmpty { Text(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).font(.subheadline).foregroundStyle(.secondary).padding(.top, 12) }
         }.padding(.horizontal, 16)
+    }
+    @ViewBuilder private func notesSection(_ header: String, _ items: [String]) -> some View {
+        if !items.isEmpty {
+            card {
+                Text(header).font(.subheadline.bold())
+                ForEach(Array(items.enumerated()), id: \.offset) { _, it in
+                    Text(Markdown.render("- " + refs(it), anchors: player.available ? .blue : nil, speakers: names)).font(.subheadline)
+                }
+            }.environment(\.openURL, OpenURLAction { u in
+                if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
+                return .systemAction })
+        }
     }
     private var transcriptTab: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
@@ -290,6 +312,17 @@ struct SessionView: View {
                     }.navigationTitle(L("tab_summary")).navigationBarTitleDisplayMode(.inline)
             }
         }
+        .sheet(isPresented: $editingActions) {
+            NavigationStack {
+                TextEditor(text: $draft).padding(.horizontal, 12)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
+                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
+                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); editingActions = false
+                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } } }
+                    }.navigationTitle(L("card_action_items")).navigationBarTitleDisplayMode(.inline)
+            }
+        }
         .alert(L("summary_settings_changed"), isPresented: $summaryStale) {
             Button(L("re_summarize")) { rerun(s, false) }
             Button(L("cancel"), role: .cancel) {}
@@ -312,7 +345,7 @@ struct SessionView: View {
             if let old = undoable {
                 HStack {
                     Text(L("resummary_done")).font(.subheadline); Spacer()
-                    Button(L("undo")) { s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.reader = old.reader; save(s); withAnimation { undoable = nil } }.bold()
+                    Button(L("undo")) { s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s); withAnimation { undoable = nil } }.bold()
                 }.padding(14).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 110)
                     .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { undoable = nil } }
             }

@@ -35,8 +35,11 @@ enum BackendBench {
     }
 
     /// The GPU graph to read with: the GPU is chosen, its last test on this model passed, and the graph is there.
+    /// Never, since the GPU left the UI (decision 2026-10-13: no gain on iOS or Android): a GPU choice saved
+    /// by an older build reads on the CPU.
+    static let gpuOffered = false
     static func gpuGraph(_ m: ReaderModel) -> String? {
-        guard chosen == "GPU", results(m)["GPU"]?.passed == true, let g = m.gpu else { return nil }
+        guard gpuOffered, chosen == "GPU", results(m)["GPU"]?.passed == true, let g = m.gpu else { return nil }
         let p = Storage.modelsRoot.appendingPathComponent(m.id).appendingPathComponent(g.name).path
         return (try? FileManager.default.attributesOfItem(atPath: p)[.size] as? Int64) == g.size ? p : nil
     }

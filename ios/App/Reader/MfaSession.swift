@@ -164,3 +164,51 @@ final class MfaSession: ReaderLlm {
 }
 
 #endif
+
+/// Dev hook (VOX_MFABENCH): prefill / decode throughput of the mobile engine on synthetic ids, the
+/// same protocol as the Android mfa_bench (warm-up 130, prefill 1024 with 129 reused, decode 64).
+enum MfaBench {
+    static func run(dir: String?) -> String {
+#if VOX_REAL_READER
+        guard let dir else { return "mfabench: no reader model" }
+        do {
+            // GPU (VOX_MFA_BACKEND=1): graph pushed to Documents/mfa-gpu.tflite; agreement with the CPU's greedy reply first.
+            let gpu = ProcessInfo.processInfo.environment["VOX_MFA_BACKEND"] == "1" ? NSHomeDirectory() + "/Documents/mfa-gpu.tflite" : nil
+            var agree = ""
+            if gpu != nil { freopen(NSHomeDirectory() + "/Documents/mfa_stderr.txt", "w", stderr); setvbuf(stderr, nil, _IONBF, 0) }
+            if let gpu {
+                let tok = try SpTokenizer(path: dir + "/Section1_SP_Tokenizer.spiece")
+                let p = [MfaEngine.bos] + Array(tok.encode("會議討論新辦公室的搬遷時程，搬家公司報價有三種，發言者傾向中間價位，並要求合約註明損壞賠償條款。下一步請整理成筆記，列出決議與待辦事項，並標註負責人與期限。").prefix(80))
+                let ref = try autoreleasepool { try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache").generate(p, maxNew: 32, temp: 0, topK: 1, topP: 1, seed: 0) }
+                let t = Date()
+                let g = try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: "", gpuGraph: gpu)
+                let gl = Date().timeIntervalSince(t)
+                let out = try g.generate(p, maxNew: 32, temp: 0, topK: 1, topP: 1, seed: 0)
+                agree = String(format: " agree %d/%d first_load %.1fs ref %@ gpu %@ ", try g.agree(p, forced: ref), ref.count, gl,
+                               tok.decode(ref), tok.decode(out))
+            }
+            let t0 = Date()
+            let e = try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache", gpuGraph: gpu)
+            let load = Date().timeIntervalSince(t0)
+            var ids = [MfaEngine.bos]; var x: UInt32 = 12345
+            while ids.count < 1024 { x = x &* 1103515245 &+ 12345; ids.append(1000 + Int((x >> 8) % 30000)) }
+            var warm = Array(ids.prefix(130)); warm[129] = 7
+            _ = try e.generate(warm, maxNew: 2, temp: 0, topK: 1, topP: 1, seed: 1)
+            var t = Date(); _ = try e.generate(ids, maxNew: 0, temp: 0, topK: 1, topP: 1, seed: 1)
+            let pf = Date().timeIntervalSince(t)
+            var n = 0; t = Date()
+            let out = try e.generate(ids, maxNew: 64, temp: 0, topK: 1, topP: 1, seed: 1) { _ in n += 1; return true }
+            var h: UInt32 = 2166136261; for v in out { h = (h ^ UInt32(truncatingIfNeeded: v)) &* 16777619 }
+            var vi = task_vm_info_data_t(); var cnt = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+            _ = withUnsafeMutablePointer(to: &vi) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(cnt)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &cnt) } }
+            var ru = rusage(); getrusage(RUSAGE_SELF, &ru)
+            let dc = Date().timeIntervalSince(t)
+            return String(format: "mfabench threads=%d load %.2fs prefill 895 tok %.2fs = %.1f tok/s decode %d tok %.2fs = %.2f tok/s hash %08x peak_footprint %d MB maxrss %d MB backend=%@",
+                          Prefs.effectiveThreads, load, pf, 895 / pf, n, dc, Double(n) / dc, h,
+                          Int(vi.ledger_phys_footprint_peak >> 20), Int(ru.ru_maxrss >> 20), ProcessInfo.processInfo.environment["VOX_MFA_BACKEND"] ?? "0") + agree
+        } catch { return "mfabench FAIL \(error)" }
+#else
+        return "mfabench: no real reader in this build"
+#endif
+    }
+}

@@ -21,7 +21,7 @@ enum SessionFile {
 
     static func manifest(_ s: Session) -> Manifest {
         var m = Manifest(); m.title = s.title; m.summary = s.summary
-        m.notes = s.notes.isEmpty ? nil : s.notes.map { ReaderProtocol.render($0) }.joined(separator: "\n")
+        m.notes = s.notes.isEmpty ? s.legacyNotes : s.notes.map { ReaderProtocol.render($0) }.joined(separator: "\n")
         m.action_items = s.actionItems ?? "-"
         m.asr_backend = "ios"
         m.llm_model = s.reader
@@ -46,7 +46,10 @@ enum SessionFile {
         var names: [String: String] = [:]
         for (k, v) in m.speaker_names ?? [:] where !v.name.isEmpty { names[k] = v.name }
         var s = Session(title: m.title ?? "", summary: m.summary ?? "", seconds: lines.last?.end ?? 0, lines: lines, notes: notes(m.notes), audio: audio, speakerNames: names.isEmpty ? nil : names)
+        if s.notes.isEmpty, let t = m.notes, MeetingNotes.parse(t) != nil { s.legacyNotes = t }   // Android: v2 NOTES first, else the journal
         s.reader = m.llm_model   // Android sessionModels: the summary stays attributed to the model that wrote it
+        // Android saves its action items as shown, edits included: keep them when they are not what the notes give.
+        if let a = m.action_items?.trimmingCharacters(in: .whitespacesAndNewlines), a != "-", !a.isEmpty, a != s.derivedActions { s.actionsEdited = a }
         return s
     }
 

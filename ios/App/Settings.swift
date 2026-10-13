@@ -77,7 +77,7 @@ enum Prefs {
     /// E4B needs the 8 GB class of phone, as on Android.
     static var e4bAllowed: Bool { ProcessInfo.processInfo.physicalMemory >= 7 << 30 }
     static var readerId: String {
-        get { let v = UserDefaults.standard.string(forKey: "reader") ?? "E2B"; return v == "E4B" && e4bAllowed ? v : "E2B" }
+        get { let v = Dev.env["VOX_READER_ID"] ?? UserDefaults.standard.string(forKey: "reader") ?? "E2B"; return v == "E4B" && e4bAllowed ? v : "E2B" }
         set { UserDefaults.standard.set(newValue, forKey: "reader") }
     }
     static var reader: ReaderModel { readerId == "E4B" ? .e4b : .e2b }

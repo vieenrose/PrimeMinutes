@@ -26,7 +26,7 @@ enum Markdown {
 
     private static func withAnchors(_ text: String, _ color: Color?) -> AttributedString {
         guard let color else { return inline(text) }
-        var out = AttributedString(), last = text.startIndex
+        var out = AttributedString(), last = text.startIndex, prevAnchor = false
         for m in anchor.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             guard let r = Range(m.range, in: text), let a = Range(m.range(at: 1), in: text), let b = Range(m.range(at: 2), in: text),
                   let g1 = Int(text[a]), let g2 = Int(text[b]) else { continue }
@@ -34,7 +34,12 @@ enum Markdown {
             let secs = c.map { g1 * 3600 + g2 * 60 + $0 } ?? g1 * 60 + g2
             // Raised like a footnote mark, so the space the model puts before it would only open a gap.
             var before = String(text[last..<r.lowerBound]); while before.hasSuffix(" ") { before.removeLast() }
-            out += inline(before) + AttributedString("\u{2060}")
+            if prevAnchor && before.isEmpty {
+                // "[0:44] [4:09]": with the space trimmed the two labels read as one ("0:444:09").
+                var sep = AttributedString(", "); sep.foregroundColor = color; sep.font = .caption2.weight(.medium); sep.baselineOffset = 6
+                out += sep
+            } else { out += inline(before) }
+            out += AttributedString("\u{2060}"); prevAnchor = true
             var mark = AttributedString(c.map { _ in "\(text[a]):\(text[b]):\(text[Range(m.range(at: 3), in: text)!])" } ?? "\(text[a]):\(text[b])")
             mark.link = URL(string: "vox://\(secs)"); mark.foregroundColor = color
             mark.font = .caption2.weight(.medium); mark.baselineOffset = 6

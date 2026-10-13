@@ -99,6 +99,20 @@ enum Stage {
 /// Runs the reader on its own thread: on slow CPUs (A12: ~12 tok/s prefill) a reader call takes 1-2 min, and inline it
 /// would throttle the transcription. Lines queue up; the reader catches up behind the ASR and after it.
 /// Test hooks (VOX_* environment variables, the Sample button) exist only in builds made with DEV=1.
+/// DEV: VOX_SNAP="3,8" writes the screen to Documents/snap1.png, snap2.png… at those seconds after launch, so a
+/// device run can be checked without Xcode (pulled with devicectl). Not compiled into release builds.
+enum Snap {
+    @MainActor static func schedule(_ spec: String) {
+        for (i, t) in spec.split(separator: ",").compactMap({ Double($0) }).enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                guard let w = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
+                let img = UIGraphicsImageRenderer(bounds: w.bounds).image { _ in w.drawHierarchy(in: w.bounds, afterScreenUpdates: true) }
+                try? img.pngData()?.write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("snap\(i + 1).png"))
+            }
+        }
+    }
+}
+
 enum Dev {
     #if VOX_DEV
     static let on = true
@@ -317,7 +331,7 @@ final class Model: ObservableObject {
                 catch { await MainActor.run { self.status = L("download_failed", "\(error)") } }
             }
             let stored = await self.store.isComplete(rm) ? await self.store.dir(rm).path : nil
-            let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"] ?? stored)
+            let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored)
             let agentUi = self.agent
             let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: .mobile)
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.status = L("reader_error", "\(error)") }; return }
@@ -379,6 +393,7 @@ final class Model: ObservableObject {
             await MainActor.run { self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count); self.agent.apply(.state(.done, notes: fn.count)) }
             await self.archive(lines: fl, notes: fn, title: ft, summary: summaryText, seconds: live ? (eng?.fedSeconds ?? 0) : seconds, job: job)
             if let job { Checkpoint.remove(job.id); await self.queue.remove(job.id) }
+            Stage.set("idle")
         }.value
     }
 
@@ -508,7 +523,7 @@ struct ContentView: View {
             LibraryView(m: m, path: $path, onAdd: { showAdd = true }, onSettings: { showSettings = true })
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Session.self) { x in SessionView(session: m.sessions.first { $0.id == x.id } ?? x, save: { m.update($0) }, rerun: { m.rerun($0, transcribe: $1) }) }
-            .onAppear { BackgroundWork.model = m; m.reload(); if Dev.env["VOX_BENCH"] != nil { Task { let t0 = Date(); let n = await Prefs.runBench(); try? "bench pick=\(n ?? -1) eff=\(Prefs.effectiveThreads) cores=\(Prefs.cores) \(Int(Date().timeIntervalSince(t0) * 1000))ms".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/bench.txt"), atomically: true, encoding: .utf8) } }; if let th = Dev.env["VOX_THEME"] { theme = th }; if Dev.env["VOX_CANCEL"] != nil { Task { try? await Task.sleep(nanoseconds: 4_000_000_000); let was = m.downloading != nil; m.cancelDownload(); try? await Task.sleep(nanoseconds: 2_000_000_000); try? "cancel was=\(was) now=\(m.downloading != nil) queued=\(m.waiting.count) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/cancel.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ACTIONS"] != nil { UserDefaults.standard.set(true, forKey: "showActions") }; if Dev.env["VOX_OPEN"] != nil { Task { let all = await m.library.all(); path = Dev.env["VOX_OPEN"] == "short" ? all.filter { $0.audio != nil && $0.seconds > 30 }.min { $0.seconds < $1.seconds }.map { [$0] } ?? [] : Array(all.prefix(1)) } }; if let d = Dev.env["VOX_DOWNLOAD"] { if d == "speech" { Task { _ = await m.downloadSpeech() } } else { m.downloadReader() } }; if Dev.env["VOX_AUTORUN"] != nil { m.run() }; if Dev.env["VOX_RECORD"] != nil { m.toggleRecord() }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let q = Dev.env["VOX_YT_ADD"] { Task { var r = "yt: no result"; if let v = try? await YouTube.search(q).first { do { let a = try await YouTube.resolve(v.url); let f = try await YouTube.download(a, name: "yt_test." + a.ext) { _ in }; r = "yt ok \(v.title) \((try? FileManager.default.attributesOfItem(atPath: f.path)[.size]) ?? 0)B" } catch { r = "yt FAIL \(error)" } }; try? r.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/yt.txt"), atomically: true, encoding: .utf8) } }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { while true { try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; if Dev.env["VOX_YOUTUBE"] != nil { showYouTube = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
+            .onAppear { BackgroundWork.model = m; m.reload(); if Dev.env["VOX_MFABENCH"] != nil { Task { let rm: ReaderModel = Dev.env["VOX_MFABENCH"] == "E4B" ? .e4b : Dev.env["VOX_MFABENCH"] == "E2B" ? .e2b : Prefs.reader; let d = await m.store.isComplete(rm) ? await m.store.dir(rm).path : nil; let r = await Task.detached { MfaBench.run(dir: d) }.value; try? r.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/mfabench-\(Dev.env["VOX_MFABENCH"] ?? "")-\(Dev.env["VOX_MFA_BACKEND"] ?? "0")-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) } }; if let b = Dev.env["VOX_SET_BACKEND"] { BackendBench.chosen = b; try? "chosen=\(BackendBench.chosen) gpuGraph=\(BackendBench.gpuGraph(Prefs.reader) ?? "nil")".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/setbackend-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) }; if Dev.env["VOX_BACKENDTEST"] != nil { Task.detached { let rm = ReaderModel.e2b, st = ModelStore(); let dir = await st.dir(rm).path; let g = dir + "/prefill_decode_fused.gpu.tflite"; if !FileManager.default.fileExists(atPath: g) { try? FileManager.default.copyItem(atPath: NSHomeDirectory() + "/Documents/mfa-gpu.tflite", toPath: g) }; let gp = await st.gpuGraph(rm); let t0 = Date(); let r = BackendBench.run(rm, dir: dir, gpu: gp, threads: Prefs.effectiveThreads) { _ in }; BackendBench.chosen = "GPU"; let used = BackendBench.gpuGraph(rm); let t1 = Date(); let f = ReaderFactory.make(dir: dir); let out = "gpu=\(gp ?? "nil") test \(Int(t1.timeIntervalSince(t0)))s " + r.map { "\($0.key) ok=\($0.value.passed) p=\(Int($0.value.prefill)) d=\(String(format: "%.1f", $0.value.decode)) note=\($0.value.note)" }.joined(separator: "; ") + " chosen=\(BackendBench.chosen) used=\(used != nil) real=\(f.real) load \(Int(Date().timeIntervalSince(t1)))s\n" + ((try? String(contentsOf: StatusLog.url, encoding: .utf8)) ?? "").split(separator: "\n").suffix(4).joined(separator: "\n"); try? out.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/backendtest-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_BENCH"] != nil { Task { let t0 = Date(); let n = await Prefs.runBench(); try? "bench pick=\(n ?? -1) eff=\(Prefs.effectiveThreads) cores=\(Prefs.cores) \(Int(Date().timeIntervalSince(t0) * 1000))ms".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/bench.txt"), atomically: true, encoding: .utf8) } }; if let th = Dev.env["VOX_THEME"] { theme = th }; if Dev.env["VOX_CANCEL"] != nil { Task { try? await Task.sleep(nanoseconds: 4_000_000_000); let was = m.downloading != nil; m.cancelDownload(); try? await Task.sleep(nanoseconds: 2_000_000_000); try? "cancel was=\(was) now=\(m.downloading != nil) queued=\(m.waiting.count) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/cancel.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ACTIONS"] != nil { UserDefaults.standard.set(true, forKey: "showActions") }; if Dev.env["VOX_OPEN"] != nil { Task { let all = await m.library.all(); path = Dev.env["VOX_OPEN"] == "short" ? all.filter { $0.audio != nil && $0.seconds > 30 }.min { $0.seconds < $1.seconds }.map { [$0] } ?? [] : Array(all.prefix(1)) } }; if let d = Dev.env["VOX_DOWNLOAD"] { if d == "speech" { Task { _ = await m.downloadSpeech() } } else { m.downloadReader() } }; if Dev.env["VOX_AUTORUN"] != nil { m.run() }; if Dev.env["VOX_RECORD"] != nil { m.toggleRecord() }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let sn = Dev.env["VOX_SNAP"] { Snap.schedule(sn) }; if let q = Dev.env["VOX_YT_ADD"] { Task { var r = "yt: no result"; if let v = try? await YouTube.search(q).first { do { let a = try await YouTube.resolve(v.url); let f = try await YouTube.download(a, name: "yt_test." + a.ext) { _ in }; r = "yt ok \(v.title) \((try? FileManager.default.attributesOfItem(atPath: f.path)[.size]) ?? 0)B" } catch { r = "yt FAIL \(error)" } }; try? r.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/yt.txt"), atomically: true, encoding: .utf8) } }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { var lastN = -1; var peakMB = 0.0; while true { NSLog("VOXSTATUS %@", m.status); do { var i = task_vm_info_data_t(); var c = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size); _ = withUnsafeMutablePointer(to: &i) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &c) } }; peakMB = max(peakMB, Double(i.phys_footprint) / 1048576); NSLog("VOXRSS %.0f peak %.0f MB kpeak %.0f resident %.0f rpeak %.0f MB", Double(i.phys_footprint) / 1048576, peakMB, Double(i.ledger_phys_footprint_peak) / 1048576, Double(i.resident_size) / 1048576, Double(i.resident_size_peak) / 1048576) }; if m.lines.count != lastN { lastN = m.lines.count; for l in m.lines { NSLog("VOXLINE %d %.1f-%.1f %@", l.speaker, l.start, l.end, l.text) } }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; if Dev.env["VOX_YOUTUBE"] != nil { showYouTube = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
             .sheet(isPresented: $showAdd) { AddSourceSheet(onFile: { picking = true }, onPodcast: { showPodcast = true }, onYouTube: { showYouTube = true }, onSession: { picking = true }) }
             .fullScreenCover(isPresented: Binding(get: { m.recording }, set: { _ in })) { CaptureView(m: m) }
             .sheet(isPresented: $showPodcast) { PodcastView { m.addEpisode($0) } }
@@ -525,25 +540,8 @@ struct ContentView: View {
 struct SettingsView: View {
     private var inferenceFooter: String {
         let capped: String = Prefs.capped ? "\n" + L("settings_inference_capped") : ""
-        return L("threads_note", Prefs.effectiveThreads, Prefs.cores) + capped + "\n" + L("settings_inference_hint") + "\n" + L("backend_hint")
+        return L("threads_note", Prefs.effectiveThreads, Prefs.cores) + capped + "\n" + L("settings_inference_hint")
     }
-    /// A backend's last test (Android Settings backend lines): speeds against the CPU, or why it is off.
-    private func backendLine(_ b: String) -> String {
-        let name = L("backend_" + b.lowercased()), r = backends[b]
-        let line: String
-        if b == "GPU", let f = gpuFetch { line = L("backend_downloading", Int(f * 100)) }
-        else if testing == b { line = L("backend_testing", name) }
-        else if let r, r.passed {
-            let cpu = backends["CPU"].flatMap { $0.passed && $0.decode > 0 ? $0.decode : nil }
-            line = L("backend_ok", r.decode, Int(r.prefill), b != "CPU" && cpu != nil ? L("backend_vs_cpu", r.decode / cpu!) : "")
-        } else if let r {
-            let why = ["no_runtime": "backend_why_runtime", "crashed": "backend_why_crashed", "no_output": "backend_why_output",
-                       "wrong_output": "backend_why_wrong", "no_model": "backend_why_model"][r.note] ?? "backend_why_unsupported"
-            line = L("backend_fail", L(why))
-        } else { line = L("backend_untested") }
-        return "\(name)  \(backends[b]?.passed == true ? "✓" : backends[b] != nil ? "✗" : "·")  \(line)"
-    }
-
     @Binding var language: String
     @Binding var theme: String
     @State private var models = Storage.models()
@@ -551,11 +549,6 @@ struct SettingsView: View {
     @State private var threads = Prefs.threads
     @State private var benching = false
     @State private var benchTick = 0
-    @State private var backend = BackendBench.chosen
-    @State private var backends = BackendBench.results(Prefs.reader)
-    @State private var testing: String?
-    @State private var gpuFetch: Double?   // the GPU graph's download, before its test
-    @State private var needModel = false
     @AppStorage("hwMonitor") private var hwMonitor = true
     @State private var reader = Prefs.readerId
     @State private var delay = Prefs.speakerDelay
@@ -582,7 +575,7 @@ struct SettingsView: View {
                         Text(L("reader_model_e2b") + " · 2.2 GB").tag("E2B")
                         if Prefs.e4bAllowed { Text(L("reader_model_e4b") + " · 3.3 GB").tag("E4B") }
                     }.pickerStyle(.inline).labelsHidden()
-                    .onChange(of: reader) { Prefs.readerId = reader; backends = BackendBench.results(Prefs.reader) }
+                    .onChange(of: reader) { Prefs.readerId = reader }
                 } header: { Text(L("settings_reader_model")) } footer: {
                     Text(L("reader_model_hint", 2200, 3300) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
                 }
@@ -592,28 +585,9 @@ struct SettingsView: View {
                     if threads > 0 {
                         Stepper(L("threads_n", threads), value: Binding(get: { threads }, set: { threads = $0; Prefs.threads = $0 }), in: 2...max(2, Prefs.cores))
                     }
-                    // The reader on each backend: the GPU is selectable only once its test passed.
-                    Picker(L("settings_backend_title"), selection: $backend) {
-                        ForEach(BackendBench.all.filter { $0 == "CPU" || backends[$0]?.passed == true }, id: \.self) { Text(L("backend_" + $0.lowercased())).tag($0) }
-                    }.disabled(benching).onChange(of: backend) { BackendBench.chosen = backend }
-                    ForEach(BackendBench.all, id: \.self) { b in Text(backendLine(b)).font(.footnote).foregroundStyle(.secondary) }
-                    if needModel { Text(L("backend_need_model")).font(.footnote).foregroundStyle(.secondary) }
                     Button(L(benching ? "settings_inference_running" : "settings_inference_run")) {
-                        benching = true; threads = 0; Prefs.threads = 0; needModel = false
-                        Task {
-                            _ = await Prefs.runBench(); benchTick += 1
-                            let rm = Prefs.reader, store = ModelStore()
-                            if Storage.ready(rm) {
-                                // The GPU graph (~800 MB) is fetched only here, when the user asks to test the GPU.
-                                if rm.gpu != nil { gpuFetch = 0; _ = try? await store.downloadGpu(rm) { d, t in Task { @MainActor in gpuFetch = Double(d) / Double(max(t, 1)) } }; gpuFetch = nil }
-                                let dir = await store.dir(rm).path, gpu = await store.gpuGraph(rm)
-                                backends = await Task.detached(priority: .userInitiated) {
-                                    BackendBench.run(rm, dir: dir, gpu: gpu, threads: Prefs.effectiveThreads) { b in Task { @MainActor in testing = b } }
-                                }.value
-                                testing = nil; backend = BackendBench.chosen
-                            } else { needModel = true }
-                            benching = false
-                        }
+                        benching = true; threads = 0; Prefs.threads = 0
+                        Task { _ = await Prefs.runBench(); benchTick += 1; benching = false }
                     }.disabled(benching)
                 } header: { Text(L("settings_inference")) } footer: { Text(inferenceFooter).id(benchTick) }
                 Section {
