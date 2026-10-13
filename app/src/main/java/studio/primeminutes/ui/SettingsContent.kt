@@ -487,11 +487,11 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
     }
     Spacer(Modifier.height(8.dp))
     Text(
-        "github.com/vieenrose/VoxSum",
+        "github.com/vieenrose/PrimeMinutes",
         style = MaterialTheme.typography.bodySmall,
         color = pal.Sky,
         modifier = Modifier
-            .clickable { uriHandler.openUri("https://github.com/vieenrose/VoxSum") }
+            .clickable { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
             .padding(vertical = 4.dp),
     )
 }

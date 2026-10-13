@@ -530,28 +530,28 @@ class ModelManager(context: Context) {
         private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
         private val LITERT_FILES = linkedMapOf(
             LITERT_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$LITERT_REV/$LITERT_XASR_FILE",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_XASR_FILE",
                 152_653_712L, "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c",
             ),
             LITERT_DIAR_FILE to Pinned(
-                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
                 101_279_632L, "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf",
             ),
         )
         // Host weights of the ggml-free engine (tools/nemo-host/*_pack.py): the X-ASR decoder/joiner/tokens/fbank and the
         // Sortformer mel bank + silence embedding. The neural graphs are the .tflite files above.
-        /** TODO before release: the Luigi/voxsum-nemo-litert commit that holds the two .bin files (unpublished: not yet pushed). */
+        /** TODO before release: the Luigi/primeminutes-nemo-litert commit that holds the two .bin files (unpublished: not yet pushed). */
         private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
         private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV"
         private const val HOST_XASR_FILE = "xasr_host.bin"
         private const val HOST_DIAR_FILE = "diar_host.bin"
         private val NEMO_FILES = linkedMapOf(
             HOST_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$HOST_REV/$HOST_XASR_FILE",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_XASR_FILE",
                 16_497_008L, "88c79ec952ef16c866880d450eabfa936a9b96a49346a765ebfc33a202d688b2",
             ),
             HOST_DIAR_FILE to Pinned(
-                "https://huggingface.co/Luigi/voxsum-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
                 133_648L, "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36",
             ),
         )
