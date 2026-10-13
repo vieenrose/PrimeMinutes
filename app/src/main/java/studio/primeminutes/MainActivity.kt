@@ -1035,6 +1035,7 @@ private fun TranscribeScreen(
             asrModelId = sessionModels?.second ?: config.asrModelId, asrBackend = sessionModels?.third ?: config.asrBackend, llmModelId = sessionModels?.first ?: config.llmModelId,
         )
         sessionDirty = false
+        TranscriptionService.persistQueued(id)   // openSessionUri waits on it: the rebuild takes seconds
         ContextCompat.startForegroundService(
             context,
             Intent(context, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_PERSIST_LIBRARY),
@@ -1346,6 +1347,11 @@ private fun TranscribeScreen(
         opening = true
         scope.launch {
           try {
+            // A library row whose edits are still being written (persistSessionEdits → service
+            // rebuild) must not be read mid-way: the old file would come back, and later be saved
+            // over the edits. Only library entries have in-flight persists.
+            SessionLibrary.entryDirOf(context, uri)?.name?.let { TranscriptionService.awaitPersist(it) }
+            if (openTicket != myOpen || sessionGen != gen) return@launch
             val loaded = runCatching { PrimeMinutesSession.open(context, uri) }.getOrNull()
             if (openTicket != myOpen || sessionGen != gen) return@launch   // superseded — drop
             if (loaded == null) {

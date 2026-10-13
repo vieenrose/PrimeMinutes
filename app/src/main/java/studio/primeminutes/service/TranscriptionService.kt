@@ -187,6 +187,18 @@ class TranscriptionService : LifecycleService() {
         /** A pending edits-persist into a library entry (see ACTION_PERSIST_LIBRARY). */
         @Volatile var pendingPersist: PersistRequest? = null
 
+        // Entries whose edits-persist is queued or running. Rebuilding session.m4a takes seconds
+        // (the audio is re-muxed), and an open of the same row meanwhile read the OLD file — then,
+        // marked dirty by its own script re-render, wrote that stale state back over the edits
+        // (seen: a renamed speaker and an edited line vanished on reopen). Opens wait on this.
+        private val persistInFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Unit>>()
+        fun persistQueued(entryId: String) { persistInFlight.putIfAbsent(entryId, kotlinx.coroutines.CompletableDeferred()) }
+        private fun persistDone(entryId: String) { persistInFlight.remove(entryId)?.complete(Unit) }
+        /** Suspends until no edits-persist is in flight for [entryId] (bounded: a service that never ran must not hang an open). */
+        suspend fun awaitPersist(entryId: String) {
+            persistInFlight[entryId]?.let { kotlinx.coroutines.withTimeoutOrNull(120_000) { it.await() } }
+        }
+
         /** The transcript/summary text for ACTION_SUMMARIZE. Rides a holder
          *  rather than an Intent extra: a long meeting's transcript exceeds the ~1 MB Binder
          *  transaction limit → TransactionTooLargeException crash. Consumed in onStartCommand. */
@@ -807,6 +819,7 @@ class TranscriptionService : LifecycleService() {
                 }
             }
             withContext(NonCancellable + Dispatchers.Main) {
+                persistDone(req.entryId)
                 activeExports--
                 if (pipelineJob?.isActive != true && activeExports == 0) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
