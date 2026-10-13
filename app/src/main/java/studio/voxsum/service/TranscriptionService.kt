@@ -1188,12 +1188,14 @@ class TranscriptionService : LifecycleService() {
         // Non-fatal on failure: the session view still has the results, and the RECORDED entry above
         // is already a durable, re-runnable fallback.
         val libEntry = entry
+        Log.i(STOP_TAG, "runPipeline attach: foreground=$foreground entry=${libEntry?.id} utts=${result.first.size} summary=${result.second.summary != null}")
         if (foreground && libEntry != null) {
             runCatching {
                 val updated = SessionLibrary.attachResults(
                     this, libEntry, result.first, emptyMap(), result.second.summary, result.second.actions,
                     result.second.title, result.second.notes, cfg.asrModelId, cfg.asrBackend, cfg.llmModelId,
                 )
+                Log.i(STOP_TAG, "runPipeline attach -> ${updated?.id ?: "NULL (buildSession failed)"}")
                 if (updated != null) {
                     emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
                 }

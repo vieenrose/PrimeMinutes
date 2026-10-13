@@ -231,7 +231,9 @@ bool Engine::init(std::string& err) {
         if (dc.host_bin.empty() || dc.pre_f32.empty() || dc.tflite.empty()) { err = "litert_host needs diar_model (diar_host.bin), diar_pre_f32 and diar_tflite"; return false; }
         try { diar_host_ = std::make_unique<DiarHost>(dc); } catch (const std::exception& e) { err = std::string("diar host: ") + e.what(); return false; }
     }
-#ifndef NEMO_NO_GGML
+#ifdef NEMO_NO_GGML
+    else if (!cfg_.skip_diar) { err = "ggml-free build: diarizer needs backend litert_host"; return false; }
+#else
     else if (!cfg_.skip_diar) {
         if (cfg_.diar_model.empty()) { err = "--diar-model required (or --no-diar)"; return false; }
         audiocpp_status st = audiocpp_registry_create(nullptr, (audiocpp_registry**)&registry_);

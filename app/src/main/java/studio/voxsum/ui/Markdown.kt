@@ -67,9 +67,15 @@ private fun AnnotatedString.Builder.appendWithAnchors(
 ) {
     if (anchorColor == null || onSeek == null) { appendInline(text); return }
     var last = 0
+    var prevAnchor = -1
     for (m in ANCHOR_RE.findAll(text)) {
         // Raised like a footnote mark, so the space the model puts before it would only open a gap.
-        appendInline(text.substring(last, m.range.first).trimEnd(' '))
+        val gap = text.substring(last, m.range.first)
+        if (prevAnchor >= 0 && gap.isBlank()) {
+            // "[0:44] [4:09]": with the space trimmed the two labels read as one ("0:444:09").
+            withStyle(SpanStyle(color = anchorColor, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)) { append(", ") }
+        } else appendInline(gap.trimEnd(' '))
+        prevAnchor = m.range.first
         append('\u2060') // word joiner: the mark never wraps to the next line alone
         val g = m.groupValues
         // Two groups is m:ss; three is h:mm:ss — the format the transcript switches to past an hour.

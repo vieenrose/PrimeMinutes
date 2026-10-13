@@ -132,6 +132,24 @@ Java_studio_voxsum_core_asr_NemoNative_nativeFedSec(JNIEnv*, jclass, jlong ptr) 
     return h->engine->fed_s();
 }
 
+// Timing of the last finished stream, for the in-app benchmark: the ASR and diarizer compute split,
+// load (which includes the weight prefault), first partial and the per-piece latency tail.
+JNIEXPORT jstring JNICALL
+Java_studio_voxsum_core_asr_NemoNative_nativeStats(JNIEnv* env, jclass, jlong ptr) {
+    auto* h = reinterpret_cast<Handle*>(ptr);
+    std::lock_guard<std::mutex> lk(h->mu);
+    const auto& st = h->engine->stats();
+    char buf[512];
+    std::snprintf(buf, sizeof buf,
+                  "{\"audio_s\":%.4f,\"wall_s\":%.4f,\"load_s\":%.4f,\"asr_s\":%.4f,\"diar_s\":%.4f,"
+                  "\"first_partial_s\":%.4f,\"piece_p95_ms\":%.2f,\"piece_max_ms\":%.2f,"
+                  "\"speakers\":%zu,\"turns\":%zu,\"peak_rss_mb\":%.1f}",
+                  st.audio_s, st.wall_s, st.load_s, st.asr_compute_s, st.diar_compute_s,
+                  st.first_partial_s, st.piece_p95_ms, st.piece_max_ms,
+                  st.speakers, st.turns, st.peak_rss_mb);
+    return to_jstring(env, buf);
+}
+
 JNIEXPORT void JNICALL
 Java_studio_voxsum_core_asr_NemoNative_nativeFree(JNIEnv*, jclass, jlong ptr) {
     delete reinterpret_cast<Handle*>(ptr);

@@ -91,13 +91,14 @@ class NemoStreamEngineTest {
         }
         var last: List<TranscriptEvent.Utterance> = emptyList()
         val t0 = System.nanoTime()
-        val engine = NemoStreamEngine(files, threads = 4, backend = "litert_cpu", xasrTflite = lit.xasr,
+        // The shipped ggml-free path: host weights (xasr_host.bin / diar_host.bin) + the LiteRT graphs, no GGUF.
+        val engine = NemoStreamEngine(files, threads = 4, backend = "litert_host", xasrTflite = lit.xasr,
             diarTflite = lit.diar, diarPreF32 = lit.preEncode)
         engine.use {
             engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
         }
         val rtf = (System.nanoTime() - t0) / 1e9 / (pcm.size / 16000.0)
-        Log.i("NemoStreamEngineTest", "litert_cpu rtf=%.3f speakers=${engine.speakerCount} text=%s"
+        Log.i("NemoStreamEngineTest", "litert_host rtf=%.3f speakers=${engine.speakerCount} text=%s"
             .format(rtf, last.joinToString(" | ") { "${it.speaker}: ${it.text}" }))
         assertTrue("expected text", last.any { it.text.isNotBlank() })
         assertTrue("expected 2 speakers, got ${engine.speakerCount}", engine.speakerCount == 2)
@@ -198,9 +199,12 @@ class NemoStreamEngineTest {
         val clips = gold.listFiles { f -> f.extension == "wav" }?.sortedBy { it.name }.orEmpty()
         org.junit.Assume.assumeTrue("clips/models not pushed", clips.isNotEmpty() && listOf(xt, dt, files.xasr, files.diar).all { it.exists() })
         val pre = ModelManager(inst.targetContext).asrLitertFiles()?.preEncode
+        // -e backends litert_host (default, ggml-free) | ggml,litert_host ...: the ggml reference is opt-in.
+        val backends = (InstrumentationRegistry.getArguments().getString("backends") ?: "litert_host").split(",")
+        val hostFiles = ModelManager(inst.targetContext).asrFiles()
         for (clip in clips) {
             val pcm = readWav16kMono(clip.readBytes())
-            for (backend in listOf("ggml", "litert_cpu")) {
+            for (backend in backends) {
                 val chunks = flow {
                     var i = 0
                     while (i < pcm.size) { val e = minOf(i + 2048, pcm.size); emit(pcm.copyOfRange(i, e)); i = e }
@@ -208,7 +212,7 @@ class NemoStreamEngineTest {
                 var last: List<TranscriptEvent.Utterance> = emptyList()
                 val t0 = System.nanoTime()
                 val engine = if (backend == "ggml") NemoStreamEngine(files, threads = 4)
-                    else NemoStreamEngine(files, threads = 4, backend = backend, xasrTflite = xt, diarTflite = dt, diarPreF32 = pre)
+                    else NemoStreamEngine(hostFiles, threads = 4, backend = backend, xasrTflite = xt, diarTflite = dt, diarPreF32 = pre)
                 engine.use {
                     engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
                 }

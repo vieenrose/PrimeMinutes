@@ -71,6 +71,18 @@ class NemoStreamEngine(
         emit(TranscriptEvent.UtteranceSnapshot(final, stable = final.size))
     }
 
+    /** Timing of the stream; call after [transcribeLive] has finished. */
+    fun stats(): AsrStats {
+        val j = org.json.JSONObject(NemoNative.nativeStats(handle))
+        return AsrStats(
+            audioSec = j.getDouble("audio_s"), wallSec = j.getDouble("wall_s"), loadSec = j.getDouble("load_s"),
+            asrSec = j.getDouble("asr_s"), diarSec = j.getDouble("diar_s"),
+            firstPartialSec = j.getDouble("first_partial_s"), pieceP95Ms = j.getDouble("piece_p95_ms"),
+            pieceMaxMs = j.getDouble("piece_max_ms"), speakers = j.getInt("speakers"), turns = j.getInt("turns"),
+            peakRssMb = j.getDouble("peak_rss_mb"),
+        )
+    }
+
     override fun close() {
         if (handle != 0L) { NemoNative.nativeFree(handle); handle = 0L }
     }
@@ -122,7 +134,19 @@ internal object NemoNative {
     @JvmStatic external fun nativeLive(handle: Long): String
     @JvmStatic external fun nativeFinish(handle: Long): String?
     @JvmStatic external fun nativeFedSec(handle: Long): Double
+    @JvmStatic external fun nativeStats(handle: Long): String
     @JvmStatic external fun nativeFree(handle: Long)
+}
+
+/** Timing of one finished stream (native `Stats`): seconds unless the name says otherwise. */
+data class AsrStats(
+    val audioSec: Double, val wallSec: Double, val loadSec: Double,
+    /** Time inside the X-ASR graph and the diarizer graph, summed over the stream. */
+    val asrSec: Double, val diarSec: Double,
+    val firstPartialSec: Double, val pieceP95Ms: Double, val pieceMaxMs: Double,
+    val speakers: Int, val turns: Int, val peakRssMb: Double,
+) {
+    val rtf: Double get() = if (audioSec > 0) wallSec / audioSec else 0.0
 }
 
 /** LiteRT graphs of the same models (the `.tflite` pair, read by the `litert_cpu` backend). */

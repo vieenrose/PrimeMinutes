@@ -4,9 +4,14 @@
 #include <jni.h>
 #include <android/log.h>
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <omp.h>
 
 #include "mfa_engine.h"
 #include "sentencepiece_processor.h"
@@ -14,6 +19,32 @@
 #define LOG_TAG "voxsum-mfa"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+// The i8 attention op runs on the statically linked libomp. With affinity on, libomp re-applies the
+// CPU mask it captured at start-up whenever it builds a new team; once Android has moved the process
+// to another cpuset (background, thermal core offlining) that mask is invalid, sched_setaffinity
+// fails and libomp aborts the process (__kmp_fatal in set_system_affinity, seen on the Note10+).
+// Must run before the first parallel region, so here at load time.
+//
+// libomp also shuts itself down when the last thread that used it exits (the reader's worker thread
+// ends with each session) and then asserts in __kmp_affinity_initialize when the next session forks
+// (SIGABRT on the second reader session in one process, Note10+). A parked thread that joined the
+// runtime once keeps it alive for the life of the process.
+extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM*, void*) {
+    setenv("KMP_AFFINITY", "disabled", 0);
+    setenv("KMP_BLOCKTIME", "0", 0);
+    setenv("OMP_WAIT_POLICY", "PASSIVE", 0);
+    std::thread([] {
+        omp_set_num_threads(1);
+#pragma omp parallel
+        { (void)omp_get_thread_num(); }
+        std::mutex m;
+        std::condition_variable cv;
+        std::unique_lock<std::mutex> lk(m);
+        cv.wait(lk, [] { return false; });   // parked for good
+    }).detach();
+    return JNI_VERSION_1_6;
+}
 
 namespace {
 

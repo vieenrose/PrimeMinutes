@@ -171,14 +171,16 @@ class ModelManager(context: Context) {
             .sortedByDescending { it.bytes }
 
     /**
-     * Delete leftover "<name>.part" temp files from downloads that were interrupted (the app was
-     * killed mid-fetch, so [download]'s own cleanup never ran). Safe to call at startup — no download
-     * is in flight yet, so every ".part" is stale — and it reclaims space a partial download stranded.
+     * Delete "<name>.part" temp files (and their ".vld" validators) left by downloads interrupted more
+     * than [PART_MAX_AGE_MS] ago. A recent one is kept: the next download of that file RESUMES from it
+     * (Range + If-Range, then the sha256 check), so a kill or a network loss on a 2 GB model does not
+     * restart it from zero. An old one belongs to a model the user stopped asking for: its space goes back.
      */
     fun sweepStalePartFiles() {
+        val cutoff = System.currentTimeMillis() - PART_MAX_AGE_MS
         runCatching {
             modelsDir.walkTopDown()
-                .filter { it.isFile && (it.name.endsWith(PART_SUFFIX) || it.name.endsWith("$PART_SUFFIX.vld")) }
+                .filter { it.isFile && (it.name.endsWith(PART_SUFFIX) || it.name.endsWith("$PART_SUFFIX.vld")) && it.lastModified() < cutoff }
                 .forEach { it.delete() }
         }
     }
@@ -288,7 +290,9 @@ class ModelManager(context: Context) {
                 } catch (e: Exception) {
                     if (e is ChecksumMismatch) clearPartial()   // corrupt bytes — resume can't fix them
                     if (e is ModelNotFound || isOutOfSpace(e) || attempt >= MAX_DOWNLOAD_ATTEMPTS) {
-                        clearPartial()
+                        // A network that stays down past the retries keeps the partial: the next try
+                        // (the queue, a new recording, the next launch) resumes from it.
+                        if (e is ModelNotFound || isOutOfSpace(e)) clearPartial()
                         throw java.io.IOException(downloadErrorMessage(e, dest.name, attempt), e)
                     }
                     delay(RETRY_BACKOFF_MS * attempt)
@@ -402,6 +406,7 @@ class ModelManager(context: Context) {
         // progress, so more attempts = strictly better odds on a flaky link.
         private const val MAX_DOWNLOAD_ATTEMPTS = 6
         private const val RETRY_BACKOFF_MS = 1500L
+        private const val PART_MAX_AGE_MS = 3L * 24 * 3600 * 1000
 
         /** True if [f] looks like a complete GGUF: starts with the "GGUF" magic and is at least 90% of
          *  [expectedBytes] — catches truncated/corrupt downloads without pinning an exact (upstream-

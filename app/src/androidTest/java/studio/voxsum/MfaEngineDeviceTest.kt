@@ -70,4 +70,31 @@ class MfaEngineDeviceTest {
         val g = r[Backend.GPU]!!
         assertTrue("GPU judged: $g", g.passed || g.note.isNotEmpty())
     }
+
+    /** Reading speed on a window as long as the app's (about 2.9k tokens), CPU; logs prefill/decode rates and peak RSS. */
+    @Test fun longWindowSpeed() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(ctx.filesDir, "mfa-e2b")
+        assumeTrue("model not pushed", File(dir, "prefill_decode_fused.tflite").exists())
+        val tok = SpTokenizer.load(File(dir, "Section1_SP_Tokenizer.spiece").path)
+        val system = File(dir, "system_prompt.txt").readText()
+        val line = "[0:12] S2: 表演就請外面的樂團，報價八萬，我明天回覆他們，場地的部分下週三前要確認，預算再討論一次。\n"
+        val sb = StringBuilder()
+        var ids: IntArray
+        var n = 0
+        do {
+            sb.append("[").append(n / 60).append(":").append("%02d".format(n % 60)).append("] S").append(n % 3 + 1).append(line.substringAfter("] S2:"))
+            n += 7
+            ids = intArrayOf(MfaEngine.BOS) + tok.encode("<|turn>system\n$system<turn|>\n<|turn>user\n## 逐字稿片段 1\n$sb<turn|>\n<|turn>model\n")
+        } while (ids.size < 2900)
+        fun hwm() = File("/proc/self/status").readLines().first { it.startsWith("VmHWM") }
+        MfaEngine.load(dir.path, ctx = 4096, threads = 4, weightCache = File(ctx.cacheDir, "mfa-e2b.wcache").path).use { e ->
+            val out = e.generate(ids, maxNew = 120, temp = 0.2f, topK = 40, topP = 0.95f, seed = 0)
+            val st = e.lastStats!!
+            android.util.Log.i("MfaEngineDeviceTest", "LONG prompt %d prefill %.1fs = %.1f tok/s, decode %d in %.1fs = %.1f tok/s, %s"
+                .format(ids.size, st.prefillSec, st.prefilled / st.prefillSec, st.generated, st.decodeSec, st.generated / st.decodeSec, hwm()))
+            android.util.Log.i("MfaEngineDeviceTest", "LONGOUT " + tok.decode(out).take(300))
+        }
+        tok.close()
+    }
 }
