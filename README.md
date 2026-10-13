@@ -11,12 +11,7 @@
 
 Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/android/README.md) 的原生 SwiftUI 移植：同一套語音引擎、同一個 AI 筆記模型與閱讀協定（Swift 版的閱讀器與 Android 的黃金測試資料逐位元組一致），介面與功能對齊 Android。
 
-<p align="center">
-<img src="docs/screenshots/demo-record.gif" width="260" alt="即時錄音：逐字稿與語者">
-<img src="docs/screenshots/demo-queue.gif" width="260" alt="兩場會議連續處理">
-</p>
-
-<p align="center"><sub>模擬器實錄（公開示範會議音訊）。左：錄音中即時逐字稿與語者標記（4 倍速），停止後產生摘要。右：連續匯入兩場會議，依序轉錄、AI 筆記、摘要（6 倍速）。</sub></p>
+<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="錄音室：連續錄兩場會議"><br><sub>錄音室：連續錄兩場會議。從空的資料庫開始，錄完公司尾牙籌備會議後按「下一場」，立即接著錄辦公室搬遷會議；第一場的 AI 筆記在背景接續整理，停止後兩場都自動完成筆記、摘要與標題。全程即時播放，未加速。於 iPhone 14 Pro Max 錄製（公開示範會議音訊），AI 筆記模型：行動版 E2B。</sub></p>
 
 <p align="center">
 <img src="docs/screenshots/10-summary.png" width="200" alt="摘要">
