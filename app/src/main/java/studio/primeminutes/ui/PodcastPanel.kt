@@ -74,7 +74,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
                 busy = true; error = null; selected = null; episodes = emptyList()
                 statusRes = R.string.dl_searching
                 series = runCatching { Podcast.searchSeries(query) }
-                    .getOrElse { error = it.userMessage(context); emptyList() }
+                    .getOrElse { error = it.userMessage(context) ?: context.getString(R.string.podcast_failed); emptyList() }
                 busy = false
             }
         }
@@ -110,7 +110,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
                         busy = true; error = null; selected = s
                         statusRes = R.string.dl_loading_episodes
                         episodes = runCatching { Podcast.fetchEpisodes(s.feedUrl) }
-                            .getOrElse { error = it.userMessage(context); emptyList() }
+                            .getOrElse { error = it.userMessage(context) ?: context.getString(R.string.podcast_failed); emptyList() }
                         busy = false
                     }
                 }) {

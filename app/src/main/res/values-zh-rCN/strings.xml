@@ -79,6 +79,8 @@
     <string name="youtube_fetch_failed">无法获取此视频</string>
     <string name="youtube_no_videos">找不到视频</string>
     <string name="youtube_search_failed">搜索失败</string>
+    <string name="podcast_failed">Podcast 请求失败</string>
+    <string name="settings_inference_failed">基准测试失败，保留先前结果</string>
     <string name="youtube_search_hint">搜索视频或粘贴链接</string>
     <string name="youtube_go">前往</string>
     <string name="youtube_search">搜索</string>

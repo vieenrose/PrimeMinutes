@@ -434,6 +434,7 @@ fun StudioScreen(
                 Text(
                     e.title ?: SessionLibrary.defaultTitle(e.createdAt),
                     style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 if (e.id == processingId) {
@@ -697,7 +698,7 @@ private fun Banner(icon: ImageVector, tint: Color, text: String, onClick: () -> 
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 1, style = MaterialTheme.typography.bodyMedium)
+        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

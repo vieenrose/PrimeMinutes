@@ -92,6 +92,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -774,6 +776,8 @@ private fun TranscribeScreen(
 
     // --- Synced player (android MediaPlayer; no extra dep). ---
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    // Height of the docked player bar, so the import-download banner is laid above it, not over it.
+    var playerBarPx by remember { mutableIntStateOf(0) }
     var enhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var positionMs by remember { mutableIntStateOf(0) }
@@ -1175,7 +1179,12 @@ private fun TranscribeScreen(
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? -> if (uri != null) launchAudio(uri) }
+    ) { uri: Uri? ->
+        // Same path as a share: copied into app storage and marked (ImportRecovery), so a kill
+        // mid-import can finish it on the next launch. Fed straight to the service, a picked
+        // document was lost with its transient grant: no copy, no marker, no entry (emulator, 2026-10-14).
+        if (uri != null) MainActivity.sharedAudioUri.value = uri
+    }
 
     // A share / "open with" from another app (LINE or WhatsApp voice note, a recorder, Files, a
     // browser download…) lands in MainActivity.sharedAudioUri. Copy the stream into app storage while
@@ -1844,11 +1853,7 @@ private fun TranscribeScreen(
                         if (shareUri == null) {
                             // Like Failed: the snackbar host lives in the Session scaffold, so a
                             // result landing while the user is on Studio/Capture must Toast instead.
-                            if (screen != Screen.Session) {
-                                Toast.makeText(context, context.getString(R.string.session_share_failed), Toast.LENGTH_LONG).show()
-                            } else {
-                                scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.session_share_failed)) }
-                            }
+                            notify(context.getString(R.string.session_share_failed) + e.reason.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty())
                         } else {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = PrimeMinutesSession.Format.M4A.mime
@@ -1863,7 +1868,7 @@ private fun TranscribeScreen(
                         val msg = when (e.outcome) {
                             "FULL" -> context.getString(R.string.session_saved_as, label)
                             "PARTIAL" -> context.getString(R.string.session_saved_partial, label)
-                            else -> context.getString(R.string.session_save_failed)
+                            else -> context.getString(R.string.session_save_failed) + e.reason.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
                         }
                         // A saved session is a Recent too (the CreateDocument grant is persistable).
                         if (e.outcome == "FULL" || e.outcome == "PARTIAL") lastSaveUri?.let { u ->
@@ -2460,7 +2465,8 @@ private fun TranscribeScreen(
                     positionMs = ms.coerceIn(0, durationMs)
                     resumeOrRecover(positionMs)
                 }
-                Surface(color = pal.PanelSurface, tonalElevation = 3.dp) {
+                Surface(color = pal.PanelSurface, tonalElevation = 3.dp,
+                    modifier = Modifier.onGloballyPositioned { playerBarPx = it.size.height }) {
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -2679,13 +2685,14 @@ private fun TranscribeScreen(
             }
             is studio.primeminutes.online.ImportDownloads.State.Failed -> {
                 studio.primeminutes.online.ImportDownloads.consume()
-                snackbarHostState.showSnackbar(st.message, duration = SnackbarDuration.Long)
+                notify(st.message)   // the download was started from Studio: a snackbar there has no host
             }
             else -> {}
         }
     }
     (importDl as? studio.primeminutes.online.ImportDownloads.State.Running)?.let {
-        studio.primeminutes.ui.ImportDownloadBanner(it, onCancel = { studio.primeminutes.online.ImportDownloads.cancel() })
+        val above = if (screen == Screen.Session && player != null) with(LocalDensity.current) { playerBarPx.toDp() } else 0.dp
+        studio.primeminutes.ui.ImportDownloadBanner(it, above, onCancel = { studio.primeminutes.online.ImportDownloads.cancel() })
     }
     if (showPodcastSheet) {
         PodcastSheet(onDismiss = { showPodcastSheet = false })

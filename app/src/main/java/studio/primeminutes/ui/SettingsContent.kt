@@ -74,6 +74,7 @@ import studio.primeminutes.core.update.UpdateInfo
 import studio.primeminutes.ui.theme.LocalThemeController
 import studio.primeminutes.ui.theme.LocalLanguageController
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesSliderColors
 import studio.primeminutes.ui.theme.primeMinutesSwitchColors
 
@@ -461,7 +462,7 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
                         if (info != null) { checkState = null; onUpdateFound(info) }
                         else checkState = context.getString(R.string.update_up_to_date)
                     }
-                    .onFailure { checkState = context.getString(R.string.update_check_failed) }
+                    .onFailure { e -> checkState = context.getString(R.string.update_check_failed) + (e.userMessage(context)?.let { " — $it" } ?: "") }
             }
         }) { Text(stringResource(R.string.update_check)) }
         checkState?.let {
@@ -632,6 +633,7 @@ private fun InferencePanel(enabled: Boolean) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var profile by remember { mutableStateOf(studio.primeminutes.core.hw.HwInfo.profile(ctx)) }
     var running by remember { mutableStateOf(false) }
+    var benchFailed by remember { mutableStateOf(false) }
     // A slider from 2 to all the cores; moving it is a manual choice. "Run benchmark" goes back to Auto: it
     // measures every count, picks the best one and moves the slider there.
     var draft by remember(profile.threads) { mutableFloatStateOf(profile.threads.toFloat()) }
@@ -652,11 +654,14 @@ private fun InferencePanel(enabled: Boolean) {
             running = true
             scope.launch {
                 studio.primeminutes.core.hw.HwInfo.setMode(ctx, studio.primeminutes.core.hw.ThreadMode.AUTO)
-                profile = runCatching { studio.primeminutes.core.hw.HwInfo.ensureBench(ctx, force = true) }.getOrDefault(profile)
+                runCatching { studio.primeminutes.core.hw.HwInfo.ensureBench(ctx, force = true) }
+                    .onSuccess { profile = it; benchFailed = false }
+                    .onFailure { benchFailed = true }   // the old numbers stay; say so instead of looking done
                 running = false
             }
         },
     ) { Text(stringResource(if (running) R.string.settings_inference_running else R.string.settings_inference_run)) }
+    if (benchFailed) Text(stringResource(R.string.settings_inference_failed), style = MaterialTheme.typography.bodySmall, color = PrimeMinutesPalette.Red)
     Text(
         stringResource(R.string.settings_inference_hint),
         style = MaterialTheme.typography.labelSmall,

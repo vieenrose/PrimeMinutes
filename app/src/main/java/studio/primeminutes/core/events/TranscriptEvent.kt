@@ -89,7 +89,9 @@ sealed interface TranscriptEvent {
      * [share] = built for sharing ([sharePath] set) vs saved to a SAF target; [outcome] is
      * FULL / PARTIAL / FAILED (matches SaveOutcome).
      */
-    data class ExportDone(val share: Boolean, val outcome: String, val sharePath: String = "") : TranscriptEvent
+    /** [reason]: the failure's message when [outcome] is FAILED, shown after the generic text so
+     *  a full disk and a revoked folder grant no longer read the same. */
+    data class ExportDone(val share: Boolean, val outcome: String, val sharePath: String = "", val reason: String = "") : TranscriptEvent
 
     data class Failed(val error: String) : TranscriptEvent
 }

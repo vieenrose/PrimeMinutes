@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import studio.primeminutes.R
@@ -25,9 +26,10 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 /**
  * Compact download card shown over any screen while a podcast/YouTube import downloads in the
  * service. A non-focusable popup, so the rest of the app stays usable; Cancel keeps the `.part`.
+ * [above] lifts it over a docked bar (the session player) instead of covering it.
  */
 @Composable
-fun ImportDownloadBanner(state: ImportDownloads.State.Running, onCancel: () -> Unit) {
+fun ImportDownloadBanner(state: ImportDownloads.State.Running, above: Dp = 0.dp, onCancel: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     Popup(alignment = Alignment.BottomCenter) {
         Surface(
@@ -35,7 +37,9 @@ fun ImportDownloadBanner(state: ImportDownloads.State.Running, onCancel: () -> U
             shape = MaterialTheme.shapes.medium,
             tonalElevation = 6.dp,
             border = BorderStroke(1.dp, pal.Hairline),
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth()
+                .then(if (above > 0.dp) Modifier.padding(bottom = above) else Modifier.navigationBarsPadding())   // the bar already clears the nav bar
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,

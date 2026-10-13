@@ -80,6 +80,8 @@
     <string name="youtube_fetch_failed">Couldn\'t fetch this video</string>
     <string name="youtube_no_videos">No videos found</string>
     <string name="youtube_search_failed">Search failed</string>
+    <string name="podcast_failed">Podcast request failed</string>
+    <string name="settings_inference_failed">Benchmark failed — the previous result is kept</string>
     <string name="youtube_search_hint">Search videos or paste a link</string>
     <string name="youtube_go">Go</string>
     <string name="youtube_search">Search</string>

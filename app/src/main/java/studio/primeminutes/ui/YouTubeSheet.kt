@@ -64,6 +64,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
     var statusRes by remember { mutableIntStateOf(R.string.dl_searching) }
     var progress by remember { mutableStateOf<Float?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var search by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     // The download runs in the foreground service (ImportDownloads), not in this sheet's scope:
     // dismissing the sheet no longer cancels it, and MainActivity picks the file up when it is ready.
@@ -85,7 +86,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
         if (q.isEmpty()) return
         if (YouTube.looksLikeUrl(q)) { transcribe(q); return }
         busy = true; error = null; results = emptyList(); progress = null; statusRes = R.string.dl_searching
-        scope.launch {
+        search = scope.launch {
             runCatching { YouTube.search(q) }
                 .onSuccess { busy = false; results = it; if (it.isEmpty()) error = context.getString(R.string.youtube_no_videos) }
                 .onFailure { busy = false; error = it.userMessage(context) ?: context.getString(R.string.youtube_search_failed) }
@@ -93,7 +94,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (!busy) onDismiss() },  // busy = searching only; a download outlives the sheet,
+        onDismissRequest = { search?.cancel(); onDismiss() },  // a search dies with the sheet; a download outlives it,
         sheetState = sheetState,
         containerColor = pal.Slate800,
     ) {
