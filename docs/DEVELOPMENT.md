@@ -1,4 +1,4 @@
-# VoxSum iOS — notes de développement (chemins relatifs à `ios/`, depuis la racine : `ios/native/…`)
+# Prime Minutes iOS — notes de développement (chemins relatifs à `ios/`, depuis la racine : `ios/native/…`)
 
 Built on a MacBook Pro 16,3 (Intel, macOS 15.7, Xcode 26.2, iOS 26.2 SDK) with `ios/native/build_ios.sh`
 (cmake 3.31.6 installed in `~/tools`; Homebrew is not writable there).
@@ -17,7 +17,7 @@ until an iOS libomp is wired in), Metal/Accelerate/BLAS off.
 
 Known limits: CLiteRTLM ships arm64 device + arm64 simulator slices only — no x86_64 — so this Intel Mac can
 build but not run the reader in the simulator; running needs a real iPhone (no signing identity configured yet).
-Not done yet: JNI → C/Swift bridge for nemo and mfa, linking `libvoxsum-nemo`, Xcode/SwiftUI project.
+Not done yet: JNI → C/Swift bridge for nemo and mfa, linking `libprimeminutes-nemo`, Xcode/SwiftUI project.
 
 ## CLI check on the iOS simulator (`build_nemo_eval.sh`)
 
@@ -51,16 +51,16 @@ Vérifié : E2B charge, notes/titre/résumé réels sur l'extrait de 123 s (ASR 
 
 ## Projet Xcode (signature sur iPhone)
 
-`Xcode/VoxSum.xcodeproj` est une cible app minimale : sa phase « Build + embed native bundle »
+`Xcode/Prime Minutes.xcodeproj` est une cible app minimale : sa phase « Build + embed native bundle »
 (`Xcode/embed_prebuilt.sh`) lance `native/build_app.sh`, copie le binaire et `Frameworks/` dans le
 produit, signe les frameworks, puis Xcode signe l'app (signature automatique).
 
 1. iPhone branché, « Faire confiance », Réglages > Confidentialité et sécurité > Mode développeur.
 2. Xcode > Settings > Accounts : ajouter l'identifiant Apple.
-3. Ouvrir `~/work/vox/ios/Xcode/VoxSum.xcodeproj`, cible VoxSum > Signing & Capabilities : choisir la Team
-   (changer le bundle id `studio.voxsum.ios` s'il est pris), choisir l'iPhone, Run.
+3. Ouvrir `~/work/vox/ios/Xcode/Prime Minutes.xcodeproj`, cible Prime Minutes > Signing & Capabilities : choisir la Team
+   (changer le bundle id `studio.primeminutes.ios` s'il est pris), choisir l'iPhone, Run.
 
-Sans Xcode GUI : `xcodebuild -project Xcode/VoxSum.xcodeproj -target VoxSum -sdk iphoneos -allowProvisioningUpdates DEVELOPMENT_TEAM=<ID> build`.
+Sans Xcode GUI : `xcodebuild -project Xcode/Prime Minutes.xcodeproj -target Prime Minutes -sdk iphoneos -allowProvisioningUpdates DEVELOPMENT_TEAM=<ID> build`.
 `SKIP_NATIVE_BUILD=1` réutilise le bundle déjà compilé. Structure validée sans signature
 (`CODE_SIGNING_ALLOWED=NO`) ; la signature elle-même n'est pas testée.
 
@@ -73,7 +73,7 @@ Appareil de référence : iPhone 14 Pro Max (6 Go, iOS 27). L'iPhone XR (3 Go, A
 - Enregistrement micro : sessions de 30 s et 62 s terminées.
 - Mode séquentiel automatique sous 4,5 Go de RAM (lecteur en pause pendant l'ASR).
 - Point de reprise de la transcription (`Library/Application Support/checkpoints/`) : un kill pendant l'étape lecteur ne refait pas l'ASR.
-- Tâche d'arrière-plan `BGProcessingTask` (`tw.com.pesi.voxsum.queue`) : reprend la file de jobs quand l'app est quittée.
+- Tâche d'arrière-plan `BGProcessingTask` (`tw.com.pesi.primeminutes.queue`) : reprend la file de jobs quand l'app est quittée.
 - Réglages : délai des locuteurs en direct (5–30 s, défaut 15) et taille du texte.
 - Pré-traitement audio : normalisation du gain, saut des silences, découpe des longues interventions.
 - Non testé sur appareil : gain/silences, découpe, réglages, tâche d'arrière-plan, reprise depuis le point de reprise.

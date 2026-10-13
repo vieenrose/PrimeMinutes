@@ -237,8 +237,8 @@
 "agent_outcome" = "已讀 %1$@ 個片段 · %2$@";
 "source_session" = "開啟場次（.ogg / .m4a）";
 "source_session_desc" = "重新載入已儲存的 .ogg 或 .m4a 以繼續編輯逐字稿";
-"export_group_session" = "VoxSum 場次（.m4a）";
-"export_group_session_desc" = "音訊、逐字稿、語者、摘要與行動項目合為一個檔案。可在 VoxSum 重新開啟，任何播放器都能播放。";
+"export_group_session" = "Prime Minutes 場次（.m4a）";
+"export_group_session_desc" = "音訊、逐字稿、語者、摘要與行動項目合為一個檔案。可在 Prime Minutes 重新開啟，任何播放器都能播放。";
 "export_action_save" = "儲存";
 "network_error" = "網路錯誤——請檢查連線後再試一次。";
 "action_process_now" = "立即處理";
@@ -266,7 +266,7 @@
 "storage_model_pending" = "摘要模型尚未下載（%1$d MB），首次使用時自動下載。";
 "theme_eink" = "電子紙";
 "theme_eink_hint" = "電子紙為專為電子閱讀器設計的高對比扁平主題，請手動選用。";
-"app_name" = "VoxSum";
+"app_name" = "Prime Minutes";
 "action_open" = "開啟";
 "library_empty" = "尚無錄音——每段錄音都會自動儲存在這裡。";
 "recent_untitled" = "未命名場次";
@@ -315,7 +315,7 @@
 "export_share_failed" = "無法準備要分享的檔案";
 "notif_session_ready" = "場次已完成";
 "svc_queue_item_failed" = "無法處理 %s——已保留在資料庫中";
-"svc_queue_item_failed_hint" = "點一下開啟 VoxSum 再試一次。";
+"svc_queue_item_failed_hint" = "點一下開啟 Prime Minutes 再試一次。";
 "summary_no_notes" = "這段錄音沒有需要記下的決議、待辦或數字。";
 "status_starting" = "啟動中…";
 "session_save_failed" = "無法儲存場次";

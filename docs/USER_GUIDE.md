@@ -1,4 +1,4 @@
-# VoxSum iOS 使用說明（含介面測試地圖）
+# Prime Minutes iOS 使用說明（含介面測試地圖）
 
 結構與 [Android 版使用說明](https://github.com/vieenrose/VoxSum/blob/android/docs/USER_GUIDE.md) 相同：
 
@@ -86,8 +86,8 @@ App 被終止或離開時，佇列由背景工作（`BGProcessingTask`）或下�
 |---|---|---|
 | 音訊檔案 | 「檔案」挑選器；複製時顯示「正在匯入分享的音訊…」，完成後排入佇列；失敗時顯示「匯入失敗」 | ✅ 手動 |
 | Podcast | 搜尋節目 → 選集 → 下載後排入佇列 | ✅ 手動 |
-| 開啟場次 | 選 VoxSum 場次 `.m4a`（Android 匯出的也可以）：直接還原逐字稿、語者與摘要，不重新轉錄 | ✅ 手動 |
-| 從其他 App 分享 | 分享音訊到 VoxSum | 同「音訊檔案」 | ⬜ |
+| 開啟場次 | 選 Prime Minutes 場次 `.m4a`（Android 匯出的也可以）：直接還原逐字稿、語者與摘要，不重新轉錄 | ✅ 手動 |
+| 從其他 App 分享 | 分享音訊到 Prime Minutes | 同「音訊檔案」 | ⬜ |
 
 ## 4. 錄音室
 

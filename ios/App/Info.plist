@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>tw.com.pesi.voxsum</string>
-<key>CFBundleName</key><string>VoxSum</string>
-<key>CFBundleExecutable</key><string>VoxSum</string>
+<key>CFBundleIdentifier</key><string>tw.com.pesi.primeminutes</string>
+<key>CFBundleName</key><string>PrimeMinutes</string>
+<key>CFBundleDisplayName</key><string>Prime Minutes</string>
+<key>CFBundleExecutable</key><string>PrimeMinutes</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>0.1</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>zh-Hans</string></array>
 <key>UIBackgroundModes</key><array><string>audio</string><string>processing</string></array>
-<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>tw.com.pesi.voxsum.queue</string></array>
+<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>tw.com.pesi.primeminutes.queue</string></array>
 <key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Audio</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>public.audio</string><string>public.movie</string></array></dict></array>
 <key>MinimumOSVersion</key><string>17.0</string>
 <key>UILaunchScreen</key><dict/>
+<key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>VoxSum transcribes your meetings from the microphone, on the device.</string>
+	<string>Prime Minutes transcribes your meetings from the microphone, on the device.</string>
 </dict></plist>

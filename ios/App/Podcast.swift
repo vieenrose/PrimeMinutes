@@ -6,7 +6,7 @@ struct Episode: Identifiable, Hashable { var id: String { audioUrl }; let title,
 /// Podcast input (port of Android `Podcast`): iTunes Search API (no key) → RSS episodes (XMLParser) → enclosure download.
 enum Podcast {
     static let maxBytes: Int64 = 500 << 20
-    private static let ua = "VoxSum/1.0"
+    private static let ua = "PrimeMinutes/1.0"
 
     static func search(_ query: String) async throws -> [PodcastSeries] {
         var c = URLComponents(string: "https://itunes.apple.com/search")!

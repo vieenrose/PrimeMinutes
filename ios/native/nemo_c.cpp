@@ -54,7 +54,7 @@ nemo_handle* nemo_create_ex(const char* xasr, const char* diar, int threads, dou
     h->engine = std::make_unique<nemo::Engine>(cfg);
     std::string err;
     if (!h->engine->init(err)) {
-        std::fprintf(stderr, "voxsum-nemo: init failed: %s\n", err.c_str());
+        std::fprintf(stderr, "primeminutes-nemo: init failed: %s\n", err.c_str());
         return nullptr;
     }
     h->engine->begin();
@@ -65,7 +65,7 @@ int nemo_push(nemo_handle* h, const float* pcm, int n) {
     std::string err;
     std::lock_guard<std::mutex> lk(h->mu);
     const bool ok = h->engine->push(pcm, static_cast<size_t>(n), err);
-    if (!ok) std::fprintf(stderr, "voxsum-nemo: push failed: %s\n", err.c_str());
+    if (!ok) std::fprintf(stderr, "primeminutes-nemo: push failed: %s\n", err.c_str());
     return ok ? 1 : 0;
 }
 
@@ -86,11 +86,11 @@ char* nemo_finish(nemo_handle* h) {
     std::string out, err;
     std::lock_guard<std::mutex> lk(h->mu);
     if (!h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err)) {
-        std::fprintf(stderr, "voxsum-nemo: finish failed: %s\n", err.c_str());
+        std::fprintf(stderr, "primeminutes-nemo: finish failed: %s\n", err.c_str());
         return nullptr;
     }
     const auto& st = h->engine->stats();
-    std::fprintf(stderr, "voxsum-nemo: audio %.1fs wall %.1fs rtf %.3f speakers %zu turns %zu\n", st.audio_s, st.wall_s,
+    std::fprintf(stderr, "primeminutes-nemo: audio %.1fs wall %.1fs rtf %.3f speakers %zu turns %zu\n", st.audio_s, st.wall_s,
                  st.audio_s > 0 ? st.wall_s / st.audio_s : 0.0, st.speakers, st.turns);
     return dup(out);
 }

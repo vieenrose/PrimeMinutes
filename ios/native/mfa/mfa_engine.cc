@@ -235,7 +235,7 @@ void drop_mapped_pages(const std::string& path) {
 // pages read stay resident (0.84 GB of PLE table for E4B; more of it resident as the vocabulary seen
 // grows). Their private read-only mappings are clean, so dropping them loses nothing: a later lookup
 // reads the page back from the page cache. Upstream fork commit bd9d499 (E4B peak 2.97 -> 2.65 GB on
-// a Reno7, same output and speed). Older VoxSum fix: the same idea, once, for shared mappings above.
+// a Reno7, same output and speed). Older Prime Minutes fix: the same idea, once, for shared mappings above.
 struct Range { void* a; size_t n; };
 std::vector<Range> clean_ranges(const std::string& path) {
     std::vector<Range> out;

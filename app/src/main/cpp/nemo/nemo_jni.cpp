@@ -1,4 +1,4 @@
-// JNI bridge for the nemo-x-asr-diarizer streaming engine (studio.voxsum.core.asr.NemoNative).
+// JNI bridge for the nemo-x-asr-diarizer streaming engine (studio.primeminutes.core.asr.NemoNative).
 //
 // Segments cross the boundary as one string: records separated by RS (0x1e), fields by US (0x1f):
 //   speaker US start_s US end_s US text
@@ -53,7 +53,7 @@ std::string from_jstring(JNIEnv* env, jstring s) {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring xasr, jstring diar, jint threads,
+Java_studio_primeminutes_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring xasr, jstring diar, jint threads,
                                                       jdouble settle_s, jstring backend, jstring xasr_tflite,
                                                       jstring diar_tflite, jstring diar_pre_f32) {
     nemo::Config cfg;
@@ -70,7 +70,7 @@ Java_studio_voxsum_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring
     h->engine = std::make_unique<nemo::Engine>(cfg);
     std::string err;
     if (!h->engine->init(err)) {
-        __android_log_print(ANDROID_LOG_ERROR, "voxsum-nemo", "init failed: %s", err.c_str());
+        __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "init failed: %s", err.c_str());
         return 0;
     }
     h->engine->begin();
@@ -78,7 +78,7 @@ Java_studio_voxsum_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring
 }
 
 JNIEXPORT jboolean JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativePush(JNIEnv* env, jclass, jlong ptr, jfloatArray pcm, jint n) {
+Java_studio_primeminutes_core_asr_NemoNative_nativePush(JNIEnv* env, jclass, jlong ptr, jfloatArray pcm, jint n) {
     auto* h = reinterpret_cast<Handle*>(ptr);
     jfloat* p = env->GetFloatArrayElements(pcm, nullptr);
     std::string err;
@@ -88,13 +88,13 @@ Java_studio_voxsum_core_asr_NemoNative_nativePush(JNIEnv* env, jclass, jlong ptr
         ok = h->engine->push(p, (size_t)n, err);
     }
     env->ReleaseFloatArrayElements(pcm, p, JNI_ABORT);
-    if (!ok) __android_log_print(ANDROID_LOG_ERROR, "voxsum-nemo", "push failed: %s", err.c_str());
+    if (!ok) __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "push failed: %s", err.c_str());
     return ok;
 }
 
 // Live view: newly frozen segments, GS (0x1d), then the provisional tail.
 JNIEXPORT jstring JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativeLive(JNIEnv* env, jclass, jlong ptr) {
+Java_studio_primeminutes_core_asr_NemoNative_nativeLive(JNIEnv* env, jclass, jlong ptr) {
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::vector<nemo::Segment> frozen, tail;
     {
@@ -109,16 +109,16 @@ Java_studio_voxsum_core_asr_NemoNative_nativeLive(JNIEnv* env, jclass, jlong ptr
 }
 
 JNIEXPORT jstring JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativeFinish(JNIEnv* env, jclass, jlong ptr) {
+Java_studio_primeminutes_core_asr_NemoNative_nativeFinish(JNIEnv* env, jclass, jlong ptr) {
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::string out, err;
     std::lock_guard<std::mutex> lk(h->mu);
     if (!h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err)) {
-        __android_log_print(ANDROID_LOG_ERROR, "voxsum-nemo", "finish failed: %s", err.c_str());
+        __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "finish failed: %s", err.c_str());
         return nullptr;
     }
     const auto& st = h->engine->stats();
-    __android_log_print(ANDROID_LOG_INFO, "voxsum-nemo",
+    __android_log_print(ANDROID_LOG_INFO, "primeminutes-nemo",
                         "audio %.1fs wall %.1fs rtf %.3f speakers %zu turns %zu rss %.0fMB",
                         st.audio_s, st.wall_s, st.audio_s > 0 ? st.wall_s / st.audio_s : 0.0,
                         st.speakers, st.turns, st.peak_rss_mb);
@@ -126,14 +126,32 @@ Java_studio_voxsum_core_asr_NemoNative_nativeFinish(JNIEnv* env, jclass, jlong p
 }
 
 JNIEXPORT jdouble JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativeFedSec(JNIEnv*, jclass, jlong ptr) {
+Java_studio_primeminutes_core_asr_NemoNative_nativeFedSec(JNIEnv*, jclass, jlong ptr) {
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::lock_guard<std::mutex> lk(h->mu);
     return h->engine->fed_s();
 }
 
+// Timing of the last finished stream, for the in-app benchmark: the ASR and diarizer compute split,
+// load (which includes the weight prefault), first partial and the per-piece latency tail.
+JNIEXPORT jstring JNICALL
+Java_studio_primeminutes_core_asr_NemoNative_nativeStats(JNIEnv* env, jclass, jlong ptr) {
+    auto* h = reinterpret_cast<Handle*>(ptr);
+    std::lock_guard<std::mutex> lk(h->mu);
+    const auto& st = h->engine->stats();
+    char buf[512];
+    std::snprintf(buf, sizeof buf,
+                  "{\"audio_s\":%.4f,\"wall_s\":%.4f,\"load_s\":%.4f,\"asr_s\":%.4f,\"diar_s\":%.4f,"
+                  "\"first_partial_s\":%.4f,\"piece_p95_ms\":%.2f,\"piece_max_ms\":%.2f,"
+                  "\"speakers\":%zu,\"turns\":%zu,\"peak_rss_mb\":%.1f}",
+                  st.audio_s, st.wall_s, st.load_s, st.asr_compute_s, st.diar_compute_s,
+                  st.first_partial_s, st.piece_p95_ms, st.piece_max_ms,
+                  st.speakers, st.turns, st.peak_rss_mb);
+    return to_jstring(env, buf);
+}
+
 JNIEXPORT void JNICALL
-Java_studio_voxsum_core_asr_NemoNative_nativeFree(JNIEnv*, jclass, jlong ptr) {
+Java_studio_primeminutes_core_asr_NemoNative_nativeFree(JNIEnv*, jclass, jlong ptr) {
     delete reinterpret_cast<Handle*>(ptr);
 }
 

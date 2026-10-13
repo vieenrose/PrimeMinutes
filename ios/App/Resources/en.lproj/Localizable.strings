@@ -237,8 +237,8 @@
 "agent_outcome" = "%1$@ windows read · %2$@";
 "source_session" = "Open session (.ogg / .m4a)";
 "source_session_desc" = "Reload a saved .ogg or .m4a to keep editing the transcript";
-"export_group_session" = "VoxSum session (.m4a)";
-"export_group_session_desc" = "Audio, transcript, speakers, summary and actions in one file. Reopens in VoxSum; plays anywhere.";
+"export_group_session" = "Prime Minutes session (.m4a)";
+"export_group_session_desc" = "Audio, transcript, speakers, summary and actions in one file. Reopens in Prime Minutes; plays anywhere.";
 "export_action_save" = "Save";
 "network_error" = "Network error — check your connection and try again.";
 "action_process_now" = "Process now";
@@ -266,7 +266,7 @@
 "storage_model_pending" = "Summary model not downloaded yet (%1$d MB) — it downloads on first use.";
 "theme_eink" = "E-ink";
 "theme_eink_hint" = "E-ink is a flat high-contrast theme for e-paper devices; select it manually.";
-"app_name" = "VoxSum";
+"app_name" = "Prime Minutes";
 "action_open" = "Open";
 "library_empty" = "No saved recordings yet — every recording is saved here automatically.";
 "recent_untitled" = "Untitled session";
@@ -315,7 +315,7 @@
 "export_share_failed" = "Could not prepare the file to share";
 "notif_session_ready" = "Session ready";
 "svc_queue_item_failed" = "Could not process %s — kept in the library";
-"svc_queue_item_failed_hint" = "Tap to open VoxSum and try again.";
+"svc_queue_item_failed_hint" = "Tap to open Prime Minutes and try again.";
 "summary_no_notes" = "Nothing to note in this recording: no decisions, actions or figures.";
 "status_starting" = "Starting…";
 "session_save_failed" = "Couldn't save session";

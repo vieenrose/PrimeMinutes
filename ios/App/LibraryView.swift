@@ -129,8 +129,7 @@ struct LibraryView: View {
                 }.padding(.horizontal, 16).padding(.vertical, 8)
             } else {
             HStack {
-                Image(systemName: "waveform").font(.headline).foregroundStyle(.white)
-                    .frame(width: 34, height: 34).background(Color.accentColor, in: RoundedRectangle(cornerRadius: 9))
+                BrandMark(size: 34)
                 Text(L("app_name")).font(.title2.bold())
                 Spacer()
                 Button(action: onAdd) { Image(systemName: "plus").font(.title3) }.accessibilityLabel(L("import_audio"))
@@ -148,8 +147,7 @@ struct LibraryView: View {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if m.sessions.isEmpty && m.waiting.isEmpty {
                         VStack(spacing: 18) {
-                            Image(systemName: "waveform").font(.system(size: 34)).foregroundStyle(.white)
-                                .frame(width: 72, height: 72).background(Color.blue.gradient, in: RoundedRectangle(cornerRadius: 20))
+                            BrandMark(size: 72)
                             Text(L("empty_headline")).font(.title3.bold()).multilineTextAlignment(.center)
                             Text(L("empty_subtitle")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             VStack(alignment: .leading, spacing: 12) {
@@ -263,5 +261,18 @@ struct WatchLive: View {
             .navigationTitle(L("action_watch_live")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("done")) { dismiss() } } }
         }.presentationDetents([.medium, .large])
+    }
+}
+
+/// The app icon (docs/brand), drawn from the bundle's icon file with the icon's own corner radius.
+struct BrandMark: View {
+    let size: CGFloat
+    var body: some View {
+        Group {
+            if let img = UIImage(named: "AppIcon60x60") { Image(uiImage: img).resizable() }
+            else { Color(red: 0x20 / 255, green: 0x37 / 255, blue: 0x60 / 255) }
+        }
+        .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        .accessibilityHidden(true)
     }
 }

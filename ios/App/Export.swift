@@ -71,7 +71,7 @@ enum Export {
     /// Writes the export and returns its URL (nil when the write fails).
     static func file(_ s: Session, _ f: Format) -> URL? {
         let safe = String(s.title.map { "/\\:*?\"<>|".contains($0) ? "_" : $0 }.prefix(60))
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent((safe.isEmpty ? "VoxSum" : safe) + "." + f.rawValue)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent((safe.isEmpty ? "Prime Minutes" : safe) + "." + f.rawValue)
         do {
             if f == .pdf { try pdf(text(s, .txt), title: s.title).write(to: url, options: .atomic) }
             else { try text(s, f).write(to: url, atomically: true, encoding: .utf8) }

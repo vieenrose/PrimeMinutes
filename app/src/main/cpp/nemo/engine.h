@@ -142,9 +142,9 @@ struct Config {
     // on all 11 clips and measured faster than audio.cpp's own graph on the phone once its activation
     // allocation was fixed (docs/one-runtime-merge.md SS25-26). --no-diar-native restores the old path.
     bool diar_native  = true;
-    // VoxSumDroid: split a single-speaker run after a sentence end once it is this long (0 = never).
+    // Prime Minutes: split a single-speaker run after a sentence end once it is this long (0 = never).
     double max_segment_s = 0;
-    // VoxSumDroid live view: a segment stops changing once it ends this far behind the audio fed.
+    // Prime Minutes live view: a segment stops changing once it ends this far behind the audio fed.
     // The diarizer revises recent labels for tens of seconds; live-vs-final agreement on 4 meetings is
     // 93.0% at 8 s, 94.7% at 15 s, 95.8% at 30 s. The app passes the user's setting (default 15).
     double live_settle_s = 15.0;
@@ -203,13 +203,13 @@ public:
     // Called whenever a segment closes (speaker change or end of input).
     bool run(const std::function<void(const Segment&)>& on_segment, std::string& err);
 
-    // Push-based streaming (VoxSumDroid): the same loop body as run(), fed by the caller instead of a WAV.
+    // Push-based streaming (Prime Minutes): the same loop body as run(), fed by the caller instead of a WAV.
     // begin() once, push() any number of 16 kHz mono pieces (any size; split into piece_ms internally),
     // finish() once. live() gives a cheap provisional view in between.
     void begin();
     bool push(const float* pcm, size_t n, std::string& err);
     bool finish(const std::function<void(const Segment&)>& on_segment, std::string& err);
-    // VoxSumDroid live view: re-attribute only the unsettled tail (inferred placement, O(tail)).
+    // Prime Minutes live view: re-attribute only the unsettled tail (inferred placement, O(tail)).
     // Segments that can no longer change during the live view are appended to [newly_frozen] exactly once;
     // [tail] is everything after them. finish() still re-attributes the whole timeline from scratch.
     void live(std::vector<Segment>& newly_frozen, std::vector<Segment>& tail) {

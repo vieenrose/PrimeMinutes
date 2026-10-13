@@ -2,17 +2,19 @@ import Foundation
 import AVFoundation
 import Compression
 
-/// Android-compatible VoxSum session container (.m4a): audio + `moov.udta.meta.ilst` carrying a freeform
-/// `----` atom (mean=studio.voxsum, name=VOXSUM) with base64(gzip(JSON)), plus ©nam / ©cmt / ©lyr for ordinary players.
+/// Android-compatible Prime Minutes session container (.m4a): audio + `moov.udta.meta.ilst` carrying a freeform
+/// `----` atom (mean=studio.primeminutes, name=PRIMEMINUTES) with base64(gzip(JSON)), plus ©nam / ©cmt / ©lyr for ordinary players.
 enum SessionFile {
-    private static let mean = "studio.voxsum", field = "VOXSUM"
+    private static let mean = "studio.primeminutes", field = "PRIMEMINUTES"
+    // Files written before the rename to Prime Minutes carry the old tag; they are still read.
+    private static let LEGACY_MEAN = "studio.voxsum", LEGACY_FIELD = "VOXSUM"
     private static let maxJSON = 16 << 20, maxBlob = 32 << 20
 
     // MARK: manifest
     struct Manifest: Codable {
         struct SN: Codable { var name: String; var confidence: String?; var reason: String? }
         struct U: Codable { var index: Int?; var start: Double; var end: Double; var text: String; var speaker: Int? }
-        var voxsum_version = 1
+        var primeminutes_version: Int? = 1   // optional: a file from before the rename carries the old key
         var title: String?, summary: String?, action_items: String?, notes: String?
         var asr_model: String?, asr_backend: String?, llm_model: String?
         var speaker_names: [String: SN]?
@@ -177,7 +179,7 @@ enum SessionFile {
         guard let a = s.audio else { return nil }
         let asset = AVURLAsset(url: JobQueue.audioDir.appendingPathComponent(a))
         let tmp = FileManager.default.temporaryDirectory
-        let raw = tmp.appendingPathComponent("voxsum_raw_\(UUID().uuidString).m4a")
+        let raw = tmp.appendingPathComponent("primeminutes_raw_\(UUID().uuidString).m4a")
         defer { try? FileManager.default.removeItem(at: raw) }
         guard let ex = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { return nil }
         ex.outputURL = raw; ex.outputFileType = .m4a
@@ -188,7 +190,7 @@ enum SessionFile {
         guard blob.utf8.count <= maxBlob else { return nil }
         let safe = String(s.title.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) ? Character($0) : "_" }.prefix(60))
         let name = safe.replacingOccurrences(of: "_{2,}", with: "_", options: .regularExpression)
-        let out = tmp.appendingPathComponent((name.trimmingCharacters(in: CharacterSet(charactersIn: "_")).isEmpty ? "voxsum_session" : name) + ".m4a")
+        let out = tmp.appendingPathComponent((name.trimmingCharacters(in: CharacterSet(charactersIn: "_")).isEmpty ? "primeminutes_session" : name) + ".m4a")
         try? FileManager.default.removeItem(at: out)
         return write(src: raw, dest: out, title: s.title, summary: s.summary, lrc: Export.text(s, .lrc), blob: blob) ? out : nil
     }
@@ -231,7 +233,7 @@ enum SessionFile {
                             if t5 == "name", c5.count > 4 { nm = String(decoding: moov[c5.lowerBound + 4..<c5.upperBound], as: UTF8.self) }
                             if t5 == "data", c5.count > 8 { val = moov[c5.lowerBound + 8..<c5.upperBound] }
                         }
-                        guard mn == mean, nm == field, let val, val.count <= maxBlob,
+                        guard (mn == mean && nm == field) || (mn == LEGACY_MEAN && nm == LEGACY_FIELD), let val, val.count <= maxBlob,
                               let gz = Data(base64Encoded: val, options: .ignoreUnknownCharacters), let json = gunzip(gz) else { continue }
                         return try? JSONDecoder().decode(Manifest.self, from: json)
                     }

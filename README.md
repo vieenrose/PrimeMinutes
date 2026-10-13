@@ -1,4 +1,4 @@
-<h1 align="center">VoxSum for iOS</h1>
+<h1 align="center">Prime Minutes for iOS</h1>
 
 <p align="center">
   <b>會議錄音 → 標註語者的逐字稿 → 摘要。<br>全程在 iPhone 上完成，完全離線。</b>
@@ -9,7 +9,7 @@
   <img alt="授權" src="https://img.shields.io/badge/license-GPL--3.0-blue">
 </p>
 
-VoxSum for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/android/README.md) 的原生 SwiftUI 移植：同一套語音引擎、同一個 AI 筆記模型與閱讀協定（Swift 版的閱讀器與 Android 的黃金測試資料逐位元組一致），介面與功能對齊 Android。
+Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/android/README.md) 的原生 SwiftUI 移植：同一套語音引擎、同一個 AI 筆記模型與閱讀協定（Swift 版的閱讀器與 Android 的黃金測試資料逐位元組一致），介面與功能對齊 Android。
 
 <p align="center">
 <img src="docs/screenshots/demo-record.gif" width="260" alt="即時錄音：逐字稿與語者">
@@ -36,7 +36,7 @@ VoxSum for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/androi
 - **邊開會邊做筆記**：AI 筆記在錄音中閱讀逐字稿，寫下決議、待辦與數字；停止後很快完成摘要。
 - **每句都可核對**：摘要與筆記的時間點一下，就從原話開始播放。
 - **錄音不會遺失**：開始錄音前就排入佇列，App 被終止也保留音訊；處理失敗的項目留在佇列可「重試」。
-- **可編輯、可匯出**：修正文字、改派或合併語者；匯出 VoxSum 場次 `.m4a`（與 Android 互通）、PDF、Markdown、純文字或字幕。
+- **可編輯、可匯出**：修正文字、改派或合併語者；匯出 Prime Minutes 場次 `.m4a`（與 Android 互通）、PDF、Markdown、純文字或字幕。
 - **依手機調整**：首次啟動做一秒測試選執行緒數；預設以 CPU 推論。設定裡的「建議」也會測試 GPU（Metal，僅 E2B）：只有回答與 CPU 一致時才可改用 GPU。
 
 ## 使用
@@ -51,7 +51,7 @@ VoxSum for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/androi
 
 **播放列**：播放／暫停、±5 秒、進度、音量（靜音、25–100%）。
 
-**匯入**：首頁 **＋** 可加入「檔案」App 裡的音訊、Podcast，或開啟 VoxSum 場次 `.m4a`；也可從其他 App 分享音訊過來。
+**匯入**：首頁 **＋** 可加入「檔案」App 裡的音訊、Podcast，或開啟 Prime Minutes 場次 `.m4a`；也可從其他 App 分享音訊過來。
 
 **設定**：語言（English、繁體中文、简体中文）、外觀（自動、淺色、深色、電子紙）、文字大小、語者標註延遲（5–30 秒）、AI 筆記模型（E2B，或 RAM 足夠的 iPhone 可選 E4B）、硬體狀態列、推論（執行緒數與閱讀器執行於 CPU 或 GPU）、顯示待辦事項、模型與儲存空間管理、關於。
 
@@ -86,8 +86,8 @@ VoxSum for iOS 是 [Android 版](https://github.com/vieenrose/VoxSum/blob/androi
 
 ```bash
 bash ios/native/build_app.sh iphoneos arm64        # 原生引擎 + SwiftUI App bundle
-# 簽署並安裝：開啟 ios/Xcode/VoxSum.xcodeproj 選 Team 與 iPhone 後 Run，或
-xcodebuild -project ios/Xcode/VoxSum.xcodeproj -scheme VoxSum -configuration Release \
+# 簽署並安裝：開啟 ios/Xcode/Prime Minutes.xcodeproj 選 Team 與 iPhone 後 Run，或
+xcodebuild -project ios/Xcode/Prime Minutes.xcodeproj -scheme Prime Minutes -configuration Release \
   -destination "id=<裝置>" DEVELOPMENT_TEAM=<ID> -allowProvisioningUpdates SKIP_NATIVE_BUILD=1 build
 bash ios/tests/run.sh                               # 閱讀器與 Android 黃金資料比對
 python3 tools/uiparity/check.py                     # 介面字串與 Android 的對齊程度

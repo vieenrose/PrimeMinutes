@@ -4,7 +4,7 @@ import UserNotifications
 import os
 import BackgroundTasks
 
-@main struct VoxSumApp: App {
+@main struct PrimeMinutesApp: App {
     @AppStorage("textSize") private var textSize = 0
     @Environment(\.scenePhase) private var phase
     init() { BackgroundWork.register() }
@@ -17,7 +17,7 @@ import BackgroundTasks
 /// Queued jobs keep going when the user leaves the app: iOS grants a processing window (usually while charging) that
 /// resumes the queue; a job cut short stays queued and restarts at the next launch (Android: foreground service).
 enum BackgroundWork {
-    static let id = "tw.com.pesi.voxsum.queue"
+    static let id = "tw.com.pesi.primeminutes.queue"
     @MainActor static weak var model: Model?
     static func register() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
@@ -503,7 +503,7 @@ final class Model: ObservableObject {
         }
     }
     private func imported(_ url: URL, _ j: Job) {
-        if let man = SessionFile.read(JobQueue.url(j)) {   // a VoxSum session: restore it instead of re-transcribing
+        if let man = SessionFile.read(JobQueue.url(j)) {   // a Prime Minutes session: restore it instead of re-transcribing
             var s = SessionFile.session(man, audio: j.audio)
             if s.title.isEmpty { s.title = url.deletingPathExtension().lastPathComponent }
             if let t = AVURLAsset(url: JobQueue.url(j)).duration.seconds as Double?, t.isFinite, t > s.seconds { s.seconds = t }
@@ -608,7 +608,7 @@ struct SettingsView: View {
                     }
                 } header: { Text(L("settings_storage")) } footer: { if !models.isEmpty { Text(L("storage_total", ByteCountFormatter.string(fromByteCount: models.reduce(0) { $0 + $1.bytes }, countStyle: .file))) } }
                 Section(L("settings_about")) {
-                    HStack { Text("VoxSum"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "").foregroundStyle(.secondary) }
+                    HStack { Text("Prime Minutes"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "").foregroundStyle(.secondary) }
                     Text(L("about_license"))
                     DisclosureGroup(L("about_components")) {
                         ForEach(["lic_nemo", "lic_crispasr", "lic_audiocpp", "lic_ggml", "lic_xasr", "lic_nemotron", "lic_opencc"], id: \.self) { Text(L($0)).font(.footnote) }
