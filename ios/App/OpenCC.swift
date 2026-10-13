@@ -66,6 +66,7 @@ final class OpenCC: @unchecked Sendable {
                 var rev: [String: String] = [:]
                 load("TWPhrases", reverse: true, into: &rev); load("TWVariantsPhrases", reverse: true, into: &rev); load("TWVariants", reverse: true, into: &rev)
                 for k in ["地點選", "重點選", "景點選", "觀點選", "優點選", "缺點選", "起點選", "終點選", "站點選", "據點選", "時點選", "焦點選", "執行"] { rev[k] = k }
+                rev["介面"] = "界面"   // the first TWPhrases line targeting 介面 is 接口 (an API); meeting prose means the UI
                 var t2s: [String: String] = [:]; load("TSPhrases", into: &t2s); load("TSCharacters", into: &t2s)
                 return OpenCC([rev, t2s])
             }
