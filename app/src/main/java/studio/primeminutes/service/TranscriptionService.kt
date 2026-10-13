@@ -34,10 +34,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import studio.primeminutes.core.asr.SeamEnrollment
 import studio.primeminutes.core.asr.SeamStitcher
 import studio.primeminutes.core.asr.AsrEngine
 import studio.primeminutes.core.asr.NemoStreamEngine
@@ -870,7 +872,8 @@ class TranscriptionService : LifecycleService() {
                     }
                     throw it
                 }
-                TranscriptEvent.ExportDone(req.share, "FAILED")
+                Log.w("primeminutes-export", "export failed", it)
+                TranscriptEvent.ExportDone(req.share, "FAILED", reason = it.message ?: it.javaClass.simpleName)
             }
             emitEvent(done)
             notifyExportResult(done)
@@ -1022,6 +1025,10 @@ class TranscriptionService : LifecycleService() {
         // Resume a little BEFORE the seam: the overlap lets SeamStitcher match the restarted diarizer's
         // speaker ids to the saved ones.
         val offsetSec = if (resume != null) (seamSec - SeamStitcher.PREROLL_SEC).coerceAtLeast(0.0) else 0.0
+        // …and, before that, a few seconds of every saved speaker: a speaker silent in the preroll came
+        // back as a new one (SeamEnrollment).
+        val enroll = if (resume != null) SeamEnrollment.plan(prior, offsetSec) else SeamEnrollment.NONE
+        if (enroll.clips.isNotEmpty()) Log.i(STOP_TAG, "resume enrollment: ${enroll.clips.size} clips, ${"%.1f".format(enroll.lengthSec)} s")
 
         // Stream-decode the source to a 16 kHz mono work WAV while feeding the live VAD/ASR — never
         // the whole waveform in RAM. The WAV is the player + diarization source (16 kHz mono).
@@ -1029,7 +1036,10 @@ class TranscriptionService : LifecycleService() {
         else File(File(filesDir, "audio").apply { mkdirs() }, "decoded_${System.currentTimeMillis()}.wav")
         val chunks = if (ownWav) {
             // Raw PCM16 read in recorder-sized blocks (the capture was already AGC'd/normalized).
-            wavChunks(wav, offsetSec)
+            kotlinx.coroutines.flow.flow {
+                for ((s, e) in enroll.clips) { emitAll(wavChunks(wav, s, e)); emit(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
+                emitAll(wavChunks(wav, offsetSec))
+            }
         } else channelFlow {
             // normalize: quiet far-field imports get an automatic constant gain before the live
             // VAD/ASR sees them — and the work WAV (player + diarization source) carries the same
@@ -1037,8 +1047,23 @@ class TranscriptionService : LifecycleService() {
             // A resumed import decodes the whole file (the work WAV must hold all of it) but feeds the
             // ASR only from offsetSec, like wavChunks does for a library capture.
             var skip = (offsetSec * WavIo.SAMPLE_RATE).toLong()
+            // The enrollment clips lie in the skipped audio: kept aside (≤ 60 s) and sent first.
+            val ranges = enroll.clips.map { (s, e) -> (s * WavIo.SAMPLE_RATE).toLong() to (e * WavIo.SAMPLE_RATE).toLong() }
+            val clipAudio = ranges.map { (a, b) -> FloatArray((b - a).toInt()) }
+            var pos = 0L
+            var clipsSent = false
             AudioDecoder.decodeToWav16k(this@TranscriptionService, uri, wav, normalize = true) { block, len ->
+                ranges.forEachIndexed { k, (a, b) ->
+                    val lo = maxOf(a, pos); val hi = minOf(b, pos + len)
+                    if (lo < hi) System.arraycopy(block, (lo - pos).toInt(), clipAudio[k], (lo - a).toInt(), (hi - lo).toInt())
+                }
+                pos += len
                 if (skip >= len) { skip -= len; return@decodeToWav16k }
+                // First block reaching the preroll: the clips go in front of it, once.
+                if (!clipsSent) {
+                    clipsSent = true
+                    clipAudio.forEach { trySendBlocking(it); trySendBlocking(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
+                }
                 val from = skip.toInt(); skip = 0
                 trySendBlocking(block.copyOfRange(from, len))
             }
@@ -1122,8 +1147,8 @@ class TranscriptionService : LifecycleService() {
                     when (e) {
                         is TranscriptEvent.UtteranceSnapshot -> {
                             val snap0 = snapConv.apply(e.copy(utterances = e.utterances.map {
-                                it.copy(startSec = skipper.toOriginal(it.startSec) + offsetSec,
-                                    endSec = skipper.toOriginal(it.endSec) + offsetSec)
+                                val (s0, e0) = enroll.toOriginal(skipper.toOriginal(it.startSec), skipper.toOriginal(it.endSec))
+                                it.copy(startSec = s0, endSec = e0)
                             }))
                             // Resumed run: the saved frozen prefix stays in front of the new audio's utterances.
                             val snap = if (prior.isEmpty()) snap0
@@ -1209,16 +1234,26 @@ class TranscriptionService : LifecycleService() {
         val libEntry = entry
         Log.i(STOP_TAG, "runPipeline attach: foreground=$foreground entry=${libEntry?.id} utts=${result.first.size} summary=${result.second.summary != null}")
         if (foreground && libEntry != null) {
-            runCatching {
+            // NonCancellable: a new import supersedes this job (previousJob.cancel()) and used to land
+            // during this ~40 s write, leaving the finished meeting RECORDED. The new job joins this one
+            // before starting, so finishing the save only delays it.
+            withContext(NonCancellable) { runCatching {
+                // The session view may have flushed its own edits (speaker names, corrected lines)
+                // into the entry while the summary was written: keep them rather than embed the
+                // pipeline's unnamed, unedited transcript over them.
+                val flushed = SessionLibrary.byId(this@TranscriptionService, libEntry.id)
+                    ?.takeIf { it.status == SessionLibrary.Status.DONE && it.sessionFile.exists() }
+                    ?.let { e -> PrimeMinutesSession.peek(e.sessionFile) }
+                val utts = flushed?.utterances?.takeIf { it.size == result.first.size } ?: result.first
                 val updated = SessionLibrary.attachResults(
-                    this, libEntry, result.first, emptyMap(), result.second.summary, result.second.actions,
+                    this@TranscriptionService, libEntry, utts, flushed?.speakerNames ?: emptyMap(), result.second.summary, result.second.actions,
                     result.second.title, result.second.notes, cfg.asrModelId, cfg.asrBackend, cfg.llmModelId,
                 )
                 Log.i(STOP_TAG, "runPipeline attach -> ${updated?.id ?: "NULL (buildSession failed)"}")
                 if (updated != null) {
                     emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
                 }
-            }.onFailure { android.util.Log.w("primeminutes-library", "could not auto-save import", it) }
+            }.onFailure { android.util.Log.w("primeminutes-library", "could not auto-save import", it) } }
             inFlightWav = null   // fully attached; nothing left for a later stop to bank
         }
         return result
@@ -1560,20 +1595,24 @@ class TranscriptionService : LifecycleService() {
     }
 
     /** Raw PCM16 of one of our own 16 kHz mono work WAVs, as float blocks. */
-    private fun wavChunks(wav: File, startSec: Double = 0.0) = kotlinx.coroutines.flow.flow {
+    private fun wavChunks(wav: File, startSec: Double = 0.0, endSec: Double = Double.MAX_VALUE) = kotlinx.coroutines.flow.flow {
         java.io.DataInputStream(wav.inputStream().buffered(1 shl 16)).use { ins ->
             ins.skipBytes(WavIo.HEADER)
             // Resume: skip the already-transcribed audio (16 kHz mono PCM16 → 2 bytes/sample).
             var skip = (startSec * WavIo.SAMPLE_RATE).toLong() * 2
             while (skip > 0) { val k = ins.skip(skip); if (k <= 0) break; skip -= k }
             val bytes = ByteArray(2048 * 2)
-            while (true) {
+            // An enrollment clip ([SeamEnrollment]) reads only up to endSec.
+            var left = if (endSec == Double.MAX_VALUE) Long.MAX_VALUE else ((endSec - startSec) * WavIo.SAMPLE_RATE).toLong() * 2
+            while (left > 0) {
                 var n = 0
-                while (n < bytes.size) {
-                    val k = ins.read(bytes, n, bytes.size - n)
+                val want = minOf(bytes.size.toLong(), left).toInt()
+                while (n < want) {
+                    val k = ins.read(bytes, n, want - n)
                     if (k < 0) break
                     n += k
                 }
+                left -= n
                 if (n < 2) break
                 val f = FloatArray(n / 2)
                 for (i in f.indices) {
@@ -1582,7 +1621,7 @@ class TranscriptionService : LifecycleService() {
                     f[i] = ((hi shl 8) or lo).toShort() / 32768f
                 }
                 emit(f)
-                if (n < bytes.size) break
+                if (n < want) break
             }
         }
     }.flowOn(Dispatchers.IO)

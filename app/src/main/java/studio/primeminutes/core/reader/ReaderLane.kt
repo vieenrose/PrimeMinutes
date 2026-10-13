@@ -126,8 +126,11 @@ class ReaderLane(
         if (llm.append(toks) < 0) return@withContext null
         val raw = llm.generateContinue(48, "<turn|>", ReaderProtocol.TEMP) {}
         raw.substringBefore("<turn|>").lines().firstOrNull { it.isNotBlank() }
-            ?.trim()?.trim('「', '」', '"', '*', '#', ' ')?.take(40)?.ifBlank { null }
+            ?.trim()?.trim('「', '」', '"', '*', '#', ' ')
+            ?.replace(TITLE_LABEL, "")   // "會議：…" / "標題：…" — the model labels its answer now and then
+            ?.trim('「', '」', '"', '*', '#', ' ')?.take(40)?.ifBlank { null }
     }
+    private val TITLE_LABEL = Regex("^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*")
 
     /**
      * The final summary as prose, from the journal — like [title], one fresh conversation on the same

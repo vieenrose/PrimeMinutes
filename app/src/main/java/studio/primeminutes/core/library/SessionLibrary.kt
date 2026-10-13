@@ -1,5 +1,6 @@
 package studio.primeminutes.core.library
 
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -39,6 +40,12 @@ object SessionLibrary {
     // (readMeta then returns null and the caller treats the entry as corrupt). One process-wide
     // reentrant lock over every meta read/write and each read-modify-write pair.
     private val metaLock = Any()
+
+    // One session.m4a build at a time per entry: the import's auto-save and the open session's edit
+    // flush (leaving the session view) both rebuild it in the entry dir through the same temp names,
+    // and the second deleted the first's temp mid-write (NoSuchFileException .audio_tmp.m4a, seen on
+    // a 45-min import). The later call now waits and writes last.
+    private val buildLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
     const val WAV_NAME = "recording.wav"
     const val SESSION_NAME = "session.m4a"
 
@@ -140,11 +147,13 @@ object SessionLibrary {
         // session's audio instead when the WAV was already pruned (session.m4a-only entries).
         audio: Uri? = null,
     ): Entry? {
-        val built = PrimeMinutesSession.buildSession(
-            context, entry.dir, audio ?: Uri.fromFile(entry.wavFile), utterances, speakerNames,
-            summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId,
-            coverEnabled = true, fileName = SESSION_NAME, format = PrimeMinutesSession.Format.M4A,
-        ) ?: return null
+        val built = buildLocks.getOrPut(entry.id) { kotlinx.coroutines.sync.Mutex() }.withLock {
+            PrimeMinutesSession.buildSession(
+                context, entry.dir, audio ?: Uri.fromFile(entry.wavFile), utterances, speakerNames,
+                summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId,
+                coverEnabled = true, fileName = SESSION_NAME, format = PrimeMinutesSession.Format.M4A,
+            )
+        } ?: return null
         clearProgress(entry)   // the run is complete: nothing left to resume
         // A user-given name (set at capture time or via rename) outranks the LLM title — batch
         // processing must never rename "Talk 3 — Dr. Smith" to whatever the model invents. Re-read

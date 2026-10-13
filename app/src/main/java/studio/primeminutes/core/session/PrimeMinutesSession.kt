@@ -287,6 +287,17 @@ object PrimeMinutesSession {
         }.getOrDefault(false)
     }
 
+    /** The embedded transcript state of [file] without extracting its audio (the [Loaded.audio] is
+     *  [file] itself, not a cache copy): for callers that only merge names and edits. Null when
+     *  the file embeds nothing readable. */
+    suspend fun peek(file: File): Loaded? = withContext(Dispatchers.IO) {
+        runCatching {
+            val blob = if (isMp4(file)) Mp4Tags.readSessionBlob(file) else null
+            if (blob == null || blob.length > MAX_BLOB_CHARS) return@runCatching null
+            parseManifest(JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8)), file)
+        }.getOrNull()
+    }
+
     private val SAFE_NAME = Regex("[^\\p{L}\\p{N}._-]")        // keep letters (incl. CJK), digits, . _ -
     private val RESERVED = Regex("(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])$")
 
