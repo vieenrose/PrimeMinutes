@@ -163,6 +163,9 @@ class OpenCcConverter private constructor(
             // 執行 is "carry out" (a plan, a decision) far more often than "run" (a program) in a
             // meeting, and mainland Chinese says 执行 too: "執行細節" became "运行细节".
             twRev["執行"] = "執行"
+            // 介面 reverses to the FIRST TWPhrases line that targets it, 接口 (an API), but in meeting
+            // prose it is the user interface: 會議介面 became 会议接口; 界面 is the mainland word.
+            twRev["介面"] = "界面"
             val t2s = HashMap<String, String>(8192)
             loadInto(context, "opencc/TSPhrases.txt", t2s)
             loadInto(context, "opencc/TSCharacters.txt", t2s)
