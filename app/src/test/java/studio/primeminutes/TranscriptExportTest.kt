@@ -113,4 +113,14 @@ class TranscriptExportTest {
         org.junit.Assert.assertEquals(42.0, cues.last().endSec, 1e-9)
         org.junit.Assert.assertEquals(text, cues.joinToString("") { it.text })
     }
+
+    @Test fun englishTurnIsCutBetweenWordsOnly() {
+        val text = "Button so that you actually in the transcription box but so that you click on a button and then it opens whatever that speaker characterization is and the left click would give you the menu"
+        val u = studio.primeminutes.core.events.TranscriptEvent.Utterance(0, text, 0.0, 9.6, 0)
+        val cues = studio.primeminutes.core.export.TranscriptExport.cues(listOf(u))
+        assertTrue(cues.size >= 3)
+        assertTrue("≤64 Latin chars per cue", cues.all { it.text.length <= 64 })
+        assertEquals("every piece is whole words", text, cues.joinToString(" ") { it.text })
+        assertEquals(9.6, cues.last().endSec, 1e-9)
+    }
 }

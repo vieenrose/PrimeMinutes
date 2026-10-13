@@ -127,20 +127,32 @@ object TranscriptExport {
 
     /**
      * Subtitle cues: an utterance is often a long turn (tens of seconds, hundreds of characters),
-     * unreadable as one subtitle. Cut it at punctuation into pieces of at most [CUE_CHARS], timing
-     * each piece in proportion to its length; short utterances pass through unchanged.
+     * unreadable as one subtitle. Cut it at punctuation into pieces of at most [CUE_WIDTH] display
+     * units (a CJK character is 2, anything else 1 — so 32 Chinese characters or 64 Latin ones, the
+     * usual two subtitle lines), timing each piece in proportion to its length; short utterances pass
+     * through unchanged. A cut forced by length backs off to the last space so no word is split.
      */
     internal fun cues(utterances: List<TranscriptEvent.Utterance>): List<TranscriptEvent.Utterance> =
         utterances.flatMap { u ->
             val text = oneCue(u.text)
-            if (text.length <= CUE_CHARS) return@flatMap listOf(u)
+            if (width(text) <= CUE_WIDTH) return@flatMap listOf(u)
             val pieces = ArrayList<String>()
             val sb = StringBuilder()
+            var w = 0
+            fun flush() { pieces += sb.toString().trim(); sb.setLength(0); w = 0 }
             for (c in text) {
-                sb.append(c)
-                val soft = c in "，、,；;：:" && sb.length >= CUE_CHARS / 2
-                val hard = c in "。？！?!." || sb.length >= CUE_CHARS
-                if (hard || soft) { pieces += sb.toString().trim(); sb.setLength(0) }
+                sb.append(c); w += width(c)
+                val soft = c in "，、,；;：:" && w >= CUE_WIDTH / 2
+                val hard = c in "。？！?!."
+                if (hard || soft) flush()
+                else if (w >= CUE_WIDTH) {
+                    val cut = sb.lastIndexOf(' ')
+                    if (cut > 0) {
+                        val rest = sb.substring(cut + 1)
+                        pieces += sb.substring(0, cut).trim()
+                        sb.setLength(0); sb.append(rest); w = width(rest)
+                    } else flush()
+                }
             }
             if (sb.isNotBlank()) pieces += sb.toString().trim()
             val total = pieces.sumOf { it.length }.toDouble().coerceAtLeast(1.0)
@@ -153,7 +165,12 @@ object TranscriptExport {
             }
         }
 
-    private const val CUE_CHARS = 32
+    private const val CUE_WIDTH = 64
+
+    /** Display width of a character: CJK ideographs, kana, hangul and fullwidth forms take 2 cells. */
+    private fun width(c: Char): Int =
+        if (c in '⺀'..'鿿' || c in '가'..'힣' || c in '豈'..'﫿' || c in '＀'..'｠') 2 else 1
+    private fun width(s: String): Int = s.sumOf { width(it) }
 
     /** LRC timestamp `[mm:ss.xx]` — xx = hundredths of a second; ASCII digits always. */
     private fun lrcStamp(sec: Double): String {
