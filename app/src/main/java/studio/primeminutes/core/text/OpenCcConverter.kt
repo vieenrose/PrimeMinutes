@@ -134,8 +134,17 @@ class OpenCcConverter private constructor(
             loadInto(context, "opencc/TWVariants.txt", tw)
             loadInto(context, "opencc/TWVariantsPhrases.txt", tw)
             loadInto(context, "opencc/TWPhrases.txt", tw)
+            PROSE_KEEP.forEach(tw::remove)
             return build(listOf(s2tStage(context), tw))
         }
+
+        /**
+         * TWPhrases entries that are software vocabulary, applied by OpenCC to any text: in meeting
+         * prose they turn 擴展性 into 擴充套件性, 權限 into 許可權, 類型 into 型別, 項目 into 專案 (seen in
+         * generated summaries). Both words are ordinary Taiwan Chinese, so the plain s2t result stays.
+         * Only the forward (s2twp) stage drops them; tw2sp still maps the TW word back.
+         */
+        internal val PROSE_KEEP = listOf("擴展", "權限", "類型", "項目", "對象", "文件", "參數", "實例", "字段", "函數")
 
         // tw2sp, OpenCC's own Taiwan→Simplified-with-phrases chain: stage 1 undoes the Taiwan
         // localisation (TWPhrasesRev + TWVariantsRevPhrases + TWVariantsRev, the reverse of the
