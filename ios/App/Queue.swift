@@ -112,10 +112,15 @@ struct SeamEnrollment {
     }
     /// Engine time (silence skip already restored) → original audio time; a gap maps to its clip's end.
     func toOriginal(_ t: Double) -> Double { segment(t).map { min($0.0 + (t - $0.2), $0.1) } ?? t - length + offset }
-    /// An engine-time line → original times, cut at the end of the clip it starts in.
+    /// An engine-time line → original times, cut at the end of the clip it starts in. The diarizer opens a turn a little
+    /// before the voice: a line starting in a gap belongs to what follows the gap (the next clip, or the audio from `offset`),
+    /// not to the clip before it (ec45 resumed at 1422 s: speaker 3's whole clip collapsed and it came back as a new speaker).
     func toOriginal(_ start: Double, _ end: Double) -> (Double, Double) {
         guard let (s, e, at) = segment(start) else { return (toOriginal(start), toOriginal(end)) }
-        return (s + (start - at), min(e, s + (end - at)))
+        if start - at < e - s { let s0 = s + (start - at); return (s0, max(s0, min(e, s + (end - at)))) }
+        guard let (ns, ne, nat) = segment(end) else { return (offset, max(offset, toOriginal(end))) }
+        if nat == at { return (e, e) }   // silence only
+        return (ns, min(ne, ns + (end - nat)))
     }
     static func plan(_ prior: [Utterance], offset: Double) -> SeamEnrollment {
         guard !prior.isEmpty, offset > 0 else { return .none(offset) }
