@@ -58,6 +58,9 @@ final class OpenCC: @unchecked Sendable {
             switch s {
             case .traditional:
                 var tw: [String: String] = [:]; load("TWVariants", into: &tw); load("TWVariantsPhrases", into: &tw); load("TWPhrases", into: &tw)
+                // Software vocabulary of TWPhrases that mangles meeting prose (擴展性→擴充套件性, 權限→許可權,
+                // 類型→型別, 項目→專案); the plain s2t word is ordinary Taiwan Chinese. Same list as Android.
+                for k in ["擴展", "權限", "類型", "項目", "對象", "文件", "參數", "實例", "字段", "函數"] { tw[k] = nil }
                 return OpenCC([s2t(), tw])
             case .simplified:
                 var rev: [String: String] = [:]

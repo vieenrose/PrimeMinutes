@@ -26,6 +26,7 @@ enum SessionFile {
         m.notes = s.notes.isEmpty ? s.legacyNotes : s.notes.map { ReaderProtocol.render($0) }.joined(separator: "\n")
         m.action_items = s.actionItems ?? "-"
         m.asr_backend = "ios"
+        m.asr_model = "xasr-stream-q8-octav+sortformer-int8-f190"   // the LiteRT pair NemoEngine loads; same id as Android
         m.llm_model = s.reader
         m.speaker_names = (s.speakerNames ?? [:]).filter { !$0.value.isEmpty }.mapValues { Manifest.SN(name: $0, confidence: "user", reason: "") }
         m.utterances = s.lines.enumerated().map { Manifest.U(index: $0.offset, start: $0.element.start, end: $0.element.end, text: $0.element.text, speaker: $0.element.speaker) }
