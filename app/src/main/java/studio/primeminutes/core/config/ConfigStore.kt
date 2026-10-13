@@ -21,7 +21,6 @@ object ConfigStore {
             ?: SummaryScript.defaultFor(AppLanguage.systemLocale()).id
         return TranscriptionConfig(
             asrBackend = p.getString("asrBackend", d.asrBackend) ?: d.asrBackend,
-            asrModelId = p.getString("asrModelId", d.asrModelId) ?: d.asrModelId,
             speakerDelaySec = p.getInt("speakerDelaySec", d.speakerDelaySec)
                 .coerceIn(TranscriptionConfig.SPEAKER_DELAY_MIN, TranscriptionConfig.SPEAKER_DELAY_MAX),
             llmModelId = p.getString("llmModelId", d.llmModelId) ?: d.llmModelId,
@@ -33,7 +32,7 @@ object ConfigStore {
     fun save(context: Context, c: TranscriptionConfig) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             putString("asrBackend", c.asrBackend)
-            putString("asrModelId", c.asrModelId)
+            remove("asrModelId")   // provenance constant since the LiteRT backend; a stored GGUF name would win
             putInt("speakerDelaySec", c.speakerDelaySec)
             putString("llmModelId", c.llmModelId)
             putString("summaryScript", c.summaryScript)

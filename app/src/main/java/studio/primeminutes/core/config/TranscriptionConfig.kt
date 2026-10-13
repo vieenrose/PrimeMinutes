@@ -10,7 +10,10 @@ import studio.primeminutes.core.models.LlmRegistry
 data class TranscriptionConfig(
     // --- ASR ---
     val asrBackend: String = "nemo",   // provenance id (AsrBackend); nemo is the only engine
-    val asrModelId: String = "x-asr-zh-en-q8_0+nemotron-3-diarization-q8_0",
+    // Provenance written into every session: the LiteRT pair the engine actually loads
+    // (ModelManager.LITERT_*_FILE). Not a setting, so ConfigStore no longer persists it — a
+    // stored value would outlive a backend change (sessions kept naming the GGUF pair).
+    val asrModelId: String = ASR_MODEL_ID,
 
     // --- Diarization ---
     // Live view (recording booth): seconds a line waits before its speaker tag is shown. The
@@ -34,6 +37,7 @@ data class TranscriptionConfig(
     val summaryScript: String = "zh-Hant",
 ) {
     companion object {
+        const val ASR_MODEL_ID = "xasr-stream-q8-octav+sortformer-int8-f190"
         const val SPEAKER_DELAY_MIN = 5
         const val SPEAKER_DELAY_MAX = 30
     }
