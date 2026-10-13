@@ -145,7 +145,7 @@ App 被終止或離開時，佇列由背景工作（`BGProcessingTask`）或下�
 
 ## 8. 設定
 
-<p><img src="guide/03-settings.png" width="200"> <img src="guide/03b-settings-backend.gif" width="270" alt="「建議」測試 CPU 與 GPU"></p>
+<p><img src="guide/03-settings.png" width="200"></p>
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
@@ -156,7 +156,6 @@ App 被終止或離開時，佇列由背景工作（`BGProcessingTask`）或下�
 | AI 筆記模型 | E2B（預設）或 E4B | ✅ 手動 |
 | 硬體狀態列 | 顯示 CPU、記憶體等 | ⬜ |
 | 推論執行緒 | 自動（首次一秒測試）或手動；載入失敗時自動降低 | ✅ 手動 |
-| 閱讀器執行於 CPU／GPU（僅 E2B） | 「建議」同時測試兩者：首次下載 GPU 版本（約 800 MB），各自顯示可用與否與速度；GPU 只有回答與 CPU 一致時才可選；預設 CPU；GPU 載入失敗時自動改用 CPU | ✅ 手動（iPhone 14 Pro Max：CPU 34.3、GPU 29.4 詞元/秒，皆可用） |
 | 顯示待辦事項 | 摘要分頁多一張待辦卡 | ✅ 手動 |
 | 儲存空間 | 列出每個模型（含編譯快取大小），可刪除 | ✅ 手動 |
 | 關於 | 版本、元件與授權 | ⬜ |
