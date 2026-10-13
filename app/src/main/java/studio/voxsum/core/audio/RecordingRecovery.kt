@@ -78,7 +78,41 @@ object ImportRecovery {
 
     fun clear(context: Context) {
         runCatching { marker(context).delete() }
+        runCatching { progressFile(context).delete() }
     }
+
+    /**
+     * The frozen transcript of the in-flight import, refreshed about once a minute of audio while it is
+     * transcribed: a kill then resumes after it ("finish the interrupted import") instead of redoing the
+     * whole file. Tied to [copy]; [clear] drops it with the marker.
+     */
+    private const val PROGRESS = "import.progress.json"
+    private fun progressFile(context: Context) = File(context.filesDir, PROGRESS)
+
+    fun saveProgress(context: Context, copy: File, p: studio.voxsum.core.library.SessionLibrary.Progress) {
+        runCatching {
+            val arr = org.json.JSONArray()
+            p.utterances.forEach { arr.put(studio.voxsum.core.session.VoxsumSession.utteranceToJson(it)) }
+            val o = org.json.JSONObject().put("copy", copy.absolutePath).put("fingerprint", p.fingerprint)
+                .put("utterances", arr).put("asrDoneSec", p.asrDoneSec)
+            val tmp = File(context.filesDir, "$PROGRESS.tmp")
+            tmp.writeText(o.toString())
+            if (!tmp.renameTo(progressFile(context))) { progressFile(context).delete(); tmp.renameTo(progressFile(context)) }
+        }.onFailure { Log.w("ImportRecovery", "could not persist import progress", it) }
+    }
+
+    /** The saved progress of [copy]'s import, or null (none, another file, unreadable). */
+    fun loadProgress(context: Context, copy: File): studio.voxsum.core.library.SessionLibrary.Progress? = runCatching {
+        val f = progressFile(context).takeIf { it.exists() } ?: return null
+        val o = org.json.JSONObject(f.readText())
+        if (o.optString("copy") != copy.absolutePath) return null
+        val arr = o.getJSONArray("utterances")
+        studio.voxsum.core.library.SessionLibrary.Progress(
+            o.optString("fingerprint"),
+            List(arr.length()) { i -> studio.voxsum.core.session.VoxsumSession.utteranceFromJson(arr.getJSONObject(i), fallbackIndex = i) },
+            o.optDouble("asrDoneSec", 0.0), false, "",
+        )
+    }.getOrNull()
 
     /** The import copy the sweep must keep, if any. */
     fun keptPath(context: Context): String? =

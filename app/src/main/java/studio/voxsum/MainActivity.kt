@@ -1133,6 +1133,8 @@ private fun TranscribeScreen(
             confirmButton = {
                 TextButton(onClick = {
                     recoveredImport = null
+                    // Continue after the progress saved while it was transcribed, if any.
+                    TranscriptionService.importResumeRequested = true
                     launchAudio(Uri.fromFile(copy))
                 }) { Text(stringResource(R.string.recover_finish)) }
             },

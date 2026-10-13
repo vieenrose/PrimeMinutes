@@ -162,6 +162,10 @@ class TranscriptionService : LifecycleService() {
          *  continues from the entry's saved progress instead of transcribing from zero. One-shot. */
         @Volatile var resumeRequested = false
 
+        /** Set by "finish the interrupted import" just before it re-runs the import copy: the next
+         *  [runPipeline] continues from [ImportRecovery]'s saved progress, if it matches. One-shot. */
+        @Volatile var importResumeRequested = false
+
         // True while a live capture is in flight *in this process*. The Activity can be destroyed and
         // recreated (low memory) while the foreground service keeps recording; the crash-recovery
         // check reads this so it doesn't mistake a still-active recording's marker for an interrupted
@@ -1004,9 +1008,14 @@ class TranscriptionService : LifecycleService() {
         // transcribe only the audio after it. Anything else that re-runs the entry supersedes the
         // checkpoint (a fresh run starts from zero, as before).
         val wantResume = resumeRequested; resumeRequested = false
-        val resume = if (wantResume && existing != null && ownWav)
-            SessionLibrary.loadProgress(existing)?.takeIf { it.fingerprint == transcriptFingerprint(cfg) && !it.asrComplete && it.utterances.isNotEmpty() }
-        else null
+        val wantImportResume = importResumeRequested; importResumeRequested = false
+        // The import copy a kill can interrupt (ImportRecovery's marker names it): its progress is saved
+        // as it is transcribed, so "finish the interrupted import" continues after it.
+        val recoverableCopy = srcFile?.takeIf { foreground && existing == null && ImportRecovery.keptPath(this) == it.absolutePath }
+        val resume = (if (wantResume && existing != null && ownWav) SessionLibrary.loadProgress(existing)
+            else if (wantImportResume && recoverableCopy != null) ImportRecovery.loadProgress(this, recoverableCopy)
+            else null)?.takeIf { it.fingerprint == transcriptFingerprint(cfg) && !it.asrComplete && it.utterances.isNotEmpty() }
+        if (resume != null && existing == null) Log.i(STOP_TAG, "import resume at ${resume.asrDoneSec.toInt()} s, ${resume.utterances.size} utterances kept")
         if (existing != null && resume == null) SessionLibrary.clearProgress(existing)
         val prior = resume?.utterances ?: emptyList()
         val seamSec = resume?.asrDoneSec ?: 0.0
@@ -1025,8 +1034,13 @@ class TranscriptionService : LifecycleService() {
             // normalize: quiet far-field imports get an automatic constant gain before the live
             // VAD/ASR sees them — and the work WAV (player + diarization source) carries the same
             // gain, so every downstream consumer hears identical audio.
+            // A resumed import decodes the whole file (the work WAV must hold all of it) but feeds the
+            // ASR only from offsetSec, like wavChunks does for a library capture.
+            var skip = (offsetSec * WavIo.SAMPLE_RATE).toLong()
             AudioDecoder.decodeToWav16k(this@TranscriptionService, uri, wav, normalize = true) { block, len ->
-                trySendBlocking(block.copyOf(len))
+                if (skip >= len) { skip -= len; return@decodeToWav16k }
+                val from = skip.toInt(); skip = 0
+                trySendBlocking(block.copyOfRange(from, len))
             }
         }.flowOn(Dispatchers.IO)
 
@@ -1044,6 +1058,7 @@ class TranscriptionService : LifecycleService() {
         var diarized: Pair<List<TranscriptEvent.Utterance>, Int>? = null
         // Resume checkpoint inputs: how many leading utterances are frozen, and whether ASR ran to the end.
         var frozenCount = 0
+        var progressSavedSec = resume?.asrDoneSec ?: 0.0   // ImportRecovery progress written up to here
         var asrFinished = false
         savedImportEntry = null
         inFlightCheckpoint = null
@@ -1118,9 +1133,13 @@ class TranscriptionService : LifecycleService() {
                             frozenCount = snap.stable
                             if (summarizeAfter && foreground && frozenCount > 0) {
                                 val keep = utterances.take(frozenCount)
-                                inFlightCheckpoint = ImportCheckpoint(
-                                    SessionLibrary.Progress(transcriptFingerprint(cfg), keep, keep.last().endSec, false, ""),
-                                ) { live?.latestCp }
+                                val progress = SessionLibrary.Progress(transcriptFingerprint(cfg), keep, keep.last().endSec, false, "")
+                                inFlightCheckpoint = ImportCheckpoint(progress) { live?.latestCp }
+                                // Once a minute of audio, on disk too: a kill does not run the stop handler.
+                                if (recoverableCopy != null && progress.asrDoneSec - progressSavedSec >= 60) {
+                                    ImportRecovery.saveProgress(this@TranscriptionService, recoverableCopy, progress)
+                                    progressSavedSec = progress.asrDoneSec
+                                }
                             }
                             emitEvent(snap)
                             feedLive(live, snap)
