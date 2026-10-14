@@ -141,7 +141,12 @@ object LibrarySearch {
                 val scored = idx.vectors.map { v -> v to SessionIndex.dot(v.q, qv) }.filter { it.second >= MIN_COS }
                 if (scored.isEmpty()) continue
                 val d = doc(context, e)
-                val ps = scored.sortedByDescending { it.second }.take(maxPassages).map { (v, cos) -> passage(d, v, cos, snippetChars) }
+                // One MEETING passage at most: a long summary has several parts, which would fill every
+                // slot and then fold into one title row, leaving the meeting with no passage to show.
+                val best = scored.sortedByDescending { it.second }
+                val firstMeeting = best.indexOfFirst { it.first.kind == SessionIndex.Kind.MEETING }
+                val ps = best.filterIndexed { i, (v, _) -> v.kind != SessionIndex.Kind.MEETING || i == firstMeeting }
+                    .take(maxPassages).map { (v, cos) -> passage(d, v, cos, snippetChars) }
                 out += Hit(e, ps.maxOf { it.score }, ps)
             }
             out.sortedByDescending { it.score }

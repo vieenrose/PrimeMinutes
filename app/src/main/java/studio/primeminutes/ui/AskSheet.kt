@@ -71,6 +71,8 @@ private val CITE_RE = Regex("""\[{1,2}([A-Za-z0-9_\-]+)@(\d+)]{1,2}""")
 private val OPEN_TAG_RE = Regex("""\[\[[^\]\n]*$""")
 /** A bracketed tag that is no citation (the model sometimes writes `[[no excerpt]]`). */
 private val BOGUS_TAG_RE = Regex("""\[\[[^@\]\n]*]]""")
+/** Markdown bullets (`* `, `- `) the reader sometimes writes; the answer is plain text. */
+private val BULLET_RE = Regex("""(?m)^[ \t]*[*-][ \t]+""")
 
 /**
  * Ask (RAG, experimental): one conversation over the whole library. Opens with [question]
@@ -198,7 +200,7 @@ private fun answerText(
     raw: String, byId: Map<String, SessionLibrary.Entry>, color: androidx.compose.ui.graphics.Color,
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
 ): AnnotatedString = buildAnnotatedString {
-    val raw = BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), "").trimEnd()
+    val raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
     var last = 0
     for (m in CITE_RE.findAll(raw)) {
         append(raw.substring(last, m.range.first).trimEnd(' '))
