@@ -8,9 +8,9 @@ import UIKit
 
 extension ReaderModel {
     /// EmbeddingGemma-2 270M int4 repacked for LiteRT (Android EmbedRegistry.GEMMA2_270M).
-    /// NOTE: `main` until the HF repo is published and a commit is pinned (same placeholder as Android).
+    /// Pinned to the published HF commit (same as Android).
     static let embed: ReaderModel = {
-        let base = "https://huggingface.co/Luigi/primeminutes-embed-litert/resolve/main"
+        let base = "https://huggingface.co/Luigi/primeminutes-embed-litert/resolve/c961c0490871bd7dc4ac16c2e13fad1e79e963c8"
         return ReaderModel(id: "embed-gemma2-270m", repo: "", rev: "", files: [
             ModelFile(name: "embedder.tflite", remote: base + "/embedder.tflite", size: 70_257_800, sha256: "25596c901d4cc9bb1156bdbff71829506b9137c48292993036464dab889ac3a3"),
             ModelFile(name: "encoder.tflite", remote: base + "/encoder.tflite", size: 89_540_120, sha256: "912763557c5b892d6db76a95382ac9141fc55b1ee4e0ee786d454b70c12d8ccb"),
