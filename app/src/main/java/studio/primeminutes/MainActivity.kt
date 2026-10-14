@@ -1485,6 +1485,12 @@ private fun TranscribeScreen(
             section(context.getString(R.string.notes_topics), n.topics)
             n.extra.forEach { (k, v) -> section(k, v) }
         }
+        // Reader journal (the "AI notes" panel): one bullet per note, as the iOS export does.
+        if (meetingNotes == null && agent.notes.isNotEmpty()) {
+            out.append(h(context.getString(R.string.agent_title))).append("\n")
+            agent.notes.forEach { out.append("- ").append(studio.primeminutes.core.reader.ReaderProtocol.render(it)).append("\n") }
+            out.append("\n")
+        }
         return refs(out.toString().trim().ifEmpty { null })
     }
 
@@ -1921,6 +1927,7 @@ private fun TranscribeScreen(
         val utts0 = utterances.toList()
         val title0 = title; val summary0 = summary; val actions0 = actionItems
         val names0 = speakerNames.toMap()
+        val notes0 = agent.notes.toList()
         scope.launch {
             val cc = withContext(Dispatchers.IO) { OpenCcConverter.get(context, newScript) }
             // The transcript uses the CONSERVATIVE s2t (no phrase-level TW localisation) so an
@@ -1941,12 +1948,16 @@ private fun TranscribeScreen(
             val newActions = actions0?.takeIf { !transcriptOnly }?.let { withContext(Dispatchers.Default) { cc.convert(it) } } ?: actions0
             val newNames = if (transcriptOnly) names0 else
                 withContext(Dispatchers.Default) { names0.mapValues { (_, n) -> n.copy(name = cc.convert(n.name)) } }
+            // AI notes are generated text too (the reader writes in the summary's script).
+            val newNotes = if (transcriptOnly) notes0 else
+                withContext(Dispatchers.Default) { notes0.map { it.copy(text = cc.convert(it.text)) } }
             if (seq != scriptSeq || gen != sessionGen || edit0 != editSeq) return@launch   // superseded / session changed / edited → drop
             val changed = newUtts != utts0 || newTitle != title0 || newSummary != summary0 ||
-                newActions != actions0 || newNames != names0
+                newActions != actions0 || newNames != names0 || newNotes != notes0
             for (i in newUtts.indices) if (i < utterances.size) utterances[i] = newUtts[i]
             title = newTitle; summary = newSummary; actionItems = newActions
             newNames.forEach { (id, n) -> speakerNames[id] = n }
+            if (newNotes != notes0 && agent.notes.size == newNotes.size) for (i in newNotes.indices) agent.notes[i] = newNotes[i]
             if (changed) sessionDirty = true
         }
     }
