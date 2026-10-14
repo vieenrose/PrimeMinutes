@@ -21,14 +21,13 @@ data class EmbedSpec(
 object EmbedRegistry {
     const val DEFAULT_ID = "embeddinggemma2-270m"
 
-    // NOTE: the HF repo is not published yet (the upload needs the user's go-ahead); the revision
-    // below is `main` until a commit is pinned. The files' sizes and hashes are those of the
-    // repack validated on the host (T6 cos ≥ 0.97 vs torch bf16).
+    // Pinned to the published HF commit; the files' sizes and hashes are those of the repack
+    // validated on the host (T6 cos ≥ 0.97 vs torch bf16) and match the Hub's LFS metadata.
     val GEMMA2_270M = EmbedSpec(
         id = DEFAULT_ID,
         displayName = "EmbeddingGemma 2 270M",
         dirName = "embed-gemma2-270m",
-        revision = "https://huggingface.co/Luigi/primeminutes-embed-litert/resolve/main",
+        revision = "https://huggingface.co/Luigi/primeminutes-embed-litert/resolve/c961c0490871bd7dc4ac16c2e13fad1e79e963c8",
         files = mapOf(
             "embedder.tflite" to (70_257_800L to "25596c901d4cc9bb1156bdbff71829506b9137c48292993036464dab889ac3a3"),
             "encoder.tflite" to (89_540_120L to "912763557c5b892d6db76a95382ac9141fc55b1ee4e0ee786d454b70c12d8ccb"),
