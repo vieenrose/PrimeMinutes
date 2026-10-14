@@ -106,12 +106,12 @@ object AskEngine {
                     val prompt = buildString {
                         if (first) { append(ReaderProtocol.P0); append(system(uiLanguage)); append(ReaderProtocol.P1) }
                         else append(ReaderProtocol.P3)
-                        append(render(excerpts)); append("\n\n"); append(question.trim()); append(ReaderProtocol.P2)
+                        append(render(excerpts, uiLanguage)); append("\n\n"); append(question.trim()); append(ReaderProtocol.P2)
                     }
                     if (s.append(s.tokenize(prompt, special = true)) < 0) {
                         // The conversation outgrew the cache: start a fresh one with this question only.
                         s.reset()
-                        val fresh = ReaderProtocol.P0 + system(uiLanguage) + ReaderProtocol.P1 + render(excerpts) + "\n\n" + question.trim() + ReaderProtocol.P2
+                        val fresh = ReaderProtocol.P0 + system(uiLanguage) + ReaderProtocol.P1 + render(excerpts, uiLanguage) + "\n\n" + question.trim() + ReaderProtocol.P2
                         if (s.append(s.tokenize(fresh, special = true)) < 0) error("prompt does not fit")
                     }
                     val t0 = System.nanoTime()
@@ -176,6 +176,8 @@ object AskEngine {
         val t = mutex.withLock { tok ?: tokenizer(app) }
         for (x in all) {
             if (out.size >= MAX_PASSAGES) break
+            // A note and its transcript chunk can carry the same words: one excerpt is enough.
+            if (out.any { it.entry.id == x.entry.id && it.text == x.text }) continue
             val n = withContext(Dispatchers.Default) { t.encode(x.text).size } + 24
             if (tokens + n > PASSAGE_TOKENS) continue
             tokens += n; out += x
@@ -183,11 +185,12 @@ object AskEngine {
         return out
     }
 
-    private fun render(xs: List<Excerpt>): String = buildString {
+    /** The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts). */
+    private fun render(xs: List<Excerpt>, lang: String): String = buildString {
         if (xs.isEmpty()) { append("(no excerpts)\n"); return@buildString }
         xs.forEachIndexed { i, x ->
             append("[[${x.entry.id}@${x.sec}]] "); append(x.entry.title ?: ""); append(" · "); append(ReaderProtocol.formatTs(x.sec))
-            append('\n'); append(x.text.trim()); append("\n\n")
+            append('\n'); append(x.text.trim().let { if (lang.startsWith("zh")) it else ChineseAmounts.toDigits(it) }); append("\n\n")
         }
     }
 
@@ -205,7 +208,8 @@ object AskEngine {
             "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts " +
             "that are not in them. After each claim, cite its source tag exactly as it appears at the " +
             "start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that " +
-            "the meetings do not mention it. Be brief and answer in English."
+            "the meetings do not mention it. Be brief and answer in English. Do not add a currency " +
+            "the excerpts do not name."
     }
 
     private fun tokenizer(app: Context): SpTokenizer {
