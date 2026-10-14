@@ -182,6 +182,7 @@ class ModelManager(context: Context) {
         }
         runCatching { File(dir, REVISION_MARKER).writeText(spec.revision) }
         check(embedReady(spec)) { "${spec.displayName} files missing after provisioning" }
+        studio.primeminutes.core.embed.EmbedHost.provisioned.value++
     }
 
     // --- Storage manager: enumerate + delete downloaded models (each re-downloads on next use). ---

@@ -804,6 +804,9 @@ private fun TranscribeScreen(
     var searchDownload by remember { mutableStateOf<Float?>(null) }
     val indexingIds by LibraryIndexer.indexing.collectAsState()
     LaunchedEffect(Unit) { if (searchModelReady) LibraryIndexer.catchUp(context) }
+    // A download finished from Settings must flip the Studio's search too (it used to need a restart).
+    val searchProvisioned by EmbedHost.provisioned.collectAsState()
+    LaunchedEffect(searchProvisioned) { if (searchProvisioned > 0) searchModelReady = EmbedHost.ready(context) }
     fun downloadSearchModel() {
         if (searchDownload != null) return
         searchDownload = 0f

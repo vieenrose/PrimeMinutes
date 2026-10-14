@@ -39,6 +39,10 @@ object EmbedHost {
 
     fun ready(context: Context): Boolean = ModelManager(context).embedReady(EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID))
 
+    /** Bumped each time the search model is provisioned, wherever the download was started
+     *  (Studio or Settings), so every screen re-reads [ready]. */
+    val provisioned = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     /** False while a live recording runs on a device with less than [SMALL_DEVICE_RAM]. */
     fun mayLoad(context: Context): Boolean {
         if (!TranscriptionService.recordingJobActive) return true
