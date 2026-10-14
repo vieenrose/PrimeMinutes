@@ -387,7 +387,11 @@ enum LibrarySearch {
         var hits: [Hit] = []
         for s in sessions {
             guard let x = index(s.id) else { continue }
-            let scored = x.vectors.map { ($0, SessionIndex.dot($0.q, qv)) }.filter { $0.1 >= minCos }.sorted { $0.1 > $1.1 }.prefix(maxPassages)
+            // One MEETING passage at most: a long summary has several parts, which would fill every
+            // slot and then fold into one title row, leaving the meeting with no passage to show.
+            var seenMeeting = false
+            let scored = x.vectors.map { ($0, SessionIndex.dot($0.q, qv)) }.filter { $0.1 >= minCos }.sorted { $0.1 > $1.1 }
+                .filter { v in guard v.0.kind == .meeting else { return true }; defer { seenMeeting = true }; return !seenMeeting }.prefix(maxPassages)
             guard !scored.isEmpty else { continue }
             let ps = scored.compactMap { passage(s, $0.0, $0.1, snippetChars) }
             guard !ps.isEmpty else { continue }

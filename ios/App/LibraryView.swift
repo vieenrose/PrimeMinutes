@@ -121,6 +121,12 @@ struct LibraryView: View {
         .onTapGesture { if !selected.isEmpty { toggle(s); return }; Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(s) }
     }
 
+    /// Row identity: Session equality is by id only, so a card whose search passages changed could keep
+    /// its old body (seen for freshly imported meetings: no passages at all); the key changes with them.
+    private func rowKey(_ s: Session) -> String {
+        let ps = hits.first { $0.session.id == s.id }?.passages ?? []
+        return s.id.uuidString + "|" + s.title + "|" + ps.map { "\($0.kind)\($0.uttIndex)\($0.semanticOnly)" }.joined(separator: ",")
+    }
     private func jobCard(_ j: Job) -> some View {
         let active = j.id == m.activeJob
         return HStack(spacing: 12) {
@@ -215,7 +221,7 @@ struct LibraryView: View {
                     ForEach(m.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
                     ForEach(days, id: \.0) { day, items in
                         if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
-                        ForEach(items) { card($0) }
+                        ForEach(items) { s in card(s).id(rowKey(s)) }
                     }
                 }.padding(.horizontal, 16)
             }

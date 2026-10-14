@@ -221,6 +221,10 @@ struct AskSheet: View {
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec); an unknown id is dropped.
     static func linked(_ text: String, _ xs: [AskEngine.Excerpt]) -> AttributedString {
+        // A tag still being written (streaming) or cut by the token cap is hidden, not shown raw.
+        let text = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\[\[[^@\]\n]*\]\]"#, with: "", options: .regularExpression)   // `[[no excerpt]]`
+            .replacingOccurrences(of: #"(?m)^[ \t]*[*-][ \t]+"#, with: "• ", options: .regularExpression)   // Markdown bullets, shown as text
         var out = AttributedString()
         let ns = text as NSString
         let rx = try! NSRegularExpression(pattern: #"\[\[([0-9A-Fa-f-]{36})@(\d+)\]\]"#)
