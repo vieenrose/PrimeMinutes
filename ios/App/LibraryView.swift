@@ -159,7 +159,7 @@ struct LibraryView: View {
                         }.frame(maxWidth: .infinity).padding(.top, 40)
                     }
                     if !m.sessions.isEmpty && days.isEmpty { Text(L("studio_no_match")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(m.waiting) { jobCard($0) }
+                    ForEach(m.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
                     ForEach(days, id: \.0) { day, items in
                         Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6)
                         ForEach(items) { card($0) }
@@ -181,7 +181,6 @@ struct LibraryView: View {
                 HwStatusLine()
                 Button { watching = true } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.status)).font(.caption).lineLimit(1); if !m.notes.isEmpty { Text(L("agent_listening", m.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
                     .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)
-                .sheet(isPresented: $watching) { WatchLive(m: m) }
             } else {
                 Text(m.status).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 16)
             }
@@ -205,17 +204,17 @@ struct LibraryView: View {
             Button(L("delete"), role: .destructive) { for s in m.sessions where selected.contains(s.id) { m.remove(s) }; selected = [] }
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
+        .sheet(isPresented: $watching) { WatchLive(m: m) }   // on the root, not on the banner: the banner leaves with the job and would tear the sheet down
         .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.remove(s) } }
         }
     }
 }
 
-/// "Add audio" bottom sheet (Android AddSourceSheet). YouTube and "open session" rows are added when those features exist.
+/// "Add audio" bottom sheet (Android AddSourceSheet, without the YouTube row: not offered on iOS).
 struct AddSourceSheet: View {
     let onFile: () -> Void
     let onPodcast: () -> Void
-    let onYouTube: () -> Void
     let onSession: () -> Void
     @Environment(\.dismiss) private var dismiss
     private func row(_ icon: String, _ title: String, _ desc: String, _ action: @escaping () -> Void) -> some View {
@@ -235,7 +234,6 @@ struct AddSourceSheet: View {
             Text(L("add_audio")).font(.title3.bold()).padding(.bottom, 8)
             row("folder", L("source_audio_file"), L("source_audio_file_desc"), onFile)
             row("dot.radiowaves.left.and.right", L("source_podcast"), L("source_podcast_desc"), onPodcast)
-            if Dev.env["VOX_YOUTUBE"] != nil { row("play.rectangle.fill", L("source_youtube"), L("source_youtube_desc"), onYouTube) }   // hidden: YouTube gates streams behind a poToken (see YouTube.swift)
             row("doc.badge.arrow.up", L("source_session"), L("source_session_desc"), onSession)
             Spacer(minLength: 0)
         }.padding(.horizontal, 20).padding(.top, 24).presentationDetents([.height(380)])
@@ -260,6 +258,7 @@ struct WatchLive: View {
             }
             .navigationTitle(L("action_watch_live")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("done")) { dismiss() } } }
+            .onChange(of: m.activeJob) { _, j in if j == nil { dismiss() } }   // the job is over: the session is in the list, nothing left to watch
         }.presentationDetents([.medium, .large])
     }
 }

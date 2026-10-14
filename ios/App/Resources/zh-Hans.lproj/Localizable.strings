@@ -140,7 +140,7 @@
 "import_busy" = "已有下载正在进行";
 "podcast_transcribe" = "转录";
 "empty_headline" = "完全离线转录与摘要";
-"empty_subtitle" = "添加音频文件、录制会议，或粘贴 YouTube 链接以开始。";
+"empty_subtitle" = "添加音频文件或录制会议以开始。";
 "pillar_private_title" = "隐私至上";
 "pillar_private_desc" = "音频永不离开您的设备";
 "pillar_offline_title" = "离线运行";
@@ -186,17 +186,7 @@
 "studio_return_capture" = "录音中…（返回）";
 "action_watch_live" = "即时查看";
 "watch_live_hint" = "阅读器写下的笔记会实时显示在这里。";
-"source_youtube" = "YouTube";
-"source_youtube_desc" = "以关键字搜索或粘贴视频链接";
-"youtube_search_hint" = "搜索视频或粘贴链接";
-"youtube_go" = "前往";
-"youtube_search" = "搜索";
 "dl_resolving" = "解析视频中…";
-"youtube_no_videos" = "找不到视频";
-"youtube_search_failed" = "搜索失败";
-"youtube_fetch_failed" = "无法获取此视频";
-"err_youtube_no_stream" = "此视频没有可用的音频流（可能受地区或登录限制）。";
-"err_youtube_live" = "直播无法转录，请选择普通视频。";
 
 "settings_hw_monitor" = "硬件状态栏";
 "settings_hw_monitor_hint" = "录音时与 AI 阅读时，显示 CPU、内存与电池的状态条。";

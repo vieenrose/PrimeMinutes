@@ -63,7 +63,7 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 
 - 僅以 CPU 推論；在 iPhone 14 Pro Max 上 Metal GPU 沒有明顯加速，因此已移除 GPU 選項。
 - 沒有 App 內更新（由 App Store／TestFlight 負責）、沒有 Android 的背景可靠性設定。iOS 以 `BGProcessingTask` 在 App 離開後繼續處理佇列。
-- 暫不提供 YouTube 匯入。
+- 不提供 YouTube 匯入（Android 限定）。
 - 中斷的處理不會跳出詢問：佇列在下次啟動時自動從檢查點接續。
 
 ## 已知限制

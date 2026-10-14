@@ -490,7 +490,7 @@ final class Model: ObservableObject {
     /// Cancel keeps the `.part`, so the same episode resumes where it stopped.
     func cancelDownload() { downloadTask?.cancel() }
     func addEpisode(_ ep: Episode) {
-        guard downloading == nil else { status = L("import_busy"); return }   // the sheet is already gone: say why nothing starts (as addYouTube does)
+        guard downloading == nil else { status = L("import_busy"); return }   // the sheet is already gone: say why nothing starts (as addEpisode does)
         let j = Job(audio: UUID().uuidString + "." + Podcast.ext(ep.audioUrl), title: ep.title)
         downloading = ep.title; downloadFraction = nil; status = L("podcast_downloading", 0)
         downloadTask = Task {
@@ -499,22 +499,6 @@ final class Model: ObservableObject {
                 _ = try await Podcast.download(ep, name: j.audio) { f in Task { @MainActor in self.downloadFraction = f; self.status = L("podcast_downloading", Int(f * 100)) } }
                 await queue.add(j); drain()
             } catch { status = Task.isCancelled ? L("app_ready") : L("download_failed", error.localizedDescription) }
-        }
-    }
-
-    /// YouTube video: resolve the audio stream, download it, then queue it like any import.
-    func addYouTube(_ v: YouTubeVideo) {
-        guard downloading == nil else { status = L("import_busy"); return }
-        downloading = v.title; status = L("dl_resolving")
-        Task {
-            defer { downloading = nil }
-            do {
-                let a = try await YouTube.resolve(v.url)
-                let j = Job(audio: UUID().uuidString + "." + a.ext, title: a.title)
-                status = L("podcast_downloading", 0)
-                _ = try await YouTube.download(a, name: j.audio) { f in Task { @MainActor in self.status = L("podcast_downloading", Int(f * 100)) } }
-                await queue.add(j); drain()
-            } catch { status = L("download_failed", error.localizedDescription) }
         }
     }
 
@@ -548,7 +532,6 @@ struct ContentView: View {
     @State private var picking = false
     @State private var showSettings = false
     @State private var showPodcast = false
-    @State private var showYouTube = false
     @State private var showAdd = false
     @State private var path: [Session] = []
     @AppStorage("language") private var language = "system"
@@ -565,11 +548,10 @@ struct ContentView: View {
                 let all = await m.library.all()
                 for s in all.prefix(2) { path = [s]; try? await Task.sleep(nanoseconds: 8_000_000_000); path = []; try? await Task.sleep(nanoseconds: 3_000_000_000) }
                 FileManager.default.createFile(atPath: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("frames/STOP").path, contents: nil)
-            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let sn = Dev.env["VOX_SNAP"] { Snap.schedule(sn) }; if let q = Dev.env["VOX_YT_ADD"] { Task { var r = "yt: no result"; if let v = try? await YouTube.search(q).first { do { let a = try await YouTube.resolve(v.url); let f = try await YouTube.download(a, name: "yt_test." + a.ext) { _ in }; r = "yt ok \(v.title) \((try? FileManager.default.attributesOfItem(atPath: f.path)[.size]) ?? 0)B" } catch { r = "yt FAIL \(error)" } }; try? r.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/yt.txt"), atomically: true, encoding: .utf8) } }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { var lastN = -1; var peakMB = 0.0; while true { NSLog("VOXSTATUS %@", m.status); do { var i = task_vm_info_data_t(); var c = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size); _ = withUnsafeMutablePointer(to: &i) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &c) } }; peakMB = max(peakMB, Double(i.phys_footprint) / 1048576); NSLog("VOXRSS %.0f peak %.0f MB kpeak %.0f resident %.0f rpeak %.0f MB", Double(i.phys_footprint) / 1048576, peakMB, Double(i.ledger_phys_footprint_peak) / 1048576, Double(i.resident_size) / 1048576, Double(i.resident_size_peak) / 1048576) }; if m.lines.count != lastN { lastN = m.lines.count; for l in m.lines { NSLog("VOXLINE %d %.1f-%.1f %@", l.speaker, l.start, l.end, l.text) } }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; if Dev.env["VOX_YOUTUBE"] != nil { showYouTube = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
-            .sheet(isPresented: $showAdd) { AddSourceSheet(onFile: { picking = true }, onPodcast: { showPodcast = true }, onYouTube: { showYouTube = true }, onSession: { picking = true }) }
+            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let sn = Dev.env["VOX_SNAP"] { Snap.schedule(sn) }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { var lastN = -1; var peakMB = 0.0; while true { NSLog("VOXSTATUS %@", m.status); do { var i = task_vm_info_data_t(); var c = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size); _ = withUnsafeMutablePointer(to: &i) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &c) } }; peakMB = max(peakMB, Double(i.phys_footprint) / 1048576); NSLog("VOXRSS %.0f peak %.0f MB kpeak %.0f resident %.0f rpeak %.0f MB", Double(i.phys_footprint) / 1048576, peakMB, Double(i.ledger_phys_footprint_peak) / 1048576, Double(i.resident_size) / 1048576, Double(i.resident_size_peak) / 1048576) }; if m.lines.count != lastN { lastN = m.lines.count; for l in m.lines { NSLog("VOXLINE %d %.1f-%.1f %@", l.speaker, l.start, l.end, l.text) } }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
+            .sheet(isPresented: $showAdd) { AddSourceSheet(onFile: { picking = true }, onPodcast: { showPodcast = true }, onSession: { picking = true }) }
             .fullScreenCover(isPresented: Binding(get: { m.recording }, set: { _ in })) { CaptureView(m: m) }
             .sheet(isPresented: $showPodcast) { PodcastView { m.addEpisode($0) } }
-            .sheet(isPresented: $showYouTube) { YouTubeSheet { m.addYouTube($0) } }
             .sheet(isPresented: $showSettings) { SettingsView(m: m, language: $language, theme: $theme) }
             .onOpenURL { m.importAudio($0) }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mpeg4Audio]) { if case .success(let u) = $0 { m.importAudio(u) } }
@@ -711,47 +693,6 @@ struct PodcastView: View {
     private func open(_ s: PodcastSeries) {
         busy = true; busyLabel = "dl_loading_episodes"; error = nil; current = s
         Task { defer { busy = false }; do { episodes = try await Podcast.episodes(s.feedUrl) } catch { self.error = L("status_error", error.localizedDescription) } }
-    }
-}
-
-struct YouTubeSheet: View {
-    let pick: (YouTubeVideo) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = Dev.env["VOX_YOUTUBE"].flatMap { $0 == "1" ? nil : $0 } ?? ""
-    @State private var results: [YouTubeVideo] = []
-    @State private var busy = false
-    @State private var error: String?
-    var body: some View {
-        NavigationStack {
-            List {
-                if let error { Text(error).foregroundStyle(.red) }
-                ForEach(results) { v in
-                    Button { pick(v); dismiss() } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(v.title).lineLimit(2)
-                            Text([v.uploader, v.durationText].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if busy { HStack(spacing: 8) { ProgressView(); Text(L("dl_searching")).font(.footnote).foregroundStyle(.secondary) } }
-            }
-            .navigationTitle(L("source_youtube"))
-            .searchable(text: $query, prompt: L("youtube_search_hint"))
-            .onSubmit(of: .search) { go() }
-            .onAppear { if !query.isEmpty { go() } }
-            .toolbar { ToolbarItem { Button(L("done")) { dismiss() } } }
-        }
-    }
-    private func go() {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
-        if YouTube.looksLikeUrl(q) { pick(YouTubeVideo(title: q, url: q, uploader: "", durationSec: 0)); dismiss(); return }
-        busy = true; error = nil; results = []
-        Task {
-            defer { busy = false }
-            do { results = try await YouTube.search(q); if results.isEmpty { error = L("youtube_no_videos") } }
-            catch { self.error = (error as? URLError) != nil ? L("network_error") : L("youtube_search_failed") }
-        }
     }
 }
 
