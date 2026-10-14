@@ -25,6 +25,7 @@ import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.service.TranscriptionService
+import studio.primeminutes.BuildConfig
 import java.io.File
 
 /**
@@ -88,7 +89,7 @@ object AskEngine {
         val app = context.applicationContext
         job?.cancel()
         job = scope.launch {
-            if (busy()) { _phase.value = Phase.Busy; return@launch }
+            if (busy()) { Log.i(TAG, "refused: a job is running"); _phase.value = Phase.Busy; return@launch }
             try {
                 _phase.value = Phase.Retrieving
                 val excerpts = retrieve(app, entries, question)
@@ -114,12 +115,20 @@ object AskEngine {
                         if (s.append(s.tokenize(fresh, special = true)) < 0) error("prompt does not fit")
                     }
                     val t0 = System.nanoTime()
+                    var tFirst = 0L
+                    var cut = false
                     s.generateContinue(ANSWER_TOKENS, "", LlmRegistry.byId(modelId!!).sampler.temp) { piece ->
-                        if (busy()) s.cancel()   // a job started: the pipeline wins
+                        if (busy()) { cut = true; s.cancel() }   // a job started: the pipeline wins
+                        if (tFirst == 0L) tFirst = System.nanoTime()
                         sb.append(piece); publish(sb.toString(), done = false)
                     }
                     val st = engine?.lastStats
-                    Log.i(TAG, "answered in ${(System.nanoTime() - t0) / 1_000_000} ms: prefill ${st?.prefilled} tok ${st?.prefillSec}s, ${st?.generated} tok ${st?.decodeSec}s")
+                    Log.i(TAG, "answered in ${(System.nanoTime() - t0) / 1_000_000} ms: first token ${(tFirst - t0) / 1_000_000} ms, prefill ${st?.prefilled} tok ${st?.prefillSec}s, ${st?.generated} tok ${st?.decodeSec}s${if (cut) ", cut by a job" else ""}")
+                    if (BuildConfig.DEBUG) {
+                        // DEV: the answer and the excerpt tags, so a device run can be checked from logcat.
+                        Log.d(TAG, "excerpts: " + excerpts.joinToString(" ") { "[[${it.entry.id}@${it.sec}]]" })
+                        Log.d(TAG, "answer: " + sb.toString().replace("\n", " ⏎ "))
+                    }
                     publish(sb.toString().trim(), done = true)
                     _phase.value = if (busy() && sb.isBlank()) Phase.Busy else Phase.Idle
                 }

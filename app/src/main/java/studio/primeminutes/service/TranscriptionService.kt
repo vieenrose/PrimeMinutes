@@ -1271,6 +1271,9 @@ class TranscriptionService : LifecycleService() {
                 Log.i(STOP_TAG, "runPipeline attach -> ${updated?.id ?: "NULL (buildSession failed)"}")
                 if (updated != null) {
                     emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
+                    // Semantic index, like the other two save paths; without it a meeting imported
+                    // while the app was open stayed unindexed until the next start's catch-up.
+                    studio.primeminutes.core.embed.LibraryIndexer.request(this@TranscriptionService, updated.id)
                 }
             }.onFailure { android.util.Log.w("primeminutes-library", "could not auto-save import", it) } }
             inFlightWav = null   // fully attached; nothing left for a later stop to bank
