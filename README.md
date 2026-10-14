@@ -22,6 +22,8 @@
 - **即時逐字稿與語者**：說話約 0.4 秒後文字上螢幕，同時標註語者（AMI / AISHELL-4 語者歸屬正確率 95.4% / 92.3%）。
 - **邊開會邊做筆記**：AI 筆記在錄音中閱讀逐字稿，寫下決議、待辦與數字；停止後約 1.5 分鐘完成摘要。
 - **每句都可核對**：摘要與筆記的時間點一下，就從原話開始播放。
+- **依語意搜尋整個會議庫**：在首頁輸入「誰提到預算」或「延期」，就列出意思相近的段落與筆記，不必記得原話；逐字稿內也可切換 **≈** 依語意找句子。搜尋模型（EmbeddingGemma 2，約 160 MB）另行下載，同樣完全離線。
+- **向會議提問（實驗性）**：輸入問題，摘要模型根據搜尋找到的段落作答並附出處，一點就跳到原話。
 - **錄音不會遺失**：停止即存檔，可連續錄多場，稍後再批次處理。
 - **可編輯、可匯出**：修正文字與語者；匯出 `.m4a`、PDF、Markdown 或字幕。
 - **依手機調整**：首次啟動自動偵測核心數並做一秒測試選執行緒；所有推論皆在 CPU 上執行（GPU 實測沒有加速，見 [`docs/GPU_NPU.md`](docs/GPU_NPU.md)）。
@@ -46,6 +48,10 @@
 
 **逐字稿**：點任一句從該處播放；長按可修改文字或改派語者；點標題可改名。
 
+**搜尋**：首頁上方的搜尋框先依標題與關鍵字過濾，停頓片刻後再依語意比對每場會議的段落、筆記與摘要，符合的段落（標示 **≈**）列在會議下方，點了就從那裡開始播放。第一次使用時搜尋框下方會提示下載搜尋模型；已有的會議在閒置時於背景建立索引（設定 › 儲存空間可查看進度）。逐字稿的搜尋列也有 **≈** 切換：關閉時只找完全相同的字，開啟時找意思相近的句子。
+
+**提問**（設定 › 實驗功能開啟後）：在首頁搜尋框輸入問題並點傳送，摘要模型只根據找到的段落作答，每個論點附上出處（會議 · 時間），點出處即可核對；可以接著追問。需要搜尋模型與摘要模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。
+
 **匯出與重新處理**（場次右上 **⋮**）：
 
 - **Prime Minutes 場次（.m4a）**：音訊、逐字稿、語者與摘要合為一檔，任何播放器都能播放，也可在 Prime Minutes 重新開啟。
@@ -54,7 +60,7 @@
 
 **匯入**：首頁 **＋** 可加入手機上的音訊檔、Podcast、YouTube，或從其他 App 分享音訊過來。
 
-**設定**：外觀（自動、淺色、深色、電子紙）、文字大小（85–150%，整個 App）、硬體狀態列、語言（English、繁體中文、简体中文，介面與產生的文字一起切換）、語者標註延遲、AI 筆記模型（E2B，或 8 GB 手機可選 E4B）、推論（執行緒數，「建議」一鍵測試）、模型管理。
+**設定**：外觀（自動、淺色、深色、電子紙）、文字大小（85–150%，整個 App）、硬體狀態列、語言（English、繁體中文、简体中文，介面與產生的文字一起切換）、語者標註延遲、AI 筆記模型（E2B，或 8 GB 手機可選 E4B）、推論（執行緒數，「建議」一鍵測試）、實驗功能（行動項目、向會議提問）、模型管理（含搜尋模型與舊會議的索引）。
 
 <details>
 <summary>更多畫面：匯出、重新處理、設定、匯入</summary>
@@ -70,7 +76,7 @@
 從 [**Releases**](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK。
 
 - Android 8.0 以上，ARMv8.2（dotprod）處理器，約 2019 年後的手機。
-- 模型首次使用時下載：語音引擎約 275 MB，AI 筆記模型 E2B 約 2.2 GB（E4B 約 3.3 GB），下載後準備一次（約一分鐘）。
+- 模型首次使用時下載：語音引擎約 275 MB，AI 筆記模型 E2B 約 2.2 GB（E4B 約 3.3 GB），下載後準備一次（約一分鐘）；語意搜尋模型約 160 MB，可選。
 - RAM 8 GB 以上：AI 筆記在錄音中同步閱讀；較小的手機在錄音結束後閱讀。
 - 唯一的網路連線：下載模型，以及每天檢查一次新版本。
 
@@ -81,10 +87,12 @@
 - 很長的會議：AI 筆記每段只帶著精簡過的前段筆記閱讀，寫標題與摘要時也只取最重要的筆記（決議、未決、待辦優先），早段的細節可能不會出現在摘要裡。
 - 偶爾會多分出發言很少的語者，可用「合併語者」修正；語音辨識漏掉標點時，換人的位置可能落在一個詞的中間。
 - E4B 只能在 RAM 8 GB 以上的手機選用；錄音中同時執行時整個 App 約佔 4 GB 記憶體。
+- 語意搜尋以句子的意思比對，不相關的句子也可能得到不低的分數而被列出；「提問」由裝置上的小模型作答，可能漏掉段落中明明有的答案，請以出處為準。
 
 ## 運作方式
 
 - **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp) 是單一串流引擎，在同一條時間軸上完成語音辨識（X-ASR）與語者分離（Nemotron-3）。
+- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」把分數最高的段落交給 AI 筆記模型作答。
 - **AI 筆記與摘要**：[Gemma-4-E2B 會議模型（行動版）](https://huggingface.co/Luigi/gemma-4-E2B-meeting-agent-zh-GGUF/tree/main/mobile-v1) 在 [LiteRT](https://github.com/google-ai-edge/LiteRT) 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)）；8 GB 記憶體的手機可改用 [E4B](https://huggingface.co/Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT)。
 
 錄音時，語音辨識優先（它落後就會漏音）；AI 筆記在背景把已確定的句子讀進上下文，每累積約 1,500 token（數分鐘的語音）才真正閱讀一次並寫筆記。停止後只剩最後一段要讀，所以摘要很快完成。在 Galaxy Note 10+（Snapdragon 855）上，約 7 分半的示範會議即時錄音，摘要於停止後約 77 秒完成，記憶體峰值 2.4 GB；改用 E4B 約 3 分鐘、4.0 GB。
@@ -113,6 +121,7 @@ scripts/test-on-device.sh             # 裝置上的儀器測試（獨立 app ID
   <tr><th>元件</th><th>授權</th><th>相關子專案</th></tr>
   <tr><td>X-ASR（語音辨識）</td><td>Apache-2.0</td><td rowspan="2"><a href="https://github.com/vieenrose/nemo-x-asr-diarizer.cpp">nemo-x-asr-diarizer.cpp</a><br>（語音辨識與語者分離整合為單一串流引擎）</td></tr>
   <tr><td>Nemotron-3 Diarization（語者分離）</td><td>OpenMDW-1.1</td></tr>
+  <tr><td>EmbeddingGemma 2 270M（語意搜尋）</td><td><a href="https://ai.google.dev/gemma/terms">Gemma</a></td><td><a href="tools/embed-export">tools/embed-export</a><br>（LiteRT 重新封裝）</td></tr>
   <tr><td>Gemma-4-E2B 會議模型（AI 筆記、摘要）</td><td>Apache-2.0</td><td><a href="https://github.com/vieenrose/meeting-summarizer">meeting-summarizer</a><br>（閱讀代理的訓練與協定）</td></tr>
   <tr><td>示範會議音訊（以 VibeVoice-1.5B 合成）</td><td>MIT</td><td><a href="docs/demo">docs/demo</a></td></tr>
   <tr><td>AISHELL-4（語者歸屬正確率評測）</td><td>CC BY-SA 4.0</td><td rowspan="2"><a href="tools/nemo-eval/README.md">tools/nemo-eval</a></td></tr>

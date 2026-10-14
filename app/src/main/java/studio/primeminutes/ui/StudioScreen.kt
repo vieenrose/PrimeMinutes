@@ -175,6 +175,7 @@ fun StudioScreen(
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit = { e, _ -> onOpen(e) },
     /** Ask (experimental): null when the feature is off; the query becomes the question. */
     onAsk: ((String) -> Unit)? = null,
+    initialQuery: String = "",
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -187,7 +188,7 @@ fun StudioScreen(
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var deleteFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var confirmDeleteMany by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(initialQuery) }
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
 
     // Multi-select for batch delete. A Set (not a List) so membership/removal is O(1) per row — after

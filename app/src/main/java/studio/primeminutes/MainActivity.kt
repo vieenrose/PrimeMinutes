@@ -598,6 +598,19 @@ private fun TranscribeScreen(
     var showPodcastSheet by remember { mutableStateOf(false) }
     // Ask (experimental, plan §6): the Studio question being answered; null = sheet closed.
     var askQuestion by remember { mutableStateOf<String?>(null) }
+    // DEV (debug builds only): `am start … --es vox_query "…" --es vox_ask "…"` pre-fills the Studio
+    // search or opens Ask with a question, so screenshots and device checks need no CJK typing.
+    // LocalContext is the localized wrapper, not the Activity: unwrap to reach the launch intent.
+    val devExtras = if (BuildConfig.DEBUG) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        (c as? android.app.Activity)?.intent?.extras
+    } else null
+    val devQuery = devExtras?.getString("vox_query") ?: ""
+    LaunchedEffect(Unit) {
+        val q = devExtras?.getString("vox_ask") ?: return@LaunchedEffect
+        delay(3_000); askQuestion = q.trim()
+    }
     var showAddSourceSheet by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
     var showYouTubeSheet by remember { mutableStateOf(false) }
@@ -2425,6 +2438,7 @@ private fun TranscribeScreen(
                 onOpen = { e -> openSessionUri(Uri.fromFile(e.audioFile)) },
                 onOpenAt = { e, t -> pendingSeekSec = t; openSessionUri(Uri.fromFile(e.audioFile)) },
                 searchModelReady = searchModelReady,
+                initialQuery = devQuery,
                 onAsk = if (config.askEnabled) { q -> askQuestion = q.trim() } else null,
                 searchDownload = searchDownload,
                 onDownloadSearchModel = { downloadSearchModel() },
