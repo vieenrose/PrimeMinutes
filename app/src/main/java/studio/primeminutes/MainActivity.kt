@@ -2213,7 +2213,7 @@ private fun TranscribeScreen(
     // Share a library entry's audio via the FileProvider (files/library is an exported path).
     fun shareEntryAudio(e: SessionLibrary.Entry) {
         val f = e.audioFile
-        val subject = e.title ?: SessionLibrary.defaultTitle(e.createdAt)
+        val subject = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
         // Give the receiver a SEMANTIC filename ('My meeting.m4a', not 'session.m4a'). A
         // getUriForFile display-name only overrides the queryable DISPLAY_NAME — many share
         // targets (incl. this device's sheet) still show the URI's path segment. So copy to the
@@ -2302,7 +2302,7 @@ private fun TranscribeScreen(
         AlertDialog(
             onDismissRequest = { interruptedEntry = null },
             title = { Text(stringResource(R.string.resume_prompt_title)) },
-            text = { Text(stringResource(R.string.resume_prompt_message, e.title ?: SessionLibrary.defaultTitle(e.createdAt))) },
+            text = { Text(stringResource(R.string.resume_prompt_message, e.title ?: SessionLibrary.defaultTitle(context, e.createdAt))) },
             confirmButton = { TextButton(onClick = { interruptedEntry = null; resumeEntry(e) }) { Text(stringResource(R.string.action_resume)) } },
             dismissButton = { TextButton(onClick = { interruptedEntry = null }) { Text(stringResource(R.string.resume_prompt_later)) } },
         )
@@ -2407,7 +2407,7 @@ private fun TranscribeScreen(
             // No generated title yet (just recorded / still processing): show the entry's provisional
             // name, as the library row does, rather than the app name.
             val entryTitle = remember(libraryDir, recentsVersion) {
-                libraryDir?.let { d -> SessionLibrary.byId(context, d.name) }?.let { it.title ?: SessionLibrary.defaultTitle(it.createdAt) }
+                libraryDir?.let { d -> SessionLibrary.byId(context, d.name) }?.let { it.title ?: SessionLibrary.defaultTitle(context, it.createdAt) }
             }
             val resumableEntry = remember(libraryDir, recentsVersion, running) {
                 libraryDir?.let { d -> SessionLibrary.byId(context, d.name) }

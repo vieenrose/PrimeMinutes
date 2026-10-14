@@ -65,6 +65,9 @@ object AppLanguage {
             else -> SummaryScript.defaultFor(system)
         }
 
+    /** The language the interface shows: the chosen one, or the device's under "auto". */
+    fun uiLocale(context: Context): Locale = localeFor(load(context)) ?: systemLocale()
+
     /** The device's own language, whatever this app has been told to show. */
     fun systemLocale(): Locale = Resources.getSystem().configuration.locales[0]
 

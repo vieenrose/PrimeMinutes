@@ -1318,7 +1318,7 @@ class TranscriptionService : LifecycleService() {
                 }
                 if (SessionLibrary.loadPendingTranscript(entry, fingerprint) != null) continue   // resume: ASR already done
                 currentQueueItemId = id
-                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(entry.createdAt), ProcessingQueue.size(this)))
+                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
                 // Track decode temp files this item creates so they're reclaimed per-item (a long
                 // queue would otherwise stack one decoded WAV copy per entry in filesDir/audio).
                 val audioDir = File(filesDir, "audio")
@@ -1340,7 +1340,7 @@ class TranscriptionService : LifecycleService() {
                     // capture stays safe (RECORDED) in the library for a manual retry. Surface it
                     // via a NOTIFICATION (the user may be elsewhere), not an UNTAGGED Status.
                     Log.w("TranscriptionService", "queue item $id failed terminally", t)
-                    notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(entry.createdAt))
+                    notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt))
                     ProcessingQueue.remove(this, id)
                 } finally {
                     currentQueueItemId = null
@@ -1362,7 +1362,7 @@ class TranscriptionService : LifecycleService() {
                 val utterances = SessionLibrary.loadPendingTranscript(entry, fingerprint)
                     ?: continue   // no sidecar (its pass-1 was cut short): leave queued, next outer lap redoes ASR
                 currentQueueItemId = id
-                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(entry.createdAt), ProcessingQueue.size(this)))
+                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
                 try {
                     val task = ReadTask(QUEUE_GEN, outputConverter(cfgAll), withTitle = true, entry = entry)
                     task.complete(utterances)
@@ -2027,7 +2027,7 @@ class TranscriptionService : LifecycleService() {
             Log.w("primeminutes-reader", "read done: could not save ${entry.id} (gen ${task.gen})")
             // Could not be written (unreadable/truncated audio, disk full): say so, don't spin on it.
             if (task.gen == QUEUE_GEN) {
-                notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(entry.createdAt))
+                notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt))
                 ProcessingQueue.remove(this, entry.id)
             }
             return
@@ -2038,7 +2038,7 @@ class TranscriptionService : LifecycleService() {
         val saved = TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title)
         events.emit(task.gen to saved)
         if (task.gen != UNTAGGED) events.emit(UNTAGGED to saved)   // the library list, whatever is open
-        if (task.gen == QUEUE_GEN) notifySessionReady(updated.title ?: SessionLibrary.defaultTitle(updated.createdAt))
+        if (task.gen == QUEUE_GEN) notifySessionReady(updated.title ?: SessionLibrary.defaultTitle(this, updated.createdAt))
     }
 
     private fun readFailed(task: ReadTask, e: Throwable) {
@@ -2050,7 +2050,7 @@ class TranscriptionService : LifecycleService() {
         events.tryEmit(task.gen to TranscriptEvent.Status("${getString(R.string.svc_summary_failed)} [$why]"))
         val entry = task.entry ?: return
         if (task.gen == QUEUE_GEN) {
-            notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(entry.createdAt))
+            notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt))
             ProcessingQueue.remove(this, entry.id)
         }
         // A recording keeps its queued safety-net item: the next drain retries it.

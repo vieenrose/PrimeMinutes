@@ -68,12 +68,16 @@ object SessionLibrary {
 
     fun root(context: Context) = File(context.filesDir, "library")
 
-    /** Display title for an untitled entry — capture date + time + a short hash (so two same-minute
-     *  captures stay distinguishable). Replaced by the LLM title or a user rename when one arrives. */
-    fun defaultTitle(createdAt: Long): String {
-        val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMd HHmm")
-        return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(createdAt))
+    /** Display title for an untitled entry — capture date + time. Replaced by the LLM title or a
+     *  user rename when one arrives. Formatted for [locale]: the interface language, which can
+     *  differ from the device's (a zh-TW interface on an English phone showed "Oct 14, 09:27"
+     *  between "上午9:27" rows). */
+    fun defaultTitle(createdAt: Long, locale: Locale): String {
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd HHmm")
+        return SimpleDateFormat(pattern, locale).format(Date(createdAt))
     }
+    fun defaultTitle(context: Context, createdAt: Long): String =
+        defaultTitle(createdAt, studio.primeminutes.core.config.AppLanguage.uiLocale(context))
 
     /** The library entry directory owning [uri] (a `file://` inside an entry), or null. */
     fun entryDirOf(context: Context, uri: Uri): File? =
@@ -118,7 +122,7 @@ object SessionLibrary {
         val entry = Entry(dir.name, dir, title = null, createdAt = createdAt, durationSec = durationSec, status = Status.RECORDED)
         writeMeta(entry)
         // Discoverable immediately: a home-screen row that re-opens (→ transcribes) the raw capture.
-        RecentSessions.add(context, Uri.fromFile(dest).toString(), defaultTitle(createdAt), createdAt)
+        RecentSessions.add(context, Uri.fromFile(dest).toString(), defaultTitle(context, createdAt), createdAt)
         // Reclaim raw WAVs of entries whose session file is already built (their player sources are
         // no longer in use — starting a new recording reset the UI session).
         pruneWavs(context, excludeId = entry.id)
@@ -173,7 +177,7 @@ object SessionLibrary {
         RecentSessions.remove(context, Uri.fromFile(entry.wavFile).toString())
         RecentSessions.add(
             context, Uri.fromFile(updated.sessionFile).toString(),
-            updated.title ?: defaultTitle(updated.createdAt), System.currentTimeMillis(),
+            updated.title ?: defaultTitle(context, updated.createdAt), System.currentTimeMillis(),
         )
         return updated
     }

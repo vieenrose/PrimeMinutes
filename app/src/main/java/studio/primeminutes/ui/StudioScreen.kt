@@ -186,7 +186,7 @@ fun StudioScreen(
         }
         entries.filter { e ->
             (want == null || e.status == want) &&
-                (q.isBlank() || (e.title ?: SessionLibrary.defaultTitle(e.createdAt)).contains(q, ignoreCase = true))
+                (q.isBlank() || (e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale)).contains(q, ignoreCase = true))
         }
     }
     // Group ONCE (LinkedHashMap preserves the newest-first order of the already-sorted list) instead
@@ -432,7 +432,7 @@ fun StudioScreen(
         ModalBottomSheet(onDismissRequest = { actionsFor = null }, sheetState = sheetState, containerColor = pal.Slate800) {
             Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Text(
-                    e.title ?: SessionLibrary.defaultTitle(e.createdAt),
+                    e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale),
                     style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -471,7 +471,7 @@ fun StudioScreen(
     renameFor?.let { e ->
         // The whole name starts selected: typing replaces it, and the cursor is not left at the start.
         var field by remember(e.id) {
-            val t = e.title ?: SessionLibrary.defaultTitle(e.createdAt)
+            val t = e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale)
             mutableStateOf(TextFieldValue(t, TextRange(0, t.length)))
         }
         val name = field.text
@@ -500,7 +500,7 @@ fun StudioScreen(
         AlertDialog(
             onDismissRequest = { deleteFor = null },
             title = { Text(stringResource(R.string.action_delete)) },
-            text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt))) },
+            text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale))) },
             confirmButton = { TextButton(onClick = { deleteFor = null; onDelete(e) }) { Text(stringResource(R.string.action_delete)) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(android.R.string.cancel)) } },
         )
@@ -558,6 +558,7 @@ private fun SessionRow(
     onManage: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
+    val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val processing = status == RowStatus.Processing
     val statusColor = when (status) {
         RowStatus.Processing, RowStatus.Queued -> PrimeMinutesPalette.Warning
@@ -572,7 +573,7 @@ private fun SessionRow(
         RowStatus.Processing -> R.string.cd_status_processing
         RowStatus.Done -> R.string.cd_status_done
     })
-    val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt)}, $statusLabel"
+    val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)}, $statusLabel"
     val isSelected = selected
     Column(
         Modifier
@@ -608,7 +609,7 @@ private fun SessionRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    entry.title ?: SessionLibrary.defaultTitle(entry.createdAt),
+                    entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale),
                     color = pal.Slate200, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
                 val meta = buildString {
