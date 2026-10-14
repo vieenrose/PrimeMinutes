@@ -1222,16 +1222,7 @@ class TranscriptionService : LifecycleService() {
         // The decoded 16 kHz WAV is the player source now (per the streaming design), unless the
         // promote above already moved it into a library entry and repointed the player.
         if (entry == null) emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(wav).toString()))
-        if (utterances.isEmpty()) {
-            // No speech detected — a legitimate (empty) SUCCESS, not an error. Return an empty
-            // result (not null) so the queue marks the entry DONE with an audio-only session,
-            // instead of leaving it RECORDED and re-transcribing it on every 'Process all'. Real
-            // errors (no source / corrupt model) return null above and stay retryable.
-            emitEvent(TranscriptEvent.Complete(emptyList(), speakerCount = null))
-            closeLive(live)
-            return emptyList<TranscriptEvent.Utterance>() to SummaryResult(null, null)
-        }
-        if (!summarizeAfter) {
+        if (!summarizeAfter && utterances.isNotEmpty()) {
             val tagged = diarized?.first ?: utterances
             emitEvent(TranscriptEvent.Complete(tagged, diarized?.second))
             return tagged to SummaryResult(null, null)
@@ -1239,7 +1230,17 @@ class TranscriptionService : LifecycleService() {
         // The import was already promoted by the ASR phase's finally (see promoteImport). Nothing
         // to do here beyond keeping `entry` for attachResults below.
 
-        val result = finishPipeline(utterances, diarized, models, converter, live)
+        val result = if (utterances.isEmpty()) {
+            // No speech detected — a legitimate (empty) SUCCESS, not an error. An empty result (not
+            // null) so the queue marks the entry DONE with an audio-only session, instead of leaving
+            // it RECORDED and re-transcribing it on every 'Process all'. Real errors (no source /
+            // corrupt model) return null above and stay retryable. A foreground run (import, recovered
+            // capture) falls through to the attach below for the same reason: it used to return here,
+            // and a silent recovered recording stayed "new" with a "Process pending (1)" that redid it.
+            emitEvent(TranscriptEvent.Complete(emptyList(), speakerCount = null))
+            closeLive(live)
+            emptyList<TranscriptEvent.Utterance>() to SummaryResult(null, null)
+        } else finishPipeline(utterances, diarized, models, converter, live)
 
         // Embed the finished results into the entry (RECORDED → full self-describing session.m4a).
         // Non-fatal on failure: the session view still has the results, and the RECORDED entry above
