@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CryptoKit
+import UIKit
 
 // Semantic search over the library (port of Android core/embed: Embedder, EmbedHost, SessionIndex,
 // LibraryIndexer, LibrarySearch). Same model files, same index.bin format, same ranking.
@@ -231,10 +232,19 @@ struct SHA256Hasher {
     func finalize() -> [UInt8] { Array(h.finalize()) }
 }
 
+/// Thread-safe flag polled by the embed loop (set from the main actor, read on the worker).
+final class IndexStop: @unchecked Sendable {
+    private let lock = NSLock(); private var v = false
+    var value: Bool { get { lock.lock(); defer { lock.unlock() }; return v } set { lock.lock(); v = newValue; lock.unlock() } }
+}
+
 /// Builds and refreshes the per-session indexes on one background worker (Android LibraryIndexer):
-/// a saved meeting goes first, `catchUp` queues the stale backlog, the worker waits while the app is busy.
+/// a saved meeting goes first, `catchUp` queues the stale backlog (one at a time, only above
+/// `minBattery` % or charging, cancellable), the worker waits while the app is busy. A backlog
+/// meeting whose build is running when a job starts is cut between two chunks and re-queued (T10).
 @MainActor final class LibraryIndexer: ObservableObject {
     static let shared = LibraryIndexer()
+    static let minBattery = 20
     @Published private(set) var indexing: Set<UUID> = []
     @Published private(set) var pending = 0
     /// True while a recording, a transcription or a reading runs (set by the Model).
@@ -242,7 +252,7 @@ struct SHA256Hasher {
     var recording: () -> Bool = { false }
     private var priority: [Session] = [], backlog: [Session] = []
     private var running = false
-    static let indexThreads = min(2, ProcessInfo.processInfo.activeProcessorCount)
+    nonisolated static let indexThreads = min(2, ProcessInfo.processInfo.activeProcessorCount)
 
     /// Index (or refresh) one saved session as soon as possible.
     func request(_ s: Session) {
@@ -262,11 +272,18 @@ struct SHA256Hasher {
     }
     func catchUp(_ sessions: [Session]) {
         guard EmbedHost.ready else { return }
+        catchUpCancelled = false
         let ids = Set(priority.map(\.id))
         backlog = Self.stale(sessions).filter { !ids.contains($0.id) }
         pending = priority.count + backlog.count; kick()
     }
-    func cancelCatchUp() { backlog = []; pending = priority.count }
+    func cancelCatchUp() { catchUpCancelled = true; backlog = []; pending = priority.count }
+    private var catchUpCancelled = false
+    private func batteryOk() -> Bool {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let st = UIDevice.current.batteryState, lv = UIDevice.current.batteryLevel
+        return st == .charging || st == .full || lv < 0 || Int(lv * 100) > Self.minBattery
+    }
     func forget(_ id: UUID) { priority.removeAll { $0.id == id }; backlog.removeAll { $0.id == id }; try? FileManager.default.removeItem(at: SessionIndex.url(id)); pending = priority.count + backlog.count }
 
     private func kick() {
@@ -276,24 +293,49 @@ struct SHA256Hasher {
     }
     private func loop() async {
         while let s = priority.first ?? backlog.first {
-            if busy() || !EmbedHost.mayLoad(recording: recording()) { try? await Task.sleep(nanoseconds: 1_000_000_000); continue }
+            let fromBacklog = priority.first == nil
+            if fromBacklog && catchUpCancelled { backlog = []; pending = 0; continue }
+            if busy() || !EmbedHost.mayLoad(recording: recording()) || (fromBacklog && !batteryOk()) {
+                try? await Task.sleep(nanoseconds: 1_000_000_000); continue
+            }
             guard EmbedHost.ready else { priority = []; backlog = []; pending = 0; return }
             priority.removeAll { $0.id == s.id }; backlog.removeAll { $0.id == s.id }
             pending = priority.count + backlog.count
             indexing.insert(s.id)
-            let ok = await Task.detached(priority: .utility) { Self.index(s) }.value
+            // A backlog build yields to a job (or to cancelCatchUp) between two chunks.
+            let stop = IndexStop()
+            let watch = fromBacklog ? Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard let self else { return }
+                    if self.busy() || self.catchUpCancelled { stop.value = true; return }
+                }
+            } : nil
+            let r = await Task.detached(priority: .utility) { Self.index(s, stop: stop) }.value
+            watch?.cancel()
             indexing.remove(s.id)
-            if !ok { StatusLog.add("index failed for \(s.id)") }
+            switch r {
+            case .done: break
+            case .failed: StatusLog.add("index failed for \(s.id)")
+            case .stopped:
+                if catchUpCancelled { StatusLog.add("catch-up cancelled during \(s.id)") }
+                else { backlog.insert(s, at: 0); pending = priority.count + backlog.count; StatusLog.add("catch-up of \(s.id) yields to a job") }
+            }
         }
     }
-    nonisolated static func index(_ s: Session) -> Bool {
+    enum Outcome { case done, failed, stopped }
+    nonisolated static func index(_ s: Session, stop: IndexStop? = nil) -> Outcome {
+        if build(s, stop: stop) { return .done }
+        return stop?.value == true ? .stopped : .failed
+    }
+    private nonisolated static func build(_ s: Session, stop: IndexStop?) -> Bool {
         let u = SessionIndex.url(s.id)
         let fp = SessionIndex.fingerprint(s)
         if SessionIndex.isCurrent(u, modelId: ReaderModel.embedId, fingerprint: fp) { return true }
         let t0 = Date()
         let built: SessionIndex.Index?? = EmbedHost.use(threads: indexThreads) { e in
             let units = SessionIndex.units(s) { e.tokens($0) }
-            return SessionIndex.build(modelId: ReaderModel.embedId, fingerprint: fp, units: units, old: SessionIndex.read(u), embed: { e.embed($0) })
+            return SessionIndex.build(modelId: ReaderModel.embedId, fingerprint: fp, units: units, old: SessionIndex.read(u), embed: { stop?.value == true ? nil : e.embed($0) })
         }
         guard let b = built, let x = b else { return false }
         do { try SessionIndex.write(x, to: u) } catch { return false }
