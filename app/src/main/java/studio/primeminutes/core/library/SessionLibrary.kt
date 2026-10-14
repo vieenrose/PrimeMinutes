@@ -104,6 +104,8 @@ object SessionLibrary {
             e
         }
         RecentSessions.add(context, Uri.fromFile(entry.audioFile).toString(), t, System.currentTimeMillis())
+        // The title is part of the meeting's semantic index: rebuild it (no-op without the model).
+        if (entry.status == Status.DONE) studio.primeminutes.core.embed.LibraryIndexer.request(context, entry.id)
     }
 
     /**

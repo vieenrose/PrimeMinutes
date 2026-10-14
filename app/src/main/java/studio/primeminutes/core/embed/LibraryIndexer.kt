@@ -63,7 +63,7 @@ object LibraryIndexer {
         val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
         return SessionLibrary.list(context.applicationContext).filter { e ->
             e.status == SessionLibrary.Status.DONE && e.sessionFile.exists() &&
-                !indexFresh(e.dir, e.sessionFile.lastModified(), spec.id)
+                !indexFresh(e.dir, maxOf(e.sessionFile.lastModified(), java.io.File(e.dir, "meta.json").lastModified()), spec.id)
         }.map { it.id }
     }
 
@@ -152,7 +152,7 @@ object LibraryIndexer {
      */
     suspend fun index(app: Context, entry: SessionLibrary.Entry, cancelled: () -> Boolean = { false }): Boolean {
         val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
-        val loaded = PrimeMinutesSession.peek(entry.sessionFile) ?: run { Log.w(TAG, "${entry.id}: session file unreadable, not indexed"); return false }
+        val loaded = load(app, entry) ?: run { Log.w(TAG, "${entry.id}: session file unreadable, not indexed"); return false }
         val fp = SessionIndex.fingerprint(loaded)
         if (SessionIndex.isCurrent(entry.dir, spec.id, fp)) return false
         val old = SessionIndex.read(entry.dir)
@@ -164,13 +164,20 @@ object LibraryIndexer {
         SessionLibrary.withBuildLock(entry.id) {
             // The meeting may have been deleted or rewritten meanwhile.
             if (!entry.sessionFile.exists()) return@withBuildLock
-            val now = PrimeMinutesSession.peek(entry.sessionFile)?.let { SessionIndex.fingerprint(it) }
+            val now = load(app, entry)?.let { SessionIndex.fingerprint(it) }
             if (now != null && !now.contentEquals(fp)) { Log.i(TAG, "${entry.id} changed while indexing, redone"); request(app, entry.id); return@withBuildLock }
             SessionIndex.write(entry.dir, built)
         }
         done.incrementAndGet()
         Log.i(TAG, "indexed ${entry.id}: ${built.vectors.size} vectors in ${(System.nanoTime() - t0) / 1_000_000} ms")
         return true
+    }
+
+    /** The session as indexed: its file, with the library title (a rename only rewrites meta.json). */
+    private suspend fun load(app: Context, entry: SessionLibrary.Entry): PrimeMinutesSession.Loaded? {
+        val s = PrimeMinutesSession.peek(entry.sessionFile) ?: return null
+        val title = SessionLibrary.byId(app, entry.id)?.title?.takeIf { it.isNotBlank() } ?: return s
+        return if (title == s.title) s else s.copy(title = title)
     }
 
     /** Background indexing uses at most two threads so a foreground app keeps its frames. */
