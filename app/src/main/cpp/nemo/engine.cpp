@@ -556,6 +556,12 @@ void Engine::attribute(const std::function<void(const Segment&)>& on_segment, bo
         stats_.timing_mode = 0;
     }
 
+    // Prime Minutes: speaker numbers are the order of first appearance in THIS transcript. The live view
+    // shares the map, and a provisional label it saw early (a low-confidence turn later refined away)
+    // would otherwise keep number 0, leaving a lone real speaker labelled "Speaker 2" for good — seen on
+    // AISHELL-4 M_R003S01C01: host run "Speaker 0", the same clip through the live path "Speaker 1".
+    // The final snapshot replaces every live segment on both apps, so renumbering here is safe.
+    if (final_pass) spk_id_.clear();
     const SegCounts n = build_segments(use->attribute_all(), 0, 0,
                                        [&](const Segment& seg, size_t, size_t) { on_segment(seg); });
 
