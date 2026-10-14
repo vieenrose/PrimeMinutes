@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -46,7 +47,7 @@ class EmbedDeviceTest {
         LibraryIndexer.ignoreBusy = true
     }
 
-    @After fun tearDown() = runBlocking {
+    @After fun tearDown() = runBlocking<Unit> {
         LibraryIndexer.ignoreBusy = false
         EmbedHost.unload()
         SessionFixture.cleanUp()
@@ -81,7 +82,7 @@ class EmbedDeviceTest {
 
     /** T5: index built for a seeded meeting, valid on disk, reused on rebuild; a rename re-embeds only that speaker's chunks;
      *  a corrupt file reads as absent; a leftover tmp file never shadows the index. */
-    @Test fun indexLifecycle() = runBlocking {
+    @Test fun indexLifecycle() = runBlocking<Unit> {
         assumeModel()
         SessionFixture.clear()
         val entry = SessionFixture.seed()
@@ -90,12 +91,14 @@ class EmbedDeviceTest {
         assertTrue("index written", f.exists())
         val idx = requireNotNull(SessionIndex.read(entry.dir))
         val loaded = requireNotNull(PrimeMinutesSession.peek(entry.sessionFile))
+        assertEquals("model id", spec.id, idx.modelId)
+        assertEquals("fingerprint", SessionIndex.fingerprint(loaded).joinToString("") { "%02x".format(it) }, idx.fingerprint.joinToString("") { "%02x".format(it) })
         assertTrue(SessionIndex.isCurrent(entry.dir, spec.id, SessionIndex.fingerprint(loaded)))
         assertTrue("meeting + chunk vectors", idx.vectors.any { it.kind == SessionIndex.Kind.MEETING } && idx.vectors.any { it.kind == SessionIndex.Kind.CHUNK })
 
-        // Rebuild with nothing changed: no embedding call.
+        // Rebuild with nothing changed: current, so no write and no embedding call.
         val calls0 = EmbedHost.calls.get()
-        assertTrue(LibraryIndexer.index(ctx, SessionLibrary.byId(ctx, entry.id)!!))
+        assertFalse(LibraryIndexer.index(ctx, SessionLibrary.byId(ctx, entry.id)!!))
         assertEquals("unchanged meeting: no embed call", calls0, EmbedHost.calls.get())
 
         // Rename Bob → only the chunks that carry his name change their text hash.
@@ -125,7 +128,7 @@ class EmbedDeviceTest {
         f.writeBytes(bytes)
         File(e2.dir, SessionIndex.FILE_NAME + ".tmp").writeBytes(ByteArray(10))
         assertNotNull(SessionIndex.read(e2.dir))
-        assertTrue(LibraryIndexer.index(ctx, e2))
+        assertFalse("still current despite the tmp file", LibraryIndexer.index(ctx, e2))
         assertNotNull(SessionIndex.read(e2.dir))
         EmbedHost.unload()
         assertEquals("handles released", 0, Embedder.live.get())
@@ -133,7 +136,7 @@ class EmbedDeviceTest {
 
     /** Hybrid search over the seeded meeting: lexical finds the exact line; the dense pass finds it by meaning, with
      *  the "≈" marker on a passage the lexical pass did not match. */
-    @Test fun hybridSearch() = runBlocking {
+    @Test fun hybridSearch() = runBlocking<Unit> {
         assumeModel()
         SessionFixture.clear()
         val entry = SessionFixture.seed()
@@ -153,7 +156,7 @@ class EmbedDeviceTest {
     }
 
     /** T3: dense pass over 1000 meetings × 30 vectors stays well under a frame budget once the vectors are cached. */
-    @Test fun denseLatencyOver1000Meetings() = runBlocking {
+    @Test fun denseLatencyOver1000Meetings() = runBlocking<Unit> {
         val root = File(ctx.cacheDir, "embed-latency").apply { deleteRecursively(); mkdirs() }
         val rnd = java.util.Random(7)
         val entries = (0 until 1000).map { i ->
@@ -175,7 +178,7 @@ class EmbedDeviceTest {
     }
 
     /** T4: the shared embedder unloads after use and leaves no native handle behind. */
-    @Test fun hostUnloadsCleanly() = runBlocking {
+    @Test fun hostUnloadsCleanly() = runBlocking<Unit> {
         assumeModel()
         val v = EmbedHost.use(ctx, 1) { it.embed(Embedder.Prompts.query("hello")) }
         assertNotNull(v); assertEquals(SessionIndex.DIM, v!!.size)
