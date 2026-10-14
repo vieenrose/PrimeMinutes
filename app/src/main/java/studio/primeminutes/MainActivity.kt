@@ -102,6 +102,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -2103,8 +2104,12 @@ private fun TranscribeScreen(
         pendingSeekSec = null
         val idx = utterances.indexOfLast { it.startSec <= t + 0.01 }.coerceAtLeast(0)
         sessTab = 1
-        delay(50)
-        runCatching { listState.animateScrollToItem(headerCount + idx, scrollOffset = -120) }
+        // The transcript list is composed only once its tab shows: an animated scroll issued before its
+        // first layout did nothing, so the meeting opened at 0:00. Wait for the items, then jump.
+        kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > headerCount + idx }
+        }
+        runCatching { listState.scrollToItem(headerCount + idx, scrollOffset = -120) }
     }
     LaunchedEffect(searchQuery) { matchPos = 0 }
     fun searchPrev() { if (searchMatches.isNotEmpty()) matchPos = (matchPos - 1 + searchMatches.size) % searchMatches.size }
