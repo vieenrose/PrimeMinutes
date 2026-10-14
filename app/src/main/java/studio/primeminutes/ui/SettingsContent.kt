@@ -182,6 +182,15 @@ fun SettingsContent(
             style = MaterialTheme.typography.bodySmall,
             color = pal.Slate400,
         )
+        Spacer(Modifier.height(10.dp))
+        SwitchRow(stringResource(R.string.settings_ask), config.askEnabled, enabled) {
+            onChange(config.copy(askEnabled = it))
+        }
+        Text(
+            stringResource(R.string.settings_ask_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = pal.Slate400,
+        )
         }
 
         Section(stringResource(R.string.settings_storage)) {

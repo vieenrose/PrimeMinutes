@@ -50,7 +50,8 @@ class EmbedDeviceTest {
     @After fun tearDown() = runBlocking<Unit> {
         LibraryIndexer.ignoreBusy = false
         EmbedHost.unload()
-        SessionFixture.cleanUp()
+        // `-e keep true` leaves the seeded meeting in place for a manual look at the app.
+        if (InstrumentationRegistry.getArguments().getString("keep") != "true") SessionFixture.cleanUp()
     }
 
     private fun cos(a: FloatArray, b: FloatArray): Float {

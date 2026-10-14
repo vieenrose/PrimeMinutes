@@ -24,6 +24,9 @@ data class TranscriptionConfig(
     val speakerDelaySec: Int = 15,
     /** Experimental: show the model's action items under the summary (off by default — not reliable enough). */
     val showActionItems: Boolean = false,
+    /** Experimental: Ask — a question over the whole library, answered by the reader model from the
+     *  passages the semantic index ranks highest (plan §6). Off by default. */
+    val askEnabled: Boolean = false,
 
     // --- Summarization ---
     // The actually-used summary model. MUST track LlmRegistry.DEFAULT_ID — hardcoding it here (it was

@@ -26,6 +26,7 @@ object ConfigStore {
             llmModelId = p.getString("llmModelId", d.llmModelId) ?: d.llmModelId,
             summaryScript = summaryScript,
             showActionItems = p.getBoolean("showActionItems", d.showActionItems),
+            askEnabled = p.getBoolean("askEnabled", d.askEnabled),
         )
     }
 
@@ -37,6 +38,7 @@ object ConfigStore {
             putString("llmModelId", c.llmModelId)
             putString("summaryScript", c.summaryScript)
             putBoolean("showActionItems", c.showActionItems)
+            putBoolean("askEnabled", c.askEnabled)
             // Settings of retired engines (hotwords, VAD, speaker-count hint, precise diarization, ASR
             // hardware) — nothing reads them any more.
             RETIRED_KEYS.forEach(::remove)

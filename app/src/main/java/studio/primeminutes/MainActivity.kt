@@ -596,6 +596,8 @@ private fun TranscribeScreen(
     // Without this the whole review loop was silently lost on Back (reopen reloaded the stale file).
     var sessionDirty by remember { mutableStateOf(false) }
     var showPodcastSheet by remember { mutableStateOf(false) }
+    // Ask (experimental, plan §6): the Studio question being answered; null = sheet closed.
+    var askQuestion by remember { mutableStateOf<String?>(null) }
     var showAddSourceSheet by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
     var showYouTubeSheet by remember { mutableStateOf(false) }
@@ -2423,6 +2425,7 @@ private fun TranscribeScreen(
                 onOpen = { e -> openSessionUri(Uri.fromFile(e.audioFile)) },
                 onOpenAt = { e, t -> pendingSeekSec = t; openSessionUri(Uri.fromFile(e.audioFile)) },
                 searchModelReady = searchModelReady,
+                onAsk = if (config.askEnabled) { q -> askQuestion = q.trim() } else null,
                 searchDownload = searchDownload,
                 onDownloadSearchModel = { downloadSearchModel() },
                 indexingIds = indexingIds,
@@ -2783,6 +2786,17 @@ private fun TranscribeScreen(
     }
     if (showPodcastSheet) {
         PodcastSheet(onDismiss = { showPodcastSheet = false })
+    }
+    askQuestion?.let { q ->
+        if (!ModelManager(context).llmReady(LlmRegistry.byId(config.llmModelId))) {
+            LaunchedEffect(q) {
+                Toast.makeText(context, R.string.ask_no_model, Toast.LENGTH_LONG).show(); askQuestion = null
+            }
+        } else studio.primeminutes.ui.AskSheet(
+            question = q, entries = remember(recentsVersion) { SessionLibrary.list(context) },
+            onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; openSessionUri(Uri.fromFile(e.audioFile)) },
+            onDismiss = { askQuestion = null },
+        )
     }
     if (showExportSheet) {
         ExportSheet(

@@ -128,7 +128,12 @@ object LibrarySearch {
         }
 
     /** Dense pass over every meeting's index with the query vector [qv]. */
-    suspend fun dense(context: Context, entries: List<SessionLibrary.Entry>, qv: FloatArray): List<Hit> =
+    /** [maxPassages] per meeting and [snippetChars] per chunk: the Studio list shows 3 short ones,
+     *  Ask ([studio.primeminutes.core.ask.AskEngine]) wants whole chunks. */
+    suspend fun dense(
+        context: Context, entries: List<SessionLibrary.Entry>, qv: FloatArray,
+        maxPassages: Int = MAX_PASSAGES, snippetChars: Int = 200,
+    ): List<Hit> =
         withContext(Dispatchers.IO) {
             val out = ArrayList<Hit>()
             for (e in entries) {
@@ -136,19 +141,19 @@ object LibrarySearch {
                 val scored = idx.vectors.map { v -> v to SessionIndex.dot(v.q, qv) }.filter { it.second >= MIN_COS }
                 if (scored.isEmpty()) continue
                 val d = doc(context, e)
-                val ps = scored.sortedByDescending { it.second }.take(MAX_PASSAGES).map { (v, cos) -> passage(d, v, cos) }
+                val ps = scored.sortedByDescending { it.second }.take(maxPassages).map { (v, cos) -> passage(d, v, cos, snippetChars) }
                 out += Hit(e, ps.maxOf { it.score }, ps)
             }
             out.sortedByDescending { it.score }
         }
 
-    private fun passage(d: Doc, v: SessionIndex.Vector, cos: Float): Passage = when (v.kind) {
+    private fun passage(d: Doc, v: SessionIndex.Vector, cos: Float, snippetChars: Int = 200): Passage = when (v.kind) {
         SessionIndex.Kind.MEETING -> Passage(v.kind, -1, -1, 0.0, null, d.title.ifBlank { d.summary.lineSequence().firstOrNull() ?: "" }, true, cos)
         SessionIndex.Kind.NOTE -> Passage(v.kind, v.a, v.a, noteTime(d, v.a), null, d.noteLines.getOrNull(v.a) ?: "", true, cos)
         SessionIndex.Kind.CHUNK -> {
             val s = d.loaded; val u = s?.utterances?.getOrNull(v.a)
             val text = s?.utterances?.subList(v.a, minOf(v.b + 1, s.utterances.size))?.joinToString(" ") { it.text } ?: ""
-            Passage(v.kind, v.a, v.b, u?.startSec ?: 0.0, speakerLabel(u?.speaker, s?.speakerNames ?: emptyMap()), text.take(200), true, cos)
+            Passage(v.kind, v.a, v.b, u?.startSec ?: 0.0, speakerLabel(u?.speaker, s?.speakerNames ?: emptyMap()), text.take(snippetChars), true, cos)
         }
     }
 

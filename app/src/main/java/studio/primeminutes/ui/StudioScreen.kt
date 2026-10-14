@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -172,6 +173,8 @@ fun StudioScreen(
     indexingIds: Set<String> = emptySet(),
     /** Open a meeting at a time (a search passage was tapped). */
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit = { e, _ -> onOpen(e) },
+    /** Ask (experimental): null when the feature is off; the query becomes the question. */
+    onAsk: ((String) -> Unit)? = null,
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -300,6 +303,13 @@ fun StudioScreen(
                         if (query.isEmpty()) Text(stringResource(R.string.studio_search_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
                         inner()
                     },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = if (onAsk != null && searchModelReady) androidx.compose.ui.text.input.ImeAction.Send
+                                    else androidx.compose.ui.text.input.ImeAction.Search,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSend = { if (query.isNotBlank()) onAsk?.invoke(query) },
+                    ),
                     modifier = Modifier.weight(1f).onFocusChanged { f ->
                         // Typing is imminent: load the embedder now so the first dense pass is not
                         // delayed by the model load.
@@ -307,6 +317,13 @@ fun StudioScreen(
                     },
                 )
                 if (indexingIds.isNotEmpty()) Chip(stringResource(R.string.studio_indexing), pal.Slate400)
+                if (onAsk != null && searchModelReady && query.isNotBlank()) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.ask_cd), tint = pal.Sky,
+                        modifier = Modifier.size(20.dp).clip(RoundedCornerShape(50)).clickable { onAsk(query) },
+                    )
+                }
             }
             if (searching && !searchModelReady) {
                 // Lexical only until the model is there: say how to get the semantic pass.
