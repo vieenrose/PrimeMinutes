@@ -41,10 +41,10 @@ import Combine
                     s.resume()
                     await MainActor.run { AskEngine.shared.phase = .answering }
                     var prompt = first ? ReaderProtocol.p0 + Self.system(lang) + ReaderProtocol.p1 : ReaderProtocol.p3
-                    prompt += Self.render(excerpts) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
+                    prompt += Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
                     if s.append(s.tokenize(prompt, special: true)) < 0 {
                         s.reset()   // the conversation outgrew the cache: start over with this question only
-                        let fresh = ReaderProtocol.p0 + Self.system(lang) + ReaderProtocol.p1 + Self.render(excerpts) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
+                        let fresh = ReaderProtocol.p0 + Self.system(lang) + ReaderProtocol.p1 + Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
                     var sb = ""
@@ -76,15 +76,20 @@ import Combine
     func release() { cancel(); turns = []; phase = .idle; let h = holder; Task.detached { h.close() } }
     func reset() { cancel(); turns = []; phase = .idle; holder.reset() }
 
-    nonisolated static func render(_ xs: [Excerpt]) -> String {
+    /// The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts).
+    nonisolated static func render(_ xs: [Excerpt], _ lang: AppLanguage) -> String {
         if xs.isEmpty { return "(no excerpts)\n" }
-        return xs.map { "[[\($0.session.id.uuidString)@\($0.sec)]] \($0.session.title) · \(ReaderProtocol.formatTs($0.sec))\n\($0.text.trimmingCharacters(in: .whitespacesAndNewlines))\n\n" }.joined()
+        let zh = lang == .zhHant || lang == .zhHans
+        return xs.map { x in
+            let t = x.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return "[[\(x.session.id.uuidString)@\(x.sec)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
+        }.joined()
     }
     nonisolated static func system(_ lang: AppLanguage) -> String {
         switch lang {
         case .zhHans: return "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。每个论点后面附上出处标签，格式与摘录开头完全相同：[[id@秒]]。若摘录中没有答案，就说「会议记录中没有提到」。回答请简短，使用简体中文。"
         case .zhHant: return "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。每個論點後面附上出處標籤，格式與摘錄開頭完全相同：[[id@秒]]。若摘錄中沒有答案，就說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。"
-        default: return "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English."
+        default: return "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English. Do not add a currency the excerpts do not name."
         }
     }
 }
@@ -136,6 +141,8 @@ final class AskHolder: @unchecked Sendable {
         var out: [AskEngine.Excerpt] = [], tokens = 0
         for x in all {
             if out.count >= AskEngine.maxPassages { break }
+            // A note and its transcript chunk can carry the same words: one excerpt is enough.
+            if out.contains(where: { $0.session.id == x.session.id && $0.text == x.text }) { continue }
             let n = count(x.text) + 24
             if tokens + n > AskEngine.passageTokens { continue }
             tokens += n; out.append(x)
@@ -170,7 +177,9 @@ struct AskSheet: View {
                                 }
                                 if !t.excerpts.isEmpty && t.done {
                                     Text(L("ask_sources")).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 4)
-                                    ForEach(t.excerpts) { x in
+                                    // By position: a note and a transcript passage at the same second share the id
+                                    // (session@sec), and SwiftUI then drew the first one twice.
+                                    ForEach(Array(t.excerpts.enumerated()), id: \.offset) { _, x in
                                         Button { open(x.session, Double(x.sec)) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -241,5 +250,76 @@ struct AskSheet: View {
         }
         out += AttributedString(ns.substring(from: last))
         return out
+    }
+}
+
+/// Chinese amounts of a thousand or more written in digits ("八萬二" → "82,000"), for the excerpts of a
+/// non-Chinese Ask (Android ChineseAmounts): the small reader translated 八萬 as "eight thousand" and no
+/// prompt wording fixed it, whereas digits are simply copied. Spoken shortcuts are read as said:
+/// 八萬二 = 82,000, 四千五 = 4,500, 一萬零五 = 10,005. A run starts with a digit (千萬不要, 萬一 are words).
+enum ChineseAmounts {
+    private static let run = try! NSRegularExpression(pattern: "[0-9]+(?:\\.[0-9]+)?[千萬万億亿]+|[一二兩两三四五六七八九十][零〇一二兩两三四五六七八九十百千萬万億亿]*")
+
+    static func toDigits(_ text: String) -> String {
+        let ns = text as NSString
+        var out = "", last = 0
+        for m in run.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let s = ns.substring(with: m.range)
+            if let v = value(s), v >= 1000 { out += format(v) } else { out += s }
+            last = m.range.location + m.range.length
+        }
+        return out + ns.substring(from: last)
+    }
+
+    static func format(_ v: Int64) -> String {
+        var s = String(v), r = ""
+        while s.count > 3 { r = "," + s.suffix(3) + r; s.removeLast(3) }
+        return s + r
+    }
+
+    private static func digit(_ c: Character) -> Int64? {
+        switch c { case "零", "〇": return 0; case "一": return 1; case "二", "兩", "两": return 2; case "三": return 3; case "四": return 4
+        case "五": return 5; case "六": return 6; case "七": return 7; case "八": return 8; case "九": return 9; default: return nil }
+    }
+    private static func unit(_ c: Character) -> Int64? {
+        switch c { case "十": return 10; case "百": return 100; case "千": return 1000; case "萬", "万": return 10_000; case "億", "亿": return 100_000_000; default: return nil }
+    }
+
+    /// The run's value, or nil when it is not a well-formed number.
+    static func value(_ s: String) -> Int64? {
+        let cs = Array(s)
+        guard let f = cs.first else { return nil }
+        if f.isASCII, f.isNumber {
+            let num = String(cs.prefix { ($0.isASCII && $0.isNumber) || $0 == "." })
+            guard var n = Double(num) else { return nil }
+            for c in cs.dropFirst(num.count) { guard let u = unit(c) else { return nil }; n *= Double(u) }
+            return Int64(n.rounded())
+        }
+        var total: Int64 = 0, section: Int64 = 0, number: Int64 = -1, lastUnit: Int64 = 0
+        for c in cs {
+            if let d = digit(c) {
+                if number > 0 && d != 0 { return nil }   // 二三: not a number
+                if d != 0 { number = d }
+                continue
+            }
+            guard let u = unit(c) else { return nil }
+            if u >= 10_000 {
+                // 萬 scales what is below it; 億 scales everything so far (一億二千萬 = 1.2 億).
+                let g = (u > 10_000 ? total : 0) + section + max(number, 0)
+                if g == 0 { return nil }
+                total = (u > 10_000 ? 0 : total) + g * u; section = 0
+            } else {
+                section += (number > 0 ? number : (u == 10 ? 1 : -1)) * u
+                if section < 0 { return nil }
+            }
+            number = -1; lastUnit = u
+        }
+        if number > 0 {
+            // A bare digit right after a unit is the next unit down (八萬二, 四千五, 二十五); after 零 it is ones.
+            let afterUnit = cs.count >= 2 && unit(cs[cs.count - 2]) != nil
+            section += afterUnit ? number * max(lastUnit / 10, 1) : number
+        }
+        return total + section
     }
 }
