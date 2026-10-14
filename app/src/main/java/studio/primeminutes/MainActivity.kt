@@ -2110,6 +2110,12 @@ private fun TranscribeScreen(
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > headerCount + idx }
         }
         runCatching { listState.scrollToItem(headerCount + idx, scrollOffset = -120) }
+        // The player waits there too (paused), as on iOS: Play starts at the passage, not at 0:00.
+        val ms = (t * 1000).toInt()
+        positionMs = ms
+        kotlinx.coroutines.withTimeoutOrNull(5_000) { snapshotFlow { durationMs }.first { it > 0 } }
+        positionMs = ms.coerceIn(0, maxOf(durationMs, ms))
+        player?.let { p -> runCatching { p.seekTo(positionMs) } }
     }
     LaunchedEffect(searchQuery) { matchPos = 0 }
     fun searchPrev() { if (searchMatches.isNotEmpty()) matchPos = (matchPos - 1 + searchMatches.size) % searchMatches.size }
