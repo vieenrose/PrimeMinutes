@@ -158,6 +158,9 @@ final class MfaSession: ReaderLlm {
     }
 
     var seqLength: Int { seq.count }
+    var context: Int { engine.context }
+    /// The last generate: prefilled, reused, generated, prefill_s, decode_s.
+    var lastStats: [Double] { engine.lastStats }
     func reset() { seq.removeAll() }
 
     private static let stopIds: Set<Int> = [1, 50, 106]

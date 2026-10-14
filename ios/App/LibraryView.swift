@@ -16,6 +16,25 @@ struct LibraryView: View {
     @State private var deletingMany = false
     @State private var sharing: URL?
     @AppStorage("seenSessions") private var seenRaw = ""
+    @ObservedObject private var indexer = LibraryIndexer.shared
+    @State private var hits: [LibrarySearch.Hit] = []
+    @State private var searchTask: Task<Void, Never>?
+    @State private var asking: String?
+    /// Fused search over the library, debounced; lexical at once, semantic once the embedder answers.
+    private func runSearch() {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { hits = []; return }
+        let sessions = m.sessions, rec = m.recording
+        hits = LibrarySearch.lexical(sessions, query: q)
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000); if Task.isCancelled { return }
+            let r = await Task.detached(priority: .userInitiated) { LibrarySearch.search(sessions, query: q, recording: rec) }.value
+            if !Task.isCancelled { hits = r }
+        }
+    }
+    private var askReady: Bool { Prefs.askEnabled && AskEngine.available }
+    private func openAt(_ s: Session, _ t: Double) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; m.openAt = (s.id, t); path.append(s) }
 
     enum Filter: String, CaseIterable { case all, new, done }
     private var seen: Set<String> { Set(seenRaw.split(separator: ",").map(String.init)) }
@@ -26,13 +45,32 @@ struct LibraryView: View {
     /// Android: NEW = recorded but not yet processed. Archived sessions are all processed (waiting jobs show in the queue line), so they are Done.
     private func isNew(_ s: Session) -> Bool { false }
     private var shown: [Session] {
-        m.sessions.filter { s in
+        let base = m.sessions.filter { s in
             switch filter { case .all: true; case .new: isNew(s); case .done: !isNew(s) }
-        }.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+        }
+        if query.trimmingCharacters(in: .whitespaces).isEmpty { return base }
+        let order = Dictionary(uniqueKeysWithValues: hits.enumerated().map { ($0.element.session.id, $0.offset) })
+        return base.filter { order[$0.id] != nil }.sorted { order[$0.id]! < order[$1.id]! }
     }
     private var days: [(Date, [Session])] {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty { return shown.isEmpty ? [] : [(Date.distantPast, shown)] }   // search: ranked, not by day
         let g = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
         return g.keys.sorted(by: >).map { ($0, g[$0]!) }
+    }
+    /// Android: the passages of a search hit under the card, ≈ marking the ones only the meaning found.
+    private func passages(_ s: Session) -> some View {
+        let ps = hits.first { $0.session.id == s.id }?.passages.filter { $0.kind != .meeting || $0.semanticOnly } ?? []
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(ps.enumerated()), id: \.offset) { _, p in
+                Button { openAt(s, p.timeSec) } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        if p.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
+                        if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                        Text((p.speaker.map { $0 + ": " } ?? "") + p.snippet).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
+                    }
+                }.buttonStyle(.plain)
+            }
+        }
     }
     private func label(_ d: Date) -> String {
         if Calendar.current.isDateInToday(d) { return L("today") }
@@ -59,6 +97,8 @@ struct LibraryView: View {
                 Text(s.title.isEmpty ? L("recent_untitled") : s.title).font(.headline).lineLimit(2)
                 Text("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
                     .font(.caption).foregroundStyle(.secondary)
+                if !query.isEmpty { passages(s) }
+                if indexer.indexing.contains(s.id) { Text(L("studio_indexing")).font(.caption2).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 0)
             if !selected.isEmpty {
@@ -118,7 +158,7 @@ struct LibraryView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { if let d = Dev.env["VOX_DIALOG"], let s = m.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.sessions.prefix(2).map(\.id)) } } }
+            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askEnabled"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.sessions.prefix(2).map(\.id)) } } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))
@@ -138,8 +178,21 @@ struct LibraryView: View {
             }
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(L("search_sessions"), text: $query)
+                TextField(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions"), text: $query).submitLabel(askReady ? .send : .search)
+                    .onSubmit { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
+                    .onChange(of: query) { _, _ in runSearch() }
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel(L("search_close")) }
+                if askReady && !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button { asking = query } label: { Image(systemName: "paperplane.fill") }.accessibilityLabel(L("ask_cd"))
+                }
             }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
+            if !EmbedHost.ready && !m.sessions.isEmpty {
+                if let p = m.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6) }
+                else { Button(L("search_semantic_download", ByteCountFormatter.string(fromByteCount: ReaderModel.embed.files.reduce(0) { $0 + $1.size }, countStyle: .file))) { m.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
+            }
+            if !indexer.indexing.isEmpty || indexer.pending > 0 {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")).font(.caption).foregroundStyle(.secondary) }.padding(.horizontal, 16).padding(.top, 6)
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack { ForEach(Filter.allCases.filter { $0 == .all || !m.sessions.isEmpty && ($0 == .done || m.sessions.contains { isNew($0) }) }, id: \.self) { chip($0) } }.padding(.horizontal, 16)
             }.padding(.vertical, 10)
@@ -161,7 +214,7 @@ struct LibraryView: View {
                     if !m.sessions.isEmpty && days.isEmpty { Text(L("studio_no_match")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 40) }
                     ForEach(m.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
                     ForEach(days, id: \.0) { day, items in
-                        Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6)
+                        if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
                         ForEach(items) { card($0) }
                     }
                 }.padding(.horizontal, 16)
@@ -204,6 +257,7 @@ struct LibraryView: View {
             Button(L("delete"), role: .destructive) { for s in m.sessions where selected.contains(s.id) { m.remove(s) }; selected = [] }
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
+        .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
         .sheet(isPresented: $watching) { WatchLive(m: m) }   // on the root, not on the banner: the banner leaves with the job and would tear the sheet down
         .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.remove(s) } }

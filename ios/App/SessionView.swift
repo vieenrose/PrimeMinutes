@@ -57,10 +57,12 @@ struct SessionView: View {
     @State private var exportFile: URL?
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
 
-    init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }) {
-        _s = State(initialValue: session); self.save = save; self.rerun = rerun
-        _tab = State(initialValue: Int(Dev.env["VOX_TAB"] ?? "") ?? 0)
-        if let q = Dev.env["VOX_QUERY"] { _query = State(initialValue: q); _searching = State(initialValue: true) }
+    let openAt: Double?
+    init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil) {
+        _s = State(initialValue: session); self.save = save; self.rerun = rerun; self.openAt = openAt
+        if openAt != nil { _tab = State(initialValue: 1) }
+        if let t = Dev.env["VOX_TAB"].flatMap(Int.init) { _tab = State(initialValue: t) }
+        if let q = Dev.env["VOX_QUERY"] { _query = State(initialValue: q); _searching = State(initialValue: true) }; if Dev.env["VOX_SEM"] != nil { _semantic = State(initialValue: true) }
         _player = StateObject(wrappedValue: Player(file: session.audio))
         switch Dev.env["VOX_DIALOG"] {   // README / guide screenshots: open one dialog without taps
         case "title": _draft = State(initialValue: session.title); _renamingTitle = State(initialValue: true)
@@ -87,7 +89,32 @@ struct SessionView: View {
         SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: screen ? SpeakerRefs.unbreakable : { $0 })
     }
     private func tint(_ spk: Int) -> Color { Self.palette[max(0, spk) % Self.palette.count] }
-    private var hits: [Utterance] { query.isEmpty ? [] : s.lines.filter { $0.text.localizedCaseInsensitiveContains(query) } }
+    /// Lexical matches, plus (≈ on) the utterances of the semantic chunks the index ranks for the query, in transcript order.
+    private var hits: [Utterance] {
+        if query.isEmpty { return [] }
+        let lex = s.lines.filter { $0.text.localizedCaseInsensitiveContains(query) }
+        guard semantic, !semIds.isEmpty else { return lex }
+        let ids = Set(lex.map(\.id)).union(semIds)
+        return s.lines.filter { ids.contains($0.id) }
+    }
+    @State private var semantic = false
+    @State private var semIds = Set<UUID>()
+    @State private var semTask: Task<Void, Never>?
+    private func semSearch() {
+        semTask?.cancel(); semIds = []
+        let q = query.trimmingCharacters(in: .whitespaces); guard semantic, q.count >= 2, EmbedHost.ready else { return }
+        let s = self.s
+        semTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000); if Task.isCancelled { return }
+            let ids = await Task.detached(priority: .userInitiated) { () -> Set<UUID> in
+                guard let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(q)) }) ?? nil else { return [] }
+                var out = Set<UUID>()
+                for h in LibrarySearch.dense([s], qv: qv, maxPassages: 5) { for p in h.passages where p.kind == .chunk { for i in p.uttIndex...p.uttEnd where s.lines.indices.contains(i) { out.insert(s.lines[i].id) } } }
+                return out
+            }.value
+            if !Task.isCancelled { semIds = ids; match = 0 }
+        }
+    }
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
@@ -203,7 +230,11 @@ struct SessionView: View {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search)
-                        .onChange(of: query) { _, _ in match = 0 }
+                        .onChange(of: query) { _, _ in match = 0; semSearch() }
+                    if EmbedHost.ready {
+                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)) }
+                            .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
+                    }
                     if !query.isEmpty {
                         Text(hits.isEmpty ? L("search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         Button { stepMatch(-1) } label: { Image(systemName: "chevron.up") }.accessibilityLabel(L("search_prev"))
@@ -242,7 +273,8 @@ struct SessionView: View {
                 }.padding(.top, 8)
             }
             .background(Color(.systemGroupedBackground))
-            .onAppear { if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } } }
+            .onAppear { if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
+                if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let l = s.lines.last(where: { $0.start <= t + 0.01 }) ?? s.lines.first { withAnimation { proxy.scrollTo(l.id, anchor: .center) } }; if player.available { player.seek(t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             .onChange(of: current) { _, id in if follow, player.playing, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.

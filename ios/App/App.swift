@@ -187,6 +187,11 @@ final class Model: ObservableObject {
 
     let store = ModelStore()
     let library = LibraryStore()
+    init() {
+        LibraryIndexer.shared.busy = { [weak self] in self.map { $0.activeJob != nil || $0.recording } ?? true }
+        LibraryIndexer.shared.recording = { [weak self] in self?.recording ?? true }
+        AskEngine.shared.busy = LibraryIndexer.shared.busy; AskEngine.shared.recording = LibraryIndexer.shared.recording
+    }
     @Published var sessions: [Session] = []
     @Published var pending = 0
     @Published var waiting: [Job] = []
@@ -209,10 +214,10 @@ final class Model: ObservableObject {
         }
         await syncQueue()
     } }
-    func reload() { Task { sessions = await library.all(); await syncQueue() } }
-    func update(_ s: Session) { Task { try? await library.save(s); sessions = await library.all() } }
+    func reload() { Task { sessions = await library.all(); await syncQueue(); LibraryIndexer.shared.catchUp(sessions) } }
+    func update(_ s: Session) { Task { try? await library.save(s); sessions = await library.all(); LibraryIndexer.shared.request(s) } }
     func remove(_ s: Session) { Task {
-        await library.delete(s.id); sessions = await library.all()
+        await library.delete(s.id); LibraryIndexer.shared.forget(s.id); sessions = await library.all()
         // Android deletes the whole entry: the audio goes too, unless another session or a queued job still uses it
         if let a = s.audio, !sessions.contains(where: { $0.audio == a }), !(await queue.all).contains(where: { $0.audio == a }) { try? FileManager.default.removeItem(at: JobQueue.audioDir.appendingPathComponent(a)) }
     } }
@@ -230,6 +235,7 @@ final class Model: ObservableObject {
         do { try await library.save(s) } catch { status = L("session_save_failed"); Notifier.failed(s.title); return }   // Android: never claim success on a failed save
         NotificationCenter.default.post(name: .voxSessionSaved, object: s, userInfo: old.map { ["undo": $0] })
         sessions = await library.all(); await syncQueue()
+        LibraryIndexer.shared.request(s)
         Notifier.done(s.title)
     }
     @Published var recording = false
@@ -330,6 +336,20 @@ final class Model: ObservableObject {
             try await store.download(.speech) { d, t in Task { @MainActor in self.status = L("download_speech", Int(d / 1_000_000), Int(t / 1_000_000)) } }
             return true
         } catch { status = L("download_failed", "\(error)"); return false }
+    }
+    /// Search model (semantic search + Ask): percent while it downloads, nil otherwise.
+    @Published var embedProgress: Int?
+    /// A citation or a search passage opens this meeting at this time (consumed by the next SessionView).
+    var openAt: (UUID, Double)?
+    func downloadEmbed() {
+        guard embedProgress == nil else { return }
+        embedProgress = 0
+        Task.detached { [store] in
+            do {
+                try await store.download(.embed) { d, t in Task { @MainActor in self.embedProgress = Int(d * 100 / max(1, t)) } }
+                await MainActor.run { self.embedProgress = nil; LibraryIndexer.shared.catchUp(self.sessions) }
+            } catch { await MainActor.run { self.embedProgress = nil; self.status = L("search_model_download_failed") + " (\(error))" } }
+        }
     }
     func downloadReader() {
         status = L("download_reader")
@@ -540,7 +560,7 @@ struct ContentView: View {
         NavigationStack(path: $path) {
             LibraryView(m: m, path: $path, onAdd: { showAdd = true }, onSettings: { showSettings = true })
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: Session.self) { x in SessionView(session: m.sessions.first { $0.id == x.id } ?? x, save: { m.update($0) }, rerun: { m.rerun($0, transcribe: $1) }) }
+            .navigationDestination(for: Session.self) { x in SessionView(session: m.sessions.first { $0.id == x.id } ?? x, save: { m.update($0) }, rerun: { m.rerun($0, transcribe: $1) }, openAt: m.openAt?.0 == x.id ? m.openAt?.1 : nil) }
             .onAppear { let first = !Dev.ranOnce; Dev.ranOnce = true; if first, Dev.env["VOX_WIPE"] != nil { for d in ["sessions", "audio", "checkpoints", "jobs.json"] { try? FileManager.default.removeItem(at: JobQueue.support.appendingPathComponent(d)) }; for d in ["sessions", "audio", "checkpoints"] { try? FileManager.default.createDirectory(at: JobQueue.support.appendingPathComponent(d), withIntermediateDirectories: true) } }; BackgroundWork.model = m; m.reload(); if Dev.env["VOX_MFABENCH"] != nil { Task { let rm: ReaderModel = Dev.env["VOX_MFABENCH"] == "E4B" ? .e4b : Dev.env["VOX_MFABENCH"] == "E2B" ? .e2b : Prefs.reader; let d = await m.store.isComplete(rm) ? await m.store.dir(rm).path : nil; let r = await Task.detached { MfaBench.run(dir: d) }.value; try? r.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/mfabench-\(Dev.env["VOX_MFABENCH"] ?? "")-\(Dev.env["VOX_MFA_BACKEND"] ?? "0")-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) } }; if let b = Dev.env["VOX_SET_BACKEND"] { BackendBench.chosen = b; try? "chosen=\(BackendBench.chosen) gpuGraph=\(BackendBench.gpuGraph(Prefs.reader) ?? "nil")".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/setbackend-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) }; if Dev.env["VOX_BACKENDTEST"] != nil { Task.detached { let rm = ReaderModel.e2b, st = ModelStore(); let dir = await st.dir(rm).path; let g = dir + "/prefill_decode_fused.gpu.tflite"; if !FileManager.default.fileExists(atPath: g) { try? FileManager.default.copyItem(atPath: NSHomeDirectory() + "/Documents/mfa-gpu.tflite", toPath: g) }; let gp = await st.gpuGraph(rm); let t0 = Date(); let r = BackendBench.run(rm, dir: dir, gpu: gp, threads: Prefs.effectiveThreads) { _ in }; BackendBench.chosen = "GPU"; let used = BackendBench.gpuGraph(rm); let t1 = Date(); let f = ReaderFactory.make(dir: dir); let out = "gpu=\(gp ?? "nil") test \(Int(t1.timeIntervalSince(t0)))s " + r.map { "\($0.key) ok=\($0.value.passed) p=\(Int($0.value.prefill)) d=\(String(format: "%.1f", $0.value.decode)) note=\($0.value.note)" }.joined(separator: "; ") + " chosen=\(BackendBench.chosen) used=\(used != nil) real=\(f.real) load \(Int(Date().timeIntervalSince(t1)))s\n" + ((try? String(contentsOf: StatusLog.url, encoding: .utf8)) ?? "").split(separator: "\n").suffix(4).joined(separator: "\n"); try? out.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/backendtest-\(Dev.env["VOX_TAG"] ?? "").txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_BENCH"] != nil { Task { let t0 = Date(); let n = await Prefs.runBench(); try? "bench pick=\(n ?? -1) eff=\(Prefs.effectiveThreads) cores=\(Prefs.cores) \(Int(Date().timeIntervalSince(t0) * 1000))ms".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/bench.txt"), atomically: true, encoding: .utf8) } }; if let th = Dev.env["VOX_THEME"] { theme = th }; if Dev.env["VOX_CANCEL"] != nil { Task { try? await Task.sleep(nanoseconds: 4_000_000_000); let was = m.downloading != nil; m.cancelDownload(); try? await Task.sleep(nanoseconds: 2_000_000_000); try? "cancel was=\(was) now=\(m.downloading != nil) queued=\(m.waiting.count) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/cancel.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ACTIONS"] != nil { UserDefaults.standard.set(true, forKey: "showActions") }; if Dev.env["VOX_OPEN"] != nil { Task { let all = await m.library.all(); path = Dev.env["VOX_OPEN"] == "short" ? all.filter { $0.audio != nil && $0.seconds > 30 }.min { $0.seconds < $1.seconds }.map { [$0] } ?? [] : Array(all.prefix(1)) } }; if let d = Dev.env["VOX_DOWNLOAD"] { if d == "speech" { Task { _ = await m.downloadSpeech() } } else { m.downloadReader() } }; if Dev.env["VOX_AUTORUN"] != nil { m.run() }; if first, let r = Dev.env["VOX_RECORD"] { Task { try? await Task.sleep(nanoseconds: UInt64((Double(r) ?? 0) * 1e9)); m.toggleRecord() } }; if first, let fr = Dev.env["VOX_FRAMES"] { Frames.start(Double(fr) ?? 0.5) }; if first, Dev.env["VOX_TOUR"] != nil { Task {
                 // Once both meetings are fully processed (idle for 10 s), open each session in turn, then stop the frames.
                 var idle = 0
@@ -548,7 +568,7 @@ struct ContentView: View {
                 let all = await m.library.all()
                 for s in all.prefix(2) { path = [s]; try? await Task.sleep(nanoseconds: 8_000_000_000); path = []; try? await Task.sleep(nanoseconds: 3_000_000_000) }
                 FileManager.default.createFile(atPath: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("frames/STOP").path, contents: nil)
-            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let sn = Dev.env["VOX_SNAP"] { Snap.schedule(sn) }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { var lastN = -1; var peakMB = 0.0; while true { NSLog("VOXSTATUS %@", m.status); do { var i = task_vm_info_data_t(); var c = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size); _ = withUnsafeMutablePointer(to: &i) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &c) } }; peakMB = max(peakMB, Double(i.phys_footprint) / 1048576); NSLog("VOXRSS %.0f peak %.0f MB kpeak %.0f resident %.0f rpeak %.0f MB", Double(i.phys_footprint) / 1048576, peakMB, Double(i.ledger_phys_footprint_peak) / 1048576, Double(i.resident_size) / 1048576, Double(i.resident_size_peak) / 1048576) }; if m.lines.count != lastN { lastN = m.lines.count; for l in m.lines { NSLog("VOXLINE %d %.1f-%.1f %@", l.speaker, l.start, l.end, l.text) } }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
+            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if let sn = Dev.env["VOX_SNAP"] { Snap.schedule(sn) }; if Dev.env["VOX_EMBEDDIAG"] != nil { Task.detached { var o = ""; if let d = try? Data(contentsOf: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/embed_ref.json")), let refs = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] { for r in refs { let text = r["text"] as? String ?? "", ref = (r["vec"] as? [Double] ?? []).map(Float.init), nt = r["tokens"] as? Int ?? 0; let t0 = Date(); let v = EmbedHost.use(threads: 2) { $0.embed(text) } ?? nil; let ms = Int(Date().timeIntervalSince(t0) * 1000); let tk = EmbedHost.use(threads: 2) { $0.tokens(text) } ?? -1; if let v = v, v.count == ref.count { var dd: Float = 0, na: Float = 0, nb: Float = 0; for i in v.indices { dd += v[i] * ref[i]; na += v[i] * v[i]; nb += ref[i] * ref[i] }; o += String(format: "cos %.4f |v| %.3f tokens %d/%d %d ms  %@\n", dd / (na.squareRoot() * nb.squareRoot()), na.squareRoot(), tk + 2, nt, ms, String(text.prefix(40))) } else { o += "embed nil for \(text.prefix(30))\n" } } } else { o += "no embed_ref.json\n" }; let ss = await MainActor.run { m.sessions }; for q in ["gold", "opening hours", "颱風季節的浪", "抓交替"] { if let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(q)) }) ?? nil { o += "Q \(q):"; for h in LibrarySearch.dense(Array(ss.prefix(1)), qv: qv, maxPassages: 6) { for p in h.passages { o += String(format: " [%@ %.3f @%.0f]", "\(p.kind)", p.score, p.timeSec) } }; o += "\n" } }; try? o.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/embeddiag.txt"), atomically: true, encoding: .utf8) } }; if let st = Dev.env["VOX_STOP"] { Task { try? await Task.sleep(nanoseconds: UInt64(Int(st) ?? 30) * 1_000_000_000); let before = m.activeJob != nil; m.stopProcessing(); try? await Task.sleep(nanoseconds: 20_000_000_000); try? "active before=\(before) parked=\(m.parked.count) active now=\(m.activeJob != nil) status=\(m.status)".write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/stop.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_STATUSLOG"] != nil { Task { var lastN = -1; var peakMB = 0.0; while true { NSLog("VOXSTATUS %@", m.status); do { var i = task_vm_info_data_t(); var c = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size); _ = withUnsafeMutablePointer(to: &i) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &c) } }; peakMB = max(peakMB, Double(i.phys_footprint) / 1048576); NSLog("VOXRSS %.0f peak %.0f MB kpeak %.0f resident %.0f rpeak %.0f MB", Double(i.phys_footprint) / 1048576, peakMB, Double(i.ledger_phys_footprint_peak) / 1048576, Double(i.resident_size) / 1048576, Double(i.resident_size_peak) / 1048576) }; if m.lines.count != lastN { lastN = m.lines.count; for l in m.lines { NSLog("VOXLINE %d %.1f-%.1f %@", l.speaker, l.start, l.end, l.text) } }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/status.txt"), atomically: true, encoding: .utf8); try? await Task.sleep(nanoseconds: 2_000_000_000) } } }; if Dev.env["VOX_ROUNDTRIP"] != nil { Task { if let s = await m.library.all().first(where: { $0.audio != nil }), let u = await SessionFile.export(s) { let r = SessionFile.read(u); m.status = "rt \((try? FileManager.default.attributesOfItem(atPath: u.path)[.size]) ?? 0)B lines \(r?.utterances?.count ?? -1)/\(s.lines.count) title \(r?.title == s.title)"; m.importAudio(u) } else { m.status = "rt: export failed" }; try? m.status.write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/rt.txt"), atomically: true, encoding: .utf8) } }; if Dev.env["VOX_ADD"] != nil { showAdd = true }; if Dev.env["VOX_DIALOG"] == "podcast" { showPodcast = true }; m.drain(); if let fs = Dev.env["VOX_IMPORT"] { for f in fs.split(separator: ",").map(String.init) { m.importAudio(URL(fileURLWithPath: f.hasPrefix("/") ? f : NSHomeDirectory() + "/" + f)) } }; if let q = Dev.env["VOX_PODCAST"] { Task { if let sr = try? await Podcast.search(q).first, let ep = try? await Podcast.episodes(sr.feedUrl, limit: 3).last { m.addEpisode(ep) } else { m.status = "podcast: no result" } } } }
             .sheet(isPresented: $showAdd) { AddSourceSheet(onFile: { picking = true }, onPodcast: { showPodcast = true }, onSession: { picking = true }) }
             .fullScreenCover(isPresented: Binding(get: { m.recording }, set: { _ in })) { CaptureView(m: m) }
             .sheet(isPresented: $showPodcast) { PodcastView { m.addEpisode($0) } }
@@ -579,6 +599,8 @@ struct SettingsView: View {
     @State private var delay = Prefs.speakerDelay
     @AppStorage("textSize") private var textSize = 0
     @AppStorage("showActions") private var showActions = false
+    @AppStorage("askEnabled") private var askEnabled = false
+    @ObservedObject private var indexer = LibraryIndexer.shared
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -616,8 +638,20 @@ struct SettingsView: View {
                     }.disabled(benching)
                 } header: { Text(L("settings_inference")) } footer: { Text(inferenceFooter).id(benchTick) }
                 Section {
+                    if !EmbedHost.ready {
+                        if let p = m.embedProgress { Text(L("search_semantic_downloading", p)).foregroundStyle(.secondary) }
+                        else { Button(L("settings_search_model_get", ByteCountFormatter.string(fromByteCount: ReaderModel.embed.files.reduce(0) { $0 + $1.size }, countStyle: .file))) { m.downloadEmbed() } }
+                    } else {
+                        let stale = LibraryIndexer.stale(m.sessions).count
+                        if indexer.pending > 0 || !indexer.indexing.isEmpty { Text(L("settings_index_pending", indexer.pending + indexer.indexing.count)).foregroundStyle(.secondary) }
+                        else if stale == 0 { Text(L("settings_index_all_done")).foregroundStyle(.secondary) }
+                        else { Button(L("settings_index_old") + " (\(stale))") { indexer.catchUp(m.sessions) } }
+                    }
+                } header: { Text(L("model_kind_embed")) } footer: { Text(L("settings_search_hint")) }
+                Section {
                     Toggle(L("settings_show_actions"), isOn: $showActions)
-                } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint")) }
+                    Toggle(L("settings_ask"), isOn: $askEnabled)
+                } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint") + "\n\n" + L("settings_ask_hint")) }
                 Section {
                     if !Storage.ready(Prefs.reader) { Text(L("storage_model_pending", Int(Prefs.reader.files.reduce(0) { $0 + $1.size } / 1_000_000))).font(.footnote).foregroundStyle(.secondary) }
                     if models.isEmpty { Text(L("storage_none")).foregroundStyle(.secondary) }

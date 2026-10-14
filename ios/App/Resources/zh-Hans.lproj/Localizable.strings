@@ -315,3 +315,34 @@
 "notes_decisions" = "决议事项";
 "notes_open" = "待确认问题";
 "notes_topics" = "讨论主题";
+
+// Semantic search + Ask (plan semantic-search §3–§6)
+"model_kind_embed" = "搜索模型";
+"studio_search_hint" = "搜索会议、主题、“谁说过…”";
+"search_semantic_download" = "按语义搜索 — 下载模型（%@）";
+"search_semantic_downloading" = "正在下载搜索模型… %d%%";
+"search_semantic_marker" = "按语义找到";
+"search_semantic_cd" = "按语义搜索";
+"search_model_download_failed" = "无法下载搜索模型";
+"studio_indexing" = "正在索引…";
+"settings_index_old" = "索引旧会议";
+"settings_index_pending" = "%d 场会议待索引";
+"settings_index_all_done" = "所有会议均已建立搜索索引。";
+"settings_search_model_get" = "下载搜索模型（%@）";
+"settings_search_hint" = "语义搜索能找到换种说法表达同一意思的段落（≈）。索引在每场会议结束后在设备上建立。";
+"settings_ask" = "向会议提问（实验性）";
+"settings_ask_hint" = "在资料库的搜索框输入问题并点发送按钮：摘要模型根据搜索找到的段落作答并注明出处。需要搜索模型和摘要模型，且设备空闲（没有录音、转写或摘要在进行）。";
+"ask_title" = "提问";
+"ask_experimental" = "实验性";
+"ask_cd" = "向会议提问";
+"ask_reset" = "新对话";
+"ask_retrieving" = "正在查找段落…";
+"ask_loading" = "正在加载模型…";
+"ask_thinking" = "思考中…";
+"ask_busy" = "请等当前的录音、转写或摘要完成后再提问。";
+"ask_no_model" = "尚未下载摘要模型（设置 › 存储空间）。";
+"ask_failed" = "提问失败：%@";
+"ask_cancel" = "停止";
+"ask_followup_hint" = "继续提问…";
+"ask_sources" = "出处";
+"ask_disclaimer" = "回答由设备上的小模型生成，可能有误——点出处即可核对。";

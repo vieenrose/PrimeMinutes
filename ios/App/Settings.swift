@@ -36,6 +36,7 @@ func L(_ key: String, _ args: CVarArg...) -> String {
 enum Prefs {
     /// Experimental, off by default (Android showActionItems).
     static var showActions: Bool { UserDefaults.standard.bool(forKey: "showActions") }
+    static var askEnabled: Bool { UserDefaults.standard.bool(forKey: "askEnabled") }
     static var cores: Int { ProcessInfo.processInfo.activeProcessorCount }
     static var threads: Int {
         get { UserDefaults.standard.integer(forKey: "threads") }
@@ -107,11 +108,11 @@ enum Storage {
         /// Android prettyModelName: the reader's chip name, the speech pair's model names, caches as "(compile cache)".
         var label: String {
             if let r = name.range(of: ".xnnpack_cache") { return L("storage_compile_cache", String(name[..<r.lowerBound])) }
-            switch name { case "nemo": return "X-ASR + Nemotron-3"; case "E2B": return L("reader_model_e2b"); case "E4B": return L("reader_model_e4b"); default: return name }
+            switch name { case "nemo": return "X-ASR + Nemotron-3"; case "E2B": return L("reader_model_e2b"); case "E4B": return L("reader_model_e4b"); case ReaderModel.embedId: return "EmbeddingGemma 2 270M"; default: return name }
         }
         /// The XNNPACK weight cache inside a reader folder (rebuilt on next load when deleted with it).
         var cacheBytes: Int64 { (try? FileManager.default.attributesOfItem(atPath: url.appendingPathComponent("weights.xnnpack_cache").path)[.size] as? Int64) ?? 0 }
-        var kind: String { let n = name.lowercased(); return n.contains("asr") || n.contains("diariz") || n.contains("nemotron") ? "model_kind_asr" : (n.contains("gemma") || n.contains("mfa") || n.contains("litert") || n.contains("reader") || n.hasSuffix(".litertlm") ? "model_kind_llm" : "model_kind_other") } }
+        var kind: String { let n = name.lowercased(); if n == ReaderModel.embedId { return "model_kind_embed" }; return n.contains("asr") || n.contains("diariz") || n.contains("nemotron") ? "model_kind_asr" : (n.contains("gemma") || n.contains("mfa") || n.contains("litert") || n.contains("reader") || n.hasSuffix(".litertlm") ? "model_kind_llm" : "model_kind_other") } }
     static var modelsRoot: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("models") }
     static func size(_ u: URL) -> Int64 {
         guard let e = FileManager.default.enumerator(at: u, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }

@@ -315,3 +315,34 @@
 "notes_decisions" = "Decisions";
 "notes_open" = "Open questions";
 "notes_topics" = "Topics";
+
+// Semantic search + Ask (plan semantic-search §3–§6)
+"model_kind_embed" = "Search model";
+"studio_search_hint" = "Search meetings, topics, “who said…”";
+"search_semantic_download" = "Search by meaning — download the model (%@)";
+"search_semantic_downloading" = "Downloading the search model… %d%%";
+"search_semantic_marker" = "found by meaning";
+"search_semantic_cd" = "Search by meaning";
+"search_model_download_failed" = "Couldn't download the search model";
+"studio_indexing" = "Indexing…";
+"settings_index_old" = "Index older meetings";
+"settings_index_pending" = "%d meetings to index";
+"settings_index_all_done" = "All meetings are indexed for search.";
+"settings_search_model_get" = "Download the search model (%@)";
+"settings_search_hint" = "Search by meaning finds passages that say the same thing in other words (≈). The index is built on the device after each meeting.";
+"settings_ask" = "Ask the meetings (experimental)";
+"settings_ask_hint" = "Type a question in the library search and tap the send button: the summary model answers from the passages the search finds, citing where. Needs the search model and the summary model, and a free device (no recording, transcription or summary running).";
+"ask_title" = "Ask";
+"ask_experimental" = "Experimental";
+"ask_cd" = "Ask the meetings";
+"ask_reset" = "New conversation";
+"ask_retrieving" = "Finding passages…";
+"ask_loading" = "Loading the model…";
+"ask_thinking" = "Thinking…";
+"ask_busy" = "Ask waits until the current recording, transcription or summary is done.";
+"ask_no_model" = "The summary model is not downloaded yet (Settings › Storage).";
+"ask_failed" = "Ask failed: %@";
+"ask_cancel" = "Stop";
+"ask_followup_hint" = "Follow-up question…";
+"ask_sources" = "Sources";
+"ask_disclaimer" = "Answers come from a small on-device model and can be wrong — tap a citation to check.";
