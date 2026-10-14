@@ -67,6 +67,10 @@ import studio.primeminutes.ui.theme.PrimeMinutesPalette
 
 /** `[[entryId@sec]]` as the model is asked to write it (and a tolerant `[[id@sec]`/`[id@sec]`). */
 private val CITE_RE = Regex("""\[{1,2}([A-Za-z0-9_\-]+)@(\d+)]{1,2}""")
+/** A tag still being written (streaming) or cut by the token cap: hidden rather than shown raw. */
+private val OPEN_TAG_RE = Regex("""\[\[[^\]\n]*$""")
+/** A bracketed tag that is no citation (the model sometimes writes `[[no excerpt]]`). */
+private val BOGUS_TAG_RE = Regex("""\[\[[^@\]\n]*]]""")
 
 /**
  * Ask (RAG, experimental): one conversation over the whole library. Opens with [question]
@@ -194,6 +198,7 @@ private fun answerText(
     raw: String, byId: Map<String, SessionLibrary.Entry>, color: androidx.compose.ui.graphics.Color,
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
 ): AnnotatedString = buildAnnotatedString {
+    val raw = BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), "").trimEnd()
     var last = 0
     for (m in CITE_RE.findAll(raw)) {
         append(raw.substring(last, m.range.first).trimEnd(' '))
