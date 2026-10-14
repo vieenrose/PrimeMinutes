@@ -50,6 +50,10 @@ import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import studio.primeminutes.core.models.ModelManager
+import studio.primeminutes.core.embed.EmbedHost
+import studio.primeminutes.core.embed.EmbedRegistry
+import studio.primeminutes.core.embed.LibraryIndexer
+import androidx.compose.runtime.collectAsState
 import studio.primeminutes.core.power.BackgroundReliability
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -315,6 +319,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
             modifier = Modifier.padding(bottom = 4.dp),
         )
     }
+    SearchModelPanel(enabled, onChanged = { version++ })
     if (models.isEmpty()) {
         Text(stringResource(R.string.storage_none), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
         return
@@ -357,6 +362,66 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
     }
 }
 
+/** Semantic search model: download it here, or index the meetings recorded before it arrived.
+ *  The indexer itself runs in the background (never during a recording or a transcription). */
+@Composable
+private fun SearchModelPanel(enabled: Boolean, onChanged: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var ready by remember { mutableStateOf(EmbedHost.ready(context)) }
+    var download by remember { mutableStateOf<Float?>(null) }
+    var stale by remember { mutableIntStateOf(-1) }
+    val pending by LibraryIndexer.pending.collectAsState()
+    val indexing by LibraryIndexer.indexing.collectAsState()
+    LaunchedEffect(ready, pending, indexing) {
+        if (ready) stale = withContext(Dispatchers.IO) { LibraryIndexer.staleIds(context).size }
+    }
+    val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
+    if (!ready) {
+        val mb = android.text.format.Formatter.formatShortFileSize(context, spec.totalBytes)
+        val dl = download
+        androidx.compose.material3.TextButton(
+            enabled = enabled && dl == null,
+            onClick = {
+                download = 0f
+                scope.launch {
+                    val r = runCatching { ModelManager(context).ensureEmbed(spec) { f -> download = f } }
+                    download = null
+                    ready = EmbedHost.ready(context)
+                    if (r.isSuccess) { LibraryIndexer.catchUp(context); onChanged() }
+                }
+            },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        ) {
+            Text(
+                if (dl == null) stringResource(R.string.settings_search_model_get, mb)
+                else stringResource(R.string.search_semantic_downloading, (dl * 100).toInt()),
+                color = pal.Sky,
+            )
+        }
+        return
+    }
+    val busy = pending > 0 || indexing.isNotEmpty()
+    if (stale == 0 && !busy) {
+        Text(stringResource(R.string.settings_index_all_done), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
+        return
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.TextButton(
+            enabled = enabled && !busy && stale > 0,
+            onClick = { LibraryIndexer.catchUp(context) },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        ) { Text(stringResource(R.string.settings_index_old), color = pal.Sky) }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (busy) stringResource(R.string.studio_indexing) + " " + stringResource(R.string.settings_index_pending, pending + indexing.size)
+            else if (stale > 0) stringResource(R.string.settings_index_pending, stale) else "",
+            style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
+        )
+    }
+}
+
 /** Human-readable storage row: the raw XNNPACK compile-cache filename
  *  (`model.litertlm.xnnpack_cache_<epoch>_<bytes>`) wraps over two lines and reads
  *  as noise — show it as "<model> (compile cache)" instead. Other files keep their
@@ -379,6 +444,7 @@ private fun kindLabel(kind: ModelManager.ModelKind): String = stringResource(
     when (kind) {
         ModelManager.ModelKind.ASR -> R.string.model_kind_asr
         ModelManager.ModelKind.LLM -> R.string.model_kind_llm
+        ModelManager.ModelKind.EMBED -> R.string.model_kind_embed
         ModelManager.ModelKind.OTHER -> R.string.model_kind_other
     }
 )

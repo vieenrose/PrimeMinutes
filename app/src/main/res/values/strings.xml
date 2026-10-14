@@ -64,6 +64,7 @@
     <string name="storage_delete_body">%1$s (%2$s) will be downloaded again the next time it is needed.</string>
     <string name="model_kind_asr">Transcription model</string>
     <string name="model_kind_llm">Summary model</string>
+    <string name="model_kind_embed">Search model</string>
     <string name="model_kind_other">Other</string>
     <string name="settings_about">About</string>
     <string name="about_license">Free &amp; open source · GPL-3.0</string>
@@ -264,8 +265,18 @@
 
     <string name="studio_processing_banner">%s (tap to watch live)</string>
 
-    <string name="studio_search_hint">Search sessions…</string>
-    <string name="studio_no_match">No session matches your search.</string>
+    <string name="studio_search_hint">Search meetings, topics, “who said…”</string>
+    <string name="search_semantic_download">Search by meaning — download the model (%1$s)</string>
+    <string name="search_semantic_downloading">Downloading the search model… %1$d%%</string>
+    <string name="search_semantic_marker">≈</string>
+    <string name="search_semantic_cd">Search by meaning</string>
+    <string name="search_model_download_failed">Couldn\'t download the search model</string>
+    <string name="studio_indexing">Indexing…</string>
+    <string name="settings_index_old">Index older meetings</string>
+    <string name="settings_index_pending">%1$d meetings to index</string>
+    <string name="settings_index_all_done">All meetings are indexed for search.</string>
+    <string name="settings_search_model_get">Download the search model (%1$s)</string>
+    <string name="studio_no_match">No meeting matches your search.</string>
     <string name="day_today">TODAY</string>
     <string name="day_yesterday">YESTERDAY</string>
 

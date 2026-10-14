@@ -247,6 +247,10 @@ class TranscriptionService : LifecycleService() {
          *  Activity recreation can't "recover" (move!) the WAV of a recording that just started. */
         @Volatile
         var recordingJobActive = false
+
+        /** True while the reader worker runs a task (the library indexer waits on it). */
+        @Volatile
+        var readerActive = false
             private set
     }
 
@@ -816,6 +820,7 @@ class TranscriptionService : LifecycleService() {
                 )
                 if (updated != null) {
                     emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
+                    studio.primeminutes.core.embed.LibraryIndexer.request(this@TranscriptionService, updated.id)
                 }
             }
             withContext(NonCancellable + Dispatchers.Main) {
@@ -1827,9 +1832,9 @@ class TranscriptionService : LifecycleService() {
                     readModel?.close(); readModel = null
                     delay(1000); continue
                 }
-                readCurrent = task
+                readCurrent = task; readerActive = true
                 val res = runCatching { withContext(RunGen(task.gen)) { readOne(task) } }
-                readCurrent = null
+                readCurrent = null; readerActive = false
                 if (task.preempted && !task.aborted) { task.preempted = false; continue }   // read again later
                 // Save BEFORE leaving the task list: while it is listed the worker counts as busy, so
                 // the service does not tear itself down (cancelling this scope) mid-save — that left a
@@ -2035,6 +2040,7 @@ class TranscriptionService : LifecycleService() {
         SessionLibrary.clearPendingTranscript(entry)
         ProcessingQueue.remove(this, entry.id)
         Log.i("primeminutes-reader", "read done: saved ${entry.id} (gen ${task.gen})")
+        studio.primeminutes.core.embed.LibraryIndexer.request(this, entry.id)   // semantic index, after the worker is free
         val saved = TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title)
         events.emit(task.gen to saved)
         if (task.gen != UNTAGGED) events.emit(UNTAGGED to saved)   // the library list, whatever is open

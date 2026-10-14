@@ -46,6 +46,11 @@ object SessionLibrary {
     // and the second deleted the first's temp mid-write (NoSuchFileException .audio_tmp.m4a, seen on
     // a 45-min import). The later call now waits and writes last.
     private val buildLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
+
+    /** Runs [block] under the entry's build lock: the session file and its derived `index.bin`
+     *  ([studio.primeminutes.core.embed.SessionIndex]) never change under each other. */
+    suspend fun <T> withBuildLock(entryId: String, block: suspend () -> T): T =
+        buildLocks.getOrPut(entryId) { kotlinx.coroutines.sync.Mutex() }.withLock { block() }
     const val WAV_NAME = "recording.wav"
     const val SESSION_NAME = "session.m4a"
 

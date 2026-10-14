@@ -203,6 +203,12 @@ import studio.primeminutes.ui.UpdateBanner
 import studio.primeminutes.ui.renderMarkdown
 import studio.primeminutes.ui.SpeakerStatsPanel
 import studio.primeminutes.ui.TranscriptSearchBar
+import studio.primeminutes.core.embed.EmbedHost
+import studio.primeminutes.core.embed.EmbedRegistry
+import studio.primeminutes.core.embed.Embedder
+import studio.primeminutes.core.embed.LibraryIndexer
+import studio.primeminutes.core.embed.LibrarySearch
+import studio.primeminutes.core.embed.SessionIndex
 import studio.primeminutes.ui.highlightedTranscript
 import studio.primeminutes.ui.YouTubeSheet
 import studio.primeminutes.ui.theme.LanguageController
@@ -772,6 +778,30 @@ private fun TranscribeScreen(
     // Find-in-transcript (a slim search bar above the list; suppresses playback auto-follow while open).
     var searchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    // Search by meaning inside the open session ("≈" in the find bar): the chunk starts whose
+    // vector matches the query are added to the match set.
+    var semanticSearch by remember { mutableStateOf(false) }
+    var semanticTargets by remember { mutableStateOf<List<Int>>(emptyList()) }
+    // A library search passage was tapped: scroll to that time once the session is loaded.
+    var pendingSeekSec by remember { mutableStateOf<Double?>(null) }
+    // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
+    var searchModelReady by remember { mutableStateOf(EmbedHost.ready(context)) }
+    var searchDownload by remember { mutableStateOf<Float?>(null) }
+    val indexingIds by LibraryIndexer.indexing.collectAsState()
+    LaunchedEffect(Unit) { if (searchModelReady) LibraryIndexer.catchUp(context) }
+    fun downloadSearchModel() {
+        if (searchDownload != null) return
+        searchDownload = 0f
+        scope.launch {
+            val r = runCatching {
+                ModelManager(context).ensureEmbed(EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)) { f -> searchDownload = f }
+            }
+            searchDownload = null
+            searchModelReady = EmbedHost.ready(context)
+            if (r.isFailure) Toast.makeText(context, R.string.search_model_download_failed, Toast.LENGTH_LONG).show()
+            else LibraryIndexer.catchUp(context)
+        }
+    }
     var matchPos by remember { mutableIntStateOf(0) }
 
     // --- Synced player (android MediaPlayer; no extra dep). ---
@@ -2023,14 +2053,45 @@ private fun TranscribeScreen(
     val twoPane = landscape && hasOverview
     val headerCount = 0   // tabs (portrait) and the left pane (landscape) own the overview now
     // Matches for find-in-transcript; recompute when the query or transcript length changes.
-    val searchMatches = remember(searchQuery, utterances.size) {
+    val searchMatches = remember(searchQuery, utterances.size, semanticTargets) {
         if (searchQuery.isBlank()) emptyList()
-        else utterances.indices.filter { utterances[it].text.contains(searchQuery, ignoreCase = true) }
+        else {
+            val lex = utterances.indices.filter { utterances[it].text.contains(searchQuery, ignoreCase = true) }
+            if (semanticTargets.isEmpty()) lex
+            else (lex + semanticTargets.filter { it in utterances.indices }).distinct().sorted()
+        }
+    }
+    // Dense pass over the open session's index (index.bin next to its session file). Only for a
+    // library session with the model present; the index is requested when it is missing.
+    val semanticAvailable = searchModelReady && libraryDir != null
+    LaunchedEffect(searchQuery, semanticSearch, libraryDir, searchActive) {
+        semanticTargets = emptyList()
+        val dir = libraryDir
+        val q = searchQuery.trim()
+        if (!searchActive || !semanticSearch || !semanticAvailable || dir == null || q.isBlank()) return@LaunchedEffect
+        delay(300)
+        val idx = withContext(Dispatchers.IO) { SessionIndex.read(dir) }
+        if (idx == null) { LibraryIndexer.request(context, dir.name); return@LaunchedEffect }
+        val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull() ?: return@LaunchedEffect
+        semanticTargets = idx.vectors.filter { it.kind == SessionIndex.Kind.CHUNK }
+            .map { it.a to SessionIndex.dot(it.q, qv) }
+            .filter { it.second >= LibrarySearch.MIN_COS }
+            .sortedByDescending { it.second }.map { it.first }
+    }
+    // A passage tapped in the library search: once the session is open, show the transcript at it.
+    LaunchedEffect(pendingSeekSec, opening, transcriptReady) {
+        val t = pendingSeekSec ?: return@LaunchedEffect
+        if (opening || !transcriptReady || utterances.isEmpty()) return@LaunchedEffect
+        pendingSeekSec = null
+        val idx = utterances.indexOfLast { it.startSec <= t + 0.01 }.coerceAtLeast(0)
+        sessTab = 1
+        delay(50)
+        runCatching { listState.animateScrollToItem(headerCount + idx, scrollOffset = -120) }
     }
     LaunchedEffect(searchQuery) { matchPos = 0 }
     fun searchPrev() { if (searchMatches.isNotEmpty()) matchPos = (matchPos - 1 + searchMatches.size) % searchMatches.size }
     fun searchNext() { if (searchMatches.isNotEmpty()) matchPos = (matchPos + 1) % searchMatches.size }
-    fun closeSearch() { searchActive = false; searchQuery = "" }
+    fun closeSearch() { searchActive = false; searchQuery = ""; semanticTargets = emptyList() }
     // Playback auto-follow — karaoke-style, but it must not FIGHT the user. Suppressed while
     // searching (would yank off a match), while editing a line/speaker (would yank the field away),
     // when NOT actively playing (a paused reader shouldn't be scrolled), and for a few seconds after
@@ -2360,6 +2421,11 @@ private fun TranscribeScreen(
                 // build bug, or manual deletion) still has its raw capture — fall back to opening
                 // that (→ re-transcribe) instead of a dead "couldn't open session" toast.
                 onOpen = { e -> openSessionUri(Uri.fromFile(e.audioFile)) },
+                onOpenAt = { e, t -> pendingSeekSec = t; openSessionUri(Uri.fromFile(e.audioFile)) },
+                searchModelReady = searchModelReady,
+                searchDownload = searchDownload,
+                onDownloadSearchModel = { downloadSearchModel() },
+                indexingIds = indexingIds,
                 onWatchLive = { e -> watchQueueItem(e) },
                 onProcessNow = { e -> enqueueAndStart(listOf(e.id)) },
                 onResume = { e -> resumeEntry(e) },
@@ -2558,6 +2624,8 @@ private fun TranscribeScreen(
                             query = searchQuery, onQuery = { searchQuery = it },
                             matchCount = searchMatches.size, matchPos = matchPos,
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
+                            semanticAvailable = semanticAvailable, semantic = semanticSearch,
+                            onSemantic = { semanticSearch = !semanticSearch },
                         )
                         LazyColumn(
                             state = listState,
@@ -2580,6 +2648,8 @@ private fun TranscribeScreen(
                             query = searchQuery, onQuery = { searchQuery = it },
                             matchCount = searchMatches.size, matchPos = matchPos,
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
+                            semanticAvailable = semanticAvailable, semantic = semanticSearch,
+                            onSemantic = { semanticSearch = !semanticSearch },
                         )
                         if (utterances.isEmpty() && !running) Text(
                             stringResource(R.string.status_no_speech),

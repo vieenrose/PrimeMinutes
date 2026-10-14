@@ -63,6 +63,7 @@
     <string name="storage_delete_body">%1$s（%2$s）下次使用時會重新下載。</string>
     <string name="model_kind_asr">轉錄模型</string>
     <string name="model_kind_llm">摘要模型</string>
+    <string name="model_kind_embed">搜尋模型</string>
     <string name="model_kind_other">其他</string>
     <string name="settings_about">關於</string>
     <string name="about_license">自由開放原始碼 · GPL-3.0</string>
@@ -245,8 +246,18 @@
 
     <string name="studio_processing_banner">%s（點按即時查看）</string>
 
-    <string name="studio_search_hint">搜尋場次…</string>
-    <string name="studio_no_match">沒有符合搜尋的場次。</string>
+    <string name="studio_search_hint">搜尋會議、主題、「誰說過…」</string>
+    <string name="search_semantic_download">依語意搜尋 — 下載模型（%1$s）</string>
+    <string name="search_semantic_downloading">正在下載搜尋模型… %1$d%%</string>
+    <string name="search_semantic_marker">≈</string>
+    <string name="search_semantic_cd">依語意搜尋</string>
+    <string name="search_model_download_failed">無法下載搜尋模型</string>
+    <string name="studio_indexing">正在建立索引…</string>
+    <string name="settings_index_old">為舊會議建立索引</string>
+    <string name="settings_index_pending">%1$d 場會議待建立索引</string>
+    <string name="settings_index_all_done">所有會議都已建立搜尋索引。</string>
+    <string name="settings_search_model_get">下載搜尋模型（%1$s）</string>
+    <string name="studio_no_match">沒有符合搜尋的會議。</string>
     <string name="day_today">今天</string>
     <string name="day_yesterday">昨天</string>
 

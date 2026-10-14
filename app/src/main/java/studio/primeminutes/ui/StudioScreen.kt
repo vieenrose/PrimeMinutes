@@ -95,6 +95,14 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.core.library.SessionLibrary
+import studio.primeminutes.core.embed.EmbedHost
+import studio.primeminutes.core.embed.EmbedRegistry
+import studio.primeminutes.core.embed.Embedder
+import studio.primeminutes.core.embed.LibrarySearch
+import studio.primeminutes.core.embed.SessionIndex
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import java.text.DateFormat
@@ -155,6 +163,15 @@ fun StudioScreen(
     onImport: () -> Unit,
     onSettings: () -> Unit,
     updateBanner: @Composable () -> Unit = {},
+    /** Semantic search: the model is downloaded (dense pass available). */
+    searchModelReady: Boolean = false,
+    /** Download fraction while the search model is being fetched; null otherwise. */
+    searchDownload: Float? = null,
+    onDownloadSearchModel: () -> Unit = {},
+    /** Meetings whose index is being built right now (shows the "Indexing…" chip). */
+    indexingIds: Set<String> = emptySet(),
+    /** Open a meeting at a time (a search passage was tapped). */
+    onOpenAt: (SessionLibrary.Entry, Double) -> Unit = { e, _ -> onOpen(e) },
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -177,17 +194,33 @@ fun StudioScreen(
     fun exitSelection() { selectionMode = false; selected.clear() }
     BackHandler(selectionMode) { exitSelection() }
 
-    val shown = remember(entries, query, statusFilter) {
+    val context = LocalContext.current
+    // Hybrid search: the lexical pass answers at once (titles, summaries, notes); after a short idle
+    // the query is embedded and the dense pass is fused in. Entries change → refresh the text cache.
+    var hits by remember { mutableStateOf<List<LibrarySearch.Hit>>(emptyList()) }
+    LaunchedEffect(entries) { LibrarySearch.refresh(context, entries) }
+    LaunchedEffect(query, entries, searchModelReady) {
         val q = query.trim()
-        val want = when (statusFilter) {   // map the filter to a target status once, not per entry
-            StatusFilter.ALL -> null
-            StatusFilter.NEW -> SessionLibrary.Status.RECORDED
-            StatusFilter.DONE -> SessionLibrary.Status.DONE
-        }
-        entries.filter { e ->
-            (want == null || e.status == want) &&
-                (q.isBlank() || (e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale)).contains(q, ignoreCase = true))
-        }
+        if (q.isBlank()) { hits = emptyList(); return@LaunchedEffect }
+        val lex = LibrarySearch.lexical(context, entries, q)
+        hits = lex
+        if (!searchModelReady) return@LaunchedEffect
+        delay(300)
+        val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull()
+            ?: return@LaunchedEffect
+        val dense = LibrarySearch.dense(context, entries, qv)
+        hits = LibrarySearch.fuse(lex, dense)
+    }
+    val want = when (statusFilter) {   // map the filter to a target status once, not per entry
+        StatusFilter.ALL -> null
+        StatusFilter.NEW -> SessionLibrary.Status.RECORDED
+        StatusFilter.DONE -> SessionLibrary.Status.DONE
+    }
+    val searching = query.isNotBlank()
+    val shownHits = remember(hits, statusFilter) { hits.filter { want == null || it.entry.status == want } }
+    val shown = remember(entries, searching, shownHits, statusFilter) {
+        if (searching) shownHits.map { it.entry }
+        else entries.filter { e -> want == null || e.status == want }
     }
     // Group ONCE (LinkedHashMap preserves the newest-first order of the already-sorted list) instead
     // of allocating a Calendar per entry on every recomposition inside the LazyColumn lambda.
@@ -248,7 +281,7 @@ fun StudioScreen(
                 ) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
             }
 
-            // Search over titles.
+            // Search over the library (lexical at once, by meaning after a short pause).
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -267,7 +300,28 @@ fun StudioScreen(
                         if (query.isEmpty()) Text(stringResource(R.string.studio_search_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
                         inner()
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).onFocusChanged { f ->
+                        // Typing is imminent: load the embedder now so the first dense pass is not
+                        // delayed by the model load.
+                        if (f.isFocused && searchModelReady) EmbedHost.preload(context, 1)
+                    },
+                )
+                if (indexingIds.isNotEmpty()) Chip(stringResource(R.string.studio_indexing), pal.Slate400)
+            }
+            if (searching && !searchModelReady) {
+                // Lexical only until the model is there: say how to get the semantic pass.
+                val mb = android.text.format.Formatter.formatShortFileSize(
+                    context, EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID).totalBytes,
+                )
+                val dl = searchDownload
+                Text(
+                    if (dl == null) stringResource(R.string.search_semantic_download, mb)
+                    else stringResource(R.string.search_semantic_downloading, (dl * 100).toInt()),
+                    color = pal.Sky, style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = dl == null, onClick = onDownloadSearchModel)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
 
@@ -345,7 +399,39 @@ fun StudioScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 10.dp, bottom = 8.dp),
             ) {
-                groups.forEach { (day, list) ->
+                if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
+                    val e = h.entry
+                    val status = when {
+                        e.id == processingId -> RowStatus.Processing
+                        e.status == SessionLibrary.Status.DONE -> RowStatus.Done
+                        e.id in queuedIds -> RowStatus.Queued
+                        else -> RowStatus.New
+                    }
+                    Column {
+                        SessionRow(
+                            entry = e, status = status,
+                            processingLabel = if (status == RowStatus.Processing) processingLabel else "",
+                            processingFraction = if (status == RowStatus.Processing) processingFraction else 0f,
+                            selectionMode = selectionMode, selected = e.id in selected,
+                            onClick = {
+                                if (selectionMode) {
+                                    if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
+                                } else when (status) {
+                                    RowStatus.Processing -> onWatchLive(e)
+                                    RowStatus.Done -> onOpen(e)
+                                    else -> actionsFor = e
+                                }
+                            },
+                            onLongClick = { if (!selectionMode) { selectionMode = true; selected[e.id] = Unit } },
+                            onManage = { actionsFor = e },
+                        )
+                        if (status == RowStatus.Done) h.passages.forEach { p ->
+                            PassageRow(p) {
+                                if (p.kind == SessionIndex.Kind.MEETING) onOpen(e) else onOpenAt(e, p.timeSec)
+                            }
+                        }
+                    }
+                } else groups.forEach { (day, list) ->
                     stickyHeader(key = "day-$day", contentType = "header") {
                         Text(
                             dayLabel(day, today, yesterday),
@@ -521,6 +607,35 @@ fun StudioScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDeleteMany = false }) { Text(stringResource(android.R.string.cancel)) } },
         )
+    }
+}
+
+/** One search passage under its meeting row: time · speaker · snippet; "≈" marks a passage found
+ *  by meaning only. Tapping opens the meeting at that utterance. */
+@Composable
+private fun PassageRow(p: LibrarySearch.Passage, onClick: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(
+        Modifier.fillMaxWidth().padding(start = Gutter + 12.dp, end = Gutter)
+            .clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        if (p.semanticOnly) Text(
+            stringResource(R.string.search_semantic_marker), color = pal.Sky, fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.width(16.dp).semantics { contentDescription = "" },
+        ) else Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            val head = buildString {
+                if (p.kind != SessionIndex.Kind.MEETING) {
+                    val t = p.timeSec.toInt(); append("%d:%02d".format(t / 60, t % 60))
+                }
+                p.speaker?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
+            }
+            if (head.isNotEmpty()) Text(head, color = pal.Slate400, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.snippet, color = pal.Slate200, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

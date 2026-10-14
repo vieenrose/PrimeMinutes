@@ -1,0 +1,58 @@
+W1014 14:56:52.583000 1556313 torch/utils/_pytree.py:630] <enum 'KernelPreference'> is an Enum subclass and is now natively supported by torch.compile as an opaque value type. Calling register_constant() on Enum subclasses is deprecated and will be an error in a future release.
+W1014 14:56:52.618000 1556313 torch/utils/_pytree.py:630] <enum 'ScaleCalculationMode'> is an Enum subclass and is now natively supported by torch.compile as an opaque value type. Calling register_constant() on Enum subclasses is deprecated and will be an error in a future release.
+Loading weights:   0%|          | 0/1376 [00:00<?, ?it/s]Loading weights:  40%|███▉      | 545/1376 [00:00<00:00, 5436.16it/s]Loading weights:  79%|███████▉  | 1089/1376 [00:00<00:00, 3154.14it/s]Loading weights: 100%|██████████| 1376/1376 [00:00<00:00, 2741.68it/s]
+Traceback (most recent call last):
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/util/environment.py", line 36, in suggest_extra_on_exception
+    yield
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/modules/transformer.py", line 869, in __init__
+    self.processor = AutoProcessor.from_pretrained(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/transformers/models/auto/processing_auto.py", line 346, in from_pretrained
+    return processor_class.from_pretrained(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/transformers/utils/import_utils.py", line 2413, in __getattribute__
+    requires_backends(cls, cls._backends)
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/transformers/utils/import_utils.py", line 2399, in requires_backends
+    raise ImportError("".join(failed))
+ImportError: 
+EmbeddingGemma2Processor requires the PIL library but it was not found in your environment. You can install it with pip:
+`pip install pillow`. Please note that you may need to restart your runtime after installation.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-luigi-VoxSumDroid/4acfab47-ccab-4e6f-900c-5df73615b1c2/scratchpad/emb/t6/ref_embed.py", line 5, in <module>
+    m = SentenceTransformer("/home/luigi/voxsum-models/embeddinggemma/ref", device="cpu", model_kwargs={"torch_dtype": torch.float32})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/util/decorators.py", line 46, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/sentence_transformer/model.py", line 194, in __init__
+    super().__init__(
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/model.py", line 236, in __init__
+    modules, self.module_kwargs = self._load_modules(
+                                  ^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/model.py", line 1081, in _load_modules
+    return self._load_config_modules(model_name_or_path, **load_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/model.py", line 1298, in _load_config_modules
+    module = module_class.load(
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/modules/transformer.py", line 2635, in load
+    return cls(model_name_or_path=model_name_or_path, **init_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/util/decorators.py", line 92, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/base/modules/transformer.py", line 868, in __init__
+    with suggest_extra_on_exception():
+  File "/home/luigi/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/home/luigi/voxsum-models/litert-export-venv/lib/python3.11/site-packages/sentence_transformers/util/environment.py", line 41, in suggest_extra_on_exception
+    raise type(e)(f"{str(e).strip()}\n\nTo install the required dependencies, run:\n{hint}") from e
+ImportError: EmbeddingGemma2Processor requires the PIL library but it was not found in your environment. You can install it with pip:
+`pip install pillow`. Please note that you may need to restart your runtime after installation.
+
+To install the required dependencies, run:
+pip install -U "sentence-transformers[image]"

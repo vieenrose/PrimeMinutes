@@ -67,6 +67,7 @@ data class HwProfile(
 object HwInfo {
     private const val PREFS = "primeminutes_hw"
     private val cores = Runtime.getRuntime().availableProcessors()
+    fun cores(): Int = cores
     private val freqs: List<Long> by lazy {
         runCatching {
             (0 until cores).mapNotNull { c ->

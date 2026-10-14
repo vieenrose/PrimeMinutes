@@ -33,6 +33,9 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import studio.primeminutes.R
 import androidx.compose.ui.graphics.Color
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
@@ -53,8 +56,13 @@ fun TranscriptSearchBar(
     onNext: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Search-by-meaning toggle: shown when the session has a dense index and the model is there. */
+    semanticAvailable: Boolean = false,
+    semantic: Boolean = false,
+    onSemantic: () -> Unit = {},
 ) {
     val pal = LocalPrimeMinutesPalette.current
+    val semanticCd = stringResource(R.string.search_semantic_cd)
     // Opening the bar means "I want to type": focus it and raise the keyboard.
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -84,6 +92,17 @@ fun TranscriptSearchBar(
                 inner()
             },
         )
+        if (semanticAvailable) {
+            // "≈" — adds the passages that match by meaning to the match set.
+            IconButton(onClick = onSemantic, modifier = Modifier.size(32.dp)) {
+                Text(
+                    stringResource(R.string.search_semantic_marker),
+                    color = if (semantic) pal.Sky else pal.Slate400, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { contentDescription = semanticCd },
+                )
+            }
+        }
         if (query.isNotEmpty()) {
             Text(
                 if (matchCount == 0) stringResource(R.string.search_no_matches)

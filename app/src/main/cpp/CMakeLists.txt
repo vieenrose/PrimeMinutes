@@ -161,7 +161,7 @@ if(DEFINED LITERT_SO_DIR AND EXISTS "${LITERT_SO_DIR}/${ANDROID_ABI}/libLiteRt.s
     link_libraries(log)
     add_subdirectory("${NATIVE_DIR}/sentencepiece" sentencepiece-build EXCLUDE_FROM_ALL)
 
-    add_library(primeminutes-mfa SHARED mfa/mfa_jni.cpp mfa/mfa_engine.cc mfa/i8_attn.cc)
+    add_library(primeminutes-mfa SHARED mfa/mfa_jni.cpp mfa/mfa_engine.cc mfa/i8_attn.cc mfa/embedder.cc mfa/embedder_jni.cpp)
     target_compile_features(primeminutes-mfa PRIVATE cxx_std_17)
     target_compile_options(primeminutes-mfa PRIVATE -O3 -fexceptions -fopenmp)
     if(ANDROID_ABI STREQUAL "arm64-v8a")

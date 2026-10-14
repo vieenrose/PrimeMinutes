@@ -9,6 +9,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import studio.primeminutes.core.asr.NemoLitertFiles
+import studio.primeminutes.core.embed.EmbedRegistry
+import studio.primeminutes.core.embed.EmbedSpec
 import studio.primeminutes.core.asr.NemoModelFiles
 import studio.primeminutes.core.asr.NemoStreamEngine
 import java.io.File
@@ -151,9 +153,40 @@ class ModelManager(context: Context) {
     val llmModel: File get() = llmFile(LlmRegistry.byId(LlmRegistry.DEFAULT_ID))
     fun llmReady(): Boolean = llmReady(LlmRegistry.byId(LlmRegistry.DEFAULT_ID))
 
+    // --- Semantic-search embedder (EmbeddingGemma-2, studio.primeminutes.core.embed) ---
+
+    fun embedDir(spec: EmbedSpec): File = File(modelsDir, spec.dirName)
+
+    fun embedReady(spec: EmbedSpec): Boolean =
+        spec.files.all { (rel, meta) -> File(embedDir(spec), rel).length() == meta.first } &&
+            runCatching { File(embedDir(spec), REVISION_MARKER).readText().trim() }.getOrNull() == spec.revision
+
+    /** Same contract as [ensureLlmModel]: per-file sha256, resumable, revision-stamped. */
+    suspend fun ensureEmbed(spec: EmbedSpec, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        if (embedReady(spec)) { onProgress(1f); return@withContext }
+        val dir = embedDir(spec).apply { mkdirs() }
+        val marked = runCatching { File(dir, REVISION_MARKER).readText().trim() }.getOrNull() == spec.revision
+        val total = spec.totalBytes
+        var done = 0L
+        spec.files.forEach { (rel, meta) ->
+            val (bytes, sha) = meta
+            val dest = File(dir, rel).apply { parentFile?.mkdirs() }
+            if (dest.length() != bytes || !marked) {
+                if (dest.exists()) dest.delete()
+                download("${spec.revision}/$rel", dest, sha) { frac ->
+                    onProgress((done + (frac * bytes).toLong()).toFloat() / total)
+                }
+            }
+            done += bytes
+            onProgress(done.toFloat() / total)
+        }
+        runCatching { File(dir, REVISION_MARKER).writeText(spec.revision) }
+        check(embedReady(spec)) { "${spec.displayName} files missing after provisioning" }
+    }
+
     // --- Storage manager: enumerate + delete downloaded models (each re-downloads on next use). ---
 
-    enum class ModelKind { ASR, LLM, OTHER }
+    enum class ModelKind { ASR, LLM, EMBED, OTHER }
 
     /** A model artifact (file or folder) on disk. [delete] reclaims it; it re-downloads on next use. */
     data class StoredModel(val name: String, val kind: ModelKind, val bytes: Long, private val path: File) {
@@ -193,6 +226,7 @@ class ModelManager(context: Context) {
         return when {
             n == NEMO_DIR -> ModelKind.ASR
             LlmRegistry.ALL.any { it.dirName == n } -> ModelKind.LLM
+            EmbedRegistry.ALL.any { it.dirName == n } -> ModelKind.EMBED
             // MOSS-TD is an ASR model that happens to ship as a .gguf — classify it before the
             // generic gguf→LLM rule below, or Settings lists it as a summary model.
             n.startsWith("moss-td") || n.startsWith("moss-transcribe") || n.startsWith("moss_td") -> ModelKind.ASR
