@@ -73,10 +73,10 @@ Appareil de référence : iPhone 14 Pro Max (6 Go, iOS 27). L'iPhone XR (3 Go, A
 - Enregistrement micro : sessions de 30 s et 62 s terminées.
 - Mode séquentiel automatique sous 4,5 Go de RAM (lecteur en pause pendant l'ASR).
 - Point de reprise de la transcription (`Library/Application Support/checkpoints/`) : un kill pendant l'étape lecteur ne refait pas l'ASR.
-- Tâche d'arrière-plan `BGProcessingTask` (`tw.com.pesi.primeminutes.queue`) : reprend la file de jobs quand l'app est quittée.
+- Arrière-plan : sur iOS 26+, une file lancée avec l'app au premier plan demande une `BGContinuedProcessingTask` (`tw.com.pesi.primeminutes.process.<uuid>`, handler enregistré sous l'id exact juste avant la soumission) : la barre « 正在處理會議 » du système montre la progression et le traitement continue app quittée (vérifié sur iPhone 14 Pro Max, iOS 27 : environ 8× plus lent qu'au premier plan). À l'expiration, le job s'arrête à son point de reprise et reste en file (`yieldToSystem`, hook DEV `VOX_YIELD=<s>`). En complément, la `BGProcessingTask` (`tw.com.pesi.primeminutes.queue`) reprend la file quand le système accorde une fenêtre ; elle utilise `Model.shared` (un lancement en arrière-plan ne crée aucune vue).
 - Réglages : délai des locuteurs en direct (5–30 s, défaut 15) et taille du texte.
 - Pré-traitement audio : normalisation du gain, saut des silences, découpe des longues interventions.
-- Non testé sur appareil : gain/silences, découpe, réglages, tâche d'arrière-plan, reprise depuis le point de reprise.
+- Non testé sur appareil : gain/silences, découpe, réglages, la `BGProcessingTask` lancée par le système.
 
 ## Construire et tester sur appareil
 
