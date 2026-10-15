@@ -210,7 +210,7 @@ object SessionLibrary {
             val arr = org.json.JSONArray()
             utterances.forEach { arr.put(PrimeMinutesSession.utteranceToJson(it)) }
             val o = JSONObject().put("fingerprint", fingerprint).put("utterances", arr)
-            File(entry.dir, PENDING_TRANSCRIPT).writeText(o.toString())
+            File(entry.dir, PENDING_TRANSCRIPT).writeTextAtomic(o.toString())
         }.onFailure { Log.w(TAG, "could not persist pending transcript for ${entry.id}", it) }
     }
 
@@ -372,7 +372,7 @@ object SessionLibrary {
             .put("durationSec", entry.durationSec)
             .put("status", entry.status.name)
         entry.title?.let { o.put("title", it) }
-        File(entry.dir, META).writeText(o.toString())
+        File(entry.dir, META).writeTextAtomic(o.toString())
     }
 
     private fun readMeta(dir: File): Entry? = synchronized(metaLock) {

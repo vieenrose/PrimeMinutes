@@ -160,7 +160,12 @@ object AskEngine {
         scope.launch { mutex.withLock { close() } }
     }
 
-    fun reset() { cancel(); _turns.value = emptyList(); _phase.value = Phase.Idle; session?.reset(); session?.resume() }
+    fun reset() {
+        cancel(); _turns.value = emptyList(); _phase.value = Phase.Idle
+        // Under the lock, after the cancelled answer has left the model: resetting the session from
+        // the caller's thread raced the native generate still unwinding on the worker.
+        scope.launch { mutex.withLock { session?.reset(); session?.resume() } }
+    }
 
     private fun currentAnswer() = _turns.value.lastOrNull()?.answer ?: ""
 

@@ -58,7 +58,7 @@ object ProcessingQueue {
     private fun write(context: Context, ids: List<String>) {
         runCatching {
             val arr = JSONArray().also { a -> ids.forEach { a.put(it) } }
-            file(context).writeText(JSONObject().put("ids", arr).toString())
+            file(context).writeTextAtomic(JSONObject().put("ids", arr).toString())
         }.onFailure { Log.w(TAG, "could not persist queue", it) }
     }
 }

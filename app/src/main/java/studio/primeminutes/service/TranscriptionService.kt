@@ -1807,8 +1807,10 @@ class TranscriptionService : LifecycleService() {
     private fun abortRead(task: ReadTask) {
         task.aborted = true
         task.final.complete(emptyList())
-        if (readCurrent === task) readModel?.cancel()
-        else synchronized(readLock) { readTasks.remove(task) }
+        // Decided under readLock, where the loop also claims its task: checked outside it, the loop
+        // could take the task between the check and the removal and read an aborted meeting.
+        val current = synchronized(readLock) { (readCurrent === task).also { if (!it) readTasks.remove(task) } }
+        if (current) readModel?.cancel()
         task.result.completeExceptionally(CancellationException("reading aborted"))
     }
 
@@ -1841,7 +1843,11 @@ class TranscriptionService : LifecycleService() {
                     readModel?.close(); readModel = null
                     delay(1000); continue
                 }
-                readCurrent = task; readerActive = true
+                val claimed = synchronized(readLock) {
+                    if (task.aborted) { readTasks.remove(task); false } else { readCurrent = task; true }
+                }
+                if (!claimed) continue
+                readerActive = true
                 val res = runCatching { withContext(RunGen(task.gen)) { readOne(task) } }
                 readCurrent = null; readerActive = false
                 if (task.preempted && !task.aborted) { task.preempted = false; continue }   // read again later

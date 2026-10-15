@@ -1,5 +1,6 @@
 package studio.primeminutes.core.session
 
+import studio.primeminutes.core.library.writeTextAtomic
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -67,7 +68,7 @@ object SessionAutosave {
                 names.put(id.toString(), o)
             }
             root.put("speakerNames", names)
-            file(context).writeText(root.toString())
+            file(context).writeTextAtomic(root.toString())
         }.onFailure { Log.w(TAG, "could not autosave session", it) }
     }
 

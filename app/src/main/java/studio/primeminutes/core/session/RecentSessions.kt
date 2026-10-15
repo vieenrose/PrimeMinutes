@@ -34,14 +34,15 @@ object RecentSessions {
 
     /** Add or move-to-front. Dedupes by uri AND by non-blank title, so the same session reached via a
      *  different Uri (VIEW intent vs picker, or a re-export with the same title) replaces its prior row
-     *  rather than duplicating it. [openedAt] is supplied by the caller. */
-    fun add(context: Context, uri: String, title: String, openedAt: Long) {
+     *  rather than duplicating it. [openedAt] is supplied by the caller. Read-modify-write, so
+     *  synchronized: the library build (IO thread) and the UI both add/remove. */
+    @Synchronized fun add(context: Context, uri: String, title: String, openedAt: Long) {
         val t = title.trim()
         val rest = list(context).filter { it.uri != uri && (t.isEmpty() || it.title.trim() != t) }
         write(context, (listOf(RecentSession(uri, title, openedAt)) + rest).take(MAX))
     }
 
-    fun remove(context: Context, uri: String) {
+    @Synchronized fun remove(context: Context, uri: String) {
         write(context, list(context).filter { it.uri != uri })
     }
 

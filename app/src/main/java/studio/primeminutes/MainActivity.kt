@@ -2450,8 +2450,14 @@ private fun TranscribeScreen(
 
     when (screen) {
         Screen.Studio -> {
-            val studioEntries = remember(recentsVersion, queueItemId) { SessionLibrary.list(context) }
-            val studioQueuedIds = remember(recentsVersion, queueItemId) { ProcessingQueue.ids(context).toSet() }
+            // Read once in place (so the first frame is not an empty library), then off the main
+            // thread on every change: list() opens one meta.json per meeting.
+            var studioEntries by remember { mutableStateOf(SessionLibrary.list(context)) }
+            var studioQueuedIds by remember { mutableStateOf(ProcessingQueue.ids(context).toSet()) }
+            LaunchedEffect(recentsVersion, queueItemId) {
+                withContext(Dispatchers.IO) { SessionLibrary.list(context) to ProcessingQueue.ids(context).toSet() }
+                    .let { (e, q) -> studioEntries = e; studioQueuedIds = q }
+            }
             // Titles saved in the other script read in the chosen one (the file itself is untouched).
             val titleConv by produceState<OpenCcConverter?>(null, config.summaryScript) {
                 value = withContext(Dispatchers.IO) {
