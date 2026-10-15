@@ -74,7 +74,13 @@ enum Notifier {
 
 /// Every status line, timestamped, in Documents/status.log (pullable with devicectl: the console is not always attached).
 enum StatusLog {
+    // DEV builds keep it in Documents for the device test scripts; a release keeps it in Caches, which is
+    // never backed up (it carries meeting titles and progress lines).
+    #if VOX_DEV
     static let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("status.log")
+    #else
+    static let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("status.log")
+    #endif
     private static let q = DispatchQueue(label: "statuslog", qos: .utility)   // never block the app on file I/O (a stalled devicectl copy held the file)
     nonisolated(unsafe) private static var lastKey = "", lastAt = Date.distantPast
     static func add(_ s: String) {
@@ -195,7 +201,18 @@ final class Model: ObservableObject {
 
     let store = ModelStore()
     let library = LibraryStore()
+    /// Application Support holds the meetings (audio, transcripts, search index, checkpoints) and GBs of
+    /// models: none of it may go to iCloud backup ("nothing leaves the device", and App Review rejects
+    /// re-downloadable data in backups). The flag on the folder covers everything below it.
+    nonisolated static func excludeFromBackup() {
+        var u = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        var v = URLResourceValues(); v.isExcludedFromBackup = true
+        do { try u.setResourceValues(v) } catch { StatusLog.add("backup exclusion failed: \(error)") }
+        StatusLog.add("app data excluded from backup: \((try? u.resourceValues(forKeys: [.isExcludedFromBackupKey]))?.isExcludedFromBackup ?? false)")
+    }
     init() {
+        Self.excludeFromBackup()
         LibraryIndexer.shared.busy = { [weak self] in self.map { $0.activeJob != nil || $0.recording } ?? true }
         LibraryIndexer.shared.recording = { [weak self] in self?.recording ?? true }
         AskEngine.shared.busy = LibraryIndexer.shared.busy; AskEngine.shared.recording = LibraryIndexer.shared.recording

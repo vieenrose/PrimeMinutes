@@ -16,7 +16,13 @@
 <key>MinimumOSVersion</key><string>17.0</string>
 <key>UILaunchScreen</key><dict/>
 <key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
-<key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict>
+<!-- Podcast enclosures are often plain http:// on hosts that cannot be listed, so cleartext stays allowed in
+     general (as Android's network_security_config); the sensitive fetches (models, updates) are HTTPS-only. -->
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/>
+	<key>NSExceptionDomains</key><dict>
+		<key>huggingface.co</key><dict><key>NSIncludesSubdomains</key><true/><key>NSExceptionAllowsInsecureHTTPLoads</key><false/></dict>
+		<key>hf.co</key><dict><key>NSIncludesSubdomains</key><true/><key>NSExceptionAllowsInsecureHTTPLoads</key><false/></dict>
+	</dict></dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Prime Minutes transcribes your meetings from the microphone, on the device.</string>
 </dict></plist>
