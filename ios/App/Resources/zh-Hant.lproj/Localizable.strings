@@ -167,7 +167,7 @@
 "reader_model_e4b_ram" = "E4B 需要 8 GB 記憶體的手機。";
 "reader_model_hint" = "行動版模型使用更快的引擎，記憶範圍較短。E2B：下載 %d MB，約佔 1.3 GB 記憶體。E4B：%d MB，約 3 GB 記憶體，錯誤較少。";
 "model_kind_asr" = "轉錄模型";
-"model_kind_llm" = "摘要模型";
+"model_kind_llm" = "AI 筆記模型";
 "model_kind_other" = "其他";
 "studio_processing_banner" = "%@（點按即時查看）";
 "source_process_all" = "處理待辦（%d）";
@@ -254,7 +254,7 @@
 "settings_speaker_delay_hint" = "錄音時文字會立即顯示；語者標註則至少在此延遲之後才出現。延遲越長，語者標註越準確。不影響最後儲存的逐字稿。";
 "settings_seconds" = "%1$d 秒";
 "settings_language_hint" = "同時決定介面語言，以及逐字稿、摘要與筆記使用的字體（繁體或簡體）。";
-"storage_model_pending" = "摘要模型尚未下載（%1$d MB），首次使用時自動下載。";
+"storage_model_pending" = "AI 筆記模型尚未下載（%1$d MB），首次使用時自動下載。";
 "theme_eink" = "電子紙";
 "theme_eink_hint" = "電子紙為專為電子閱讀器設計的高對比扁平主題，請手動選用。";
 "app_name" = "Prime Minutes";
@@ -334,7 +334,7 @@
 "settings_search_model_get" = "下載搜尋模型（%@）";
 "settings_search_hint" = "語意搜尋能找到換個說法表達同一意思的段落（≈）。索引在每場會議結束後於裝置上建立。";
 "settings_ask" = "向會議提問（實驗性）";
-"settings_ask_hint" = "在資料庫的搜尋框輸入問題並點傳送按鈕：摘要模型根據搜尋找到的段落作答並註明出處。需要搜尋模型和摘要模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。";
+"settings_ask_hint" = "在資料庫的搜尋框輸入問題並點傳送按鈕：AI 筆記模型根據搜尋找到的段落作答並註明出處。需要搜尋模型和 AI 筆記模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。";
 "ask_title" = "提問";
 "ask_experimental" = "實驗性";
 "ask_cd" = "向會議提問";
@@ -343,7 +343,7 @@
 "ask_loading" = "正在載入模型…";
 "ask_thinking" = "思考中…";
 "ask_busy" = "請等目前的錄音、轉寫或摘要完成後再提問。";
-"ask_no_model" = "尚未下載摘要模型（設定 › 儲存空間）。";
+"ask_no_model" = "尚未下載 AI 筆記模型（設定 › 儲存空間）。";
 "ask_failed" = "提問失敗：%@";
 "ask_cancel" = "停止";
 "ask_followup_hint" = "繼續提問…";
