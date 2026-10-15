@@ -370,6 +370,11 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         if (!wl.isHeld) wl.acquire()
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        studio.primeminutes.core.hw.MemoryPressure.onTrim(level)
+    }
+
     override fun onDestroy() {
         wakeLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()

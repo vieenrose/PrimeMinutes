@@ -88,6 +88,6 @@ object EmbedHost {
     }
 
     /** Frees the model now (a recording starts on a small device, tests). Waits for a running call. */
-    suspend fun unload() { mutex.withLock { embedder?.close(); embedder = null; idleJob?.cancel() } }
+    suspend fun unload() { mutex.withLock { embedder?.let { it.close(); Log.i(TAG, "embedder unloaded") }; embedder = null; idleJob?.cancel() } }
     fun unloadAsync() { scope.launch { unload() } }
 }

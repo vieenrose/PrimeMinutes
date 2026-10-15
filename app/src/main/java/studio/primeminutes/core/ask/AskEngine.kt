@@ -160,6 +160,12 @@ object AskEngine {
         scope.launch { mutex.withLock { close() } }
     }
 
+    /** Frees the reader model under memory pressure, after any answer in progress; the next
+     *  question reloads it (it only loses the prompt-prefix reuse). */
+    fun trim() {
+        scope.launch { mutex.withLock { if (engine != null) { close(); Log.i(TAG, "reader unloaded (memory pressure)") } } }
+    }
+
     fun reset() {
         cancel(); _turns.value = emptyList(); _phase.value = Phase.Idle
         // Under the lock, after the cancelled answer has left the model: resetting the session from

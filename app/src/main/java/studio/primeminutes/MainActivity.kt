@@ -339,6 +339,11 @@ class MainActivity : ComponentActivity() {
         super.attachBaseContext(studio.primeminutes.core.config.AppLanguage.wrap(newBase))
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        studio.primeminutes.core.hw.MemoryPressure.onTrim(level)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         maybeRequestNotifications()
