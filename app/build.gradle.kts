@@ -160,10 +160,11 @@ dependencies {
 val litertAar: Configuration by configurations.creating { isTransitive = false }
 dependencies { litertAar("com.google.ai.edge.litert:litert:2.2.0@aar") }
 
-val extractLiteRt by tasks.registering(Copy::class) {
+// CPU only (2026-10-13): the GPU accelerator (libLiteRtClGlAccelerator.so, 3 MB) is not packaged.
+// Sync, not Copy, so a build dir from before drops it too.
+val extractLiteRt by tasks.registering(Sync::class) {
     from({ zipTree(litertAar.singleFile) }) {
-        include("jni/arm64-v8a/libLiteRt.so", "jni/x86_64/libLiteRt.so",
-            "jni/arm64-v8a/libLiteRtClGlAccelerator.so", "jni/x86_64/libLiteRtClGlAccelerator.so")
+        include("jni/arm64-v8a/libLiteRt.so", "jni/x86_64/libLiteRt.so")
         eachFile { path = path.removePrefix("jni/") }
         includeEmptyDirs = false
     }

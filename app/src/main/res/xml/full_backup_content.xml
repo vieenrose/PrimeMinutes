@@ -5,4 +5,6 @@
 -->
 <full-backup-content>
     <exclude domain="file" />
+    <!-- Recent sessions: meeting titles and file URIs are meeting content, not settings. -->
+    <exclude domain="sharedpref" path="primeminutes_recents.xml" />
 </full-backup-content>

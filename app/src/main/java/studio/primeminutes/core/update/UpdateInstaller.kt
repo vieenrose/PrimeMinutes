@@ -51,9 +51,31 @@ object UpdateInstaller {
             check(total == null || read == total) { "Update download truncated ($read/$total)" }
             if (dest.exists()) dest.delete()
             check(tmp.renameTo(dest)) { "Could not finalize update download" }
+            runCatching { verify(context, dest) }.onFailure { dest.delete(); throw it }
             onProgress(1f)
             dest
         }
+
+    /**
+     * The downloaded APK must be this app, newer, and signed by the installed app's key. The system
+     * installer would refuse a foreign signature too, but only after the user confirmed, and with an
+     * error that reads like a broken update; a different package would even install side by side.
+     */
+    private fun verify(context: Context, apk: File) {
+        val pm = context.packageManager
+        val flags = if (android.os.Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+            else @Suppress("DEPRECATION") android.content.pm.PackageManager.GET_SIGNATURES
+        val got = pm.getPackageArchiveInfo(apk.path, flags) ?: error("Update is not a valid APK")
+        check(got.packageName == context.packageName) { "Update is for ${got.packageName}, not ${context.packageName}" }
+        val mine = pm.getPackageInfo(context.packageName, flags)
+        check(androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(got) > androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(mine)) {
+            "Update is not newer than the installed version"
+        }
+        fun certs(i: android.content.pm.PackageInfo): Set<String> =
+            (if (android.os.Build.VERSION.SDK_INT >= 28) i.signingInfo?.apkContentsSigners?.toList()
+             else @Suppress("DEPRECATION") i.signatures?.toList()).orEmpty().map { it.toCharsString() }.toSet()
+        check(certs(got).isNotEmpty() && certs(got) == certs(mine)) { "Update is not signed by this app's key" }
+    }
 
     /**
      * Launch the system installer for [apk]. If the user hasn't granted "install unknown apps" to

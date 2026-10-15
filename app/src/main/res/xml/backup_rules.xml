@@ -10,8 +10,11 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" />
+        <!-- Recent sessions: meeting titles and file URIs are meeting content, not settings. -->
+        <exclude domain="sharedpref" path="primeminutes_recents.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" />
+        <exclude domain="sharedpref" path="primeminutes_recents.xml" />
     </device-transfer>
 </data-extraction-rules>
