@@ -267,7 +267,13 @@ final class Model: ObservableObject {
         if let job { s.id = job.id; s.date = job.date; s.audio = job.audio; if let t = job.title, !t.isEmpty { s.title = t } }
         if !summary.isEmpty { s.reader = Prefs.readerId }
         let old = resummarized.removeValue(forKey: s.id)
-        if let old { s.speakerNames = old.speakerNames }   // re-summarize keeps the transcript, so its speaker names too
+        // Re-summarize keeps the transcript: the stored one, read NOW — lines, speaker names or a title the user
+        // edited while the reader ran were overwritten by the snapshot taken at the tap.
+        if let old {
+            let cur = await library.all().first { $0.id == s.id } ?? old
+            s.lines = cur.lines; s.speakerNames = cur.speakerNames
+            if cur.title != old.title { s.title = cur.title }
+        }
         do { try await library.save(s) } catch { status = L("session_save_failed"); Notifier.failed(s.title); return }   // Android: never claim success on a failed save
         NotificationCenter.default.post(name: .voxSessionSaved, object: s, userInfo: old.map { ["undo": $0] })
         sessions = await library.all(); await syncQueue()
@@ -521,9 +527,9 @@ final class Model: ObservableObject {
     /// Processes every queued job in order (also at launch: recordings cut short by a kill are picked up here).
     /// Android re-transcribe / re-summarize: re-queues the session's saved audio under the same id (summarize reuses the stored transcript, so only the reader runs).
     func rerun(_ s: Session, transcribe: Bool) {
-        guard let a = s.audio else { return }
+        guard let a = s.audio else { StatusLog.add("trace rerun: no audio"); return }
         let j = Job(id: s.id, date: s.date, audio: a, title: s.title)
-        guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { return }
+        guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { StatusLog.add("trace rerun: audio file missing"); return }
         Task { guard !(await queue.contains(s.id)) else { return }   // already queued (double tap): one row, one run
         if transcribe { Checkpoint.remove(s.id); resummarized[s.id] = nil } else { Checkpoint.save(s.lines, s.id); resummarized[s.id] = s }
         status = L("status_starting")   // Android: shown until the first model line
