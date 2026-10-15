@@ -61,6 +61,14 @@ object AskEngine {
 
     data class Turn(val question: String, val answer: String, val excerpts: List<Excerpt>, val done: Boolean)
 
+    /** A citation checked against the excerpts the model was given for THIS answer: the exact tag, else the
+     *  nearest excerpt of the same meeting (a mistyped second), else null — a meeting it was never shown,
+     *  or an id it invented. */
+    fun cite(id: String, sec: Int, excerpts: List<Excerpt>): Excerpt? {
+        val same = excerpts.filter { it.entry.id == id }
+        return same.firstOrNull { it.sec == sec } ?: same.minByOrNull { kotlin.math.abs(it.sec - sec) }
+    }
+
     private val _phase = MutableStateFlow<Phase>(Phase.Idle)
     val phase: StateFlow<Phase> = _phase
     private val _turns = MutableStateFlow<List<Turn>>(emptyList())
