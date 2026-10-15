@@ -10,6 +10,8 @@ struct ReaderModel {
     let files: [ModelFile]
     /// The GPU's prefill/decode graph (ML Drift), fetched only when the user tests the GPU; E2B only.
     var gpu: ModelFile? = nil
+    /// The chat template the weights were trained with.
+    var template: ChatTemplate = .gemma4
     func url(_ f: ModelFile) -> URL { URL(string: f.remote.hasPrefix("https://") ? f.remote : "https://huggingface.co/\(repo)/resolve/\(rev)/\(f.remote)")! }
 
     /// Speech engine (ASR + diarization), the two pins of Android `ModelManager.NEMO_FILES`; CPU only.

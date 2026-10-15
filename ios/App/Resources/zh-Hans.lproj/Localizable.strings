@@ -150,6 +150,7 @@
 "re_transcribe" = "重新转录";
 "re_summarize" = "重新摘要";
 "studio_no_match" = "没有符合搜索的场次。";
+"studio_searching" = "搜索中…";
 "status_processing" = "处理中…";
 "action_share_audio" = "分享音频";
 "delete_confirm_many" = "确定要永久删除 %d 个场次吗？音频与转写文本都会被移除。";

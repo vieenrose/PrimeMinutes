@@ -9,7 +9,9 @@ import Combine
     static let maxPassages = 8, passageTokens = 1500, answerTokens = 320, noteBonus: Float = 0.05
 
     enum Phase: Equatable { case idle, busy, retrieving, loading, answering, failed(String) }
-    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float; var id: String { session.id.uuidString + "@\(sec)" } }
+    /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
+    /// (115 for a line starting at 115.4 s opened the line before).
+    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var id: String { session.id.uuidString + "@\(sec)" } }
     struct Turn: Identifiable { let id = UUID(); let question: String; var answer: String; let excerpts: [Excerpt]; var done: Bool }
 
     @Published private(set) var phase = Phase.idle
@@ -40,11 +42,12 @@ import Combine
                     let s = try holder.open()
                     s.resume()
                     await MainActor.run { AskEngine.shared.phase = .answering }
-                    var prompt = first ? ReaderProtocol.p0 + Self.system(lang) + ReaderProtocol.p1 : ReaderProtocol.p3
-                    prompt += Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
+                    let t = s.template
+                    var prompt = first ? t.p0 + Self.system(lang) + t.p1 : t.p3
+                    prompt += Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                     if s.append(s.tokenize(prompt, special: true)) < 0 {
                         s.reset()   // the conversation outgrew the cache: start over with this question only
-                        let fresh = ReaderProtocol.p0 + Self.system(lang) + ReaderProtocol.p1 + Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + ReaderProtocol.p2
+                        let fresh = t.p0 + Self.system(lang) + t.p1 + Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
                     var sb = ""
@@ -114,7 +117,7 @@ final class AskHolder: @unchecked Sendable {
         let t0 = Date()
         let e = try MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache")
         StatusLog.add(String(format: "reader loaded for Ask in %.1f s", Date().timeIntervalSince(t0)))
-        let s = MfaSession(engine: e, tok: try tokenizer())
+        let s = MfaSession(engine: e, tok: try tokenizer(), template: m.template)
         engine = e; session = s; modelId = m.id
         return s
     }
@@ -136,7 +139,7 @@ final class AskHolder: @unchecked Sendable {
         guard let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil else { return [] }
         let hits = LibrarySearch.dense(sessions, qv: qv, maxPassages: 4, snippetChars: 1200)
         let all = hits.flatMap { h in h.passages.filter { $0.kind != .meeting }.map { p in
-            AskEngine.Excerpt(session: h.session, sec: Int(p.timeSec), text: p.snippet, score: p.score + (p.kind == .note ? AskEngine.noteBonus : 0)) } }
+            AskEngine.Excerpt(session: h.session, sec: Int(p.timeSec), text: p.snippet, score: p.score + (p.kind == .note ? AskEngine.noteBonus : 0), at: p.timeSec) } }
             .sorted { $0.score > $1.score }
         var out: [AskEngine.Excerpt] = [], tokens = 0
         for x in all {
@@ -172,7 +175,7 @@ struct AskSheet: View {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
                                     Text(Self.linked(t.answer, t.excerpts)).font(.body).textSelection(.enabled)
                                         .environment(\.openURL, OpenURLAction { u in
-                                            if u.scheme == "voxask", let s = t.excerpts.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Double(u.path.dropFirst()) { open(s.session, sec); return .handled }
+                                            if u.scheme == "voxask", let s = t.excerpts.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.excerpts.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
                                             return .systemAction })
                                 }
                                 if !t.excerpts.isEmpty && t.done {
@@ -180,7 +183,7 @@ struct AskSheet: View {
                                     // By position: a note and a transcript passage at the same second share the id
                                     // (session@sec), and SwiftUI then drew the first one twice.
                                     ForEach(Array(t.excerpts.enumerated()), id: \.offset) { _, x in
-                                        Button { open(x.session, Double(x.sec)) } label: {
+                                        Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                                 Text(x.session.title + " — " + x.text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)

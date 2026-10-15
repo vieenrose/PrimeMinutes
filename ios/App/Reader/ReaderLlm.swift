@@ -4,6 +4,8 @@ import Foundation
 /// conversation, extended by `append` (prefill only) and `generateContinue` (its tokens join the
 /// sequence), restarted by `reset`. Not thread-safe: the reader lane serializes every call.
 protocol ReaderLlm: AnyObject {
+    /// The model's chat template: every turn the reader writes is framed by its pieces.
+    var template: ChatTemplate { get }
     /// Token ids of `text` without BOS; `special` parses template pieces (`<|turn>` …).
     func tokenize(_ text: String, special: Bool) -> [Int]
     /// Prefill `tokens` onto the cache. Returns the new sequence length, or -1 on failure.
@@ -13,6 +15,37 @@ protocol ReaderLlm: AnyObject {
     func generateContinue(maxTokens: Int, stop: String, temp: Float, onToken: (String) -> Void) -> String
     var seqLength: Int { get }
     func reset()
+}
+
+extension ReaderLlm {
+    var template: ChatTemplate { .gemma4 }
+}
+
+/// A model's chat template as literal pieces (Android `ChatTemplate`): what the model's own template
+/// renders around a system, user and model turn (thinking off). It travels with the `ReaderModel`, so
+/// weights with another template (or a fine-tune with an adjusted protocol) need no change in the
+/// reader, Ask or the summarizer.
+struct ChatTemplate {
+    /// Text of the BOS token; the tokenizer does not parse it, so it is mapped to `bosId`.
+    let bos: String, bosId: Int
+    /// Open a system, user and model turn.
+    let system: String, user: String, model: String
+    /// Closes a turn (what the model writes at the end of its reply), and what comes before the next turn.
+    let end: String, sep: String
+    /// Token ids that end a reply: the engine stops on them and they are left out of the kept sequence.
+    let stopIds: Set<Int>
+
+    /// Before the system prompt; system → user; user → model; model → next user.
+    var p0: String { bos + system }
+    var p1: String { end + sep + user }
+    var p2: String { end + sep + model }
+    var p3: String { end + sep + user }
+    /// Opens a conversation that has no system turn.
+    var userFirst: String { bos + user }
+
+    /// Gemma 4, thinking off (note §4.1). Stop ids: `<eos>` (1), the metadata's third stop id (50), `<turn|>` (106).
+    static let gemma4 = ChatTemplate(bos: "<bos>", bosId: 2, system: "<|turn>system\n", user: "<|turn>user\n", model: "<|turn>model\n",
+                                     end: "<turn|>", sep: "\n", stopIds: [1, 50, 106])
 }
 
 enum AgentState { case starting, listening, reading, restarting, summarizing, done }

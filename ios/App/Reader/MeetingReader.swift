@@ -39,7 +39,8 @@ final class MeetingReader {
 
     /// Prefill the fresh prefix (system + empty journal).
     func start() throws {
-        for (key, text) in [("p0", P.p0), ("p1", P.p1), ("p2", P.p2), ("p3", P.p3)] { pieces[key] = llm.tokenize(text, special: true) }
+        let t = llm.template
+        for (key, text) in [("p0", t.p0), ("p1", t.p1), ("p2", t.p2), ("p3", t.p3)] { pieces[key] = llm.tokenize(text, special: true) }
         state(.starting)
         try prefillFresh(P.journalEmpty)
         started = true

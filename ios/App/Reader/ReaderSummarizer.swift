@@ -15,8 +15,8 @@ struct ReaderSummarizer {
         llm.reset()
         let toks = fitting(journal, 48) { "以下是一場會議的筆記：\n\n" + $0 + "\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。" }
         guard llm.append(toks) >= 0 else { return nil }
-        let raw = llm.generateContinue(maxTokens: 48, stop: "<turn|>", temp: ReaderProtocol.temp) { _ in }
-        let first = raw.components(separatedBy: "<turn|>")[0].split(whereSeparator: \.isNewline)
+        let raw = llm.generateContinue(maxTokens: 48, stop: llm.template.end, temp: ReaderProtocol.temp) { _ in }
+        let first = raw.components(separatedBy: llm.template.end)[0].split(whereSeparator: \.isNewline)
             .map(String.init).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let junk = CharacterSet(charactersIn: "「」\"*# ")
         guard var t = first?.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: junk) else { return nil }
@@ -38,8 +38,8 @@ struct ReaderSummarizer {
             "說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。" +
             "只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。" }
         guard llm.append(toks) >= 0 else { return nil }
-        let raw = llm.generateContinue(maxTokens: Self.proseMax, stop: "<turn|>", temp: ReaderProtocol.temp) { _ in }
-        return Self.cleanProse(raw, known: Set(journal.map(\.ts)))
+        let raw = llm.generateContinue(maxTokens: Self.proseMax, stop: llm.template.end, temp: ReaderProtocol.temp) { _ in }
+        return Self.cleanProse(raw, known: Set(journal.map(\.ts)), turnEnd: llm.template.end)
     }
 
     /// The one-shot prompt over the notes, compacted further while it would not leave `maxOut`
@@ -49,8 +49,8 @@ struct ReaderSummarizer {
         while true {
             let notes = (chars > 0 ? ReaderProtocol.compactNotes(journal, budgetChars: chars) : journal)
                 .map(ReaderProtocol.render).joined(separator: "\n")
-            let toks = llm.tokenize("<bos><|turn>user\n", special: true) + llm.tokenize(prompt(notes), special: false) +
-                llm.tokenize("<turn|>\n<|turn>model\n", special: true)
+            let toks = llm.tokenize(llm.template.userFirst, special: true) + llm.tokenize(prompt(notes), special: false) +
+                llm.tokenize(llm.template.p2, special: true)
             if chars <= 0 || toks.count + maxOut + 8 <= budget.ctxBudget || chars <= 800 { return toks }
             chars -= 400
         }
@@ -62,9 +62,9 @@ struct ReaderSummarizer {
 
     /// The prose reply made presentable: unknown `[ts]` stripped, no headings or bullets, and a
     /// reply cut off by `proseMax` (no end-of-turn) ends at its last whole sentence.
-    static func cleanProse(_ raw: String, known: Set<String>) -> String? {
-        let ended = raw.contains("<turn|>")
-        var text = raw.components(separatedBy: "<turn|>")[0]
+    static func cleanProse(_ raw: String, known: Set<String>, turnEnd: String = ChatTemplate.gemma4.end) -> String? {
+        let ended = raw.contains(turnEnd)
+        var text = raw.components(separatedBy: turnEnd)[0]
         let ns = text as NSString
         var stripped = ""; var last = 0
         for m in tsRx.matches(in: text, range: NSRange(location: 0, length: ns.length)) {

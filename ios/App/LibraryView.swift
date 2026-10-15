@@ -19,18 +19,21 @@ struct LibraryView: View {
     @ObservedObject private var indexer = LibraryIndexer.shared
     @State private var hits: [LibrarySearch.Hit] = []
     @State private var searchTask: Task<Void, Never>?
+    /// The query whose semantic half is still running: until it lands, no hit means "searching", not "no match".
+    @State private var densePending: String?
     @State private var asking: String?
     /// Fused search over the library, debounced; lexical at once, semantic once the embedder answers.
     private func runSearch() {
         searchTask?.cancel()
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { hits = []; return }
+        guard !q.isEmpty else { hits = []; densePending = nil; return }
         let sessions = m.sessions, rec = m.recording
         hits = LibrarySearch.lexical(sessions, query: q)
+        densePending = q.count >= 2 && EmbedHost.ready && EmbedHost.mayLoad(recording: rec) ? q : nil
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 250_000_000); if Task.isCancelled { return }
             let r = await Task.detached(priority: .userInitiated) { LibrarySearch.search(sessions, query: q, recording: rec) }.value
-            if !Task.isCancelled { hits = r }
+            if !Task.isCancelled { hits = r; if densePending == q { densePending = nil } }
         }
     }
     private var askReady: Bool { Prefs.askEnabled && AskEngine.available }
@@ -217,7 +220,7 @@ struct LibraryView: View {
                             Text(L("library_empty")).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.top, 4)
                         }.frame(maxWidth: .infinity).padding(.top, 40)
                     }
-                    if !m.sessions.isEmpty && days.isEmpty { Text(L("studio_no_match")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 40) }
+                    if !m.sessions.isEmpty && days.isEmpty { Text(L(densePending != nil ? "studio_searching" : "studio_no_match")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 40) }
                     ForEach(m.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
                     ForEach(days, id: \.0) { day, items in
                         if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }

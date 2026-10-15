@@ -16,10 +16,8 @@ enum ReaderProtocol {
     static let dupLookback = 30
     static let dupJaccard = 0.6
 
-    static let p0 = "<bos><|turn>system\n"
-    static let p1 = "<turn|>\n<|turn>user\n"
-    static let p2 = "<turn|>\n<|turn>model\n"
-    static let p3 = "<turn|>\n<|turn>user\n"
+    // The chat template pieces (before system, system→user, user→model, model→next user) come with
+    // the model: ReaderLlm.template (ReaderModel.template).
 
     static let journalHeader = "## 筆記本（至今）\n"
     static let journalEmpty = "（尚無筆記）"

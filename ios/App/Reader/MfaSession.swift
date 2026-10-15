@@ -99,13 +99,14 @@ final class MfaEngine {
 final class MfaSession: ReaderLlm {
     private let engine: MfaEngine, tok: SpTokenizer
     private let topK: Int, topP: Float, seed: UInt32
+    let template: ChatTemplate
     private var seq: [Int] = []
     /// Sticky: a stopped reading stays stopped through its remaining windows until `resume()`.
     private let cancelledLock = NSLock()
     private var cancelled = false
 
-    init(engine: MfaEngine, tok: SpTokenizer, topK: Int = 40, topP: Float = 0.95, seed: UInt32 = 0) {
-        self.engine = engine; self.tok = tok; self.topK = topK; self.topP = topP; self.seed = seed
+    init(engine: MfaEngine, tok: SpTokenizer, topK: Int = 40, topP: Float = 0.95, seed: UInt32 = 0, template: ChatTemplate = .gemma4) {
+        self.engine = engine; self.tok = tok; self.topK = topK; self.topP = topP; self.seed = seed; self.template = template
     }
 
     private var isCancelled: Bool { cancelledLock.lock(); defer { cancelledLock.unlock() }; return cancelled }
@@ -114,10 +115,10 @@ final class MfaSession: ReaderLlm {
 
     func tokenize(_ text: String, special: Bool) -> [Int] {
         // SentencePiece parses the template's pieces (<|turn>, <turn|>) but not <bos>: map it here.
-        guard special, text.contains("<bos>") else { return tok.encode(text) }
+        guard special, text.contains(template.bos) else { return tok.encode(text) }
         var out: [Int] = []
-        for (i, part) in text.components(separatedBy: "<bos>").enumerated() {
-            if i > 0 { out.append(MfaEngine.bos) }
+        for (i, part) in text.components(separatedBy: template.bos).enumerated() {
+            if i > 0 { out.append(template.bosId) }
             if !part.isEmpty { out += tok.encode(part) }
         }
         return out
@@ -150,7 +151,7 @@ final class MfaSession: ReaderLlm {
         }
         // The generated ids themselves join the sequence (re-tokenizing the text could differ and
         // break the engine's prefix reuse); an end-of-turn id is the model's, not the text's.
-        let kept = gen.filter { !Self.stopIds.contains($0) }
+        let kept = gen.filter { !template.stopIds.contains($0) }
         var text = tok.decode(kept)
         if stopped, let r = text.range(of: stop) { text = String(text[..<r.upperBound]) }
         seq += kept
@@ -163,7 +164,6 @@ final class MfaSession: ReaderLlm {
     var lastStats: [Double] { engine.lastStats }
     func reset() { seq.removeAll() }
 
-    private static let stopIds: Set<Int> = [1, 50, 106]
 }
 
 #endif
