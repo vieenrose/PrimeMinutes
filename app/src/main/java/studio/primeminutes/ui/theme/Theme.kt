@@ -15,6 +15,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -244,7 +245,16 @@ fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !pal.isDark
+            // Both bars follow the palette: the XML theme is Material.Light, so without this the
+            // dark palettes kept a light navigation bar (and dark icons on it).
+            @Suppress("DEPRECATION")
+            window.statusBarColor = pal.Slate900.toArgb()
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = pal.Slate900.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !pal.isDark
+                isAppearanceLightNavigationBars = !pal.isDark
+            }
         }
     }
     CompositionLocalProvider(LocalPrimeMinutesPalette provides pal) {

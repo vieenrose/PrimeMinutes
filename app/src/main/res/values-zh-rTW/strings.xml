@@ -102,6 +102,7 @@
 
     <!-- Player controls (content descriptions) -->
     <string name="cd_back5">倒退 5 秒</string>
+    <string name="cd_seek_bar">播放位置</string>
     <string name="cd_forward5">快進 5 秒</string>
     <string name="cd_play">播放</string>
     <string name="cd_pause">暫停</string>
@@ -195,6 +196,8 @@
     <string name="cd_line_actions">此句操作</string>
     <string name="speaker_move_line">將此句移至</string>
     <string name="speaker_merge_into">合併語者至</string>
+    <string name="speaker_merged">已合併語者</string>
+    <string name="speaker_line_moved">已移動此行</string>
     <plurals name="status_session_loaded">
         <item quantity="other">已載入場次 — %d 行</item>
     </plurals>
@@ -229,6 +232,7 @@
     <string name="svc_paused_time_limit">處理已因系統時間限制而暫停——重新開啟 Prime Minutes 即可繼續。</string>
 
     <string name="library_empty">尚無錄音——每段錄音都會自動儲存在這裡。</string>
+    <string name="first_run_download_notice">第一次錄音會下載語音與摘要模型（約 %1$d MB），建議使用 Wi‑Fi。</string>
 
     <!-- Studio refonte -->
     <string name="back">返回</string>
@@ -372,7 +376,7 @@
     <string name="lic_nemo">nemo-x-asr-diarizer（串流語音辨識與語者分離）</string>
     <string name="lic_crispasr">CrispASR（X-ASR 執行環境）</string>
     <string name="lic_audiocpp">audio.cpp（Nemotron-3 語者分離執行環境）</string>
-    <string name="lic_ggml">LiteRT · SentencePiece（AI 筆記）</string>
+    <string name="lic_ggml">LiteRT · SentencePiece（摘要）</string>
     <string name="lic_xasr">X-ASR 中英模型</string>
     <string name="lic_nemotron">Nemotron-3 語者分離模型</string>
     <string name="lic_opencc">OpenCC（繁體 / 簡體）</string>
@@ -382,7 +386,7 @@
     <string name="settings_show_actions">顯示行動項目</string>
     <string name="settings_show_actions_hint">在摘要下方列出模型擷取的行動項目。約五分之一可能與逐字稿不符，點時間即可核對。</string>
     <string name="settings_ask">向會議提問（實驗性）</string>
-    <string name="settings_ask_hint">在工作室的搜尋框輸入問題並點「提問」按鈕：摘要模型根據搜尋找到的段落作答並註明出處。需要搜尋模型和摘要模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。</string>
+    <string name="settings_ask_hint">在首頁的會議搜尋框輸入問題並點「提問」按鈕：摘要模型根據搜尋找到的段落作答並註明出處。需要搜尋模型和摘要模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。</string>
     <string name="ask_title">提問</string>
     <string name="ask_experimental">實驗性</string>
     <string name="ask_cd">向會議提問</string>
@@ -399,7 +403,7 @@
     <string name="agent_view_detailed">顯示詳細過程</string>
     <string name="agent_view_simple">簡化顯示</string>
     <string name="agent_simple_listening">閱讀逐字稿中——進度條滿時整理下一批筆記</string>
-    <string name="settings_reader_model">AI 筆記模型</string>
+    <string name="settings_reader_model">摘要模型</string>
     <string name="reader_model_e2b">行動版 E2B</string>
     <string name="reader_model_e4b">行動版 E4B</string>
     <string name="reader_model_hint">行動版模型使用更快的引擎，記憶範圍較短。E2B：下載 %1$d MB，約佔 1.3 GB 記憶體。E4B：%2$d MB，約 3 GB 記憶體，錯誤較少。</string>

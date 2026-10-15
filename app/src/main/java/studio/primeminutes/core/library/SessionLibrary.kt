@@ -173,7 +173,10 @@ object SessionLibrary {
         // is one atomic section (metaLock) so a rename can't slip between them and be lost.
         val updated = synchronized(metaLock) {
             val u = entry.copy(
-                title = byId(context, entry.id)?.title ?: entry.title ?: title?.trim()?.ifBlank { null },
+                // A silent capture finished "Done" with a date for a title, indistinguishable from a
+                // real meeting in the list: name it after what happened.
+                title = byId(context, entry.id)?.title ?: entry.title ?: title?.trim()?.ifBlank { null }
+                    ?: context.getString(studio.primeminutes.R.string.status_no_speech).takeIf { utterances.isEmpty() },
                 status = Status.DONE,
             )
             runCatching { writeMeta(u) }.onFailure { Log.w(TAG, "could not update library meta", it) }

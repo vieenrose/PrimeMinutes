@@ -1,5 +1,7 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -153,7 +155,7 @@ private fun ExportGroupCard(
                             .clip(chip)
                             .background(if (on) pal.Sky else Color.Transparent)
                             .border(1.dp, if (on) pal.Sky else pal.Hairline, chip)
-                            .clickable { selected = f }
+                            .selectable(selected = on, role = Role.RadioButton) { selected = f }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     ) {
                         Text(

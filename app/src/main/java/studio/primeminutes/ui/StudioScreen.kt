@@ -1,5 +1,7 @@
 package studio.primeminutes.ui
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.shape.CircleShape
 
 import androidx.activity.compose.BackHandler
@@ -418,6 +420,26 @@ fun StudioScreen(
                     textAlign = TextAlign.Center,
                 )
                 if (firstRun) {
+                    // The first recording downloads the speech + summary models: say how much before
+                    // it starts, so nobody burns a mobile plan without knowing.
+                    var pendingMb by remember { mutableStateOf(0L) }
+                    LaunchedEffect(Unit) {
+                        pendingMb = withContext(Dispatchers.IO) {
+                            val mm = studio.primeminutes.core.models.ModelManager(context)
+                            val llm = studio.primeminutes.core.models.LlmRegistry.byId(
+                                studio.primeminutes.core.config.ConfigStore.load(context).llmModelId)
+                            ((if (mm.asrReady()) 0L else mm.asrDownloadBytes()) +
+                                (if (mm.llmReady(llm)) 0L else llm.totalBytes)) / 1_000_000
+                        }
+                    }
+                    if (pendingMb > 0) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.first_run_download_notice, pendingMb.toInt()),
+                            color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     Spacer(Modifier.height(20.dp))
                     androidx.compose.material3.OutlinedButton(
                         onClick = onImport,

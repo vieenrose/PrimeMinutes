@@ -1,5 +1,8 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -229,7 +232,8 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
             .clip(outer)
             .background(pal.PanelSurface)
             .border(1.dp, pal.Hairline, outer)
-            .padding(4.dp),
+            .padding(4.dp)
+            .selectableGroup(),
     ) {
         labels.forEachIndexed { i, label ->
             val on = i == selected
@@ -238,7 +242,7 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
                     .weight(1f)
                     .clip(seg)
                     .background(if (on) (if (pal.isEink) pal.Sky else pal.ActiveTint) else Color.Transparent)
-                    .clickable { onSelect(i) }
+                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {

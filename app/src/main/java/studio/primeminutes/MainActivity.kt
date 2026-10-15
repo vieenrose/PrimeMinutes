@@ -1,5 +1,13 @@
 package studio.primeminutes
 
+import androidx.annotation.StringRes
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -48,6 +56,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -656,6 +666,9 @@ private fun TranscribeScreen(
 
     var editingIndex by remember { mutableIntStateOf(-1) }
     var editingSpeakerId by remember { mutableStateOf<Int?>(null) }
+    // The line whose chip was tapped: only that one turns into the name field (every line of the
+    // speaker did, a column of identical text fields).
+    var editingSpeakerLine by remember { mutableStateOf(-1) }
     var editingTitle by remember { mutableStateOf(false) }
     var editingSummary by remember { mutableStateOf(false) }
     var editingActions by remember { mutableStateOf(false) }
@@ -2059,10 +2072,26 @@ private fun TranscribeScreen(
         editingIndex = -1; editingSpeakerId = null
         sessionDirty = true   // a merge/move was never saved: nothing marked the session changed
     }
+    // A merge is one tap in a long-press menu and rewrites every line of that speaker: offer it back.
+    fun applySpeakerEditUndoable(result: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>, @StringRes done: Int) {
+        val before = utterances.toList() to speakerNames.toMap()
+        applySpeakerEdit(result)
+        val ticket = sessionGen
+        scope.launch {
+            val res = snackbarHostState.showSnackbar(
+                message = context.getString(done),
+                actionLabel = context.getString(R.string.undo),
+                duration = SnackbarDuration.Long,
+            )
+            if (res == SnackbarResult.ActionPerformed && sessionGen == ticket && utterances.toList() == result.first) {
+                applySpeakerEdit(before)
+            }
+        }
+    }
     fun reassignLine(index: Int, target: Int) =
-        applySpeakerEdit(SpeakerEdits.reassign(utterances.toList(), speakerNames.toMap(), index, target))
+        applySpeakerEditUndoable(SpeakerEdits.reassign(utterances.toList(), speakerNames.toMap(), index, target), R.string.speaker_line_moved)
     fun mergeSpeaker(from: Int, into: Int) =
-        applySpeakerEdit(SpeakerEdits.merge(utterances.toList(), speakerNames.toMap(), from, into))
+        applySpeakerEditUndoable(SpeakerEdits.merge(utterances.toList(), speakerNames.toMap(), from, into), R.string.speaker_merged)
 
     LaunchedEffect(sessionGen) { sessTab = if (summary != null) 0 else 1 }
     val stats = computeDiarizationStats(utterances)
@@ -2186,7 +2215,7 @@ private fun TranscribeScreen(
                 highlight = if (searchActive) searchQuery else "",
                 isEditing = editingIndex == idx,
                 speakerNames = speakerNames,
-                editingSpeakerId = editingSpeakerId,
+                editingSpeakerId = editingSpeakerId?.takeIf { editingSpeakerLine == idx },
                 onSeek = { sec -> resumeOrRecover((sec * 1000).toInt()) },
                 onBeginEdit = { editingIndex = idx; editingSpeakerId = null },
                 onSaveText = { newText ->
@@ -2197,7 +2226,7 @@ private fun TranscribeScreen(
                     }
                 },
                 onCancelEdit = { editingIndex = -1 },
-                onBeginSpeakerEdit = { sid -> editingSpeakerId = sid; editingIndex = -1 },
+                onBeginSpeakerEdit = { sid -> editingSpeakerId = sid; editingSpeakerLine = idx; editingIndex = -1 },
                 onCommitSpeakerName = { sid, name ->
                     if (name.isBlank()) speakerNames.remove(sid)
                     else speakerNames[sid] = SpeakerName(name, confidence = "user")
@@ -3267,7 +3296,7 @@ private fun PlayerBar(
                         .clip(CircleShape)
                         // Dark: the solid accent (the brand fill is a navy that swallows the dark glyph).
                         .background(if (pal.isDark) androidx.compose.ui.graphics.SolidColor(pal.Sky) else pal.BrandGradient)
-                        .clickable(onClick = onPlayPause),
+                        .clickable(role = Role.Button, onClick = onPlayPause),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -3374,10 +3403,19 @@ private fun TimelineStrip(
     val pal = LocalPrimeMinutesPalette.current
     val durSec = (durationMs / 1000.0).coerceAtLeast(0.001)
     var dragging by remember { mutableStateOf(false) }
+    val seekLabel = stringResource(R.string.cd_seek_bar)
     Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(pal.Slate800)
+            // A Canvas has no semantics: TalkBack skipped the scrubber. Expose it as a slider
+            // (position read out as time, volume keys / swipe step by 1/20 of the meeting).
+            .semantics {
+                contentDescription = seekLabel
+                stateDescription = "${fmtMs(progressMs)} / ${fmtMs(durationMs)}"
+                progressBarRangeInfo = ProgressBarRangeInfo(progressMs.toFloat(), 0f..durationMs.coerceAtLeast(1).toFloat(), 20)
+                setProgress { v -> if (durationMs > 0) { onSeekTo(v.toInt().coerceIn(0, durationMs)); true } else false }
+            }
             .pointerInput(durationMs) {
                 detectTapGestures { offset ->
                     if (size.width > 0 && durationMs > 0) {
@@ -3685,5 +3723,12 @@ private fun SpeakerTag(
                     }
                 },
         )
+        // Visible Save / Cancel: the keyboard's Done was the only way out (and it hides on some IMEs).
+        IconButton(onClick = { onCommit(value.trim()) }, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.save), tint = color)
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = LocalPrimeMinutesPalette.current.Slate400)
+        }
     }
 }

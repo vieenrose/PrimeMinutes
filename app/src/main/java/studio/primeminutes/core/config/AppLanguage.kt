@@ -46,7 +46,7 @@ object AppLanguage {
     }
 
     fun localeFor(code: String): Locale? = when (code) {
-        EN -> Locale.ENGLISH
+        EN -> Locale.US
         ZH_TW -> Locale.TAIWAN
         ZH_CN -> Locale.SIMPLIFIED_CHINESE
         else -> null
