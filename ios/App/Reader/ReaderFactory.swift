@@ -15,10 +15,10 @@ enum ReaderFactory {
         do {
             tok = try SpTokenizer(path: dir + "/Section1_SP_Tokenizer.spiece")
             let onGpu = gpu.flatMap { g -> MfaEngine? in
-                do { return try MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: threads, weightCache: "", gpuGraph: g) }
+                do { return try MfaEngine(dir: dir, ctx: Prefs.reader.budget.ctxBudget, threads: threads, weightCache: "", gpuGraph: g) }
                 catch { FileHandle.standardError.write(Data("primeminutes-reader: GPU load failed, reading on the CPU: \(error)\n".utf8)); return nil }
             }
-            eng = try onGpu ?? MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: threads, weightCache: dir + "/weights.xnnpack_cache")
+            eng = try onGpu ?? MfaEngine(dir: dir, ctx: Prefs.reader.budget.ctxBudget, threads: threads, weightCache: dir + "/weights.xnnpack_cache")
         } catch {
             FileHandle.standardError.write(Data("primeminutes-reader: load failed, using the stub: \(error)\n".utf8))
             Prefs.reportReadFailure()

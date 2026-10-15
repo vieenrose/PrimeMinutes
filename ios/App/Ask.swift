@@ -45,11 +45,13 @@ import Combine
                     let t = s.template
                     var prompt = first ? t.p0 + Self.system(lang) + t.p1 : t.p3
                     prompt += Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
+                    let tPrompt = Date()
                     if s.append(s.tokenize(prompt, special: true)) < 0 {
                         s.reset()   // the conversation outgrew the cache: start over with this question only
                         let fresh = t.p0 + Self.system(lang) + t.p1 + Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
+                    let pre = s.lastStats   // the prompt's prefill (append runs its own generate call)
                     var sb = ""
                     let t0 = Date()
                     _ = s.generateContinue(maxTokens: Self.answerTokens, stop: "", temp: ReaderProtocol.temp) { piece in
@@ -58,7 +60,7 @@ import Combine
                         let now = sb
                         DispatchQueue.main.async { AskEngine.shared.publish(now, done: false) }
                     }
-                    let st = s.lastStats; StatusLog.add(String(format: "ask answered in %.1f s: prefilled %d (reused %d) in %.1f s, generated %d in %.1f s; seq %d / ctx %d", Date().timeIntervalSince(t0), Int(st[0]), Int(st[1]), st[3], Int(st[2]), st[4], s.seqLength, s.context))
+                    let st = s.lastStats; StatusLog.add(String(format: "ask answered in %.1f s: prefilled %d (reused %d) in %.1f s, generated %d in %.1f s; seq %d / ctx %d", Date().timeIntervalSince(tPrompt), Int(pre[0]), Int(pre[1]), pre[3], Int(st[2]), st[4], s.seqLength, s.context))
                     return .success(sb.trimmingCharacters(in: .whitespacesAndNewlines))
                 } catch { return .failure(error) }
             }.value
@@ -115,7 +117,7 @@ final class AskHolder: @unchecked Sendable {
         guard Storage.ready(m) else { throw ReaderError(description: L("ask_no_model")) }
         let dir = Storage.modelsRoot.appendingPathComponent(m.id).path
         let t0 = Date()
-        let e = try MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache")
+        let e = try MfaEngine(dir: dir, ctx: m.budget.ctxBudget, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache")
         StatusLog.add(String(format: "reader loaded for Ask in %.1f s", Date().timeIntervalSince(t0)))
         let s = MfaSession(engine: e, tok: try tokenizer(), template: m.template)
         engine = e; session = s; modelId = m.id
