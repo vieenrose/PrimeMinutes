@@ -141,37 +141,41 @@ object PrimeMinutesSession {
     ): Built? = withContext(Dispatchers.IO) {
         if (audioUri == null) return@withContext null
         dir.mkdirs()
-        // Stream-decode to a 16 kHz mono work WAV, then stream that to OGG/Opus — never the whole
-        // waveform in RAM, so multi-hour sessions encode without OOM. BUT when the source is ALREADY
-        // a canonical 16 kHz mono WAV (a library capture / decode output — the common re-save case),
-        // skip the decode entirely and stream that file straight through: on a long meeting that is
-        // the single most expensive step, paid on every attach/edit-save for nothing.
+        // Already one of OUR session files (an edit re-save of a library entry — opened through a
+        // cache copy named session.bin, hence the content check — or sharing one): the AAC audio is
+        // unchanged, so only the tags are rewritten. Decoding and re-encoding the whole meeting for
+        // that took over a minute on the Note10+, on every edit.
         val srcFile = audioUri.takeIf { it.scheme == "file" }?.path?.let(::File)
-        val reuseSource = srcFile != null && WavIo.isCanonical16kMono(srcFile)
-        val workWav: File
-        if (reuseSource) {
-            workWav = srcFile!!
+        val retagSource = srcFile != null && srcFile.isFile && isMp4(srcFile) &&
+            runCatching { Mp4Tags.readSessionBlob(srcFile) != null }.getOrDefault(false)
+        val plain: File
+        if (retagSource) {
+            plain = srcFile!!
         } else {
-            workWav = File(dir, ".audio_tmp.wav")
-            val decoded = runCatching {
-                AudioDecoder.decodeToWav16k(context, audioUri, workWav) { _, _ -> }
-            }.getOrElse { android.util.Log.w("primeminutes-ogg", "decode failed", it); null }
-            if (decoded == null || decoded <= 0L) { workWav.delete(); return@withContext null }
-        }
-        // A SHA-256 of the decoded audio — a stable fingerprint that makes the cover an ID for THIS
-        // track (unchanged by transcript edits). Hashed here, before the work WAV is consumed below.
-        val audioId = MessageDigest.getInstance("SHA-256").run {
-            workWav.inputStream().use { ins -> val b = ByteArray(1 shl 16); while (true) { val n = ins.read(b); if (n < 0) break; update(b, 0, n) } }
-            digest()
-        }
-        // Dot-prefixed temp name so it can never collide with a suggestFileName() output (which is
-        // trimmed of leading dots), avoiding deleting the very file we return in the share flow.
-        val plain = File(dir, ".audio_tmp.${format.ext}")
-        val transcoded = AudioTranscoder.wavToM4aAac(workWav, plain)
-        if (!reuseSource) workWav.delete()   // never delete the reused SOURCE (the library capture)
-        if (!transcoded) {
-            android.util.Log.w("primeminutes-session", "wav->${format.ext} transcode returned false")
-            return@withContext null
+            // Stream-decode to a 16 kHz mono work WAV, then stream that to AAC — never the whole
+            // waveform in RAM, so multi-hour sessions encode without OOM. BUT when the source is ALREADY
+            // a canonical 16 kHz mono WAV (a library capture / decode output), skip the decode and
+            // stream that file straight through: on a long meeting it is the most expensive step.
+            val reuseSource = srcFile != null && WavIo.isCanonical16kMono(srcFile)
+            val workWav: File
+            if (reuseSource) {
+                workWav = srcFile!!
+            } else {
+                workWav = File(dir, ".audio_tmp.wav")
+                val decoded = runCatching {
+                    AudioDecoder.decodeToWav16k(context, audioUri, workWav) { _, _ -> }
+                }.getOrElse { android.util.Log.w("primeminutes-ogg", "decode failed", it); null }
+                if (decoded == null || decoded <= 0L) { workWav.delete(); return@withContext null }
+            }
+            // Dot-prefixed temp name so it can never collide with a suggestFileName() output (which is
+            // trimmed of leading dots), avoiding deleting the very file we return in the share flow.
+            plain = File(dir, ".audio_tmp.${format.ext}")
+            val transcoded = AudioTranscoder.wavToM4aAac(workWav, plain)
+            if (!reuseSource) workWav.delete()   // never delete the reused SOURCE (the library capture)
+            if (!transcoded) {
+                android.util.Log.w("primeminutes-session", "wav->${format.ext} transcode returned false")
+                return@withContext null
+            }
         }
         // No generated cover art: the per-session identicon read as a random logo and was removed.
         // [coverEnabled] is kept for call-site compatibility and ignored.
@@ -216,7 +220,7 @@ object PrimeMinutesSession {
             if (plain != tagged && plain.exists()) { plain.copyTo(tagged, overwrite = true); embedded = false }
             else { android.util.Log.w("primeminutes-session", "session build produced no file"); return@withContext null }
         }
-        if (plain != tagged) plain.delete()
+        if (!retagSource) plain.delete()   // never the re-tagged SOURCE: it is the library's only audio
         // POSIX rename overwrites the target atomically — never pre-delete finalOut (a failure
         // after that would lose the previous good session file).
         if (!tagged.renameTo(finalOut)) {
