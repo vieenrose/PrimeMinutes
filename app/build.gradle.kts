@@ -139,6 +139,9 @@ dependencies {
     // The platform's org.json is a throw-on-call stub in local unit tests, and the MOSS
     // tokenizer/detokenizer parse the model's vocab.json with it.
     testImplementation("org.json:json:20240303")
+    // Robolectric: the library/queue persistence (files, SharedPreferences) tested on the JVM, in CI.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
