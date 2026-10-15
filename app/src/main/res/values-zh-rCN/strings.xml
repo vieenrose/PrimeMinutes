@@ -56,13 +56,13 @@
     <string name="settings_language">语言</string>
     <string name="settings_storage">存储空间</string>
     <string name="storage_total">设备上的模型：%1$s</string>
-    <string name="storage_model_pending">摘要模型尚未下载（%1$d MB），首次使用时自动下载。</string>
+    <string name="storage_model_pending">AI 笔记模型尚未下载（%1$d MB），首次使用时自动下载。</string>
     <string name="storage_none">尚未下载任何模型</string>
     <string name="storage_delete">删除模型</string>
     <string name="storage_delete_title">删除这个模型？</string>
     <string name="storage_delete_body">%1$s（%2$s）下次使用时会重新下载。</string>
     <string name="model_kind_asr">转录模型</string>
-    <string name="model_kind_llm">摘要模型</string>
+    <string name="model_kind_llm">AI 笔记模型</string>
     <string name="model_kind_embed">搜索模型</string>
     <string name="model_kind_other">其他</string>
     <string name="settings_about">关于</string>
@@ -133,7 +133,7 @@
     <string name="svc_downloading_models">正在下载模型（首次运行）…</string>
     <string name="svc_downloading_models_pct">正在下载模型… %d%%</string>
     <string name="svc_downloading_named">正在下载 %1$s…</string>
-    <string name="svc_summarization_model_pct">摘要模型… %d%%</string>
+    <string name="svc_summarization_model_pct">AI 笔记模型… %d%%</string>
     <string name="svc_preparing_named">正在准备 %1$s（仅首次，约一分钟）…</string>
     <string name="svc_summarizing">摘要中…</string>
     <string name="show_more">显示更多</string>
@@ -232,7 +232,7 @@
     <string name="svc_paused_time_limit">处理已因系统时间限制而暂停——重新打开 Prime Minutes 即可继续。</string>
 
     <string name="library_empty">尚无录音——每段录音都会自动保存在这里。</string>
-    <string name="first_run_download_notice">第一次录音会下载语音与摘要模型（约 %1$d MB），建议使用 Wi‑Fi。</string>
+    <string name="first_run_download_notice">第一次录音会下载语音与 AI 笔记模型（约 %1$d MB），建议使用 Wi‑Fi。</string>
 
     <!-- Studio refonte -->
     <string name="back">返回</string>
@@ -376,7 +376,7 @@
     <string name="lic_nemo">nemo-x-asr-diarizer（流式语音识别与说话人分离）</string>
     <string name="lic_crispasr">CrispASR（X-ASR 运行环境）</string>
     <string name="lic_audiocpp">audio.cpp（Nemotron-3 说话人分离运行环境）</string>
-    <string name="lic_ggml">LiteRT · SentencePiece（摘要）</string>
+    <string name="lic_ggml">LiteRT · SentencePiece（AI 笔记）</string>
     <string name="lic_xasr">X-ASR 中英模型</string>
     <string name="lic_nemotron">Nemotron-3 说话人分离模型</string>
     <string name="lic_opencc">OpenCC（繁体 / 简体）</string>
@@ -386,7 +386,7 @@
     <string name="settings_show_actions">显示行动项目</string>
     <string name="settings_show_actions_hint">在摘要下方列出模型提取的行动项目。约五分之一可能与转写文本不符，点时间即可核对。</string>
     <string name="settings_ask">向会议提问（实验性）</string>
-    <string name="settings_ask_hint">在首页的会议搜索框输入问题并点"提问"按钮：摘要模型根据搜索找到的段落作答并注明出处。需要搜索模型和摘要模型，且设备空闲（没有录音、转写或摘要在进行）。</string>
+    <string name="settings_ask_hint">在首页的会议搜索框输入问题并点"提问"按钮：AI 笔记模型根据搜索找到的段落作答并注明出处。需要搜索模型和 AI 笔记模型，且设备空闲（没有录音、转写或摘要在进行）。</string>
     <string name="ask_title">提问</string>
     <string name="ask_experimental">实验性</string>
     <string name="ask_cd">向会议提问</string>
@@ -394,7 +394,7 @@
     <string name="ask_loading">正在加载模型…</string>
     <string name="ask_thinking">思考中…</string>
     <string name="ask_busy">请等当前的录音、转写或摘要完成后再提问。</string>
-    <string name="ask_no_model">尚未下载摘要模型（设置 › 存储空间）。</string>
+    <string name="ask_no_model">尚未下载 AI 笔记模型（设置 › 存储空间）。</string>
     <string name="ask_failed">提问失败：%1$s</string>
     <string name="ask_cancel">停止</string>
     <string name="ask_followup_hint">继续提问…</string>
@@ -403,7 +403,7 @@
     <string name="agent_view_detailed">显示详细过程</string>
     <string name="agent_view_simple">简化显示</string>
     <string name="agent_simple_listening">阅读转写文本中——进度条满时整理下一批笔记</string>
-    <string name="settings_reader_model">摘要模型</string>
+    <string name="settings_reader_model">AI 笔记模型</string>
     <string name="reader_model_e2b">移动版 E2B</string>
     <string name="reader_model_e4b">移动版 E4B</string>
     <string name="reader_model_hint">移动版模型使用更快的引擎，记忆范围较短。E2B：下载 %1$d MB，约占 1.3 GB 内存。E4B：%2$d MB，约 3 GB 内存，错误较少。</string>

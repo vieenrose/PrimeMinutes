@@ -57,13 +57,13 @@
     <string name="settings_language">Language</string>
     <string name="settings_storage">Storage</string>
     <string name="storage_total">Models on device: %1$s</string>
-    <string name="storage_model_pending">Summary model not downloaded yet (%1$d MB) — it downloads on first use.</string>
+    <string name="storage_model_pending">AI notes model not downloaded yet (%1$d MB) — it downloads on first use.</string>
     <string name="storage_none">No models downloaded yet</string>
     <string name="storage_delete">Delete model</string>
     <string name="storage_delete_title">Delete this model?</string>
     <string name="storage_delete_body">%1$s (%2$s) will be downloaded again the next time it is needed.</string>
     <string name="model_kind_asr">Transcription model</string>
-    <string name="model_kind_llm">Summary model</string>
+    <string name="model_kind_llm">AI notes model</string>
     <string name="model_kind_embed">Search model</string>
     <string name="model_kind_other">Other</string>
     <string name="settings_about">About</string>
@@ -138,7 +138,7 @@
     <string name="svc_downloading_models">Downloading models (first run)…</string>
     <string name="svc_downloading_models_pct">Downloading models… %d%%</string>
     <string name="svc_downloading_named">Downloading %1$s…</string>
-    <string name="svc_summarization_model_pct">Summarization model… %d%%</string>
+    <string name="svc_summarization_model_pct">AI notes model… %d%%</string>
     <string name="svc_preparing_named">Preparing %1$s (once, about a minute)…</string>
     <string name="svc_summarizing">Summarizing…</string>
     <string name="show_more">Show more</string>
@@ -251,7 +251,7 @@
     <string name="svc_paused_time_limit">Processing paused by the system time limit — reopen Prime Minutes to resume.</string>
 
     <string name="library_empty">No saved recordings yet — every recording is saved here automatically.</string>
-    <string name="first_run_download_notice">The first recording downloads the speech and summary models (about %1$d MB) — Wi‑Fi recommended.</string>
+    <string name="first_run_download_notice">The first recording downloads the speech and AI notes models (about %1$d MB) — Wi‑Fi recommended.</string>
 
     <!-- Studio refonte -->
     <string name="back">Back</string>
@@ -384,7 +384,7 @@
     <string name="lic_nemo">nemo-x-asr-diarizer (streaming ASR + diarization)</string>
     <string name="lic_crispasr">CrispASR (X-ASR runtime)</string>
     <string name="lic_audiocpp">audio.cpp (Nemotron-3 diarization runtime)</string>
-    <string name="lic_ggml">LiteRT · SentencePiece (summary)</string>
+    <string name="lic_ggml">LiteRT · SentencePiece (AI notes)</string>
     <string name="lic_xasr">X-ASR zh-en model</string>
     <string name="lic_nemotron">Nemotron-3 Diarization model</string>
     <string name="lic_opencc">OpenCC (zh-TW / zh-CN)</string>
@@ -394,7 +394,7 @@
     <string name="settings_show_actions">Show action items</string>
     <string name="settings_show_actions_hint">Lists the action items the model extracts under the summary. About one in five may not match the transcript — tap a time to check.</string>
     <string name="settings_ask">Ask the meetings (experimental)</string>
-    <string name="settings_ask_hint">Type a question in the meeting search (home screen) and tap the Ask button: the summary model answers from the passages the search finds, citing where. Needs the search model and the summary model, and a free device (no recording, transcription or summary running).</string>
+    <string name="settings_ask_hint">Type a question in the meeting search (home screen) and tap the Ask button: the AI notes model answers from the passages the search finds, citing where. Needs the search model and the AI notes model, and a free device (no recording, transcription or summary running).</string>
     <string name="ask_title">Ask</string>
     <string name="ask_experimental">Experimental</string>
     <string name="ask_cd">Ask the meetings</string>
@@ -402,7 +402,7 @@
     <string name="ask_loading">Loading the model…</string>
     <string name="ask_thinking">Thinking…</string>
     <string name="ask_busy">Ask waits until the current recording, transcription or summary is done.</string>
-    <string name="ask_no_model">The summary model is not downloaded yet (Settings › Storage).</string>
+    <string name="ask_no_model">The AI notes model is not downloaded yet (Settings › Storage).</string>
     <string name="ask_failed">Ask failed: %1$s</string>
     <string name="ask_cancel">Stop</string>
     <string name="ask_followup_hint">Follow-up question…</string>
@@ -411,7 +411,7 @@
     <string name="agent_view_detailed">Show details</string>
     <string name="agent_view_simple">Simple view</string>
     <string name="agent_simple_listening">Reading the transcript — notes are written when the bar fills</string>
-    <string name="settings_reader_model">Summary model</string>
+    <string name="settings_reader_model">AI notes model</string>
     <string name="reader_model_e2b">Mobile E2B</string>
     <string name="reader_model_e4b">Mobile E4B</string>
     <string name="reader_model_hint">Mobile models run on a faster engine with a shorter memory. E2B: %1$d MB download, about 1.3 GB RAM. E4B: %2$d MB, about 3 GB RAM, fewer mistakes.</string>
