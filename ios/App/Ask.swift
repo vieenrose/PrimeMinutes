@@ -241,7 +241,7 @@ struct AskSheet: View {
         let q = followup.trimmingCharacters(in: .whitespacesAndNewlines); guard !q.isEmpty else { return }
         followup = ""; ask.ask(m.sessions, question: q)
     }
-    /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec); an unknown id is dropped.
+    /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
     static func linked(_ text: String, _ xs: [AskEngine.Excerpt]) -> AttributedString {
         // A tag still being written (streaming) or cut by the token cap is hidden, not shown raw.
         let text = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
@@ -254,9 +254,12 @@ struct AskSheet: View {
         for mt in rx.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             out += AttributedString(ns.substring(with: NSRange(location: last, length: mt.range.location - last)))
             let id = ns.substring(with: mt.range(at: 1)).uppercased(), sec = Int(ns.substring(with: mt.range(at: 2))) ?? 0
-            if let x = xs.first(where: { $0.session.id.uuidString == id }) {
-                var a = AttributedString(x.session.title + " · " + ReaderProtocol.formatTs(sec))
-                a.link = URL(string: "voxask://\(id)/\(sec)"); a.foregroundColor = .accentColor
+            // Checked against this answer's excerpts (Android AskEngine.cite): the exact tag, else the nearest excerpt
+            // of that meeting (a made-up second), else dropped.
+            let same = xs.filter { $0.session.id.uuidString == id }
+            if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
+                var a = AttributedString(x.session.title + " · " + ReaderProtocol.formatTs(x.sec))
+                a.link = URL(string: "voxask://\(id)/\(x.sec)"); a.foregroundColor = .accentColor
                 out += a
             }
             last = mt.range.location + mt.range.length
