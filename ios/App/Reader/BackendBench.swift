@@ -81,7 +81,7 @@ enum BackendBench {
     private static func probe(_ b: String, dir: String, gpu: String?, ids: [Int], threads: Int, ref: [Int], onReply: ([Int]) -> Void) -> BackendResult {
         do {
             let e = try MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: threads,
-                                  weightCache: dir + "/weights.xnnpack_cache", gpuGraph: b == "GPU" ? gpu : nil)
+                                  weightCache: dir + "/" + ModelStore.weightCache, gpuGraph: b == "GPU" ? gpu : nil)
             let out = try e.generate(ids, maxNew: reply, temp: 0, topK: 1, topP: 1, seed: 0)
             let s = e.lastStats
             guard s[2] > 0 else { return BackendResult(passed: false, note: "no_output") }

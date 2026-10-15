@@ -38,12 +38,15 @@ final class MfaEngine {
 
     /// `dir` = the folder with the three `.tflite` files; `weightCache` is built on first load (CPU).
     /// `gpuGraph`: run on the GPU (ML Drift Metal) with this prefill/decode graph instead.
-    init(dir: String, ctx: Int, threads: Int, weightCache: String, gpuGraph: String? = nil) throws {
+    /// `stopIds`: the model's end-of-reply tokens (its `ChatTemplate.stopIds`).
+    init(dir: String, ctx: Int, threads: Int, weightCache: String, gpuGraph: String? = nil, stopIds: Set<Int> = ChatTemplate.gemma4.stopIds) throws {
         var err = [CChar](repeating: 0, count: 1024)
         guard let p = mfa_load(dir, gpuGraph ?? dir + "/prefill_decode_fused.tflite", Int32(ctx), Int32(threads),
                                gpuGraph == nil ? weightCache : "", gpuGraph == nil ? 0 : 1, &err, 1024)
         else { throw ReaderError(description: "mobile reader load failed: " + String(cString: err)) }
         h = p; onGpu = gpuGraph != nil
+        let stops = stopIds.map { Int32($0) }
+        stops.withUnsafeBufferPointer { mfa_set_stops(p, $0.baseAddress, Int32($0.count)) }
     }
     deinit { mfa_free(h) }
 
@@ -182,7 +185,7 @@ enum MfaBench {
             if let gpu {
                 let tok = try SpTokenizer(path: dir + "/Section1_SP_Tokenizer.spiece")
                 let p = [MfaEngine.bos] + Array(tok.encode("會議討論新辦公室的搬遷時程，搬家公司報價有三種，發言者傾向中間價位，並要求合約註明損壞賠償條款。下一步請整理成筆記，列出決議與待辦事項，並標註負責人與期限。").prefix(80))
-                let ref = try autoreleasepool { try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache").generate(p, maxNew: 32, temp: 0, topK: 1, topP: 1, seed: 0) }
+                let ref = try autoreleasepool { try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/" + ModelStore.weightCache).generate(p, maxNew: 32, temp: 0, topK: 1, topP: 1, seed: 0) }
                 let t = Date()
                 let g = try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: "", gpuGraph: gpu)
                 let gl = Date().timeIntervalSince(t)
@@ -191,7 +194,7 @@ enum MfaBench {
                                tok.decode(ref), tok.decode(out))
             }
             let t0 = Date()
-            let e = try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache", gpuGraph: gpu)
+            let e = try MfaEngine(dir: dir, ctx: 4096, threads: Prefs.effectiveThreads, weightCache: dir + "/" + ModelStore.weightCache, gpuGraph: gpu)
             let load = Date().timeIntervalSince(t0)
             var ids = [MfaEngine.bos]; var x: UInt32 = 12345
             while ids.count < 1024 { x = x &* 1103515245 &+ 12345; ids.append(1000 + Int((x >> 8) % 30000)) }

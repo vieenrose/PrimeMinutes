@@ -31,6 +31,7 @@ mfa_engine* mfa_load(const char* dir, const char* main_graph, int ctx, int threa
 }
 
 int mfa_context(mfa_engine* h) { return h ? h->e->context() : 0; }
+void mfa_set_stops(mfa_engine* h, const int* ids, int n) { if (h && ids && n > 0) h->e->set_stops(std::vector<int>(ids, ids + n)); }
 void mfa_cancel(mfa_engine* h) { if (h) h->e->cancel(); }
 void mfa_free(mfa_engine* h) { if (h) { delete h->e; delete h; } }
 

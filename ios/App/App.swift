@@ -149,13 +149,16 @@ enum Dev {
 
 final class ReaderWorker: @unchecked Sendable {
     private let reader: MeetingReader, lock = NSCondition()
-    private var queue: [Line] = [], busy = false, paused = false, snapshot: [Note] = [], total = 0, done = 0
+    private var queue: [Line] = [], busy = false, paused = false, stopped = false, snapshot: [Note] = [], total = 0, done = 0
     /// `paused`: hold the lines until `resume()` (low-RAM devices read after the transcription, not during it).
     init(_ r: MeetingReader, paused: Bool = false) {
         reader = r; self.paused = paused
         Thread.detachNewThread { [self] in
             while true {
-                lock.lock(); while queue.isEmpty || paused { busy = false; lock.broadcast(); lock.wait() }
+                lock.lock(); while (queue.isEmpty || paused) && !stopped { busy = false; lock.broadcast(); lock.wait() }
+                // Ended by its job: the thread lets go of the reader (and its multi-GB engine) instead of
+                // waiting forever, which kept one engine alive per job until jetsam.
+                if stopped { busy = false; lock.broadcast(); lock.unlock(); StatusLog.add("trace reader worker ended"); return }
                 let l = queue.removeFirst(); busy = true; lock.unlock()
                 Stage.set("offer")
                 do { try reader.offer(l) } catch { StatusLog.add("trace reader.offer error: \(error)") }
@@ -165,12 +168,14 @@ final class ReaderWorker: @unchecked Sendable {
     }
     func offer(_ l: Line) { lock.lock(); queue.append(l); total += 1; lock.broadcast(); lock.unlock() }
     func resume() { lock.lock(); paused = false; lock.broadcast(); lock.unlock() }
+    /// The job is over (finished, stopped or failed): drop what is queued and end the thread after the current line.
+    func stop() { lock.lock(); stopped = true; queue.removeAll(); lock.broadcast(); lock.unlock() }
     var journal: [Note] { lock.lock(); defer { lock.unlock() }; return snapshot }
     var progress: (done: Int, total: Int) { lock.lock(); defer { lock.unlock() }; return (done, total) }
     /// Blocks until every queued line has been read.
     func drain(_ tick: (Int, Int) -> Void) {
         lock.lock()
-        while !queue.isEmpty || busy { lock.broadcast(); lock.wait(until: Date().addingTimeInterval(2)); let p = (done, total); lock.unlock(); tick(p.0, p.1); lock.lock() }
+        while (!queue.isEmpty || busy) && !stopped { lock.broadcast(); lock.wait(until: Date().addingTimeInterval(2)); let p = (done, total); lock.unlock(); tick(p.0, p.1); lock.lock() }
         lock.unlock()
     }
 }
@@ -386,6 +391,7 @@ final class Model: ObservableObject {
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.status = L("reader_error", "\(error)") }; return }
             let conv = TextConv(); let lowRam = ProcessInfo.processInfo.physicalMemory < 4_500_000_000   // 3 GB phones cannot hold ASR + diarizer + E2B at once
             let worker = ReaderWorker(reader, paused: lowRam && cached == nil)
+            defer { worker.stop() }
             let sk = skipper ?? SilenceSkipper()   // nothing skipped → identity
             // Resume: the saved prefix goes to the reader first; fresh lines are mapped to original-audio time (offset + skipped
             // silence) and stitched onto it, so the reader sees original times and nothing is restored twice.
@@ -395,6 +401,7 @@ final class Model: ObservableObject {
                 SeamStitcher.stitch(prior, seam: seam, sk.restore(fresh).map { var u = $0; (u.start, u.end) = en.toOriginal(u.start, u.end); return u }, stable: stable)
             }
             var kept: [Utterance] = prior, snapshot: [Utterance] = prior, offered = 0, frozen: [Utterance] = [], savedAt = 0.0
+            var fedUntil = prior.last?.end ?? -1   // end of the last line handed to the reader: finish() feeds what follows
             if resume != nil { for u in prior { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }; offered = prior.count; StatusLog.add("trace resume at \(Int(seam)) s, \(prior.count) utterances kept") }
             do {
                 if cached == nil, let eng { try feed { chunk in
@@ -404,7 +411,7 @@ final class Model: ObservableObject {
                     let (fresh, tail) = eng.live(); frozen += fresh   // the engine returns only the newly frozen lines
                     let (all, stable) = full(frozen + tail, stable: frozen.count); kept = Array(all.prefix(stable))
                     let edge = all.last?.end ?? 0; snapshot = all.filter { $0.end <= edge - 10 }   // resume point: everything clear of the live edge
-                    for u in kept.dropFirst(offered) { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }   // original-audio times: notes need no restore
+                    for u in kept.dropFirst(offered) { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) }; fedUntil = max(fedUntil, u.end) }   // original-audio times: notes need no restore
                     offered = max(offered, kept.count)
                     let j = worker.journal, fed = eng.fedSeconds
                     // Every minute, the same resume point a Stop leaves: a kill (swipe-away, jetsam) then resumes after it
@@ -435,6 +442,11 @@ final class Model: ObservableObject {
             } else {
                 let fresh = eng?.finish() ?? []
                 final = full(fresh, stable: fresh.count).0
+                // The live view only ever fed frozen lines: the last segment and the settle window are in the
+                // final transcript only, and the meeting's closing decisions with them (Android: ReaderLane.finish).
+                var tail = 0
+                for u in final where u.start >= fedUntil - 0.01 { if let l = ReaderSummarizer.toLine(u) { worker.offer(l); tail += 1 } }
+                StatusLog.add("trace finish: \(tail) closing lines to the reader")
                 if let job { Checkpoint.save(final, job.id) }
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }

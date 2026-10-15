@@ -13,6 +13,7 @@ typedef struct mfa_tok mfa_tok;
 mfa_engine* mfa_load(const char* dir, const char* main_graph, int ctx, int threads, const char* weight_cache,
                      int backend, char* err, int err_len);
 int mfa_context(mfa_engine* e);
+void mfa_set_stops(mfa_engine* e, const int* ids, int n);  // the model's end-of-reply tokens
 void mfa_cancel(mfa_engine* e);                 // any thread
 void mfa_free(mfa_engine* e);
 

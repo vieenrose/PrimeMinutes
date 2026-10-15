@@ -63,17 +63,25 @@ nemo_handle* nemo_create_ex(const char* xasr, const char* diar, int threads, dou
 
 int nemo_push(nemo_handle* h, const float* pcm, int n) {
     std::string err;
-    std::lock_guard<std::mutex> lk(h->mu);
-    const bool ok = h->engine->push(pcm, static_cast<size_t>(n), err);
+    bool ok;
+    // A C++ exception must not reach Swift (it aborts the app and the live capture): the LiteRT graphs
+    // throw on a runtime error, so a failed piece is reported like any other.
+    try {
+        std::lock_guard<std::mutex> lk(h->mu);
+        ok = h->engine->push(pcm, static_cast<size_t>(n), err);
+    } catch (const std::exception& e) { ok = false; err = e.what(); }
     if (!ok) std::fprintf(stderr, "primeminutes-nemo: push failed: %s\n", err.c_str());
     return ok ? 1 : 0;
 }
 
 char* nemo_live(nemo_handle* h) {
     std::vector<nemo::Segment> frozen, tail;
-    {
+    try {
         std::lock_guard<std::mutex> lk(h->mu);
         h->engine->live(frozen, tail);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "primeminutes-nemo: live failed: %s\n", e.what());
+        frozen.clear(); tail.clear();
     }
     std::string out;
     for (const auto& s : frozen) out += encode_segment(s);
@@ -85,7 +93,10 @@ char* nemo_live(nemo_handle* h) {
 char* nemo_finish(nemo_handle* h) {
     std::string out, err;
     std::lock_guard<std::mutex> lk(h->mu);
-    if (!h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err)) {
+    bool ok;
+    try { ok = h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err); }
+    catch (const std::exception& e) { ok = false; err = e.what(); }
+    if (!ok) {
         std::fprintf(stderr, "primeminutes-nemo: finish failed: %s\n", err.c_str());
         return nullptr;
     }

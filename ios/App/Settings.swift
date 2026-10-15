@@ -111,7 +111,7 @@ enum Storage {
             switch name { case "nemo": return "X-ASR + Nemotron-3"; case "E2B": return L("reader_model_e2b"); case "E4B": return L("reader_model_e4b"); case ReaderModel.embedId: return "EmbeddingGemma 2 270M"; default: return name }
         }
         /// The XNNPACK weight cache inside a reader folder (rebuilt on next load when deleted with it).
-        var cacheBytes: Int64 { (try? FileManager.default.attributesOfItem(atPath: url.appendingPathComponent("weights.xnnpack_cache").path)[.size] as? Int64) ?? 0 }
+        var cacheBytes: Int64 { (try? FileManager.default.attributesOfItem(atPath: url.appendingPathComponent(ModelStore.weightCache).path)[.size] as? Int64) ?? 0 }
         var kind: String { let n = name.lowercased(); if n == ReaderModel.embedId { return "model_kind_embed" }; return n.contains("asr") || n.contains("diariz") || n.contains("nemotron") ? "model_kind_asr" : (n.contains("gemma") || n.contains("mfa") || n.contains("litert") || n.contains("reader") || n.hasSuffix(".litertlm") ? "model_kind_llm" : "model_kind_other") } }
     static var modelsRoot: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("models") }
     static func size(_ u: URL) -> Int64 {

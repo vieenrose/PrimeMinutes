@@ -72,19 +72,52 @@ actor ModelStore {
         self.root = root
     }
     func dir(_ m: ReaderModel) -> URL { root.appendingPathComponent(m.id) }
-    func isComplete(_ m: ReaderModel) -> Bool {
+    /// Written next to a model's files: the pinned revision they came from (as Android's `.revision`).
+    static let revisionMarker = ".revision"
+    /// XNNPACK's packed-weight cache, built on the first load. Keyed by buffer index, not content.
+    static let weightCache = "weights.xnnpack_cache"
+    private func sizesMatch(_ m: ReaderModel) -> Bool {
         m.files.allSatisfy { (try? FileManager.default.attributesOfItem(atPath: dir(m).appendingPathComponent($0.name).path)[.size] as? Int64) == $0.size }
+    }
+    private func marked(_ m: ReaderModel) -> Bool {
+        (try? String(contentsOf: dir(m).appendingPathComponent(Self.revisionMarker), encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) == m.rev
+    }
+    /// Every file at its pinned size AND from the pinned revision: a re-pinned fine-tune of the same
+    /// architecture has the same sizes, so the size alone would keep the old weights.
+    func isComplete(_ m: ReaderModel) -> Bool {
+        guard sizesMatch(m) else { return false }
+        if marked(m) { return true }
+        // Files from before the marker existed: they can only come from the revision pinned then, which
+        // is this one until the first re-pin ships, so stamp them once instead of re-downloading GBs.
+        let stamp = dir(m).appendingPathComponent(Self.revisionMarker)
+        if !FileManager.default.fileExists(atPath: stamp.path), (try? m.rev.write(to: stamp, atomically: true, encoding: .utf8)) != nil { return true }
+        return false
     }
 
     /// Downloads what is missing; `progress` gets (bytes done, bytes total) over the whole model.
     func download(_ m: ReaderModel, progress: @escaping @Sendable (Int64, Int64) -> Void) async throws {
-        try FileManager.default.createDirectory(at: dir(m), withIntermediateDirectories: true)
+        let d = dir(m), fm = FileManager.default
+        try fm.createDirectory(at: d, withIntermediateDirectories: true)
+        let stamp = d.appendingPathComponent(Self.revisionMarker)
+        if fm.fileExists(atPath: stamp.path), !marked(m) {
+            // Files from another revision: none is trusted (same sizes are likely), and the packed-weight
+            // cache must be rebuilt from the new weights. An unstamped folder is a first download in
+            // progress, kept so it resumes.
+            for f in m.files {
+                let p = d.appendingPathComponent(f.name)
+                try? fm.removeItem(at: p); try? fm.removeItem(at: p.appendingPathExtension("part"))
+            }
+            try? fm.removeItem(at: d.appendingPathComponent(Self.weightCache))
+            try? fm.removeItem(at: stamp)
+        }
         let total = m.files.reduce(0) { $0 + $1.size }; var done: Int64 = 0
         for f in m.files {
             let base = done
             try await fetch(m, f) { got in progress(base + got, total) }
             done += f.size; progress(done, total)
         }
+        try m.rev.write(to: stamp, atomically: true, encoding: .utf8)
     }
 
     /// The GPU graph's path when it is fully there.
@@ -109,8 +142,16 @@ actor ModelStore {
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
         var req = URLRequest(url: m.url(f))
         if have > 0 { req.setValue("bytes=\(have)-", forHTTPHeaderField: "Range") }
-        try await Chunked.fetch(req, to: part, resumeFrom: have, onProgress: progress)
-        guard (try FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) == f.size else { throw ModelStoreError.size(f.name) }
+        do { try await Chunked.fetch(req, to: part, resumeFrom: have, onProgress: progress) }
+        catch ModelStoreError.badStatus(416) {
+            // The .part is already whole (or past it): a kill during the sha check left it. Start over
+            // instead of failing every retry on the same range.
+            try? FileManager.default.removeItem(at: part)
+            try await Chunked.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: 0, onProgress: progress)
+        }
+        guard (try FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) == f.size else {
+            try? FileManager.default.removeItem(at: part); throw ModelStoreError.size(f.name)
+        }
         if let want = f.sha256, try Self.sha256(part) != want { try? FileManager.default.removeItem(at: part); throw ModelStoreError.hash(f.name) }
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: part, to: dest)

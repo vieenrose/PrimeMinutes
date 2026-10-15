@@ -117,7 +117,7 @@ final class AskHolder: @unchecked Sendable {
         guard Storage.ready(m) else { throw ReaderError(description: L("ask_no_model")) }
         let dir = Storage.modelsRoot.appendingPathComponent(m.id).path
         let t0 = Date()
-        let e = try MfaEngine(dir: dir, ctx: m.budget.ctxBudget, threads: Prefs.effectiveThreads, weightCache: dir + "/weights.xnnpack_cache")
+        let e = try MfaEngine(dir: dir, ctx: m.budget.ctxBudget, threads: Prefs.effectiveThreads, weightCache: dir + "/" + ModelStore.weightCache, stopIds: m.template.stopIds)
         StatusLog.add(String(format: "reader loaded for Ask in %.1f s", Date().timeIntervalSince(t0)))
         let s = MfaSession(engine: e, tok: try tokenizer(), template: m.template)
         engine = e; session = s; modelId = m.id

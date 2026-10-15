@@ -283,7 +283,6 @@ void unlock(LiteRtTensorBuffer b) { LiteRtUnlockTensorBuffer(b); }
 size_t bytes_of(LiteRtTensorBuffer b) { size_t n = 0; LiteRtGetTensorBufferSize(b, &n); return n; }
 
 constexpr int T = 128;                        // prefill_128 block
-const std::vector<int> kStop = {106, 1, 50};  // <turn|>, <eos>, and the metadata's third stop id
 
 }  // namespace
 
@@ -473,7 +472,7 @@ std::vector<int> Engine::generate(const std::vector<int>& ids, int max_new, floa
             if (cancel_) { reason = "cancel"; break; }
             tok = m.sample(m.step(tok, pos), temp, top_k, top_p, rng);
             out.push_back(tok);
-            if (std::find(kStop.begin(), kStop.end(), tok) != kStop.end()) { reason = "stop"; break; }
+            if (std::find(stops_.begin(), stops_.end(), tok) != stops_.end()) { reason = "stop"; break; }
             if (on_token && !on_token(tok)) { reason = "cancel"; break; }
         }
     }
