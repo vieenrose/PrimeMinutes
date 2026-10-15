@@ -276,6 +276,9 @@ final class Model: ObservableObject {
     private let buffer = ChunkBuffer()
 
     private var interruptObs: NSObjectProtocol?
+    /// Set from the tap until the recorder exists: a second tap during the permission prompt or the
+    /// model download started a second recorder and a second job.
+    private var startingRecord = false
     func toggleRecord() {
         // A call, Siri or another app taking the mic: save what was recorded (queued like any stop) and say so, instead of a stalled tap.
         if interruptObs == nil { interruptObs = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
@@ -283,12 +286,15 @@ final class Model: ObservableObject {
             Task { @MainActor in guard let self, self.recording else { return }; self.toggleRecord(); self.status = L("rec_interrupted") }
         } }
         if recording { recorder?.stop(); recorder = nil; liveBuffer?.close(); liveBuffer = nil; recording = false; status = L("stopping"); return }
+        guard !startingRecord else { return }
+        startingRecord = true
         Task {
+            defer { startingRecord = false }   // early returns; cleared as soon as the recorder exists
             guard await Recorder.requestPermission() else { status = L("mic_permission_required"); return }
             guard await downloadSpeech() else { return }
             status = L("loading_models"); lines = []; notes = []; title = ""; summary = ""
             elapsed = 0
-            let r = Recorder(); recorder = r; recording = true; UIApplication.shared.isIdleTimerDisabled = true
+            let r = Recorder(); recorder = r; recording = true; startingRecord = false; UIApplication.shared.isIdleTimerDisabled = true
             let job = Job(audio: UUID().uuidString + ".wav")
             guard let wav = try? WavWriter(JobQueue.url(job)) else { recording = false; return }
             recordingJob = job.id

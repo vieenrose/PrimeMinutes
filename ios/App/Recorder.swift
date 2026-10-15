@@ -22,6 +22,19 @@ final class Recorder {
         }
         let s = AVAudioSession.sharedInstance()
         try s.setCategory(.record, mode: .measurement); try s.setActive(true)
+        try tap(onChunk)
+        // A route change (AirPods in or out, a USB mic) stops the engine and changes the input format:
+        // without a restart the rest of the meeting was recorded as silence.
+        configObs = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            guard let self, self.configObs != nil else { return }
+            self.engine.inputNode.removeTap(onBus: 0)
+            do { try self.tap(onChunk); StatusLog.add("trace mic route changed: restarted at \(self.engine.inputNode.outputFormat(forBus: 0).sampleRate) Hz") }
+            catch { StatusLog.add("trace mic restart failed: \(error)") }
+        }
+    }
+    private var configObs: NSObjectProtocol?
+
+    private func tap(_ onChunk: @escaping ([Float]) -> Void) throws {
         let input = engine.inputNode, inFmt = input.outputFormat(forBus: 0)
         converter = AVAudioConverter(from: inFmt, to: out)
         input.installTap(onBus: 0, bufferSize: 4096, format: inFmt) { [self] buf, _ in
@@ -63,7 +76,11 @@ final class Recorder {
         }
     }
 
-    func stop() { if feeding { feeding = false; return }; engine.inputNode.removeTap(onBus: 0); engine.stop(); try? AVAudioSession.sharedInstance().setActive(false) }
+    func stop() {
+        if feeding { feeding = false; return }
+        if let o = configObs { NotificationCenter.default.removeObserver(o); configObs = nil }
+        engine.inputNode.removeTap(onBus: 0); engine.stop(); try? AVAudioSession.sharedInstance().setActive(false)
+    }
 }
 
 /// Android LiveAgc: gentle boost-only gain for the live mic (far speaker → audible to VAD/ASR), applied before the
