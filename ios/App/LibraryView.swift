@@ -37,6 +37,24 @@ struct LibraryView: View {
         }
     }
     private var askReady: Bool { Prefs.askEnabled && AskEngine.available }
+    /// DEV (README animations): VOX_TYPE types a query; then VOX_TYPE_ASK sends it to Ask, or VOX_TYPE_OPEN=<text>
+    /// opens the first passage containing that text once the results are in.
+    private func devType(_ q: String) {
+        if Dev.env["VOX_TYPE_ASK"] != nil { UserDefaults.standard.set(true, forKey: "askEnabled") }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            for i in 1...q.count { query = String(q.prefix(i)); try? await Task.sleep(nanoseconds: 220_000_000) }
+            if Dev.env["VOX_TYPE_ASK"] != nil { try? await Task.sleep(nanoseconds: 1_000_000_000); asking = query; return }
+            guard let pick = Dev.env["VOX_TYPE_OPEN"] else { return }
+            func found() -> (Session, Double)? {
+                for h in hits { if let p = h.passages.first(where: { $0.snippet.contains(pick) }) { return (h.session, p.timeSec) } }
+                return nil
+            }
+            for _ in 0..<80 where densePending != nil || found() == nil { try? await Task.sleep(nanoseconds: 250_000_000) }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if let (s, t) = found() { openAt(s, t) }
+        }
+    }
     private func openAt(_ s: Session, _ t: Double) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; m.openAt = (s.id, t); path.append(s) }
 
     enum Filter: String, CaseIterable { case all, new, done }
@@ -167,7 +185,7 @@ struct LibraryView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askEnabled"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.sessions.prefix(2).map(\.id)) } } }
+            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askEnabled"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))

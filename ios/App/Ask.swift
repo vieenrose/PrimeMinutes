@@ -219,6 +219,16 @@ struct AskSheet: View {
             }
         }
         .onAppear { if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.sessions, question: initial) } }
+        .task {
+            // DEV (README animation): VOX_ASK_OPEN=<seconds> taps the source at that second once the answer is in.
+            guard let sec = Dev.env["VOX_ASK_OPEN"].flatMap(Int.init) else { return }
+            for _ in 0..<240 {
+                if let t = ask.turns.last, t.done, let x = t.excerpts.first(where: { $0.sec == sec }) {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000); open(x.session, x.at); return
+                }
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
         .onDisappear { ask.release() }
     }
     private var phaseRow: some View {

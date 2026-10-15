@@ -30,9 +30,20 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 - **即時逐字稿與語者**：錄音時文字即時上螢幕，同時標註語者。
 - **邊開會邊做筆記**：AI 筆記在錄音中閱讀逐字稿，寫下決議、待辦與數字；停止後很快完成摘要。
 - **每句都可核對**：摘要與筆記的時間點一下，就從原話開始播放。
+- **依語意搜尋整個會議庫**：在首頁輸入「誰提到預算」或「延期」，就列出意思相近的段落與筆記，不必記得原話。搜尋模型（EmbeddingGemma 2，約 160 MB）另行下載，同樣完全離線。
+- **向會議提問（實驗性）**：輸入問題，AI 筆記模型根據搜尋找到的段落作答並附出處，一點就跳到原話。
 - **錄音不會遺失**：開始錄音前就排入佇列，App 被終止也保留音訊；處理失敗的項目留在佇列可「重試」。
 - **可編輯、可匯出**：修正文字、改派或合併語者；匯出 Prime Minutes 場次 `.m4a`（與 Android 互通）、PDF、Markdown、純文字或字幕。
 - **依手機調整**：首次啟動做一秒測試選執行緒數；所有推論皆在 CPU 上執行。
+
+## 搜尋與提問
+
+| 語意搜尋 | 向會議提問 |
+|:---:|:---:|
+| <img src="docs/screenshots/search.gif" width="260" alt="語意搜尋：輸入問題，列出意思相近的段落"> | <img src="docs/screenshots/ask.gif" width="260" alt="向會議提問：根據段落作答並附出處"> |
+| 輸入「大家的車要停哪裡」：原話說的是「有沒有停車位……月租一個四千五」，用詞不同也找得到；點段落就從 3:50 開始播放。 | 問「尾牙頭獎是什麼？」：AI 筆記模型讀過搜尋找到的段落後作答，並附上出處；點出處就跳到 1:55 的原話。 |
+
+兩段皆在 iPhone 14 Pro Max 上即時錄製（App 內每秒 10 格擷取），未加速；會議標題由 AI 筆記模型自動產生。搜尋在輸入時先比對關鍵字，一兩秒後補上語意相近的結果；提問約 5 秒完成（E2B）。搜尋模型（約 160 MB）在搜尋框下方或「設定」下載；提問需在「設定 › 實驗功能」開啟。
 
 ## 使用
 
@@ -68,11 +79,12 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 
 ## 已知限制
 
-與 Android 相同：摘要模型以中文會議訓練，英文會議也會寫出中文摘要；部分會議紀錄內容可能與原話不符，請點時間核對；偶爾會多分出發言很少的語者，可用「合併語者」修正。
+與 Android 相同：摘要模型以中文會議訓練，英文會議也會寫出中文摘要；部分會議紀錄內容可能與原話不符，請點時間核對；偶爾會多分出發言很少的語者，可用「合併語者」修正。語意搜尋以句子的意思比對，不相關的句子也可能被列出；「提問」由裝置上的小模型作答，可能漏掉段落中明明有的答案，請以出處為準。
 
 ## 運作方式
 
 - **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp)：語音辨識（X-ASR）與語者分離（Nemotron-3）在同一條時間軸上的串流引擎，以 C 介面接到 Swift。
+- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」把分數最高的段落交給 AI 筆記模型作答。
 - **AI 筆記與摘要**：Gemma-4-E2B 會議模型（行動版）在 LiteRT 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)，`CLiteRTLM.xcframework`）。閱讀協定（`MeetingReader`、`ReaderSummarizer`）以 Swift 重寫。
 
 ## 從原始碼建置
