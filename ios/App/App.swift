@@ -33,6 +33,41 @@ enum BackgroundWork {
             }
         }
     }
+    /// iOS 26: a user-started queue run keeps going when the user leaves the app, with the system's progress UI
+    /// (BGContinuedProcessingTask). One task per drain, submitted while the app is in front; it reports the current
+    /// job's progress and ends with the queue. Before iOS 26 only the processing window above remains.
+    static let continuedPrefix = "tw.com.pesi.primeminutes.process"
+    /// Registered under the exact id, just before its submission: a handler registered under the wildcard is not
+    /// found for a submitted id (NSInternalInconsistencyException); continued tasks may register after launch.
+    @available(iOS 26, *) private static func registerContinued(_ id: String) -> Bool {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
+            guard let task = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
+            StatusLog.add("trace continued task started")
+            task.progress.totalUnitCount = 1000
+            // The system takes the time back (user cancel, load): checkpoint the job and leave it queued.
+            task.expirationHandler = { StatusLog.add("trace continued task expired"); Task { @MainActor in Model.shared.yieldToSystem() } }
+            Task { @MainActor in
+                let m = Model.shared
+                while m.isDraining {
+                    task.progress.completedUnitCount = Int64(min(max(m.jobProgress, 0), 1) * 1000)
+                    task.updateTitle(L("bg_task_title"), subtitle: m.status)
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+                task.progress.completedUnitCount = 1000
+                StatusLog.add("trace continued task done")
+                task.setTaskCompleted(success: true)
+            }
+        }
+    }
+    @MainActor static func continueInBackground() {
+        guard #available(iOS 26, *), Dev.env["VOX_NOCONTINUED"] == nil else { return }
+        guard UIApplication.shared.applicationState != .background else { StatusLog.add("trace continued task: app in background, not submitted"); return }
+        let id = "\(continuedPrefix).\(UUID().uuidString)"
+        guard registerContinued(id) else { StatusLog.add("trace continued task: handler not registered"); return }
+        let r = BGContinuedProcessingTaskRequest(identifier: id, title: L("bg_task_title"), subtitle: L("status_starting"))
+        r.strategy = .fail   // now or not at all: a queued request could start after the run is over
+        do { try BGTaskScheduler.shared.submit(r) } catch { StatusLog.add("trace continued task not submitted: \(error)") }
+    }
     static func schedule() {
         Task {
             guard await Model.shared.queue.count > 0 else { return }
@@ -475,6 +510,7 @@ final class Model: ObservableObject {
                         guard live || !self.recording else { return }
                         self.lines = conv.utterances(all); self.notes = conv.notes(j)
                         if live { if self.recording { self.status = L("recording_s", Int(fed)) }; return }
+                        self.jobProgress = 0.8 * min(1, (max(0, fed - en.length) + offset) / max(seconds, 1))
                         self.status = L("transcribing_s", Int(max(0, fed - en.length) + offset), Int(seconds))
                     }
                     Stage.set("idle")
@@ -503,7 +539,7 @@ final class Model: ObservableObject {
                 if let job { Checkpoint.save(final, job.id) }
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }
-            worker.drain { d, t in Task { @MainActor in guard live || !self.recording else { return }; self.status = L("reading_s", d, t) } }
+            worker.drain { d, t in Task { @MainActor in self.jobProgress = 0.8 + 0.2 * Double(d) / Double(max(t, 1)); guard live || !self.recording else { return }; self.status = L("reading_s", d, t) } }
             var readError = worker.failure
             if readError == nil { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
             // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
@@ -532,6 +568,8 @@ final class Model: ObservableObject {
     // MARK: processing queue
     let queue = JobQueue()
     private var draining = false
+    /// One continued-processing task per drain, asked for when its first job starts.
+    private var continuedSubmitted = false
     /// Sessions being re-summarized, as they were: names carried over, and Android's "New summary ready · Undo".
     private var resummarized: [UUID: Session] = [:]
     var drainTask: Task<Void, Never>?
@@ -548,6 +586,10 @@ final class Model: ObservableObject {
         status = L("status_starting")   // Android: shown until the first model line
         await queue.add(j); await syncQueue(); drain() }
     }
+    /// The queue is being worked through (the background task lasts as long).
+    var isDraining: Bool { draining }
+    /// The running job's progress, 0…1: transcription up to 0.8, then the reading.
+    @Published var jobProgress = 0.0
     func drain() {
         guard !draining, liveJob == nil else { return }
         draining = true
@@ -558,7 +600,8 @@ final class Model: ObservableObject {
                 let url = JobQueue.url(job)
                 WavWriter.repair(url)
                 guard let secs = AudioDecode.duration(url), secs > 0 else { parked.insert(job.id); failed[job.id] = L("import_failed"); status = L("import_failed"); await syncQueue(); continue }   // undecodable: shown with its error and Remove, not dropped silently
-                let left = await queue.count; pending = left; activeJob = job.id; await syncQueue()
+                let left = await queue.count; pending = left; activeJob = job.id; jobProgress = 0; await syncQueue()
+                if !continuedSubmitted { continuedSubmitted = true; BackgroundWork.continueInBackground() }
                 if left > 1 { status = L("queue_n", left) }
                 let skipper = SilenceSkipper()
                 let partial = Checkpoint.loadPartial(job.id)   // left by a Stop, or saved every minute (a kill): continue after its seam
@@ -577,7 +620,7 @@ final class Model: ObservableObject {
                 else if queued { parked.insert(job.id); failed[job.id] = status; Notifier.failed(job.title ?? L("meeting")) }   // failed run (still queued: a saved one leaves the queue): parked with its error and a Retry (Android), never looped on — whatever sits ahead of it (a parked job, a promoted one)
                 activeJob = nil; await syncQueue()
             }
-            draining = false
+            draining = false; continuedSubmitted = false
             UIApplication.shared.isIdleTimerDisabled = false
         }
     }
