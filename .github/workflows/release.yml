@@ -58,7 +58,7 @@ jobs:
           echo "$(dirname "$SDKM")" >> "$GITHUB_PATH"
           yes | "$SDKM" --licenses > /dev/null || true
           # The versions app/build.gradle.kts pins (compileSdk, ndkVersion): AGP would otherwise fetch them itself.
-          yes | "$SDKM" "platform-tools" "platforms;android-37" \
+          yes | "$SDKM" "platform-tools" "platforms;android-37.0" \
             "build-tools;35.0.0" "cmake;3.22.1" "ndk;29.0.14206865"
 
       # Gate the release on the host test suite. v0.36.0 shipped with an instrumented suite that
