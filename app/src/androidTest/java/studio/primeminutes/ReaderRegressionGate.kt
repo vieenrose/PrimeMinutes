@@ -27,8 +27,9 @@ import java.io.File
  * change. Each reference meeting (androidTest/assets/reader_gate, a fixed ASR transcript) goes
  * through the app's own path — ReaderLane with the model's card, then prose and title — and the
  * output must state at least `threshold` of the meeting's key facts (decisions, amounts, dates).
- * The threshold sits below the measured `baseline` (2026-10-16: 0.67–0.75 for E2B and E4B — the
- * readers do miss facts today); a change that lowers recall, or raises it, shows in the report.
+ * The threshold sits below the measured `baseline` (2026-10-16, max_notes 12: 0.75–0.92 for E2B and
+ * E4B; 0.67–0.75 with the former 6). The reading is deterministic (same output run after run), so
+ * any change in recall comes from the change under test.
  * The facts are written in Traditional Chinese; the output is converted to it before matching.
  *
  * Needs the model installed in the app under test (skipped otherwise). Pick it with

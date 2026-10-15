@@ -28,7 +28,7 @@
  },
  "reader": {
   "read_max": 400,
-  "max_notes": 6,
+  "max_notes": 12,
   "segment_s": 20,
   "stop": "\nNEXT",
   "primer": "NEXT",

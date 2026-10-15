@@ -35,9 +35,10 @@ class NoteCapTest {
             "NOTE [3:00] (ACTION) 下週三前確認遊覽車",
         ).joinToString("\n")
         val capped = ArrayList<String>()
+        // The cap mechanism at upstream's 6 (the shipped card keeps 12).
         val reader = MeetingReader(OneReply(reply), "sys", events = {
             if (it is AgentEvent.NoteDropped && it.reason == DropReason.CAP) capped += it.line
-        })
+        }, pc = studio.primeminutes.core.models.ModelCard.DEFAULT.reader.copy(maxNotes = 6))
         reader.start()
         listOf(0, 20, 60, 100, 120, 180).forEach { reader.offer(Line(it, "S1", "話$it")) }
         reader.finish()

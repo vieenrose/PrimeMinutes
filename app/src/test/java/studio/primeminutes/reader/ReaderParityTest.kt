@@ -72,6 +72,8 @@ class ReaderParityTest {
             count = { it.codePointCount(0, it.length) },
             events = { if (it is AgentEvent.Restart) restarts++ },
             budget = budget,
+            // Upstream phone_live.py keeps 6 notes a window; the shipped card keeps more (gate 2026-10-16).
+            pc = ModelCard.DEFAULT.reader.copy(maxNotes = 6),
         )
         reader.start()
         val lines = g.getJSONArray("lines")

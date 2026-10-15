@@ -1,12 +1,19 @@
 {
  "name": "weiya",
  "source": "library entry 20261014-175615 (ASR transcript, Note10+)",
- "threshold": 0.58,
+ "threshold": 0.67,
  "baseline": {
-  "measured": "2026-10-16, Note10+, one run per model",
+  "measured": "2026-10-16, Note10+, max_notes 12 (deterministic: 2 runs identical)",
   "recall": {
-   "gemma4-e4b-meeting-agent-zh-mobile": 0.75,
+   "gemma4-e4b-meeting-agent-zh-mobile": 0.92,
    "gemma4-e2b-meeting-agent-zh-mobile-v1": 0.75
+  },
+  "before": {
+   "max_notes": 6,
+   "recall": {
+    "gemma4-e4b-meeting-agent-zh-mobile": 0.75,
+    "gemma4-e2b-meeting-agent-zh-mobile-v1": 0.75
+   }
   }
  },
  "facts": [
