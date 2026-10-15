@@ -2,6 +2,9 @@
 //   build+run: ios/tests/run.sh
 import Foundation
 
+/// Upstream phone_live.py keeps 6 notes a window; the shipped card keeps more (gate 2026-10-16).
+let upstreamCard: ModelCard = { var c = ModelCard.default; c.reader.maxNotes = 6; return c }()
+
 final class FakeLlm: ReaderLlm {
     var seq = String.UnicodeScalarView()
     var prompts: [String] = []
@@ -29,7 +32,7 @@ func replay(_ path: String, _ budget: ReaderBudget) throws -> (g: [String: Any],
     var restarts = 0
     let reader = MeetingReader(llm: llm, systemPrompt: g["system_prompt"] as! String,
                                count: { $0.unicodeScalars.count },
-                               events: { if case .restart = $0 { restarts += 1 } }, budget: budget)
+                               events: { if case .restart = $0 { restarts += 1 } }, budget: budget, card: upstreamCard)
     try reader.start()
     for l in g["lines"] as! [[String: Any]] {
         try reader.offer(Line(startS: l["start"] as! Int, speaker: l["speaker"] as? String, text: l["text"] as! String))

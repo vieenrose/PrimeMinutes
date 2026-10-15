@@ -10,7 +10,7 @@ struct ModelCard {
     let template: ChatTemplate
     let sampler: Sampler
     let budget: ReaderBudget
-    let reader: ReaderCard
+    var reader: ReaderCard
     let title: OneShot
     let prose: OneShot
     let ask: AskCard
@@ -82,7 +82,9 @@ struct ModelCard {
 /// grammar, caps, the minutes' sections and the proposal guard. The shipped card's values are the
 /// port of vieenrose/meeting-summarizer (`eval/phone_live.py`): change one only against a re-measurement.
 struct ReaderCard {
-    let readMax: Int, maxNotes: Int, segmentS: Int
+    let readMax: Int
+    var maxNotes: Int   // var: tests pin upstream's 6
+    let segmentS: Int
     /// Ends a reading turn; `primer` is the model's reply in the primed prefix.
     let stop: String, primer: String
     let dupLookback: Int, dupJaccard: Double
