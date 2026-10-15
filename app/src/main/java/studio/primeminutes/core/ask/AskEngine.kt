@@ -239,7 +239,7 @@ object AskEngine {
         // The engine wants the directory of the fused graph (mobile-v1/mfa), the cache sits at the spec root.
         val e = MfaEngine.load(
             File(dir, spec.mainFile).parentFile!!.path, ctx = spec.maxCtx, threads = HwInfo.threads(app),
-            weightCache = File(dir, "weights.xnnpack_cache").path,
+            weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, stopIds = spec.template.stopIds,
         )
         Log.i(TAG, "reader loaded for Ask in ${(System.nanoTime() - t0) / 1_000_000} ms")
         val t = tokenizer(app)

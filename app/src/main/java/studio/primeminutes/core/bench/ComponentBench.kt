@@ -82,7 +82,8 @@ object ComponentBench {
         // The reader loads from the main file's folder (its embedders sit beside it), not the model root.
         val engine = MfaEngine.load(
             main.parentFile!!.path, ctx = spec.maxCtx, threads = HwInfo.threads(context),
-            weightCache = File(dir, "weights.xnnpack_cache").path, backend = 0, main = main.path,
+            weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, backend = 0, main = main.path,
+            stopIds = spec.template.stopIds,
         )
         val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
         return engine to tok

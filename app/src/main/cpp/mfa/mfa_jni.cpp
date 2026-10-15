@@ -130,6 +130,14 @@ Java_studio_primeminutes_core_llm_MfaEngine_nativeAgree(JNIEnv* env, jclass, jlo
 }
 
 JNIEXPORT void JNICALL
+Java_studio_primeminutes_core_llm_MfaEngine_nativeSetStops(JNIEnv* env, jclass, jlong h, jintArray jstops) {
+    if (!h || !jstops) return;
+    std::vector<int> v(env->GetArrayLength(jstops));
+    env->GetIntArrayRegion(jstops, 0, (jsize)v.size(), reinterpret_cast<jint*>(v.data()));
+    engine(h)->set_stops(std::move(v));
+}
+
+JNIEXPORT void JNICALL
 Java_studio_primeminutes_core_llm_MfaEngine_nativeCancel(JNIEnv*, jclass, jlong h) { if (h) engine(h)->cancel(); }
 
 JNIEXPORT void JNICALL

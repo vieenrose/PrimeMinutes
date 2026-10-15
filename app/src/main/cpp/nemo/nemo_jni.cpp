@@ -80,13 +80,17 @@ Java_studio_primeminutes_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, j
 JNIEXPORT jboolean JNICALL
 Java_studio_primeminutes_core_asr_NemoNative_nativePush(JNIEnv* env, jclass, jlong ptr, jfloatArray pcm, jint n) {
     auto* h = reinterpret_cast<Handle*>(ptr);
+    if (!pcm || n < 0 || n > env->GetArrayLength(pcm)) return JNI_FALSE;
     jfloat* p = env->GetFloatArrayElements(pcm, nullptr);
+    if (!p) return JNI_FALSE;
     std::string err;
     bool ok;
-    {
+    // A C++ exception must never cross JNI (it aborts the process, and the live capture with it):
+    // the graphs throw on a LiteRT runtime error, so a failed piece is reported like any other.
+    try {
         std::lock_guard<std::mutex> lk(h->mu);
         ok = h->engine->push(p, (size_t)n, err);
-    }
+    } catch (const std::exception& e) { ok = false; err = e.what(); }
     env->ReleaseFloatArrayElements(pcm, p, JNI_ABORT);
     if (!ok) __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "push failed: %s", err.c_str());
     return ok;
@@ -97,9 +101,12 @@ JNIEXPORT jstring JNICALL
 Java_studio_primeminutes_core_asr_NemoNative_nativeLive(JNIEnv* env, jclass, jlong ptr) {
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::vector<nemo::Segment> frozen, tail;
-    {
+    try {
         std::lock_guard<std::mutex> lk(h->mu);
         h->engine->live(frozen, tail);
+    } catch (const std::exception& e) {
+        __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "live failed: %s", e.what());
+        frozen.clear(); tail.clear();
     }
     std::string out;
     for (const auto& s : frozen) out += encode_segment(s);
@@ -113,7 +120,10 @@ Java_studio_primeminutes_core_asr_NemoNative_nativeFinish(JNIEnv* env, jclass, j
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::string out, err;
     std::lock_guard<std::mutex> lk(h->mu);
-    if (!h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err)) {
+    bool ok;
+    try { ok = h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err); }
+    catch (const std::exception& e) { ok = false; err = e.what(); }
+    if (!ok) {
         __android_log_print(ANDROID_LOG_ERROR, "primeminutes-nemo", "finish failed: %s", err.c_str());
         return nullptr;
     }

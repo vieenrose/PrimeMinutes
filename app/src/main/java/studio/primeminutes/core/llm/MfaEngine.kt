@@ -68,19 +68,22 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
         init { System.loadLibrary("primeminutes-mfa") }
 
         /** `<bos>`: the engine does not add it (unlike LiteRT-LM), so every prompt starts with it.
-         *  Generation stops by itself at `<turn|>` (106), `<eos>` (1) and 50. */
+         *  Generation stops at the [load]ed stop ids (the model's [studio.primeminutes.core.models.ChatTemplate.stopIds]). */
         const val BOS = 2
 
         /**
          * Load the model in [dir] (the `mfa/` folder of the HF repo). [weightCache] is built on the
          * first load (~0.8 GB for E2B, 2.2 GB for E4B) — do that once after the download, before any
          * recording, with nothing else loaded (§13.2). [backend]: 0 CPU, 1 GPU, 2 NPU (see
-         * [studio.primeminutes.core.hw.Backend]). [main]: the prefill/decode graph, the GPU variant's for
+         * [studio.primeminutes.core.hw.Backend]). [stopIds]: the model's end-of-reply tokens. [main]: the prefill/decode graph, the GPU variant's for
          * the GPU (the embedders of [dir] serve both). Throws IllegalStateException on failure.
          */
         fun load(dir: String, ctx: Int, threads: Int, weightCache: String, backend: Int = 0,
-                 main: String = "$dir/prefill_decode_fused.tflite"): MfaEngine =
-            MfaEngine(nativeLoad(dir, main, ctx, threads, weightCache, backend))
+                 main: String = "$dir/prefill_decode_fused.tflite",
+                 stopIds: Set<Int> = studio.primeminutes.core.models.ChatTemplate.GEMMA4.stopIds): MfaEngine =
+            MfaEngine(nativeLoad(dir, main, ctx, threads, weightCache, backend)).also {
+                nativeSetStops(it.handle, stopIds.toIntArray())
+            }
 
         @JvmStatic private external fun nativeLoad(dir: String, main: String, ctx: Int, threads: Int, cache: String, backend: Int): Long
         @JvmStatic private external fun nativeGenerate(
@@ -88,6 +91,7 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
             cb: TokenCallback?, stats: DoubleArray,
         ): IntArray
         @JvmStatic private external fun nativeAgree(h: Long, ids: IntArray, forced: IntArray): Int
+        @JvmStatic private external fun nativeSetStops(h: Long, stops: IntArray)
         @JvmStatic private external fun nativeCancel(h: Long)
         @JvmStatic private external fun nativeFree(h: Long)
         @JvmStatic private external fun nativeContext(h: Long): Int

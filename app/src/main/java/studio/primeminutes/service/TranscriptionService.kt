@@ -78,7 +78,7 @@ import java.io.File
  *  gates live mode at "8 GB"). An 8 GB phone reports ~7.4 GiB of totalMem (the OPPO Reno7:
  *  7,728,400 kB), so the gate is 7 GiB: every 8 GB phone passes, 6 GB phones do not. */
 /** The mobile reader's XNNPACK weight cache, next to its weights. */
-private const val WEIGHT_CACHE = "weights.xnnpack_cache"
+private const val WEIGHT_CACHE = ModelManager.WEIGHT_CACHE
 private const val LIVE_READER_MIN_RAM = 7L * 1024 * 1024 * 1024
 /** How often a live reading task picks up the newest transcript snapshot. */
 private const val LIVE_FEED_MS = 400L
@@ -1070,7 +1070,13 @@ class TranscriptionService : LifecycleService() {
             val clipAudio = ranges.map { (a, b) -> FloatArray((b - a).toInt()) }
             var pos = 0L
             var clipsSent = false
+            // Stop cancels this producer, but trySendBlocking only reports "closed" and the decoder would
+            // run on to EOF (CPU with no foreground service, the promoted WAV still growing): end it here.
+            fun send(a: FloatArray) {
+                if (trySendBlocking(a).isClosed || !isActive) throw kotlinx.coroutines.CancellationException("import stopped")
+            }
             AudioDecoder.decodeToWav16k(this@TranscriptionService, uri, wav, normalize = true) { block, len ->
+                if (!isActive) throw kotlinx.coroutines.CancellationException("import stopped")
                 ranges.forEachIndexed { k, (a, b) ->
                     val lo = maxOf(a, pos); val hi = minOf(b, pos + len)
                     if (lo < hi) System.arraycopy(block, (lo - pos).toInt(), clipAudio[k], (lo - a).toInt(), (hi - lo).toInt())
@@ -1080,10 +1086,10 @@ class TranscriptionService : LifecycleService() {
                 // First block reaching the preroll: the clips go in front of it, once.
                 if (!clipsSent) {
                     clipsSent = true
-                    clipAudio.forEach { trySendBlocking(it); trySendBlocking(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
+                    clipAudio.forEach { send(it); send(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
                 }
                 val from = skip.toInt(); skip = 0
-                trySendBlocking(block.copyOfRange(from, len))
+                send(block.copyOfRange(from, len))
             }
         }.flowOn(Dispatchers.IO)
 
@@ -1891,10 +1897,10 @@ class TranscriptionService : LifecycleService() {
         val engine = try {
             if (backend == studio.primeminutes.core.hw.Backend.GPU) studio.primeminutes.core.llm.MfaEngine.load(
                 main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = "", backend = backend.id, main = gpuMain!!.path,
+                weightCache = "", backend = backend.id, main = gpuMain!!.path, stopIds = spec.template.stopIds,
             ) else studio.primeminutes.core.llm.MfaEngine.load(
                 main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = File(dir, WEIGHT_CACHE).path, backend = backend.id,
+                weightCache = File(dir, WEIGHT_CACHE).path, backend = backend.id, stopIds = spec.template.stopIds,
             )
         } catch (e: Exception) {
             if (backend == studio.primeminutes.core.hw.Backend.CPU) throw e
@@ -1902,7 +1908,7 @@ class TranscriptionService : LifecycleService() {
             backend = studio.primeminutes.core.hw.Backend.CPU
             studio.primeminutes.core.llm.MfaEngine.load(
                 main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = File(dir, WEIGHT_CACHE).path,
+                weightCache = File(dir, WEIGHT_CACHE).path, stopIds = spec.template.stopIds,
             )
         }
         studio.primeminutes.core.hw.HwInfo.activeBackend = backend
@@ -2131,7 +2137,7 @@ class TranscriptionService : LifecycleService() {
             withContext(Dispatchers.Default) {
                 studio.primeminutes.core.llm.MfaEngine.load(
                     File(dir, spec.mainFile).parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                    weightCache = cache.path,
+                    weightCache = cache.path, stopIds = spec.template.stopIds,
                 ).close()
             }
         } catch (e: Throwable) {

@@ -342,7 +342,12 @@ class MainActivity : ComponentActivity() {
         // copies live under filesDir/library, so these are all reclaimable. Off the main thread —
         // it's file IO. NOT safe while the foreground service is mid-run (an Activity recreation,
         // not a cold start): the sweep would delete the pipeline's in-flight files.
-        if (!TranscriptionService.pipelineActive) {
+        // A podcast/YouTube download writes into filesDir/audio from the service without a pipeline
+        // (Running), and its finished file waits there for the user (Ready): neither may be swept.
+        val downloading = studio.primeminutes.online.ImportDownloads.state.value.let {
+            it is studio.primeminutes.online.ImportDownloads.State.Running || it is studio.primeminutes.online.ImportDownloads.State.Ready
+        }
+        if (!TranscriptionService.pipelineActive && TranscriptionService.exportsInFlight == 0 && !downloading) {
             Thread {
                 ModelManager(applicationContext).sweepStalePartFiles()
                 studio.primeminutes.online.sweepStaleParts(java.io.File(filesDir, "audio"))

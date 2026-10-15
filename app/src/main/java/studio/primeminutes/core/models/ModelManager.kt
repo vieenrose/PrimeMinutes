@@ -254,6 +254,12 @@ class ModelManager(context: Context) {
             val (bytes, sha) = meta
             val dest = File(dir, rel).apply { parentFile?.mkdirs() }
             if (dest.length() != bytes || !marked) {
+                // A file from another revision (same size or not) is replaced, never kept under the new stamp:
+                // download() is a no-op on an existing destination.
+                if (dest.exists()) dest.delete()
+                // XNNPACK's packed-weight cache is keyed by buffer index, not content: weights from another
+                // revision would run on the old packed values. Any fetched file invalidates it.
+                File(dir, WEIGHT_CACHE).delete()
                 download("${spec.revision}/$rel", dest, sha) { frac ->
                     onProgress((done + (frac * bytes).toLong()).toFloat() / total)
                 }
@@ -429,6 +435,8 @@ class ModelManager(context: Context) {
     companion object {
         /** Written next to a spec's files, recording the pinned revision they came from. */
         const val REVISION_MARKER = ".revision"
+        /** XNNPACK packed-weight cache next to a reader model's files (built on first load). */
+        const val WEIGHT_CACHE = "weights.xnnpack_cache"
 
         // Per-destination download locks, shared across ALL ModelManager instances (the UI's
         // detect-names path constructs its own ModelManager), so concurrent first-run downloads of the

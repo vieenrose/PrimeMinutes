@@ -47,10 +47,15 @@ public:
     // Callable from any thread: the running generate() stops after its current step.
     void cancel() { cancel_ = true; }
 
+    // Token ids that end a reply (the model's chat template). Set before generate(); the default is
+    // Gemma 4's (<turn|>, <eos>, 50) so an old caller keeps working.
+    void set_stops(std::vector<int> stops) { stops_ = std::move(stops); }
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     std::atomic<bool> cancel_{false};
+    std::vector<int> stops_{106, 1, 50};
 };
 
 }  // namespace mfa
