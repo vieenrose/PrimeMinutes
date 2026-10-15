@@ -52,10 +52,10 @@ func replay(_ path: String, _ budget: ReaderBudget) throws -> (g: [String: Any],
     static func main() throws {
         let dir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "golden"
         _ = try replay("\(dir)/reader_parity.json", .standard)
-        let (g, reader) = try replay("\(dir)/reader_parity_mobile.json", .mobile)
-        check(g["window_tokens"] as! Int, ReaderBudget.mobile.windowTokens, "mobile window")
+        let (g, reader) = try replay("\(dir)/reader_parity_mobile.json", ModelCard.default.budget)
+        check(g["window_tokens"] as! Int, ModelCard.default.budget.windowTokens, "mobile window")
         for (b, want) in g["compact_notes"] as! [String: [Int]] {
-            check(P.compactNotes(reader.journal, budgetChars: Int(b)!).map(\.id), want, "compact_notes at \(b)")
+            check(ModelCard.default.reader.compactNotes(reader.journal, budgetChars: Int(b)!).map(\.id), want, "compact_notes at \(b)")
         }
         // helpers
         check(P.formatTs(3725), "1:02:05", "formatTs"); check(P.parseTs("1:02:05"), 3725, "parseTs")

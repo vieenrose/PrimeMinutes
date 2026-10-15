@@ -13,6 +13,8 @@ final class MeetingReader {
     private let events: (AgentEvent) -> Void
     private let clock: () -> UInt64
     private let budget: ReaderBudget
+    private let pc: ReaderCard
+    private let temp: Float
 
     private(set) var journal: [Note] = []
     private var lines: [Line] = []
@@ -28,8 +30,9 @@ final class MeetingReader {
     init(llm: ReaderLlm, systemPrompt: String, count: ((String) -> Int)? = nil,
          events: @escaping (AgentEvent) -> Void = { _ in },
          clock: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
-         budget: ReaderBudget = .standard) {
+         budget: ReaderBudget = .standard, card: ModelCard = .default) {
         self.llm = llm; self.systemPrompt = systemPrompt; self.events = events; self.clock = clock; self.budget = budget
+        self.pc = card.reader; self.temp = card.sampler.temp
         self.count = count ?? { [unowned llm] in llm.tokenize($0, special: false).count }
     }
 
@@ -42,7 +45,7 @@ final class MeetingReader {
         let t = llm.template
         for (key, text) in [("p0", t.p0), ("p1", t.p1), ("p2", t.p2), ("p3", t.p3)] { pieces[key] = llm.tokenize(text, special: true) }
         state(.starting)
-        try prefillFresh(P.journalEmpty)
+        try prefillFresh(pc.journalEmpty)
         started = true
         state(.listening, ctx: llm.seqLength)
     }
@@ -85,7 +88,7 @@ final class MeetingReader {
         if line.startS >= segEnd {
             closedSeg = segLines.joined(separator: "\n")
             segLines.removeAll()
-            segEnd = line.startS + P.segmentS
+            segEnd = line.startS + pc.segmentS
         }
     }
 
@@ -93,15 +96,15 @@ final class MeetingReader {
     func finish() throws -> String {
         if windowLines > 0 { try closeWindow() }
         state(.summarizing, window: 0, ctx: llm.seqLength, notes: journal.count)
-        return P.minutes(journal)
+        return pc.minutes(journal)
     }
 
     private func openWindow(_ first: Line) throws {
-        if llm.seqLength + 2 * budget.windowTokens + P.readMax + 600 > budget.ctxBudget { try restart() }
+        if llm.seqLength + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget { try restart() }
         k += 1
         windowTok = 0
-        segEnd = first.startS + P.segmentS
-        try append(P.windowHeader(k), special: false, what: "window header")
+        segEnd = first.startS + pc.segmentS
+        try append(pc.windowHeader(k), special: false, what: "window header")
         state(.listening, window: k, ctx: llm.seqLength, notes: journal.count)
     }
 
@@ -113,7 +116,7 @@ final class MeetingReader {
         state(.reading, window: k, ctx: llm.seqLength, notes: journal.count)
         let t0 = clock()
         _ = llm.append(pieces["p2"]!)
-        let reply = llm.generateContinue(maxTokens: P.readMax, stop: P.stop, temp: P.temp) { [k, events] in events(.turnToken(window: k, piece: $0)) }
+        let reply = llm.generateContinue(maxTokens: pc.readMax, stop: pc.stop, temp: temp) { [k, events] in events(.turnToken(window: k, piece: $0)) }
         let kept = parse(reply)
         _ = llm.append(pieces["p3"]!)
         events(.turnDone(window: k, reply: reply, kept: kept, ms: Int((clock() - t0) / 1_000_000)))
@@ -127,23 +130,23 @@ final class MeetingReader {
     private func parse(_ reply: String) -> Int {
         var cands: [(raw: String, note: Note)] = []
         for rawLine in reply.split(omittingEmptySubsequences: true, whereSeparator: \.isNewline).map(String.init) {
-            guard let m = groups(P.act, rawLine), m[1] == "NOTE" else { continue }
+            guard let m = groups(pc.act, rawLine), m[1] == pc.noteAct else { continue }
             let raw = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let n = groups(P.note, m[2].trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            guard let n = groups(pc.note, m[2].trimmingCharacters(in: .whitespacesAndNewlines)) else {
                 events(.noteDropped(window: k, line: raw, reason: .parse)); continue
             }
             let ts = n[1], tag: String? = n[2].isEmpty ? nil : n[2], text = n[3]
-            let seen = (journal.suffix(P.dupLookback).map(\.text) + cands.map(\.note.text)).suffix(P.dupLookback)
-            let reason: DropReason? = resolve(ts) == nil ? .citation : (seen.contains { P.similar(text, $0) > P.dupJaccard } ? .duplicate : nil)
+            let seen = (journal.suffix(pc.dupLookback).map(\.text) + cands.map(\.note.text)).suffix(pc.dupLookback)
+            let reason: DropReason? = resolve(ts) == nil ? .citation : (seen.contains { P.similar(text, $0) > pc.dupJaccard } ? .duplicate : nil)
             if let r = reason { events(.noteDropped(window: k, line: raw, reason: r)); continue }
             cands.append((raw, Note(id: 0, window: k, ts: ts, tag: tag, text: text)))
         }
-        func rank(_ t: String?) -> Int { switch t?.uppercased() { case "DECISION", "ACTION": 0; case "NUMBER": 1; case "OPEN-ISSUE": 2; default: 3 } }
+        let rank = pc.capRank
         let keep = Set(cands.indices.sorted {
             let a = (rank(cands[$0].note.tag), rank(cands[$0].note.tag) == 0 ? -$0 : $0)
             let b = (rank(cands[$1].note.tag), rank(cands[$1].note.tag) == 0 ? -$1 : $1)
             return a < b
-        }.prefix(P.maxNotes))
+        }.prefix(pc.maxNotes))
         var kept = 0
         for (i, c) in cands.enumerated() {
             if !keep.contains(i) { events(.noteDropped(window: k, line: c.raw, reason: .cap)); continue }
@@ -164,15 +167,15 @@ final class MeetingReader {
         let before = llm.seqLength
         state(.restarting, window: k, ctx: before, notes: journal.count)
         llm.reset()
-        try prefillFresh(P.compact(journal, count: count, budget: budget.restartBudget))
+        try prefillFresh(pc.compact(journal, count: count, budget: budget.restartBudget))
         restarts += 1
         events(.restart(count: restarts, ctxBefore: before, ctxAfter: llm.seqLength))
     }
 
     private func prefillFresh(_ journalText: String) throws {
         let toks = pieces["p0"]! + llm.tokenize(systemPrompt, special: false) + pieces["p1"]! +
-            llm.tokenize(P.journalHeader + journalText, special: false) + pieces["p2"]! +
-            llm.tokenize("NEXT", special: false) + pieces["p3"]!
+            llm.tokenize(pc.journalHeader + journalText, special: false) + pieces["p2"]! +
+            llm.tokenize(pc.primer, special: false) + pieces["p3"]!
         try timedAppend(toks, "prefix")
     }
 

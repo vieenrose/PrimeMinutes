@@ -39,7 +39,7 @@ final class MfaEngine {
     /// `dir` = the folder with the three `.tflite` files; `weightCache` is built on first load (CPU).
     /// `gpuGraph`: run on the GPU (ML Drift Metal) with this prefill/decode graph instead.
     /// `stopIds`: the model's end-of-reply tokens (its `ChatTemplate.stopIds`).
-    init(dir: String, ctx: Int, threads: Int, weightCache: String, gpuGraph: String? = nil, stopIds: Set<Int> = ChatTemplate.gemma4.stopIds) throws {
+    init(dir: String, ctx: Int, threads: Int, weightCache: String, gpuGraph: String? = nil, stopIds: Set<Int> = ModelCard.default.template.stopIds) throws {
         var err = [CChar](repeating: 0, count: 1024)
         guard let p = mfa_load(dir, gpuGraph ?? dir + "/prefill_decode_fused.tflite", Int32(ctx), Int32(threads),
                                gpuGraph == nil ? weightCache : "", gpuGraph == nil ? 0 : 1, &err, 1024)
@@ -108,7 +108,7 @@ final class MfaSession: ReaderLlm {
     private let cancelledLock = NSLock()
     private var cancelled = false
 
-    init(engine: MfaEngine, tok: SpTokenizer, topK: Int = 40, topP: Float = 0.95, seed: UInt32 = 0, template: ChatTemplate = .gemma4) {
+    init(engine: MfaEngine, tok: SpTokenizer, topK: Int = ModelCard.default.sampler.topK, topP: Float = ModelCard.default.sampler.topP, seed: UInt32 = 0, template: ChatTemplate = ModelCard.default.template) {
         self.engine = engine; self.tok = tok; self.topK = topK; self.topP = topP; self.seed = seed; self.template = template
     }
 

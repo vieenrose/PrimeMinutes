@@ -5,24 +5,24 @@ import Foundation
 /// output sanitised hard. Call from the reader's thread.
 struct ReaderSummarizer {
     let llm: ReaderLlm
-    var budget: ReaderBudget = .mobile
-    /// Title and prose read the journal compacted to this many characters (0 = all of it).
-    var notesChars = 3900
-    static let proseMax = 600
+    /// The model's card: budgets, sampler, the title/prose prompts and how far the journal is compacted.
+    var card: ModelCard = .default
+    private var budget: ReaderBudget { card.budget }
+    private var notesChars: Int { card.reader.notesChars }
 
     func title(_ journal: [Note]) -> String? {
         guard !journal.isEmpty else { return nil }
         llm.reset()
-        let toks = fitting(journal, 48) { "以下是一場會議的筆記：\n\n" + $0 + "\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。" }
+        let toks = fitting(journal, card.title.maxTokens, card.title.render)
         guard llm.append(toks) >= 0 else { return nil }
-        let raw = llm.generateContinue(maxTokens: 48, stop: llm.template.end, temp: ReaderProtocol.temp) { _ in }
+        let raw = llm.generateContinue(maxTokens: card.title.maxTokens, stop: llm.template.end, temp: card.sampler.temp) { _ in }
         let first = raw.components(separatedBy: llm.template.end)[0].split(whereSeparator: \.isNewline)
             .map(String.init).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let junk = CharacterSet(charactersIn: "「」\"*# ")
         guard var t = first?.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: junk) else { return nil }
         // "會議：…" / "標題：…" — the model labels its answer now and then.
-        if let r = t.range(of: "^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*", options: .regularExpression) {
-            t = String(t[r.upperBound...]).trimmingCharacters(in: junk)
+        if let label = card.title.label, find(label, t) {
+            t = replace(label, t, "").trimmingCharacters(in: junk)
         }
         let cut = String(t.prefix(40))
         return cut.isEmpty ? nil : cut
@@ -33,12 +33,9 @@ struct ReaderSummarizer {
     func prose(_ journal: [Note]) -> String? {
         guard !journal.isEmpty else { return nil }
         llm.reset()
-        let toks = fitting(journal, Self.proseMax) { "以下是一場會議的筆記：\n\n" + $0 +
-            "\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），" +
-            "說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。" +
-            "只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。" }
+        let toks = fitting(journal, card.prose.maxTokens, card.prose.render)
         guard llm.append(toks) >= 0 else { return nil }
-        let raw = llm.generateContinue(maxTokens: Self.proseMax, stop: llm.template.end, temp: ReaderProtocol.temp) { _ in }
+        let raw = llm.generateContinue(maxTokens: card.prose.maxTokens, stop: llm.template.end, temp: card.sampler.temp) { _ in }
         return Self.cleanProse(raw, known: Set(journal.map(\.ts)), turnEnd: llm.template.end)
     }
 
@@ -47,7 +44,7 @@ struct ReaderSummarizer {
     private func fitting(_ journal: [Note], _ maxOut: Int, _ prompt: (String) -> String) -> [Int] {
         var chars = notesChars
         while true {
-            let notes = (chars > 0 ? ReaderProtocol.compactNotes(journal, budgetChars: chars) : journal)
+            let notes = (chars > 0 ? card.reader.compactNotes(journal, budgetChars: chars) : journal)
                 .map(ReaderProtocol.render).joined(separator: "\n")
             let toks = llm.tokenize(llm.template.userFirst, special: true) + llm.tokenize(prompt(notes), special: false) +
                 llm.tokenize(llm.template.p2, special: true)
@@ -61,8 +58,8 @@ struct ReaderSummarizer {
     private static let sentenceEnd = rx(#"[。！？!?](\s*\[\d+:\d{2}(?::\d{2})?\])?|[.](?=\s|$)"#)
 
     /// The prose reply made presentable: unknown `[ts]` stripped, no headings or bullets, and a
-    /// reply cut off by `proseMax` (no end-of-turn) ends at its last whole sentence.
-    static func cleanProse(_ raw: String, known: Set<String>, turnEnd: String = ChatTemplate.gemma4.end) -> String? {
+    /// reply cut off by the card's prose budget (no end-of-turn) ends at its last whole sentence.
+    static func cleanProse(_ raw: String, known: Set<String>, turnEnd: String = ModelCard.default.template.end) -> String? {
         let ended = raw.contains(turnEnd)
         var text = raw.components(separatedBy: turnEnd)[0]
         let ns = text as NSString

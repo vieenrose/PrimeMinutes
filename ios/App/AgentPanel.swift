@@ -21,8 +21,8 @@ import SwiftUI
     @Published var notesSoFar = 0
     @Published var reply = ""
     @Published var ctxTokens = 0
-    @Published var windowMax = ReaderBudget.mobile.windowTokens
-    @Published var ctxMax = ReaderBudget.mobile.ctxBudget
+    @Published var windowMax = ModelCard.default.budget.windowTokens
+    @Published var ctxMax = ModelCard.default.budget.ctxBudget
     @Published var notes: [Note] = []
     @Published var steps: [Step] = []
     @Published var log: [LogLine] = []

@@ -18,11 +18,11 @@ protocol ReaderLlm: AnyObject {
 }
 
 extension ReaderLlm {
-    var template: ChatTemplate { .gemma4 }
+    var template: ChatTemplate { ModelCard.default.template }
 }
 
 /// A model's chat template as literal pieces (Android `ChatTemplate`): what the model's own template
-/// renders around a system, user and model turn (thinking off). It travels with the `ReaderModel`, so
+/// renders around a system, user and model turn (thinking off). It comes from the `ModelCard`, so
 /// weights with another template (or a fine-tune with an adjusted protocol) need no change in the
 /// reader, Ask or the summarizer.
 struct ChatTemplate {
@@ -43,9 +43,6 @@ struct ChatTemplate {
     /// Opens a conversation that has no system turn.
     var userFirst: String { bos + user }
 
-    /// Gemma 4, thinking off (note §4.1). Stop ids: `<eos>` (1), the metadata's third stop id (50), `<turn|>` (106).
-    static let gemma4 = ChatTemplate(bos: "<bos>", bosId: 2, system: "<|turn>system\n", user: "<|turn>user\n", model: "<|turn>model\n",
-                                     end: "<turn|>", sep: "\n", stopIds: [1, 50, 106])
 }
 
 enum AgentState { case starting, listening, reading, restarting, summarizing, done }

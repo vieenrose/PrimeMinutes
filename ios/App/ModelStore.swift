@@ -10,12 +10,11 @@ struct ReaderModel {
     let files: [ModelFile]
     /// The GPU's prefill/decode graph (ML Drift), fetched only when the user tests the GPU; E2B only.
     var gpu: ModelFile? = nil
-    /// The chat template the weights were trained with.
-    var template: ChatTemplate = .gemma4
-    /// The reader's window, context and restart budgets the weights were tuned for (integration note §12).
-    var budget: ReaderBudget = .mobile
-    /// Title and prose read the journal compacted to this many characters (0 = all of it).
-    var notesChars = 3900
+    /// How to drive these weights (model_cards/<name>.json): chat template, sampler, budgets, the
+    /// reader protocol and the title/prose/Ask prompts.
+    var card: ModelCard = .default
+    var template: ChatTemplate { card.template }
+    var budget: ReaderBudget { card.budget }
     func url(_ f: ModelFile) -> URL { URL(string: f.remote.hasPrefix("https://") ? f.remote : "https://huggingface.co/\(repo)/resolve/\(rev)/\(f.remote)")! }
 
     /// Speech engine (ASR + diarization), the two pins of Android `ModelManager.NEMO_FILES`; CPU only.

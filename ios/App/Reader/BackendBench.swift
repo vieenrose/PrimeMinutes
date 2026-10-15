@@ -80,7 +80,7 @@ enum BackendBench {
     #if VOX_REAL_READER
     private static func probe(_ b: String, dir: String, gpu: String?, ids: [Int], threads: Int, ref: [Int], onReply: ([Int]) -> Void) -> BackendResult {
         do {
-            let e = try MfaEngine(dir: dir, ctx: ReaderBudget.mobile.ctxBudget, threads: threads,
+            let e = try MfaEngine(dir: dir, ctx: ModelCard.default.budget.ctxBudget, threads: threads,
                                   weightCache: dir + "/" + ModelStore.weightCache, gpuGraph: b == "GPU" ? gpu : nil)
             let out = try e.generate(ids, maxNew: reply, temp: 0, topK: 1, topP: 1, seed: 0)
             let s = e.lastStats

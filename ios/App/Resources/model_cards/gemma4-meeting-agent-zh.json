@@ -1,0 +1,112 @@
+{
+ "schema": 1,
+ "name": "gemma4-meeting-agent-zh",
+ "about": "Everything the app must know to drive the Gemma-4 meeting-agent fine-tune (E2B and E4B share it): chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt).",
+ "template": {
+  "bos": "<bos>",
+  "bos_id": 2,
+  "system": "<|turn>system\n",
+  "user": "<|turn>user\n",
+  "model": "<|turn>model\n",
+  "end": "<turn|>",
+  "sep": "\n",
+  "stop_ids": [
+   1,
+   50,
+   106
+  ]
+ },
+ "sampler": {
+  "top_k": 40,
+  "top_p": 0.95,
+  "temp": 0.2
+ },
+ "budget": {
+  "window_tokens": 1500,
+  "ctx_budget": 4096,
+  "restart_budget": 1200
+ },
+ "reader": {
+  "read_max": 400,
+  "max_notes": 6,
+  "segment_s": 20,
+  "stop": "\nNEXT",
+  "primer": "NEXT",
+  "dup_lookback": 30,
+  "dup_jaccard": 0.6,
+  "journal_header": "## 筆記本（至今）\n",
+  "journal_empty": "（尚無筆記）",
+  "window_header": "## 逐字稿片段 {k}\n",
+  "omitted": "\n（另有 {n} 則較早的筆記未列出）",
+  "act": "^\\s*(NOTE|REVISE|LOOKBACK|NEXT)\\b(.*)$",
+  "note_act": "NOTE",
+  "note": "^\\s*\\[?(\\d+:\\d{2}(?::\\d{2})?)\\]?\\s*(?:\\((\\w[\\w-]*)\\)\\s*)?(.+)$",
+  "compact_priority": [
+   "DECISION",
+   "OPEN-ISSUE",
+   "ACTION"
+  ],
+  "cap_priority": [
+   [
+    "DECISION",
+    "ACTION"
+   ],
+   [
+    "NUMBER"
+   ],
+   [
+    "OPEN-ISSUE"
+   ]
+  ],
+  "sections": [
+   [
+    "決議事項",
+    "DECISION"
+   ],
+   [
+    "待辦與負責人",
+    "ACTION"
+   ],
+   [
+    "保留與未決",
+    "OPEN-ISSUE"
+   ],
+   [
+    "討論要點",
+    "PROPOSAL"
+   ],
+   [
+    "重要數字",
+    "NUMBER"
+   ]
+  ],
+  "section_empty": "- 無",
+  "proposal_tag": "PROPOSAL",
+  "reclassify_tags": [
+   "DECISION",
+   "ACTION"
+  ],
+  "action_tag": "ACTION",
+  "proposal_cue": "^(建議|提議|可以|可考慮|考慮|希望|應該|應|或許|是否|討論|研議)|建議|提議|可考慮",
+  "decided": "通過|決定|決議|同意|定案",
+  "notes_chars": 3900
+ },
+ "title": {
+  "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。",
+  "max_tokens": 48,
+  "label": "^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*"
+ },
+ "prose": {
+  "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。",
+  "max_tokens": 600
+ },
+ "ask": {
+  "answer_tokens": 320,
+  "no_excerpts": "(no excerpts)",
+  "system": {
+   "zh-Hans": "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。每个论点后面附上出处标签，格式与摘录开头完全相同：[[id@秒]]。问题的用词可能和摘录不同，请找意思相同的内容。只有在每段摘录都没有相关内容时，才说「会议记录中没有提到」。回答请简短，使用简体中文。",
+   "zh-Hant": "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。每個論點後面附上出處標籤，格式與摘錄開頭完全相同：[[id@秒]]。問題的用詞可能和摘錄不同，請找意思相同的內容。只有在每段摘錄都沒有相關內容時，才說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。",
+   "en": "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English. Do not add a currency the excerpts do not name."
+  }
+ }
+}

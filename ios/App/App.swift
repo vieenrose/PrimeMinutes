@@ -417,7 +417,7 @@ final class Model: ObservableObject {
             let stored = await self.store.isComplete(rm) ? await self.store.dir(rm).path : nil
             let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored)
             let agentUi = self.agent
-            let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: Prefs.reader.budget)
+            let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: Prefs.reader.budget, card: Prefs.reader.card)
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.status = L("reader_error", "\(error)") }; return }
             let conv = TextConv(); let lowRam = ProcessInfo.processInfo.physicalMemory < 4_500_000_000   // 3 GB phones cannot hold ASR + diarizer + E2B at once
             let worker = ReaderWorker(reader, paused: lowRam && cached == nil)
@@ -482,9 +482,9 @@ final class Model: ObservableObject {
             }
             worker.drain { d, t in Task { @MainActor in self.status = L("reading_s", d, t) } }
             _ = try? reader.finish(); let journal = reader.journal
-            let sum = ReaderSummarizer(llm: r.llm, budget: Prefs.reader.budget, notesChars: Prefs.reader.notesChars)
+            let sum = ReaderSummarizer(llm: r.llm, card: Prefs.reader.card)
             // No notes at all (a short or off-topic recording): one plain line, not five empty sections (Android summary_no_notes).
-            let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? ReaderProtocol.minutes(journal)
+            let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? Prefs.reader.card.reader.minutes(journal)
             let (fl, fn, ft, fp) = (conv.utterances(final), conv.notes(journal), conv.text(t ?? ""), prose.map { conv.text($0) } ?? "")
             let summaryText = fp.isEmpty && !fl.isEmpty ? L("summary_no_notes") : fp
             await MainActor.run { self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count); self.agent.apply(.state(.done, notes: fn.count)) }

@@ -6,7 +6,7 @@ import Combine
 /// cites and the sheet turns into "title · m:ss" links.
 @MainActor final class AskEngine: ObservableObject {
     static let shared = AskEngine()
-    static let maxPassages = 8, passageTokens = 1500, answerTokens = 320, noteBonus: Float = 0.05
+    static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05
 
     enum Phase: Equatable { case idle, busy, retrieving, loading, answering, failed(String) }
     /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
@@ -29,6 +29,7 @@ import Combine
         task?.cancel()
         if busy() { phase = .busy; return }
         let lang = AppLanguage.current.resolved
+        let card = Prefs.reader.card
         let first = turns.isEmpty
         task = Task { [holder] in
             phase = .retrieving
@@ -43,18 +44,18 @@ import Combine
                     s.resume()
                     await MainActor.run { AskEngine.shared.phase = .answering }
                     let t = s.template
-                    var prompt = first ? t.p0 + Self.system(lang) + t.p1 : t.p3
-                    prompt += Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
+                    var prompt = first ? t.p0 + Self.system(lang, card) + t.p1 : t.p3
+                    prompt += Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                     let tPrompt = Date()
                     if s.append(s.tokenize(prompt, special: true)) < 0 {
                         s.reset()   // the conversation outgrew the cache: start over with this question only
-                        let fresh = t.p0 + Self.system(lang) + t.p1 + Self.render(excerpts, lang) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
+                        let fresh = t.p0 + Self.system(lang, card) + t.p1 + Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
                     let pre = s.lastStats   // the prompt's prefill (append runs its own generate call)
                     var sb = ""
                     let t0 = Date()
-                    _ = s.generateContinue(maxTokens: Self.answerTokens, stop: "", temp: ReaderProtocol.temp) { piece in
+                    _ = s.generateContinue(maxTokens: card.ask.answerTokens, stop: "", temp: card.sampler.temp) { piece in
                         if Task.isCancelled { s.cancel() }
                         sb += piece
                         let now = sb
@@ -82,20 +83,17 @@ import Combine
     func reset() { cancel(); turns = []; phase = .idle; holder.reset() }
 
     /// The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts).
-    nonisolated static func render(_ xs: [Excerpt], _ lang: AppLanguage) -> String {
-        if xs.isEmpty { return "(no excerpts)\n" }
+    nonisolated static func render(_ xs: [Excerpt], _ lang: AppLanguage, _ card: ModelCard) -> String {
+        if xs.isEmpty { return card.ask.noExcerpts + "\n" }
         let zh = lang == .zhHant || lang == .zhHans
         return xs.map { x in
             let t = x.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return "[[\(x.session.id.uuidString)@\(x.sec)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
         }.joined()
     }
-    nonisolated static func system(_ lang: AppLanguage) -> String {
-        switch lang {
-        case .zhHans: return "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。每个论点后面附上出处标签，格式与摘录开头完全相同：[[id@秒]]。问题的用词可能和摘录不同，请找意思相同的内容。只有在每段摘录都没有相关内容时，才说「会议记录中没有提到」。回答请简短，使用简体中文。"
-        case .zhHant: return "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。每個論點後面附上出處標籤，格式與摘錄開頭完全相同：[[id@秒]]。問題的用詞可能和摘錄不同，請找意思相同的內容。只有在每段摘錄都沒有相關內容時，才說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。"
-        default: return "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English. Do not add a currency the excerpts do not name."
-        }
+    /// The answer follows the interface language, whatever the question's: the card's system prompt.
+    nonisolated static func system(_ lang: AppLanguage, _ card: ModelCard) -> String {
+        card.ask.system[lang == .zhHans ? "zh-Hans" : lang == .zhHant ? "zh-Hant" : "en"]!
     }
 }
 

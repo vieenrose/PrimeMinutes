@@ -11,7 +11,7 @@ extension Session {
         return derivedActions
     }
     var derivedActions: String? {
-        let a = notes.map(ReaderProtocol.reclassify).filter { $0.tag?.uppercased() == "ACTION" }
+        let a = ModelCard.default.reader.actions(notes)
         return a.isEmpty ? nil : a.map { "- \($0.text.trimmingCharacters(in: CharacterSet(charactersIn: "。"))) [\($0.ts)]" }.joined(separator: "\n")
     }
 }
