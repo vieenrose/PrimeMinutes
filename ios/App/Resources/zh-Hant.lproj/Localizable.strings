@@ -270,6 +270,8 @@
 "cd_line_actions" = "此句操作";
 "speaker_move_line" = "將此句移至";
 "speaker_merge_into" = "合併語者至";
+"speaker_merge_confirm" = "將「%1$@」合併至「%2$@」？其所有語句都會改為 %2$@。";
+"speaker_merge" = "合併";
 "transcript_changed_resummarize" = "逐字稿已編輯，請點「重新摘要」以更新摘要。";
 "summary_pending_hint" = "尚無摘要——處理完成後會顯示在這裡。";
 "summary_missing_hint" = "此場次沒有摘要——可從選單選「重新摘要」再試一次。";
@@ -347,3 +349,4 @@
 "ask_followup_hint" = "繼續提問…";
 "ask_sources" = "出處";
 "ask_disclaimer" = "回答由裝置上的小模型產生，可能有誤——點出處即可核對。";
+"select" = "選取";

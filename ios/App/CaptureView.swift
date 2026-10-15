@@ -3,7 +3,7 @@ import SwiftUI
 /// Live recording screen (Android CaptureScreen): big timer, live transcript with a coloured bar per speaker, stop button.
 struct CaptureView: View {
     @ObservedObject var m: Model
-    private static let palette: [Color] = [.red, .blue, .orange, .green, .purple, .pink, .teal, .indigo]
+    private static let palette = speakerPalette
 
     var body: some View {
         VStack(spacing: 0) {

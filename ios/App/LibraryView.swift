@@ -139,7 +139,15 @@ struct LibraryView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.accentColor, lineWidth: selected.contains(s.id) ? 2 : 0))
         .contentShape(Rectangle())
         .onLongPressGesture { toggle(s) }
-        .onTapGesture { if !selected.isEmpty { toggle(s); return }; Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(s) }
+        .onTapGesture { activate(s) }
+        // Gestures are invisible to VoiceOver: say it is a button, and offer the long-press as an action.
+        .accessibilityAddTraits(selected.contains(s.id) ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { activate(s) }
+        .accessibilityAction(named: L("select")) { toggle(s) }
+    }
+    private func activate(_ s: Session) {
+        if !selected.isEmpty { toggle(s); return }
+        Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(s)
     }
 
     /// Row identity: Session equality is by id only, so a card whose search passages changed could keep

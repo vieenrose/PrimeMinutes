@@ -47,6 +47,8 @@ struct SessionView: View {
     @State private var draft = ""
     @State private var renamingSpeaker: Int?
     @State private var editingLine: UUID?
+    /// (from, into) awaiting confirmation: a merge rewrites every line of a speaker, one tap away in a menu.
+    @State private var merging: (Int, Int)?
     @State private var transcriptDirty = false
     @State private var toast: String?
     @State private var editingSummary = false
@@ -82,7 +84,7 @@ struct SessionView: View {
     @State private var searching = false
     @State private var match = 0
     @FocusState private var searchFocus: Bool
-    private static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .red, .indigo]
+    private static let palette = speakerPalette
     private var names: [(String, Color)] { Array(Set(s.lines.map(\.speaker))).sorted().map { (SpeakerRefs.unbreakable(s.name($0)), tint($0)) } }
     /// Model text as shown: its S1, S2 become the transcript's speaker names (Android refs(screen = true)).
     private func refs(_ t: String, screen: Bool = true) -> String {
@@ -125,15 +127,16 @@ struct SessionView: View {
         VStack(spacing: 6) {
             Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration))
             HStack {
+                // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
                 Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .frame(width: 96, alignment: .leading)
+                    .lineLimit(1).fixedSize().frame(minWidth: 96, alignment: .leading)
                 Spacer()
-                Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2) }.accessibilityLabel(L("cd_back5"))
+                Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
                 Button { player.toggle() } label: {
                     Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2).foregroundStyle(.white)
                         .frame(width: 56, height: 56).background(Color.accentColor, in: Circle())
                 }.accessibilityLabel(L(player.playing ? "pause" : "play"))
-                Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2) }.accessibilityLabel(L("cd_forward5"))
+                Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
                 Spacer()
                 HStack(spacing: 12) {
                 Menu {
@@ -142,7 +145,8 @@ struct SessionView: View {
                 } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary) }
                     .accessibilityLabel(L("cd_mute"))
                 Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                }.frame(width: 96, alignment: .trailing)
+                    .lineLimit(1).fixedSize()
+                }.frame(minWidth: 96, alignment: .trailing)
             }
         }.padding(.horizontal, 20).padding(.vertical, 8).background(.bar)
     }
@@ -320,13 +324,23 @@ struct SessionView: View {
             }
             Button(L("cancel"), role: .cancel) {}
         }
-        .alert(L("cd_edit"), isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
-            TextField("", text: $draft, axis: .vertical)
-            Button(L("done")) {
-                let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t { s.lines[i].text = t; edited() }
-            }
-            Button(L("cancel"), role: .cancel) {}
+        // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
+        .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
+            NavigationStack {
+                TextEditor(text: $draft).padding(.horizontal, 12)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
+                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
+                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t { s.lines[i].text = t; edited() }
+                            editingLine = nil } }
+                    }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
+            }.presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(merging.map { L("speaker_merge_confirm", s.name($0.0), s.name($0.1)) } ?? "",
+                            isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
+            Button(L("speaker_merge")) { if let (f, t) = merging { merge(f, t) }; merging = nil }
+            Button(L("cancel"), role: .cancel) { merging = nil }
         }
         .alert(L("transcript_changed_resummarize"), isPresented: $transcriptDirty) {
             if s.audio != nil { Button(L("re_summarize")) { rerun(s, false) } }
@@ -394,7 +408,7 @@ struct SessionView: View {
         let others = Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != l.speaker }
         if !others.isEmpty {
             Section(L("speaker_move_line")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { reassign(l.id, k) } } }
-            Section(L("speaker_merge_into")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { merge(l.speaker, k) } } }
+            Section(L("speaker_merge_into")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { merging = (l.speaker, k) } } }
         }
     }
     /// Android SpeakerEdits: plain relabels, ids kept (labels and colours stay put); a speaker left without lines loses its name.

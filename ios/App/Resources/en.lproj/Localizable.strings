@@ -270,6 +270,8 @@
 "cd_line_actions" = "Line actions";
 "speaker_move_line" = "Move line to";
 "speaker_merge_into" = "Merge speaker into";
+"speaker_merge_confirm" = "Merge “%1$@” into “%2$@”? All of its lines move to %2$@.";
+"speaker_merge" = "Merge";
 "transcript_changed_resummarize" = "Transcript edited — tap Re-summarize to update the summary.";
 "summary_pending_hint" = "No summary yet — it appears here once processing finishes.";
 "summary_missing_hint" = "No summary for this session — choose Re-summarize in the ⋮ menu to try again.";
@@ -347,3 +349,4 @@
 "ask_followup_hint" = "Follow-up question…";
 "ask_sources" = "Sources";
 "ask_disclaimer" = "Answers come from a small on-device model and can be wrong — tap a citation to check.";
+"select" = "Select";

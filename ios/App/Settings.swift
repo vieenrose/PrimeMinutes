@@ -74,7 +74,9 @@ enum Prefs {
     }
     /// Text size: 0 follows the system, else a fixed Dynamic Type step.
     static let textSizeLabels = ["text_size_system", "text_size_small", "text_size_normal", "text_size_large", "text_size_xlarge"]
-    static func typeSize(_ i: Int) -> DynamicTypeSize? { [nil, .small, .large, .xxLarge, .accessibility1][min(max(i, 0), 4)] }
+    /// Steps added to the system Dynamic Type size (Android multiplies its scale by the system's
+    /// the same way): a fixed size threw away a larger system setting. nil = follow the system.
+    static func typeSizeSteps(_ i: Int) -> Int? { [nil, -2, 0, 2, 4][min(max(i, 0), 4)] }
     /// E4B needs the 8 GB class of phone, as on Android.
     static var e4bAllowed: Bool { ProcessInfo.processInfo.physicalMemory >= 7 << 30 }
     static var readerId: String {

@@ -9,7 +9,7 @@ import BackgroundTasks
     @Environment(\.scenePhase) private var phase
     init() { BackgroundWork.register() }
     var body: some Scene {
-        WindowGroup { ContentView().modifier(TextSize(size: Prefs.typeSize(textSize))) }
+        WindowGroup { ContentView().modifier(TextSize(steps: Prefs.typeSizeSteps(textSize))) }
             .onChange(of: phase) { if phase == .background { BackgroundWork.schedule() } }
     }
 }
@@ -39,10 +39,17 @@ enum BackgroundWork {
     }
 }
 
-/// Fixed Dynamic Type step from Settings; nil follows the system.
+/// Dynamic Type steps from Settings, on top of the system size; nil follows the system.
 struct TextSize: ViewModifier {
-    let size: DynamicTypeSize?
-    @ViewBuilder func body(content: Content) -> some View { if let size { content.dynamicTypeSize(size) } else { content } }
+    let steps: Int?
+    @Environment(\.dynamicTypeSize) private var system
+    @ViewBuilder func body(content: Content) -> some View {
+        if let steps, steps != 0 {
+            let all = DynamicTypeSize.allCases
+            let i = (all.firstIndex(of: system) ?? 3) + steps
+            content.dynamicTypeSize(all[min(max(i, 0), all.count - 1)])
+        } else { content }
+    }
 }
 
 /// Mic chunks arrive on the audio thread, the engine loop drains them on another.
