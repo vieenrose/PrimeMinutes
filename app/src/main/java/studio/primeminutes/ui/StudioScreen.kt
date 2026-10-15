@@ -221,15 +221,13 @@ fun StudioScreen(
         hits = lex
         if (!searchModelReady) { densePending = null; return@LaunchedEffect }
         densePending = q
-        try {
-            delay(300)
-            val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull()
-                ?: return@LaunchedEffect
-            val dense = LibrarySearch.dense(context, entries, qv)
-            hits = LibrarySearch.fuse(lex, dense)
-        } finally {
-            if (densePending == q) densePending = null
-        }
+        delay(300)
+        val qv = try { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+        if (qv != null) hits = LibrarySearch.fuse(lex, LibrarySearch.dense(context, entries, qv))
+        // Cleared only when the pass ends: a cancelled pass leaves it to the effect that replaces it
+        // (relaunched for the same query when the entries change, it flashed "no match" for a frame).
+        densePending = null
     }
     val want = when (statusFilter) {   // map the filter to a target status once, not per entry
         StatusFilter.ALL -> null
