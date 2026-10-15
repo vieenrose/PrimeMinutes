@@ -99,6 +99,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -1802,7 +1803,9 @@ private fun TranscribeScreen(
     // Active utterance for the synced highlight: the line whose [start, end] holds the playhead.
     // In an inter-utterance gap (silence), switch to the next line at the gap's MIDPOINT so the
     // highlight anticipates upcoming speech instead of staying a line behind during the pause.
-    val activeIndex = remember(positionMs, utterances.size) {
+    // Derived: the playhead moves every 150 ms while playing, and reading it here directly
+    // recomposed the whole screen at that rate; only a change of line does now.
+    val activeIndex by remember { derivedStateOf {
         val sec = positionMs / 1000.0
         val n = utterances.size
         var i = -1
@@ -1811,7 +1814,7 @@ private fun TranscribeScreen(
             val mid = (utterances[i].endSec + utterances[i + 1].startSec) / 2.0
             if (sec >= mid) i + 1 else i
         } else i
-    }
+    } }
 
     // Re-render every Chinese text node into [newScript] via OpenCC — the cheap path for a pure
     // Traditional↔Simplified switch (no LLM). Conversion preserves wording, so it's applied to ALL nodes
