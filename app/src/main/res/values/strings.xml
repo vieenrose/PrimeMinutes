@@ -277,6 +277,7 @@
     <string name="settings_index_all_done">All meetings are indexed for search.</string>
     <string name="settings_search_model_get">Download the search model (%1$s)</string>
     <string name="studio_no_match">No meeting matches your search.</string>
+    <string name="studio_searching">Searching…</string>
     <string name="day_today">TODAY</string>
     <string name="day_yesterday">YESTERDAY</string>
 

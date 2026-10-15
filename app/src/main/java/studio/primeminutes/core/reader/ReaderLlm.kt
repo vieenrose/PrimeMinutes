@@ -7,6 +7,9 @@ package studio.primeminutes.core.reader
  * the reader serializes every call on one thread.
  */
 interface ReaderLlm {
+    /** The model's chat template: every turn the reader writes is framed by its pieces. */
+    val template: studio.primeminutes.core.models.ChatTemplate get() = studio.primeminutes.core.models.ChatTemplate.GEMMA4
+
     /** Token ids of [text] without BOS; [special] parses template pieces (`<|turn>` …). */
     fun tokenize(text: String, special: Boolean): IntArray
 

@@ -94,6 +94,8 @@ fun AskSheet(
     val phase by AskEngine.phase.collectAsState()
     val turns by AskEngine.turns.collectAsState()
     val byId = remember(entries) { entries.associateBy { it.id } }
+    // Citation tag "id@sec" -> the cited passage's exact start (a tag only carries whole seconds).
+    val exact = remember(turns) { turns.flatMap { it.excerpts }.associate { "${it.entry.id}@${it.sec}" to it.at } }
     var followUp by remember { mutableStateOf("") }
 
     LaunchedEffect(question) { AskEngine.reset(); AskEngine.ask(context, entries, question, lang) }
@@ -133,7 +135,7 @@ fun AskSheet(
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
                     if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, byId, pal.Sky, onOpenAt),
+                        answerText(t.answer, byId, exact, pal.Sky, onOpenAt),
                         style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
                     )
                     if (t.done && t.excerpts.isNotEmpty()) {
@@ -146,7 +148,7 @@ fun AskSheet(
                                 "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
                                 modifier = Modifier.padding(vertical = 2.dp)
-                                    .clickable { onOpenAt(x.entry, x.sec.toDouble()) },
+                                    .clickable { onOpenAt(x.entry, x.at) },
                             )
                         }
                     }
@@ -197,7 +199,7 @@ fun AskSheet(
 
 /** The answer with `[[id@sec]]` tags turned into superscript "title · m:ss" links. */
 private fun answerText(
-    raw: String, byId: Map<String, SessionLibrary.Entry>, color: androidx.compose.ui.graphics.Color,
+    raw: String, byId: Map<String, SessionLibrary.Entry>, exact: Map<String, Double>, color: androidx.compose.ui.graphics.Color,
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
 ): AnnotatedString = buildAnnotatedString {
     val raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
@@ -212,7 +214,7 @@ private fun answerText(
         withLink(LinkAnnotation.Clickable(
             tag = "cite-${e.id}@$sec",
             styles = TextLinkStyles(style = SpanStyle(color = color, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)),
-            linkInteractionListener = { onOpenAt(e, sec.toDouble()) },
+            linkInteractionListener = { onOpenAt(e, exact["${e.id}@$sec"] ?: sec.toDouble()) },
         )) { append("[${(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(sec)}]") }
     }
     append(raw.substring(last))

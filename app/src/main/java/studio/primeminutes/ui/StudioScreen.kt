@@ -176,6 +176,8 @@ fun StudioScreen(
     /** Ask (experimental): null when the feature is off; the query becomes the question. */
     onAsk: ((String) -> Unit)? = null,
     initialQuery: String = "",
+    /** DEV (debug builds): typed into the search box one character at a time, for README animations. */
+    typeQuery: String = "",
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -199,21 +201,35 @@ fun StudioScreen(
     BackHandler(selectionMode) { exitSelection() }
 
     val context = LocalContext.current
+    LaunchedEffect(typeQuery) {
+        if (typeQuery.isBlank()) return@LaunchedEffect
+        if (searchModelReady) EmbedHost.preload(context, 1)   // what focusing the box does
+        kotlinx.coroutines.delay(2_500)
+        for (i in 1..typeQuery.length) { query = typeQuery.take(i); kotlinx.coroutines.delay(220) }
+    }
     // Hybrid search: the lexical pass answers at once (titles, summaries, notes); after a short idle
     // the query is embedded and the dense pass is fused in. Entries change → refresh the text cache.
     var hits by remember { mutableStateOf<List<LibrarySearch.Hit>>(emptyList()) }
+    // The query whose dense pass is still running: until it lands, an empty list means "searching",
+    // not "no match" (the first query of a session also waits for the model to load).
+    var densePending by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(entries) { LibrarySearch.refresh(context, entries) }
     LaunchedEffect(query, entries, searchModelReady) {
         val q = query.trim()
-        if (q.isBlank()) { hits = emptyList(); return@LaunchedEffect }
+        if (q.isBlank()) { hits = emptyList(); densePending = null; return@LaunchedEffect }
         val lex = LibrarySearch.lexical(context, entries, q)
         hits = lex
-        if (!searchModelReady) return@LaunchedEffect
-        delay(300)
-        val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull()
-            ?: return@LaunchedEffect
-        val dense = LibrarySearch.dense(context, entries, qv)
-        hits = LibrarySearch.fuse(lex, dense)
+        if (!searchModelReady) { densePending = null; return@LaunchedEffect }
+        densePending = q
+        try {
+            delay(300)
+            val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull()
+                ?: return@LaunchedEffect
+            val dense = LibrarySearch.dense(context, entries, qv)
+            hits = LibrarySearch.fuse(lex, dense)
+        } finally {
+            if (densePending == q) densePending = null
+        }
     }
     val want = when (statusFilter) {   // map the filter to a target status once, not per entry
         StatusFilter.ALL -> null
@@ -395,7 +411,11 @@ fun StudioScreen(
                     Spacer(Modifier.height(8.dp))
                 }
                 Text(
-                    if (firstRun) stringResource(R.string.library_empty) else stringResource(R.string.studio_no_match),
+                    when {
+                        firstRun -> stringResource(R.string.library_empty)
+                        densePending != null -> stringResource(R.string.studio_searching)
+                        else -> stringResource(R.string.studio_no_match)
+                    },
                     color = pal.Slate400, style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
@@ -645,11 +665,13 @@ private fun PassageRow(p: LibrarySearch.Passage, onClick: () -> Unit) {
             modifier = Modifier.width(16.dp).semantics { contentDescription = "" },
         ) else Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
+            val speaker = p.speaker?.takeIf { it.isNotBlank() }
+                ?: p.speakerId?.let { stringResource(R.string.speaker_n, it + 1) }   // as the transcript names it
             val head = buildString {
                 if (p.kind != SessionIndex.Kind.MEETING) {
                     val t = p.timeSec.toInt(); append("%d:%02d".format(t / 60, t % 60))
                 }
-                p.speaker?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
+                speaker?.let { if (isNotEmpty()) append(" · "); append(it) }
             }
             if (head.isNotEmpty()) Text(head, color = pal.Slate400, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(p.snippet, color = pal.Slate200, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)

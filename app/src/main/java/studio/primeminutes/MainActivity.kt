@@ -600,7 +600,8 @@ private fun TranscribeScreen(
     // Ask (experimental, plan §6): the Studio question being answered; null = sheet closed.
     var askQuestion by remember { mutableStateOf<String?>(null) }
     // DEV (debug builds only): `am start … --es vox_query "…" --es vox_ask "…"` pre-fills the Studio
-    // search or opens Ask with a question, so screenshots and device checks need no CJK typing.
+    // search or opens Ask with a question, so screenshots and device checks need no CJK typing;
+    // `--es vox_type "…"` types the query in, one character at a time (README animations).
     // LocalContext is the localized wrapper, not the Activity: unwrap to reach the launch intent.
     val devExtras = if (BuildConfig.DEBUG) {
         var c: Context? = context
@@ -2453,6 +2454,7 @@ private fun TranscribeScreen(
                 onOpenAt = { e, t -> pendingSeekSec = t; openSessionUri(Uri.fromFile(e.audioFile)) },
                 searchModelReady = searchModelReady,
                 initialQuery = devQuery,
+                typeQuery = devExtras?.getString("vox_type") ?: "",
                 onAsk = if (config.askEnabled) { q -> askQuestion = q.trim() } else null,
                 searchDownload = searchDownload,
                 onDownloadSearchModel = { downloadSearchModel() },

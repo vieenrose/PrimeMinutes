@@ -58,15 +58,15 @@ object ComponentBench {
     suspend fun summarizer(context: Context): SummaryStats = withContext(Dispatchers.IO) {
         val (engine, tok) = loadSummarizer(context)
         engine.use { tok.use {
-            val session = MfaSession(engine, tok)
+            val session = MfaSession(engine, tok, template = LlmRegistry.byId(TranscriptionConfig.Holder.config.llmModelId).template)
             val prompt = "Summarize the following meeting notes.\n" + SENTENCE.repeat(PROMPT_REPEATS)
             session.reset()
             // The chat template as the reader builds it (ReaderLane.fitting): special tokens on the frame.
-            session.append(session.tokenize("<bos><|turn>user\n", true) + session.tokenize(prompt, false) +
-                session.tokenize("<turn|>\n<|turn>model\n", true))
+            val t = session.template
+            session.append(session.tokenize(t.userFirst, true) + session.tokenize(prompt, false) + session.tokenize(t.p2, true))
             // append() prefills in its own generate call; generateContinue() decodes in the next one.
             val pre = checkNotNull(engine.lastStats) { "summarizer returned no prefill timing" }
-            session.generateContinue(DECODE_TOKENS, "<turn|>", 0.0f) {}
+            session.generateContinue(DECODE_TOKENS, t.end, 0.0f) {}
             val dec = checkNotNull(engine.lastStats) { "summarizer returned no decode timing" }
             SummaryStats(pre.prefilled, pre.prefillSec, dec.generated, dec.decodeSec)
         } }

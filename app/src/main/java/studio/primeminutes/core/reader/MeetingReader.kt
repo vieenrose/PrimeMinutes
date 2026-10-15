@@ -46,7 +46,8 @@ class MeetingReader(
     var onCheckpoint: ((ReaderCheckpoint) -> Unit)? = null
 
     private fun initPieces() {
-        pieces = mapOf("p0" to P.P0, "p1" to P.P1, "p2" to P.P2, "p3" to P.P3)
+        val t = llm.template
+        pieces = mapOf("p0" to t.p0, "p1" to t.p1, "p2" to t.p2, "p3" to t.p3)
             .mapValues { llm.tokenize(it.value, true) }
     }
 

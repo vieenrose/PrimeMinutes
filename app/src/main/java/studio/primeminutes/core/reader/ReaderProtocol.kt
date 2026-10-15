@@ -19,13 +19,8 @@ object ReaderProtocol {
     const val DUP_LOOKBACK = 30
     const val DUP_JACCARD = 0.6
 
-    // Gemma 4 chat template pieces (thinking off), note §4.1 — what phone_live.py derives from the
-    // GGUF's own template via /apply-template: before system, system->user, user->model,
-    // model->next user.
-    const val P0 = "<bos><|turn>system\n"
-    const val P1 = "<turn|>\n<|turn>user\n"
-    const val P2 = "<turn|>\n<|turn>model\n"
-    const val P3 = "<turn|>\n<|turn>user\n"
+    // The chat template pieces (before system, system->user, user->model, model->next user) come
+    // with the model: ReaderLlm.template (LlmSpec.template).
 
     const val JOURNAL_HEADER = "## 筆記本（至今）\n"
     const val JOURNAL_EMPTY = "（尚無筆記）"

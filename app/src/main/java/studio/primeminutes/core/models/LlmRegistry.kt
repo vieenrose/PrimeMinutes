@@ -34,6 +34,8 @@ data class LlmSpec(
     val maxCtx: Int,
     /** The reader's system prompt, shipped next to the weights (they must stay paired). */
     val systemPromptFile: String = "",
+    /** The chat template the weights were trained with. */
+    val template: ChatTemplate = ChatTemplate.GEMMA4,
     /** The GPU variant of [mainFile], downloaded only when the GPU is tested; null: CPU only. */
     val gpuGraph: GpuGraph? = null,
 ) {

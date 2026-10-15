@@ -7,7 +7,6 @@ import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.session.PrimeMinutesSession
 import studio.primeminutes.core.text.ChineseScript
 import studio.primeminutes.core.text.OpenCcConverter
-import studio.primeminutes.data.speakerLabel
 import java.io.File
 import kotlin.math.ln
 import kotlin.math.max
@@ -34,10 +33,12 @@ object LibrarySearch {
         val uttIndex: Int,
         val uttEnd: Int,
         val timeSec: Double,
+        /** The speaker's custom name, or null (the UI then shows its localized "Speaker N" from [speakerId]). */
         val speaker: String?,
         val snippet: String,
         val semanticOnly: Boolean,
         val score: Float,
+        val speakerId: Int? = null,
     )
 
     data class Hit(val entry: SessionLibrary.Entry, val score: Float, val passages: List<Passage>)
@@ -119,7 +120,7 @@ object LibrarySearch {
                 if (e.id == openId) d.loaded?.let { s ->
                     s.utterances.forEach { u ->
                         if (hits(u.text) == terms.size)
-                            ps += Passage(SessionIndex.Kind.CHUNK, u.index, u.index, u.startSec, speakerLabel(u.speaker, s.speakerNames), u.text, false, 0.8f)
+                            ps += Passage(SessionIndex.Kind.CHUNK, u.index, u.index, u.startSec, u.speaker?.let { s.speakerNames[it]?.name }, u.text, false, 0.8f, u.speaker)
                     }
                 }
                 if (ps.isNotEmpty()) out += Hit(e, ps.maxOf { it.score }, ps.sortedByDescending { it.score }.take(MAX_PASSAGES))
@@ -158,7 +159,7 @@ object LibrarySearch {
         SessionIndex.Kind.CHUNK -> {
             val s = d.loaded; val u = s?.utterances?.getOrNull(v.a)
             val text = s?.utterances?.subList(v.a, minOf(v.b + 1, s.utterances.size))?.joinToString(" ") { it.text } ?: ""
-            Passage(v.kind, v.a, v.b, u?.startSec ?: 0.0, speakerLabel(u?.speaker, s?.speakerNames ?: emptyMap()), text.take(snippetChars), true, cos)
+            Passage(v.kind, v.a, v.b, u?.startSec ?: 0.0, u?.speaker?.let { s?.speakerNames?.get(it)?.name }, text.take(snippetChars), true, cos, u?.speaker)
         }
     }
 

@@ -258,6 +258,7 @@
     <string name="settings_index_all_done">所有会议均已建立搜索索引。</string>
     <string name="settings_search_model_get">下载搜索模型（%1$s）</string>
     <string name="studio_no_match">没有符合搜索的会议。</string>
+    <string name="studio_searching">搜索中…</string>
     <string name="day_today">今天</string>
     <string name="day_yesterday">昨天</string>
 

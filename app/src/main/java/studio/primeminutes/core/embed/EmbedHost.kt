@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import studio.primeminutes.core.models.ModelManager
@@ -54,12 +55,14 @@ object EmbedHost {
     /**
      * Runs [block] with the loaded embedder (loading it with [threads] if needed). Returns null
      * when the model is not downloaded or [mayLoad] is false. Serialized: one call at a time.
+     * Always off the main thread: the search box calls it from a composition effect, and the load
+     * (0.8 s warm, 5 s with a cold page cache) froze the UI there.
      */
-    suspend fun <T> use(context: Context, threads: Int, block: (Embedder) -> T): T? {
+    suspend fun <T> use(context: Context, threads: Int, block: (Embedder) -> T): T? = withContext(Dispatchers.IO) {
         val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
         val mm = ModelManager(context)
-        if (!mm.embedReady(spec) || !mayLoad(context)) return null
-        return mutex.withLock {
+        if (!mm.embedReady(spec) || !mayLoad(context)) return@withContext null
+        mutex.withLock {
             val e = embedder ?: run {
                 val t0 = System.nanoTime()
                 val loaded = Embedder.load(mm.embedDir(spec), threads)

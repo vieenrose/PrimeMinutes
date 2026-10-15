@@ -1907,7 +1907,7 @@ class TranscriptionService : LifecycleService() {
         }
         studio.primeminutes.core.hw.HwInfo.activeBackend = backend
         val tok = studio.primeminutes.core.llm.SpTokenizer.load(File(dir, spec.tokenizerFile).path)
-        val session = studio.primeminutes.core.llm.MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP)
+        val session = studio.primeminutes.core.llm.MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
         return ReaderModel(
             spec.id, session, system, studio.primeminutes.core.reader.ReaderBudget.MOBILE, notesChars = 3900,
             cancelFn = session::cancel, resumeFn = session::resume, closeFn = { engine.close(); tok.close(); studio.primeminutes.core.hw.HwInfo.activeBackend = studio.primeminutes.core.hw.Backend.CPU },

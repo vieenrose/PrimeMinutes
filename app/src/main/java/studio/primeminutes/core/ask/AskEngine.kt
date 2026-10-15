@@ -56,7 +56,9 @@ object AskEngine {
     }
 
     /** One excerpt handed to the model. */
-    data class Excerpt(val entry: SessionLibrary.Entry, val sec: Int, val text: String, val score: Float)
+    /** [sec] is the whole second of the citation tag; [at] the passage's exact start, where a tap opens it
+     *  (115 for a line starting at 115.4 s opened the line before). */
+    data class Excerpt(val entry: SessionLibrary.Entry, val sec: Int, val text: String, val score: Float, val at: Double = sec.toDouble())
 
     data class Turn(val question: String, val answer: String, val excerpts: List<Excerpt>, val done: Boolean)
 
@@ -103,15 +105,16 @@ object AskEngine {
                     _phase.value = Phase.Answering
                     val sb = StringBuilder()
                     val first = _turns.value.size == 1
+                    val t = s.template
                     val prompt = buildString {
-                        if (first) { append(ReaderProtocol.P0); append(system(uiLanguage)); append(ReaderProtocol.P1) }
-                        else append(ReaderProtocol.P3)
-                        append(render(excerpts, uiLanguage)); append("\n\n"); append(question.trim()); append(ReaderProtocol.P2)
+                        if (first) { append(t.p0); append(system(uiLanguage)); append(t.p1) }
+                        else append(t.p3)
+                        append(render(excerpts, uiLanguage)); append("\n\n"); append(question.trim()); append(t.p2)
                     }
                     if (s.append(s.tokenize(prompt, special = true)) < 0) {
                         // The conversation outgrew the cache: start a fresh one with this question only.
                         s.reset()
-                        val fresh = ReaderProtocol.P0 + system(uiLanguage) + ReaderProtocol.P1 + render(excerpts, uiLanguage) + "\n\n" + question.trim() + ReaderProtocol.P2
+                        val fresh = t.p0 + system(uiLanguage) + t.p1 + render(excerpts, uiLanguage) + "\n\n" + question.trim() + t.p2
                         if (s.append(s.tokenize(fresh, special = true)) < 0) error("prompt does not fit")
                     }
                     val t0 = System.nanoTime()
@@ -171,7 +174,7 @@ object AskEngine {
         LibrarySearch.refresh(app, entries)
         val hits = LibrarySearch.dense(app, entries, qv, maxPassages = 4, snippetChars = 1200)
         val all = hits.flatMap { h -> h.passages.filter { it.kind != SessionIndex.Kind.MEETING }.map { p ->
-            Excerpt(h.entry, p.timeSec.toInt(), p.snippet, p.score + if (p.kind == SessionIndex.Kind.NOTE) NOTE_BONUS else 0f)
+            Excerpt(h.entry, p.timeSec.toInt(), p.snippet, p.score + if (p.kind == SessionIndex.Kind.NOTE) NOTE_BONUS else 0f, p.timeSec)
         } }.sortedByDescending { it.score }
         val out = ArrayList<Excerpt>()
         var tokens = 0
@@ -238,7 +241,7 @@ object AskEngine {
         )
         Log.i(TAG, "reader loaded for Ask in ${(System.nanoTime() - t0) / 1_000_000} ms")
         val t = tokenizer(app)
-        return MfaSession(e, t, spec.sampler.topK, spec.sampler.topP).also { engine = e; session = it; modelId = spec.id }
+        return MfaSession(e, t, spec.sampler.topK, spec.sampler.topP, template = spec.template).also { engine = e; session = it; modelId = spec.id }
     }
 
     private fun close() {

@@ -1,5 +1,6 @@
 package studio.primeminutes.core.reader
 
+import studio.primeminutes.core.models.ChatTemplate
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import studio.primeminutes.core.events.TranscriptEvent
@@ -124,8 +125,8 @@ class ReaderLane(
         llm.reset()
         val toks = fitting(journal, 48) { notes -> "以下是一場會議的筆記：\n\n" + notes + "\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。" }
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(48, "<turn|>", ReaderProtocol.TEMP) {}
-        raw.substringBefore("<turn|>").lines().firstOrNull { it.isNotBlank() }
+        val raw = llm.generateContinue(48, llm.template.end, ReaderProtocol.TEMP) {}
+        raw.substringBefore(llm.template.end).lines().firstOrNull { it.isNotBlank() }
             ?.trim()?.trim('「', '」', '"', '*', '#', ' ')
             ?.replace(TITLE_LABEL, "")   // "會議：…" / "標題：…" — the model labels its answer now and then
             ?.trim('「', '」', '"', '*', '#', ' ')?.take(40)?.ifBlank { null }
@@ -146,8 +147,8 @@ class ReaderLane(
             "說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。" +
             "只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。" }
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(PROSE_MAX, "<turn|>", ReaderProtocol.TEMP) {}
-        cleanProse(raw, journal.map { it.ts }.toSet())
+        val raw = llm.generateContinue(PROSE_MAX, llm.template.end, ReaderProtocol.TEMP) {}
+        cleanProse(raw, journal.map { it.ts }.toSet(), llm.template.end)
     }
 
     private fun notesFor(journal: List<Note>, chars: Int = notesChars): List<Note> =
@@ -160,8 +161,8 @@ class ReaderLane(
         var chars = notesChars
         while (true) {
             val notes = notesFor(journal, chars).joinToString("\n") { ReaderProtocol.render(it) }
-            val toks = llm.tokenize("<bos><|turn>user\n", true) + llm.tokenize(prompt(notes), false) +
-                llm.tokenize("<turn|>\n<|turn>model\n", true)
+            val toks = llm.tokenize(llm.template.userFirst, true) + llm.tokenize(prompt(notes), false) +
+                llm.tokenize(llm.template.p2, true)
             if (chars <= 0 || toks.size + maxOut + 8 <= budget.ctxBudget || chars <= 800) return toks
             chars -= 400
         }
@@ -181,10 +182,11 @@ class ReaderLane(
 
         /** The prose reply made presentable: unknown `[ts]` stripped (with the space it leaves before
          *  punctuation), no headings or bullets, and a reply cut off by [PROSE_MAX] (no end-of-turn)
-         *  ends at its last whole sentence — a long meeting's summary stopped mid-word on "[12:28". */
-        fun cleanProse(raw: String, known: Set<String>): String? {
-            val ended = raw.contains("<turn|>")
-            var text = raw.substringBefore("<turn|>")
+         *  ends at its last whole sentence — a long meeting's summary stopped mid-word on "[12:28".
+         *  [turnEnd] is the template's end of turn. */
+        fun cleanProse(raw: String, known: Set<String>, turnEnd: String = ChatTemplate.GEMMA4.end): String? {
+            val ended = raw.contains(turnEnd)
+            var text = raw.substringBefore(turnEnd)
                 .replace(Regex("""\[(\d+:\d{2}(?::\d{2})?)\]""")) { m -> if (m.groupValues[1] in known) m.value else "" }
                 .replace(Regex("""[ \t]+([。，、；：！？.,;:!?])"""), "$1")
                 .lines().map { it.trim().removePrefix("#").trim() }.filter { it.isNotEmpty() && !it.startsWith("-") && !it.startsWith("*") }

@@ -1,5 +1,6 @@
 package studio.primeminutes.core.llm
 
+import studio.primeminutes.core.models.ChatTemplate
 import studio.primeminutes.core.reader.ReaderLlm
 
 /**
@@ -15,6 +16,7 @@ class MfaSession(
     private val topK: Int = 40,
     private val topP: Float = 0.95f,
     private val seed: Int = 0,
+    override val template: ChatTemplate = ChatTemplate.GEMMA4,
 ) : ReaderLlm {
 
     private val seq = ArrayList<Int>()
@@ -29,10 +31,10 @@ class MfaSession(
 
     override fun tokenize(text: String, special: Boolean): IntArray {
         // SentencePiece parses the template's pieces (<|turn>, <turn|>) but not <bos>: map it here.
-        if (!special || !text.contains(BOS_TEXT)) return tok.encode(text)
+        if (!special || !text.contains(template.bos)) return tok.encode(text)
         val out = ArrayList<Int>()
-        text.split(BOS_TEXT).forEachIndexed { i, part ->
-            if (i > 0) out += MfaEngine.BOS
+        text.split(template.bos).forEachIndexed { i, part ->
+            if (i > 0) out += template.bosId
             if (part.isNotEmpty()) out += tok.encode(part).toList()
         }
         return out.toIntArray()
@@ -71,7 +73,7 @@ class MfaSession(
         // The reply joins the sequence, and the stop string with it. The
         // generated ids themselves go in (re-tokenizing the text could differ and break the
         // engine's prefix reuse); an end-of-turn id is the model's, not the text's, so it is left out.
-        val kept = gen.filter { it !in STOP_IDS }
+        val kept = gen.filter { it !in template.stopIds }
         var text = tok.decode(kept.toIntArray())
         if (stopped) text = text.substring(0, text.indexOf(stop) + stop.length)
         seq += kept
@@ -81,9 +83,4 @@ class MfaSession(
     override fun seqLength(): Int = seq.size
 
     override fun reset() { seq.clear() }
-
-    private companion object {
-        const val BOS_TEXT = "<bos>"
-        val STOP_IDS = setOf(1, 50, 106)
-    }
 }
