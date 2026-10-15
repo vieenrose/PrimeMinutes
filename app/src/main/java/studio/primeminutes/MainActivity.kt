@@ -923,18 +923,19 @@ private fun TranscribeScreen(
         if (!sessionDirty || running || isRecording) return
         val id = libraryDir?.name ?: return
         if (utterances.isEmpty()) return
-        TranscriptionService.pendingPersist = TranscriptionService.PersistRequest(
+        val ticket = TranscriptionService.pendingPersist.post(TranscriptionService.PersistRequest(
             entryId = id, audioUri = audioUri,
             utterances = utterances.toList(), speakerNames = speakerNames.toMap(),
             summary = summary, actionItems = actionItems, title = title,
             notes = meetingNotes?.render() ?: agent.journalText(),
             asrModelId = sessionModels?.second ?: config.asrModelId, asrBackend = sessionModels?.third ?: config.asrBackend, llmModelId = sessionModels?.first ?: config.llmModelId,
-        )
+        ))
         sessionDirty = false
         TranscriptionService.persistQueued(id)   // openSessionUri waits on it: the rebuild takes seconds
         ContextCompat.startForegroundService(
             context,
-            Intent(context, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_PERSIST_LIBRARY),
+            Intent(context, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_PERSIST_LIBRARY)
+                .putExtra(TranscriptionService.EXTRA_REQUEST, ticket),
         )
     }
 
@@ -1212,17 +1213,18 @@ private fun TranscribeScreen(
     // as .m4a. Overlay clears on ExportDone.
     fun stageSessionExport(share: Boolean, uri: Uri?, format: PrimeMinutesSession.Format) {
         if (!share) lastSaveUri = uri
-        TranscriptionService.pendingExport = TranscriptionService.ExportRequest(
+        val ticket = TranscriptionService.pendingExport.post(TranscriptionService.ExportRequest(
             share = share, saveUri = uri, audioUri = audioUri,
             utterances = utterances.toList(), speakerNames = speakerNames.toMap(),
             summary = summary, actionItems = actionItems, title = title, notes = meetingNotes?.render() ?: agent.journalText(),
             asrModelId = sessionModels?.second ?: config.asrModelId, asrBackend = sessionModels?.third ?: config.asrBackend, llmModelId = sessionModels?.first ?: config.llmModelId,
             coverEnabled = coverEnabled,
             fileName = PrimeMinutesSession.suggestFileName(title, format.ext), format = format,
-        )
+        ))
         exporting = true
         ContextCompat.startForegroundService(
-            context, Intent(context, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_EXPORT),
+            context, Intent(context, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_EXPORT)
+                .putExtra(TranscriptionService.EXTRA_REQUEST, ticket),
         )
     }
     val sessionSaverM4a = rememberLauncherForActivityResult(
@@ -1875,12 +1877,13 @@ private fun TranscribeScreen(
         if (regenerateTitle) { title = null; titleEdited = false }
         running = true; progress = 0f; status = context.getString(R.string.status_starting)   // transcript persists
         // Transcript rides the holder, not an Intent extra (Binder 1 MB limit → crash on long meetings).
-        TranscriptionService.pendingText = studio.primeminutes.core.llm.TranscriptFormat.format(
-            utterances, speakerNames.mapValues { it.value.name })
+        val ticket = TranscriptionService.pendingText.post(studio.primeminutes.core.llm.TranscriptFormat.format(
+            utterances, speakerNames.mapValues { it.value.name }))
         val intent = Intent(context, TranscriptionService::class.java)
             .setAction(TranscriptionService.ACTION_SUMMARIZE)
             .putExtra(TranscriptionService.EXTRA_WITH_TITLE, regenerateTitle)
             .putExtra(TranscriptionService.EXTRA_RUN_GEN, sessionGen)
+            .putExtra(TranscriptionService.EXTRA_REQUEST, ticket)
         ContextCompat.startForegroundService(context, intent)
     }
 

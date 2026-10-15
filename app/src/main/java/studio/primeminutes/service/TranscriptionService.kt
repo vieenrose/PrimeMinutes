@@ -110,6 +110,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         const val EXTRA_SUMMARY = "summary"
         const val EXTRA_WITH_TITLE = "with_title"   // ACTION_SUMMARIZE: also regenerate the title
         const val EXTRA_RUN_GEN = "run_gen"         // the UI sessionGen that owns this run (event tagging)
+        const val EXTRA_REQUEST = "request"         // the Mailbox ticket of an export / persist / summarize request
         const val ACTION_STOP = "studio.primeminutes.STOP"
 
         /** How long a Stop waits for the pipeline's teardown (the library save) before stopping the
@@ -173,10 +174,11 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // capture never overruns the AudioRecord hardware buffer. See runRecordingPipeline().
         private const val MIC_BUFFER_BLOCKS = 256
 
-        @Volatile var pendingExport: ExportRequest? = null
+        /** Pending session exports (ACTION_EXPORT), by ticket. */
+        val pendingExport = Mailbox<ExportRequest>()
 
-        /** A pending edits-persist into a library entry (see ACTION_PERSIST_LIBRARY). */
-        @Volatile var pendingPersist: PersistRequest? = null
+        /** Pending edits-persists into a library entry (ACTION_PERSIST_LIBRARY), by ticket. */
+        val pendingPersist = Mailbox<PersistRequest>()
 
         // Entries whose edits-persist is queued or running. Rebuilding session.m4a takes seconds
         // (the audio is re-muxed), and an open of the same row meanwhile read the OLD file — then,
@@ -190,10 +192,10 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             persistInFlight[entryId]?.let { kotlinx.coroutines.withTimeoutOrNull(120_000) { it.await() } }
         }
 
-        /** The transcript/summary text for ACTION_SUMMARIZE. Rides a holder
+        /** The transcript/summary text for ACTION_SUMMARIZE, by ticket. Rides a holder
          *  rather than an Intent extra: a long meeting's transcript exceeds the ~1 MB Binder
          *  transaction limit → TransactionTooLargeException crash. Consumed in onStartCommand. */
-        @Volatile var pendingText: String? = null
+        val pendingText = Mailbox<String>()
 
 
         // Process-wide event bus the UI subscribes to. replay=0: UI must be collecting. Each event is
@@ -516,7 +518,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 return START_NOT_STICKY
             }
             ACTION_EXPORT -> {
-                runExport(pendingExport.also { pendingExport = null })
+                runExport(pendingExport.take(intent))
                 return START_NOT_STICKY
             }
             ACTION_IMPORT_DOWNLOAD -> {
@@ -524,7 +526,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 return START_NOT_STICKY
             }
             ACTION_PERSIST_LIBRARY -> {
-                runPersist(pendingPersist.also { pendingPersist = null })
+                runPersist(pendingPersist.take(intent))
                 return START_NOT_STICKY
             }
         }
@@ -563,9 +565,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val cfgSnapshot = TranscriptionConfig.Holder.config
         startForegroundTyped(recording, getString(R.string.svc_preparing))
         val uri = intent?.getStringExtra(EXTRA_AUDIO_URI)
-        // Transcript/summary text rides pendingText (Binder-limit safe). Consume it here on the
-        // main thread before the job launches so a rapid second dispatch can't steal it.
-        val pendingBody = if (summarizeOnly) pendingText.also { pendingText = null } else null
+        // Transcript/summary text rides pendingText (Binder-limit safe), under this intent's ticket.
+        val pendingBody = if (summarizeOnly) pendingText.take(intent) else null
         val transcript = pendingBody ?: intent?.getStringExtra(EXTRA_TRANSCRIPT)
         val summaryExtra = pendingBody ?: intent?.getStringExtra(EXTRA_SUMMARY)
         val summarizeWithTitle = intent?.getBooleanExtra(EXTRA_WITH_TITLE, false) ?: false
