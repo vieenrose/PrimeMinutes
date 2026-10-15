@@ -163,6 +163,7 @@ enum Dev {
 final class ReaderWorker: @unchecked Sendable {
     private let reader: MeetingReader, lock = NSCondition()
     private var queue: [Line] = [], busy = false, paused = false, stopped = false, snapshot: [Note] = [], total = 0, done = 0
+    private var error: Error?
     /// `paused`: hold the lines until `resume()` (low-RAM devices read after the transcription, not during it).
     init(_ r: MeetingReader, paused: Bool = false) {
         reader = r; self.paused = paused
@@ -174,7 +175,8 @@ final class ReaderWorker: @unchecked Sendable {
                 if stopped { busy = false; lock.broadcast(); lock.unlock(); StatusLog.add("trace reader worker ended"); return }
                 let l = queue.removeFirst(); busy = true; lock.unlock()
                 Stage.set("offer")
-                do { try reader.offer(l) } catch { StatusLog.add("trace reader.offer error: \(error)") }
+                // After a failure the reader's context is unknown: it reads no further (Android ReaderLane keeps its first failure).
+                if failure == nil { do { try reader.offer(l) } catch { StatusLog.add("trace reader.offer error: \(error)"); lock.lock(); self.error = error; lock.unlock() } }
                 lock.lock(); snapshot = reader.journal; done += 1; lock.unlock()
             }
         }
@@ -184,6 +186,8 @@ final class ReaderWorker: @unchecked Sendable {
     /// The job is over (finished, stopped or failed): drop what is queued and end the thread after the current line.
     func stop() { lock.lock(); stopped = true; queue.removeAll(); lock.broadcast(); lock.unlock() }
     var journal: [Note] { lock.lock(); defer { lock.unlock() }; return snapshot }
+    /// The first reading error, if any: the job then reports "summary unavailable", not an empty meeting.
+    var failure: Error? { lock.lock(); defer { lock.unlock() }; return error }
     var progress: (done: Int, total: Int) { lock.lock(); defer { lock.unlock() }; return (done, total) }
     /// Blocks until every queued line has been read.
     func drain(_ tick: (Int, Int) -> Void) {
@@ -481,13 +485,18 @@ final class Model: ObservableObject {
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }
             worker.drain { d, t in Task { @MainActor in self.status = L("reading_s", d, t) } }
-            _ = try? reader.finish(); let journal = reader.journal
+            var readError = worker.failure
+            if readError == nil { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
+            // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
+            // cause on the status line (Android readFailed). The transcript is still archived.
+            let journal = readError == nil ? reader.journal : []
             let sum = ReaderSummarizer(llm: r.llm, card: Prefs.reader.card)
             // No notes at all (a short or off-topic recording): one plain line, not five empty sections (Android summary_no_notes).
             let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? Prefs.reader.card.reader.minutes(journal)
             let (fl, fn, ft, fp) = (conv.utterances(final), conv.notes(journal), conv.text(t ?? ""), prose.map { conv.text($0) } ?? "")
-            let summaryText = fp.isEmpty && !fl.isEmpty ? L("summary_no_notes") : fp
-            await MainActor.run { self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count); self.agent.apply(.state(.done, notes: fn.count)) }
+            let summaryText = fp.isEmpty && !fl.isEmpty && readError == nil ? L("summary_no_notes") : fp
+            let why = readError.map { String(String(describing: $0).split(separator: "\n").first ?? "").prefix(120) }
+            await MainActor.run { self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = why.map { L("summary_failed") + " [\($0)]" } ?? (ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count)); self.agent.apply(.state(.done, notes: fn.count)) }
             await self.archive(lines: fl, notes: fn, title: ft, summary: summaryText, seconds: live ? (eng?.fedSeconds ?? 0) : seconds, job: job)
             if let job { Checkpoint.remove(job.id); await self.queue.remove(job.id) }
             Stage.set("idle")

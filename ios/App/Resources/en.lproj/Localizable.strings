@@ -309,6 +309,7 @@
 "notif_session_ready" = "Session ready";
 "svc_queue_item_failed" = "Could not process %@ — kept in the library";
 "svc_queue_item_failed_hint" = "Tap to open Prime Minutes and try again.";
+"summary_failed" = "Summary unavailable — the transcript is saved";
 "summary_no_notes" = "Nothing to note in this recording: no decisions, actions or figures.";
 "status_starting" = "Starting…";
 "session_save_failed" = "Couldn't save session";

@@ -309,6 +309,7 @@
 "notif_session_ready" = "場次已完成";
 "svc_queue_item_failed" = "無法處理 %@——已保留在資料庫中";
 "svc_queue_item_failed_hint" = "點一下開啟 Prime Minutes 再試一次。";
+"summary_failed" = "無法產生摘要——逐字稿已儲存";
 "summary_no_notes" = "這段錄音沒有需要記下的決議、待辦或數字。";
 "status_starting" = "啟動中…";
 "session_save_failed" = "無法儲存場次";
