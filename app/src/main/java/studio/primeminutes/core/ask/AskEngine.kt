@@ -111,12 +111,14 @@ object AskEngine {
                         else append(t.p3)
                         append(render(excerpts, uiLanguage)); append("\n\n"); append(question.trim()); append(t.p2)
                     }
+                    val tPrompt = System.nanoTime()
                     if (s.append(s.tokenize(prompt, special = true)) < 0) {
                         // The conversation outgrew the cache: start a fresh one with this question only.
                         s.reset()
                         val fresh = t.p0 + system(uiLanguage) + t.p1 + render(excerpts, uiLanguage) + "\n\n" + question.trim() + t.p2
                         if (s.append(s.tokenize(fresh, special = true)) < 0) error("prompt does not fit")
                     }
+                    val pre = engine?.lastStats   // the prompt's prefill (append runs its own generate call)
                     val t0 = System.nanoTime()
                     var tFirst = 0L
                     var cut = false
@@ -126,7 +128,7 @@ object AskEngine {
                         sb.append(piece); publish(sb.toString(), done = false)
                     }
                     val st = engine?.lastStats
-                    Log.i(TAG, "answered in ${(System.nanoTime() - t0) / 1_000_000} ms: first token ${(tFirst - t0) / 1_000_000} ms, prefill ${st?.prefilled} tok ${st?.prefillSec}s, ${st?.generated} tok ${st?.decodeSec}s${if (cut) ", cut by a job" else ""}")
+                    Log.i(TAG, "answered in ${(System.nanoTime() - tPrompt) / 1_000_000} ms: prefill ${pre?.prefilled} tok (${pre?.reused} reused) ${pre?.prefillSec}s, first token ${(tFirst - t0) / 1_000_000} ms, ${st?.generated} tok ${st?.decodeSec}s${if (cut) ", cut by a job" else ""}")
                     if (BuildConfig.DEBUG) {
                         // DEV: the answer and the excerpt tags, so a device run can be checked from logcat.
                         Log.d(TAG, "excerpts: " + excerpts.joinToString(" ") { "[[${it.entry.id}@${it.sec}]]" })

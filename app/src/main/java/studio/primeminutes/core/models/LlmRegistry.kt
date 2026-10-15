@@ -36,6 +36,10 @@ data class LlmSpec(
     val systemPromptFile: String = "",
     /** The chat template the weights were trained with. */
     val template: ChatTemplate = ChatTemplate.GEMMA4,
+    /** The reader's window, context and restart budgets the weights were tuned for (integration note §12). */
+    val readerBudget: studio.primeminutes.core.reader.ReaderBudget = studio.primeminutes.core.reader.ReaderBudget.MOBILE,
+    /** Title and prose read the journal compacted to this many characters (0 = all of it). */
+    val notesChars: Int = 3900,
     /** The GPU variant of [mainFile], downloaded only when the GPU is tested; null: CPU only. */
     val gpuGraph: GpuGraph? = null,
 ) {
