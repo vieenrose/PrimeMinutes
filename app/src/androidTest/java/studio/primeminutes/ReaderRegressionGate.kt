@@ -15,6 +15,7 @@ import studio.primeminutes.core.llm.MfaSession
 import studio.primeminutes.core.llm.SpTokenizer
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
+import studio.primeminutes.core.reader.AgentEvent
 import studio.primeminutes.core.reader.ReaderLane
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.core.text.ChineseScript
@@ -44,7 +45,13 @@ class ReaderRegressionGate {
     private fun gate(name: String) = runBlocking {
         val ins = InstrumentationRegistry.getInstrumentation()
         val ctx = ins.targetContext
-        val spec = LlmRegistry.byId(InstrumentationRegistry.getArguments().getString("llm") ?: LlmRegistry.DEFAULT_ID)
+        val args = InstrumentationRegistry.getArguments()
+        val spec = LlmRegistry.byId(args.getString("llm") ?: LlmRegistry.DEFAULT_ID)
+        // Experiments without a new card: -e max_notes N, -e window_tokens N (the report records them).
+        val card = spec.card.let { c ->
+            c.copy(reader = args.getString("max_notes")?.toIntOrNull()?.let { c.reader.copy(maxNotes = it) } ?: c.reader,
+                budget = args.getString("window_tokens")?.toIntOrNull()?.let { c.budget.copy(windowTokens = it) } ?: c.budget)
+        }
         val mm = ModelManager(ctx)
         assumeTrue("model ${spec.id} not installed", mm.llmReady(spec))
         val ref = JSONObject(ins.context.assets.open("reader_gate/$name.json").bufferedReader().readText())
@@ -57,10 +64,13 @@ class ReaderRegressionGate {
         val engine = MfaEngine.load(File(dir, spec.mainFile).parentFile!!.path, ctx = spec.maxCtx, threads = 4,
             weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, stopIds = spec.template.stopIds)
         val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
+        val drops = HashMap<String, Int>()
         val t0 = System.nanoTime()
         val (res, prose, title) = try {
             val session = MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
-            ReaderLane(session, File(dir, spec.systemPromptFile).readText(), spec.card) { }.use { lane ->
+            ReaderLane(session, File(dir, spec.systemPromptFile).readText(), card) { ev ->
+                if (ev is AgentEvent.NoteDropped) synchronized(drops) { drops.merge(ev.reason.name, 1, Int::plus) }
+            }.use { lane ->
                 lane.start()
                 val r = lane.finish(utts)
                 Triple(r, runCatching { lane.prose(r.journal) }.getOrNull(), runCatching { lane.title(r.journal) }.getOrNull())
@@ -85,10 +95,11 @@ class ReaderRegressionGate {
         val report = JSONObject().put("meeting", name).put("model", spec.id).put("seconds", secs.toInt())
             .put("recall", recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
+            .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
             .put("prose", prose).put("journal", notes)
-        File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$name-${spec.id}.json").writeText(report.toString(1))
-        android.util.Log.i("ReaderGate", "$name ${spec.id}: recall %.2f (missed %s), %d notes, %d actions, title \"%s\", %ds, leaks %s"
-            .format(recall, missed, res.journal.size, res.actions.size, title, secs.toInt(), leaks))
+        File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$name-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
+        android.util.Log.i("ReaderGate", "$name ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s"
+            .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks))
 
         val threshold = ref.optDouble("threshold", 0.75)
         assertTrue("$name: recall %.2f < %.2f, missed $missed".format(recall, threshold), recall >= threshold)
