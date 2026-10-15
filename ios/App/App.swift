@@ -261,7 +261,7 @@ final class Model: ObservableObject {
     private func archive(lines: [Utterance], notes: [Note], title: String, summary: String, seconds: Double, job: Job? = nil) async {
         // No speech: still a library entry with its audio (Android keeps the entry, status_no_speech), never a silent drop.
         let summary = lines.isEmpty && summary.isEmpty ? L("status_no_speech") : summary
-        if lines.isEmpty { status = L("status_no_speech") }
+        if lines.isEmpty && !recording { status = L("status_no_speech") }
         let fallback = lines.first.map { String($0.text.prefix(20)) } ?? L("meeting")
         var s = Session(title: title.isEmpty ? fallback : title, summary: summary, seconds: seconds, lines: lines, notes: notes)
         if let job { s.id = job.id; s.date = job.date; s.audio = job.audio; if let t = job.title, !t.isEmpty { s.title = t } }
@@ -460,6 +460,9 @@ final class Model: ObservableObject {
                         Checkpoint.savePartial(.init(lines: snapshot, seam: last.end), job.id); savedAt = fed
                     }
                     Task { @MainActor in
+                        // A recording started while this queued job runs owns the screen (it streams its own lines):
+                        // the job keeps going and archives, it just stops painting over it.
+                        guard live || !self.recording else { return }
                         self.lines = conv.utterances(all); self.notes = conv.notes(j)
                         if live { if self.recording { self.status = L("recording_s", Int(fed)) }; return }
                         self.status = L("transcribing_s", Int(max(0, fed - en.length) + offset), Int(seconds))
@@ -490,7 +493,7 @@ final class Model: ObservableObject {
                 if let job { Checkpoint.save(final, job.id) }
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }
-            worker.drain { d, t in Task { @MainActor in self.status = L("reading_s", d, t) } }
+            worker.drain { d, t in Task { @MainActor in guard live || !self.recording else { return }; self.status = L("reading_s", d, t) } }
             var readError = worker.failure
             if readError == nil { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
             // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
@@ -502,7 +505,7 @@ final class Model: ObservableObject {
             let (fl, fn, ft, fp) = (conv.utterances(final), conv.notes(journal), conv.text(t ?? ""), prose.map { conv.text($0) } ?? "")
             let summaryText = fp.isEmpty && !fl.isEmpty && readError == nil ? L("summary_no_notes") : fp
             let why = readError.map { String(String(describing: $0).split(separator: "\n").first ?? "").prefix(120) }
-            await MainActor.run { self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = why.map { L("summary_failed") + " [\($0)]" } ?? (ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count)); self.agent.apply(.state(.done, notes: fn.count)) }
+            await MainActor.run { guard live || !self.recording else { return }; self.lines = fl; self.notes = fn; self.title = ft; self.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.status = why.map { L("summary_failed") + " [\($0)]" } ?? (ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count)); self.agent.apply(.state(.done, notes: fn.count)) }
             await self.archive(lines: fl, notes: fn, title: ft, summary: summaryText, seconds: live ? (eng?.fedSeconds ?? 0) : seconds, job: job)
             if let job { Checkpoint.remove(job.id); await self.queue.remove(job.id) }
             Stage.set("idle")
