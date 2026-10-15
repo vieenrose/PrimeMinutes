@@ -29,27 +29,21 @@ data class LlmSpec(
     /** Relative path of a separate tokenizer blob, or "" — a GGUF embeds its own. */
     val tokenizerFile: String = "",
     val shortName: String = "",
-    val sampler: SamplerProfile = SamplerProfile.GEMMA_READER,
     /** The context the graph is loaded with, in tokens (the mobile graphs run at 4k). */
     val maxCtx: Int,
     /** The reader's system prompt, shipped next to the weights (they must stay paired). */
     val systemPromptFile: String = "",
-    /** The chat template the weights were trained with. */
-    val template: ChatTemplate = ChatTemplate.GEMMA4,
-    /** The reader's window, context and restart budgets the weights were tuned for (integration note §12). */
-    val readerBudget: studio.primeminutes.core.reader.ReaderBudget = studio.primeminutes.core.reader.ReaderBudget.MOBILE,
-    /** Title and prose read the journal compacted to this many characters (0 = all of it). */
-    val notesChars: Int = 3900,
+    /** How to drive these weights (model_cards/<name>.json): chat template, sampler, budgets,
+     *  the reader protocol and the title/prose/Ask prompts. */
+    val card: ModelCard = ModelCard.DEFAULT,
 ) {
     val totalBytes: Long get() = files.values.sumOf { it.first }
+    val template: ChatTemplate get() = card.template
+    val sampler: SamplerProfile get() = card.sampler
 }
 
-/** The reader's sampler (integration note §13.4: top-k 40, top-p 0.95, T 0.2). */
-data class SamplerProfile(val topK: Int, val topP: Float, val temp: Float) {
-    companion object {
-        val GEMMA_READER = SamplerProfile(topK = 40, topP = 0.95f, temp = 0.2f)
-    }
-}
+/** The reader's sampler (integration note §13.4: top-k 40, top-p 0.95, T 0.2 in the shipped card). */
+data class SamplerProfile(val topK: Int, val topP: Float, val temp: Float)
 
 /**
  * The on-device summarizer: the Gemma-4-E2B meeting agent (QAT, Q4_0, Apache-2.0), fine-tuned as a
@@ -115,9 +109,9 @@ object LlmRegistry {
         ),
         mainFile = "$dir/prefill_decode_fused.tflite",
         tokenizerFile = "$dir/Section1_SP_Tokenizer.spiece",
-        sampler = SamplerProfile.GEMMA_READER,
         maxCtx = 4096,
         systemPromptFile = prompt,
+        card = ModelCard.DEFAULT,
     )
 
     fun byId(id: String): LlmSpec =

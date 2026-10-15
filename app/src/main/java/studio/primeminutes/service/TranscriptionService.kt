@@ -1723,9 +1723,8 @@ class TranscriptionService : LifecycleService() {
         val specId: String,
         val llm: studio.primeminutes.core.reader.ReaderLlm,
         val system: String,
-        val budget: studio.primeminutes.core.reader.ReaderBudget,
-        /** Title/prose input cap in characters (0 = the whole journal), see ReaderLane. */
-        val notesChars: Int,
+        /** Its card: protocol, budgets, sampler and prompts (ReaderLane). */
+        val card: studio.primeminutes.core.models.ModelCard,
         private val cancelFn: () -> Unit,
         private val resumeFn: () -> Unit,
         private val closeFn: () -> Unit,
@@ -1901,7 +1900,7 @@ class TranscriptionService : LifecycleService() {
         val tok = studio.primeminutes.core.llm.SpTokenizer.load(File(dir, spec.tokenizerFile).path)
         val session = studio.primeminutes.core.llm.MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
         return ReaderModel(
-            spec.id, session, system, spec.readerBudget, notesChars = spec.notesChars,
+            spec.id, session, system, spec.card,
             cancelFn = session::cancel, resumeFn = session::resume, closeFn = { engine.close(); tok.close() },
         )
     }
@@ -1940,7 +1939,7 @@ class TranscriptionService : LifecycleService() {
         val emit: (AgentEvent) -> Unit = { ev ->
             events.tryEmit(gen to TranscriptEvent.Agent(if (conv == null) ev else ev.mapText(conv::convert)))
         }
-        val lane = ReaderLane(model.llm, model.system, model.budget, model.notesChars, emit)
+        val lane = ReaderLane(model.llm, model.system, model.card, emit)
         if (task.text == null) {
             // Checkpoint the notes after every window; a saved one lets an interrupted reading (Stop,
             // crash, kill) continue instead of reading the whole transcript again.

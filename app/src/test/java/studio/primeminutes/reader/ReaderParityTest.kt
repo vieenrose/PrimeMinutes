@@ -1,5 +1,6 @@
 package studio.primeminutes.reader
 
+import studio.primeminutes.core.models.ModelCard
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -46,15 +47,15 @@ class ReaderParityTest {
     /** The mobile graphs' 4k protocol: make_golden.py --mobile (window 1500, ctx 4096, journal 1200). */
     @Test
     fun matchesPhoneLiveAt4k() {
-        val (g, reader) = replay("/reader_parity_mobile.json", ReaderBudget.MOBILE)
-        assertEquals(g.getInt("window_tokens"), ReaderBudget.MOBILE.windowTokens)
-        assertEquals(g.getInt("ctx"), ReaderBudget.MOBILE.ctxBudget)
-        assertEquals(g.getInt("restart_budget"), ReaderBudget.MOBILE.restartBudget)
+        val (g, reader) = replay("/reader_parity_mobile.json", ModelCard.DEFAULT.budget)
+        assertEquals(g.getInt("window_tokens"), ModelCard.DEFAULT.budget.windowTokens)
+        assertEquals(g.getInt("ctx"), ModelCard.DEFAULT.budget.ctxBudget)
+        assertEquals(g.getInt("restart_budget"), ModelCard.DEFAULT.budget.restartBudget)
         // conversion_prompts.compact_notes: the title/prose input at several budgets.
         val compact = g.getJSONObject("compact_notes")
         for (b in compact.keys()) {
             val want = compact.getJSONArray(b).let { a -> (0 until a.length()).map(a::getInt) }
-            assertEquals("compact_notes at $b chars", want, ReaderProtocol.compactNotes(reader.journal, b.toInt()).map(Note::id))
+            assertEquals("compact_notes at $b chars", want, ModelCard.DEFAULT.reader.compactNotes(reader.journal, b.toInt()).map(Note::id))
         }
     }
 

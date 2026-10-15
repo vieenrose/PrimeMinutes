@@ -80,7 +80,7 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
          */
         fun load(dir: String, ctx: Int, threads: Int, weightCache: String, backend: Int = 0,
                  main: String = "$dir/prefill_decode_fused.tflite",
-                 stopIds: Set<Int> = studio.primeminutes.core.models.ChatTemplate.GEMMA4.stopIds): MfaEngine =
+                 stopIds: Set<Int> = studio.primeminutes.core.models.ModelCard.DEFAULT.template.stopIds): MfaEngine =
             MfaEngine(nativeLoad(dir, main, ctx, threads, weightCache, backend)).also {
                 nativeSetStops(it.handle, stopIds.toIntArray())
             }

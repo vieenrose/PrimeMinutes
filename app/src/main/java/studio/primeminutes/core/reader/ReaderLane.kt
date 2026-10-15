@@ -1,6 +1,6 @@
 package studio.primeminutes.core.reader
 
-import studio.primeminutes.core.models.ChatTemplate
+import studio.primeminutes.core.models.ModelCard
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import studio.primeminutes.core.events.TranscriptEvent
@@ -19,12 +19,15 @@ import kotlin.math.floor
 class ReaderLane(
     private val llm: ReaderLlm,
     private val systemPrompt: String,
-    private val budget: ReaderBudget = ReaderBudget.STANDARD,
-    /** Title and prose read the journal compacted to this many characters (0 = all of it): a whole
-     *  meeting's journal does not fit a 4k context (integration note §12.3). */
-    private val notesChars: Int = 0,
+    /** The model's card: protocol, budgets, sampler and the title/prose prompts. */
+    private val card: ModelCard,
     private val events: (AgentEvent) -> Unit,
 ) : AutoCloseable {
+    private val budget = card.budget
+    /** Title and prose read the journal compacted to this many characters (0 = all of it): a whole
+     *  meeting's journal does not fit a 4k context (integration note §12.3). */
+    private val notesChars = card.reader.notesChars
+
 
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread({
@@ -33,7 +36,7 @@ class ReaderLane(
         }, "primeminutes-reader")
     }
     private val dispatcher = executor.asCoroutineDispatcher()
-    private val reader = MeetingReader(llm, systemPrompt, events = events, budget = budget)
+    private val reader = MeetingReader(llm, systemPrompt, events = events, budget = budget, pc = card.reader, temp = card.sampler.temp)
 
     /** Utterances already handed to the reader (by index in the live snapshot). */
     private var fed = 0
@@ -104,7 +107,7 @@ class ReaderLane(
         return withContext(dispatcher) {
             failure?.let { throw it }
             val minutes = reader.finish()
-            ReaderResult(reader.journal.toList(), minutes)
+            ReaderResult(reader.journal.toList(), minutes, card.reader.actions(reader.journal))
         }
     }
 
@@ -123,15 +126,14 @@ class ReaderLane(
     suspend fun title(journal: List<Note>): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
         llm.reset()
-        val toks = fitting(journal, 48) { notes -> "以下是一場會議的筆記：\n\n" + notes + "\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。" }
+        val toks = fitting(journal, card.title.maxTokens, card.title::render)
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(48, llm.template.end, ReaderProtocol.TEMP) {}
+        val raw = llm.generateContinue(card.title.maxTokens, llm.template.end, card.sampler.temp) {}
         raw.substringBefore(llm.template.end).lines().firstOrNull { it.isNotBlank() }
             ?.trim()?.trim('「', '」', '"', '*', '#', ' ')
-            ?.replace(TITLE_LABEL, "")   // "會議：…" / "標題：…" — the model labels its answer now and then
+            ?.let { t -> card.title.label?.let { t.replace(it, "") } ?: t }   // "會議：…" / "標題：…" — the model labels its answer now and then
             ?.trim('「', '」', '"', '*', '#', ' ')?.take(40)?.ifBlank { null }
     }
-    private val TITLE_LABEL = Regex("^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*")
 
     /**
      * The final summary as prose, from the journal — like [title], one fresh conversation on the same
@@ -142,17 +144,14 @@ class ReaderLane(
     suspend fun prose(journal: List<Note>): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
         llm.reset()
-        val toks = fitting(journal, PROSE_MAX) { notes -> "以下是一場會議的筆記：\n\n" + notes +
-            "\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），" +
-            "說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。" +
-            "只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。" }
+        val toks = fitting(journal, card.prose.maxTokens, card.prose::render)
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(PROSE_MAX, llm.template.end, ReaderProtocol.TEMP) {}
+        val raw = llm.generateContinue(card.prose.maxTokens, llm.template.end, card.sampler.temp) {}
         cleanProse(raw, journal.map { it.ts }.toSet(), llm.template.end)
     }
 
     private fun notesFor(journal: List<Note>, chars: Int = notesChars): List<Note> =
-        if (chars > 0) ReaderProtocol.compactNotes(journal, chars) else journal
+        if (chars > 0) card.reader.compactNotes(journal, chars) else journal
 
     /** The one-shot prompt over the notes, compacted further while it would not leave [maxOut]
      *  tokens of room in the context (3,900 characters is upstream's measure; Chinese runs denser
@@ -178,13 +177,11 @@ class ReaderLane(
     }
 
     companion object {
-        const val PROSE_MAX = 600
-
         /** The prose reply made presentable: unknown `[ts]` stripped (with the space it leaves before
-         *  punctuation), no headings or bullets, and a reply cut off by [PROSE_MAX] (no end-of-turn)
+         *  punctuation), no headings or bullets, and a reply cut off by the card's prose budget (no end-of-turn)
          *  ends at its last whole sentence — a long meeting's summary stopped mid-word on "[12:28".
          *  [turnEnd] is the template's end of turn. */
-        fun cleanProse(raw: String, known: Set<String>, turnEnd: String = ChatTemplate.GEMMA4.end): String? {
+        fun cleanProse(raw: String, known: Set<String>, turnEnd: String = ModelCard.DEFAULT.template.end): String? {
             val ended = raw.contains(turnEnd)
             var text = raw.substringBefore(turnEnd)
                 .replace(Regex("""\[(\d+:\d{2}(?::\d{2})?)\]""")) { m -> if (m.groupValues[1] in known) m.value else "" }
@@ -209,7 +206,5 @@ class ReaderLane(
     }
 }
 
-/** What a reader run produced: the journal and the minutes assembled from it. */
-data class ReaderResult(val journal: List<Note>, val minutes: String) {
-    val actions: List<Note> get() = journal.map(ReaderProtocol::reclassify).filter { it.tag.equals("ACTION", ignoreCase = true) }
-}
+/** What a reader run produced: the journal, the minutes assembled from it and its actions (proposal guard applied). */
+data class ReaderResult(val journal: List<Note>, val minutes: String, val actions: List<Note>)

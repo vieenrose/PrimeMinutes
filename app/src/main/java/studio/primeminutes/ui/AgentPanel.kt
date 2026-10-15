@@ -50,6 +50,7 @@ import studio.primeminutes.R
 import studio.primeminutes.core.reader.AgentEvent
 import studio.primeminutes.core.reader.AgentState
 import studio.primeminutes.core.reader.Note
+import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
@@ -97,8 +98,8 @@ class AgentUiState {
     /** Tokens in the model's context now (moves with every prefill). */
     var ctxTokens by mutableIntStateOf(0)
     /** Window size and context budget of the reader in use (they differ between engines). */
-    var windowMax by mutableIntStateOf(ReaderProtocol.WINDOW_TOKENS)
-    var ctxMax by mutableIntStateOf(ReaderProtocol.CTX_BUDGET)
+    var windowMax by mutableIntStateOf(ModelCard.DEFAULT.budget.windowTokens)
+    var ctxMax by mutableIntStateOf(ModelCard.DEFAULT.budget.ctxBudget)
         private set
     /** Reading a whole transcript at once (a re-summarize, the queue), not keeping up with a
      *  recording: the "next notes when the bar fills" wording only fits the latter. Set by
@@ -147,7 +148,7 @@ class AgentUiState {
         }
         if (parsed.isEmpty()) return false
         reset()
-        notes += parsed.map { ReaderProtocol.reclassify(it) }
+        notes += parsed.map { ModelCard.DEFAULT.reader.reclassify(it) }
         state = AgentEvent.State(AgentState.DONE, notes = parsed.size)
         return true
     }
@@ -182,7 +183,7 @@ class AgentUiState {
                 add(Kind.TURN, "window ${e.window} · %.1f s · +${e.kept} notes".format(e.ms / 1000.0))
             }
             is AgentEvent.NoteKept -> {
-                notes += ReaderProtocol.reclassify(e.note)   // same proposal guard as the minutes
+                notes += ModelCard.DEFAULT.reader.reclassify(e.note)   // same proposal guard as the minutes
                 edit { it.copy(kept = it.kept + 1) }
                 add(Kind.KEPT, ReaderProtocol.render(e.note))
             }

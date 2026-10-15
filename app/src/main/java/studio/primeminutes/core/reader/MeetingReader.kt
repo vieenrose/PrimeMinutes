@@ -1,16 +1,17 @@
 package studio.primeminutes.core.reader
 
+import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.reader.ReaderProtocol as P
 
 /**
  * The live meeting reader (port of `eval/phone_live.py`): transcript lines are fed into ONE
  * growing conversation as they are spoken — prefill only, while people talk — and every ~2,000
- * tokens a reading turn writes up to [ReaderProtocol.MAX_NOTES] typed, cited notes into the journal. The minutes are the
- * journal grouped by type ([ReaderProtocol.minutes]).
+ * tokens a reading turn writes up to [ReaderCard.maxNotes] typed, cited notes into the journal. The minutes are the
+ * journal grouped by type ([ReaderCard.minutes]).
  *
  * Windowing reproduces `windows_of` + the segment loop of `phone_live.py` exactly, even though
  * lines arrive one by one: a window closes when the NEXT line would push it past
- * [ReaderProtocol.WINDOW_TOKENS] (or at [finish]); a segment's trailing newline is only decided
+ * [ReaderBudget.windowTokens] (or at [finish]); a segment's trailing newline is only decided
  * once the next line shows whether it was the window's last. The same class drives the post-hoc
  * path (a finished transcript fed as fast as it goes).
  *
@@ -25,6 +26,10 @@ class MeetingReader(
     private val events: (AgentEvent) -> Unit = {},
     private val clock: () -> Long = System::nanoTime,
     private val budget: ReaderBudget = ReaderBudget.STANDARD,
+    /** The protocol the weights were trained on (model card). */
+    private val pc: ReaderCard = ModelCard.DEFAULT.reader,
+    /** The reading turn's temperature (model card). */
+    private val temp: Float = ModelCard.DEFAULT.sampler.temp,
 ) {
     val journal = ArrayList<Note>()
     private val lines = ArrayList<Line>()          // every line fed so far (citation resolution)
@@ -66,7 +71,7 @@ class MeetingReader(
         offered = cp.offered
         digest = cp.digest
         journal.forEach { events(AgentEvent.NoteKept(it)) }
-        prefillFresh(if (journal.isEmpty()) P.JOURNAL_EMPTY else P.compact(journal, count, budget.restartBudget))
+        prefillFresh(if (journal.isEmpty()) pc.journalEmpty else pc.compact(journal, count, budget.restartBudget))
         started = true
         events(AgentEvent.State(AgentState.LISTENING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = llm.seqLength(), notes = journal.size))
     }
@@ -75,7 +80,7 @@ class MeetingReader(
     fun start() {
         initPieces()
         events(AgentEvent.State(AgentState.STARTING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget))
-        prefillFresh(P.JOURNAL_EMPTY)
+        prefillFresh(pc.journalEmpty)
         started = true
         events(AgentEvent.State(AgentState.LISTENING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, ctxTokens = llm.seqLength()))
     }
@@ -120,7 +125,7 @@ class MeetingReader(
         if (line.startS >= segEnd) {
             closedSeg = segLines.joinToString("\n")
             segLines.clear()
-            segEnd = line.startS + P.SEGMENT_S
+            segEnd = line.startS + pc.segmentS
         }
     }
 
@@ -129,15 +134,15 @@ class MeetingReader(
         if (windowLines > 0) closeWindow()
         // Reading is over; the summary and title calls follow (the caller reports DONE after them).
         events(AgentEvent.State(AgentState.SUMMARIZING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, ctxTokens = llm.seqLength(), notes = journal.size))
-        return P.minutes(journal)
+        return pc.minutes(journal)
     }
 
     private fun openWindow(first: Line) {
-        if (llm.seqLength() + 2 * budget.windowTokens + P.READ_MAX + 600 > budget.ctxBudget) restart()
+        if (llm.seqLength() + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget) restart()
         k++
         windowTok = 0
-        segEnd = first.startS + P.SEGMENT_S
-        append(P.windowHeader(k), special = false, what = "window header")
+        segEnd = first.startS + pc.segmentS
+        append(pc.windowHeader(k), special = false, what = "window header")
         events(AgentEvent.State(AgentState.LISTENING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = llm.seqLength(), notes = journal.size))
     }
 
@@ -150,7 +155,7 @@ class MeetingReader(
         events(AgentEvent.State(AgentState.READING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = llm.seqLength(), notes = journal.size))
         val t0 = clock()
         llm.append(pieces.getValue("p2"))
-        val reply = llm.generateContinue(P.READ_MAX, P.STOP, P.TEMP) { events(AgentEvent.TurnToken(k, it)) }
+        val reply = llm.generateContinue(pc.readMax, pc.stop, temp) { events(AgentEvent.TurnToken(k, it)) }
         val kept = parse(reply)
         llm.append(pieces.getValue("p3"))
         events(AgentEvent.TurnDone(k, reply, kept, (clock() - t0) / 1_000_000))
@@ -164,7 +169,7 @@ class MeetingReader(
     /**
      * phone_live.py's reply parsing + the deployed guards. Returns the notes kept.
      *
-     * Deviation from upstream: when a window yields more than [ReaderProtocol.MAX_NOTES] notes,
+     * Deviation from upstream: when a window yields more than [ReaderCard.maxNotes] notes,
      * upstream keeps the first ones in reply order — so a meeting's closing to-do round-up, read
      * last, lost every ACTION. Here the cap keeps decisions and actions first, then numbers, open
      * issues and the rest. Surplus decisions/actions keep the newest (the round-up comes last); other
@@ -173,16 +178,16 @@ class MeetingReader(
     private fun parse(reply: String): Int {
         val cands = ArrayList<Pair<String, Note>>()   // raw line → note, past parse/citation/dup checks
         for (raw in reply.lines()) {
-            val m = P.ACT.find(raw) ?: continue
-            if (m.groupValues[1] != "NOTE") continue
-            val n = P.NOTE.find(m.groupValues[2].trim())
+            val m = pc.act.find(raw) ?: continue
+            if (m.groupValues[1] != pc.noteAct) continue
+            val n = pc.note.find(m.groupValues[2].trim())
             if (n == null) { events(AgentEvent.NoteDropped(k, raw.trim(), DropReason.PARSE)); continue }
             val (ts, tagRaw, text) = n.destructured
             val tag = tagRaw.ifEmpty { null }
-            val seen = journal.takeLast(P.DUP_LOOKBACK).map { it.text } + cands.map { it.second.text }
+            val seen = journal.takeLast(pc.dupLookback).map { it.text } + cands.map { it.second.text }
             val reason = when {
                 resolve(ts) == null -> DropReason.CITATION
-                seen.takeLast(P.DUP_LOOKBACK).any { P.similar(text, it) > P.DUP_JACCARD } -> DropReason.DUPLICATE
+                seen.takeLast(pc.dupLookback).any { P.similar(text, it) > pc.dupJaccard } -> DropReason.DUPLICATE
                 else -> null
             }
             if (reason != null) { events(AgentEvent.NoteDropped(k, raw.trim(), reason)); continue }
@@ -190,7 +195,7 @@ class MeetingReader(
         }
         val keep = cands.indices
             .sortedWith(compareBy<Int>({ capRank(cands[it].second.tag) }, { if (capRank(cands[it].second.tag) == 0) -it else it }))
-            .take(P.MAX_NOTES).toSet()
+            .take(pc.maxNotes).toSet()
         var kept = 0
         for ((i, c) in cands.withIndex()) {
             if (i !in keep) { events(AgentEvent.NoteDropped(k, c.first, DropReason.CAP)); continue }
@@ -202,12 +207,7 @@ class MeetingReader(
         return kept
     }
 
-    private fun capRank(tag: String?): Int = when (tag?.uppercase()) {
-        "DECISION", "ACTION" -> 0
-        "NUMBER" -> 1
-        "OPEN-ISSUE" -> 2
-        else -> 3
-    }
+    private fun capRank(tag: String?): Int = pc.capRank(tag)
 
     /** ingest.resolve_citation: the earliest fed line starting at [ts], or null (invented). */
     private fun resolve(ts: String): Int? {
@@ -219,7 +219,7 @@ class MeetingReader(
         val before = llm.seqLength()
         events(AgentEvent.State(AgentState.RESTARTING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = before, notes = journal.size))
         llm.reset()
-        val compacted = P.compact(journal, count, budget.restartBudget)
+        val compacted = pc.compact(journal, count, budget.restartBudget)
         prefillFresh(compacted)
         restarts++
         events(AgentEvent.Restart(restarts, before, llm.seqLength()))
@@ -227,8 +227,8 @@ class MeetingReader(
 
     private fun prefillFresh(journalText: String) {
         val toks = pieces.getValue("p0") + llm.tokenize(systemPrompt, false) + pieces.getValue("p1") +
-            llm.tokenize(P.JOURNAL_HEADER + journalText, false) + pieces.getValue("p2") +
-            llm.tokenize("NEXT", false) + pieces.getValue("p3")
+            llm.tokenize(pc.journalHeader + journalText, false) + pieces.getValue("p2") +
+            llm.tokenize(pc.primer, false) + pieces.getValue("p3")
         timedAppend(toks, "prefix")
     }
 

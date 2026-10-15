@@ -1,5 +1,6 @@
 package studio.primeminutes.reader
 
+import studio.primeminutes.core.models.ModelCard
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import studio.primeminutes.core.reader.Line
@@ -24,12 +25,12 @@ class LongLineTest {
     }
 
     @Test fun aMonologueLongerThanTheWindowStaysInsideTheContext() {
-        val llm = Llm(ReaderBudget.MOBILE.ctxBudget)
-        val reader = MeetingReader(llm, "系統".repeat(200), count = { it.codePointCount(0, it.length) }, events = {}, budget = ReaderBudget.MOBILE)
+        val llm = Llm(ModelCard.DEFAULT.budget.ctxBudget)
+        val reader = MeetingReader(llm, "系統".repeat(200), count = { it.codePointCount(0, it.length) }, events = {}, budget = ModelCard.DEFAULT.budget)
         reader.start()
         reader.offer(Line(0, "S1", "這是一段很長的獨白，沒有停頓。".repeat(400)))   // ~6,000 characters in one line
         reader.offer(Line(900, "S2", "好。"))
         reader.finish()
-        assertTrue("peak ${llm.maxSeq} tokens", llm.maxSeq <= ReaderBudget.MOBILE.ctxBudget)
+        assertTrue("peak ${llm.maxSeq} tokens", llm.maxSeq <= ModelCard.DEFAULT.budget.ctxBudget)
     }
 }

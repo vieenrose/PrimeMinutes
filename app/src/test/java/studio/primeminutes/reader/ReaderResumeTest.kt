@@ -1,5 +1,6 @@
 package studio.primeminutes.reader
 
+import studio.primeminutes.core.models.ModelCard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,7 +24,7 @@ class ReaderResumeTest {
         override fun reset() { seq.setLength(0) }
     }
 
-    private val budget = ReaderBudget.MOBILE
+    private val budget = ModelCard.DEFAULT.budget
     private fun reader(llm: Llm) = MeetingReader(llm, "系統", count = { it.codePointCount(0, it.length) }, events = {}, budget = budget)
     private val lines = List(60) { Line(it * 100, "S1", "第${it}句，" + "內容".repeat(120)) }
 

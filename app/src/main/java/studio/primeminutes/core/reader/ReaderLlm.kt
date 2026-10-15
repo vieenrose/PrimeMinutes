@@ -8,7 +8,7 @@ package studio.primeminutes.core.reader
  */
 interface ReaderLlm {
     /** The model's chat template: every turn the reader writes is framed by its pieces. */
-    val template: studio.primeminutes.core.models.ChatTemplate get() = studio.primeminutes.core.models.ChatTemplate.GEMMA4
+    val template: studio.primeminutes.core.models.ChatTemplate get() = studio.primeminutes.core.models.ModelCard.DEFAULT.template
 
     /** Token ids of [text] without BOS; [special] parses template pieces (`<|turn>` …). */
     fun tokenize(text: String, special: Boolean): IntArray

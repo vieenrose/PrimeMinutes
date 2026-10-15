@@ -1,6 +1,7 @@
 package studio.primeminutes.core.llm
 
 import studio.primeminutes.core.models.ChatTemplate
+import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.reader.ReaderLlm
 
 /**
@@ -16,7 +17,7 @@ class MfaSession(
     private val topK: Int = 40,
     private val topP: Float = 0.95f,
     private val seed: Int = 0,
-    override val template: ChatTemplate = ChatTemplate.GEMMA4,
+    override val template: ChatTemplate = ModelCard.DEFAULT.template,
 ) : ReaderLlm {
 
     private val seq = ArrayList<Int>()

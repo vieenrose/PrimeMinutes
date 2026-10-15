@@ -43,7 +43,6 @@ object AskEngine {
     private const val TAG = "primeminutes-ask"
     private const val MAX_PASSAGES = 8
     private const val PASSAGE_TOKENS = 1500   // ≤ ~1 500 tokens of excerpts in the mobile 4k context
-    private const val ANSWER_TOKENS = 320
     private const val NOTE_BONUS = 0.05f      // notes are denser than raw chunks: prefer them at equal score
 
     sealed class Phase {
@@ -122,7 +121,8 @@ object AskEngine {
                     val t0 = System.nanoTime()
                     var tFirst = 0L
                     var cut = false
-                    s.generateContinue(ANSWER_TOKENS, "", LlmRegistry.byId(modelId!!).sampler.temp) { piece ->
+                    val card = card()
+                    s.generateContinue(card.ask.answerTokens, "", card.sampler.temp) { piece ->
                         if (busy()) { cut = true; s.cancel() }   // a job started: the pipeline wins
                         if (tFirst == 0L) tFirst = System.nanoTime()
                         sb.append(piece); publish(sb.toString(), done = false)
@@ -199,32 +199,23 @@ object AskEngine {
 
     /** The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts). */
     private fun render(xs: List<Excerpt>, lang: String): String = buildString {
-        if (xs.isEmpty()) { append("(no excerpts)\n"); return@buildString }
+        if (xs.isEmpty()) { append(card().ask.noExcerpts + "\n"); return@buildString }
         xs.forEachIndexed { i, x ->
             append("[[${x.entry.id}@${x.sec}]] "); append(x.entry.title ?: ""); append(" · "); append(ReaderProtocol.formatTs(x.sec))
             append('\n'); append(x.text.trim().let { if (lang.startsWith("zh")) it else ChineseAmounts.toDigits(it) }); append("\n\n")
         }
     }
 
-    /** The answer follows the interface language (plan §6), whatever the question's. */
-    private fun system(lang: String): String = when {
-        lang.startsWith("zh") && (lang.contains("Hans") || lang.endsWith("CN") || lang.endsWith("SG")) ->
-            "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。" +
-            "每个论点后面附上出处标签，格式与摘录开头完全相同：[[id@秒]]。" +
-            "问题的用词可能和摘录不同，请找意思相同的内容。只有在每段摘录都没有相关内容时，" +
-            "才说「会议记录中没有提到」。回答请简短，使用简体中文。"
-        lang.startsWith("zh") ->
-            "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。" +
-            "每個論點後面附上出處標籤，格式與摘錄開頭完全相同：[[id@秒]]。" +
-            "問題的用詞可能和摘錄不同，請找意思相同的內容。只有在每段摘錄都沒有相關內容時，" +
-            "才說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。"
-        else ->
-            "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts " +
-            "that are not in them. After each claim, cite its source tag exactly as it appears at the " +
-            "start of the excerpt: [[id@seconds]]. If the excerpts do not contain the answer, say that " +
-            "the meetings do not mention it. Be brief and answer in English. Do not add a currency " +
-            "the excerpts do not name."
-    }
+    /** The answer follows the interface language (plan §6), whatever the question's: the card's
+     *  system prompt for Simplified Chinese, Traditional Chinese or English. */
+    private fun system(lang: String): String = card().ask.system(when {
+        lang.startsWith("zh") && (lang.contains("Hans") || lang.endsWith("CN") || lang.endsWith("SG")) -> "zh-Hans"
+        lang.startsWith("zh") -> "zh-Hant"
+        else -> "en"
+    })
+
+    /** The card of the model loaded for Ask (else the chosen one). */
+    private fun card() = LlmRegistry.byId(modelId ?: studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId).card
 
     private fun tokenizer(app: Context): SpTokenizer {
         tok?.let { return it }
