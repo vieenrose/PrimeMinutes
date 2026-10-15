@@ -1888,35 +1888,15 @@ class TranscriptionService : LifecycleService() {
         // The mobile graphs on the forked LiteRT engine (integration note §13): CPU only, 4k,
         // the XNNPACK weight cache built on the first load next to the weights.
         val main = File(dir, spec.mainFile)
-        // CPU unless the user picked a GPU / NPU whose benchmark passed; a failed load there falls
-        // back to the CPU rather than losing the reading. The GPU runs its own graph (the XNNPACK
-        // weight cache is the CPU graph's): a model without one, or not downloaded, reads on the CPU.
-        var backend = studio.primeminutes.core.hw.HwInfo.backend(this)
-        val gpuMain = models.llmGpuFile(spec)
-        if (backend == studio.primeminutes.core.hw.Backend.GPU && gpuMain == null) backend = studio.primeminutes.core.hw.Backend.CPU
-        val engine = try {
-            if (backend == studio.primeminutes.core.hw.Backend.GPU) studio.primeminutes.core.llm.MfaEngine.load(
-                main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = "", backend = backend.id, main = gpuMain!!.path, stopIds = spec.template.stopIds,
-            ) else studio.primeminutes.core.llm.MfaEngine.load(
-                main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = File(dir, WEIGHT_CACHE).path, backend = backend.id, stopIds = spec.template.stopIds,
-            )
-        } catch (e: Exception) {
-            if (backend == studio.primeminutes.core.hw.Backend.CPU) throw e
-            Log.w("primeminutes-reader", "$backend failed to load, using the CPU", e)
-            backend = studio.primeminutes.core.hw.Backend.CPU
-            studio.primeminutes.core.llm.MfaEngine.load(
-                main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
-                weightCache = File(dir, WEIGHT_CACHE).path, stopIds = spec.template.stopIds,
-            )
-        }
-        studio.primeminutes.core.hw.HwInfo.activeBackend = backend
+        val engine = studio.primeminutes.core.llm.MfaEngine.load(
+            main.parentFile!!.path, ctx = spec.maxCtx, threads = asrThreads(),
+            weightCache = File(dir, WEIGHT_CACHE).path, stopIds = spec.template.stopIds,
+        )
         val tok = studio.primeminutes.core.llm.SpTokenizer.load(File(dir, spec.tokenizerFile).path)
         val session = studio.primeminutes.core.llm.MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
         return ReaderModel(
             spec.id, session, system, spec.readerBudget, notesChars = spec.notesChars,
-            cancelFn = session::cancel, resumeFn = session::resume, closeFn = { engine.close(); tok.close(); studio.primeminutes.core.hw.HwInfo.activeBackend = studio.primeminutes.core.hw.Backend.CPU },
+            cancelFn = session::cancel, resumeFn = session::resume, closeFn = { engine.close(); tok.close() },
         )
     }
 

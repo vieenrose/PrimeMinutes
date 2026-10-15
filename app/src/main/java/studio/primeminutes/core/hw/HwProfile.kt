@@ -115,15 +115,6 @@ object HwInfo {
     /** Key of the stored benchmark results: SoC, cores and app version. */
     fun benchKey(context: Context): String = key(context)
 
-    /** What the engines were last loaded on; the status line shows a GPU / NPU gauge only for these. */
-    @Volatile var activeBackend: Backend = Backend.CPU
-
-    /** The backend to load the reader on: the user's choice while its last benchmark passed, else CPU. */
-    fun backend(context: Context): Backend {
-        val b = BackendBench.chosen(context)
-        return if (b !in Backend.offered) Backend.CPU else if (b == Backend.CPU || BackendBench.results(context, key(context))[b]?.passed == true) b else Backend.CPU
-    }
-
     fun benchDone(context: Context): Boolean = prefs(context).getString("benchKey", null) == key(context)
 
     /** Live ASR + reader at once also needs cores for both: below six they would fight over them. */

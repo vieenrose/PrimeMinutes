@@ -7,7 +7,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import studio.primeminutes.core.hw.Backend
-import studio.primeminutes.core.hw.BackendBench
 import studio.primeminutes.core.llm.MfaEngine
 import studio.primeminutes.core.llm.SpTokenizer
 import java.io.File
@@ -20,9 +19,6 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class MfaEngineDeviceTest {
     @Test fun loadsTokenizesAndWritesNotes() = writesNotes(Backend.CPU)
-
-    /** The same reading on the GPU graph in `files/mfa-e2b-gpu/` (skipped when it is not pushed). */
-    @Test fun writesNotesOnTheGpu() = writesNotes(Backend.GPU)
 
     private fun writesNotes(b: Backend) {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
@@ -51,24 +47,6 @@ class MfaEngineDeviceTest {
             assertTrue("prefix reused", e.lastStats!!.reused >= ids.size - 1)
         }
         tok.close()
-    }
-
-    /**
-     * The backend test on the real model: the CPU passes and sets the reference; the GPU, given its
-     * graph in `files/mfa-e2b-gpu/` (skipped otherwise), passes or fails with a reason, never
-     * silently. Its verdict and agreement are in the log (tag primeminutes-backend).
-     */
-    @Test fun backendBenchJudgesTheGpu() {
-        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val dir = File(ctx.filesDir, "mfa-e2b")
-        val gpu = File(ctx.filesDir, "mfa-e2b-gpu/prefill_decode_fused.tflite")
-        assumeTrue("models not pushed", File(dir, "prefill_decode_fused.tflite").exists() && gpu.exists())
-        val r = BackendBench.run(ctx, "device-test", dir.path, File(dir, "Section1_SP_Tokenizer.spiece").path, 4096,
-            4, File(ctx.cacheDir, "mfa-e2b.wcache").path, gpu.path)
-        android.util.Log.i("MfaEngineDeviceTest", "backends: $r")
-        assertTrue("CPU passes: ${r[Backend.CPU]}", r[Backend.CPU]?.passed == true)
-        val g = r[Backend.GPU]!!
-        assertTrue("GPU judged: $g", g.passed || g.note.isNotEmpty())
     }
 
     /** Reading speed on a window as long as the app's (about 2.9k tokens), CPU; logs prefill/decode rates and peak RSS. */
