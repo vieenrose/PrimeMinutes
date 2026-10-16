@@ -27,6 +27,11 @@ import Network
     @Published var consentRequest: ConsentRequest?
     /// Fraction of the background prefetch while it runs.
     @Published var prefetchProgress: Double?
+    /// Bytes the running prefetch fetches in all (the card shows "so far / total").
+    @Published private(set) var prefetchTotal: Int64 = 0
+    /// Cancel on the progress card: no automatic restart (network change) until the app restarts or the user
+    /// agrees again; a recording or an import still fetches what it needs (Android ModelPrefetch.cancel).
+    private var cancelledThisRun = false
     /// "Later" at first launch: not asked again until the app restarts (a run that needs the models still asks).
     private var laterThisRun = false
     private var prefetchTask: Task<Void, Never>?
@@ -75,6 +80,7 @@ import Network
         consentRequest = nil
         guard let c else { laterThisRun = true; return }   // Later
         consent = c
+        cancelledThisRun = false
         if c == .wifiOnly && !r.unmetered { screen.status = L("dl_consent_waiting_wifi"); return }
         // With a run waiting, the run fetches what it needs (its own progress); else prefetch now.
         if let a = r.action { a() } else { maybePrefetch() }
@@ -82,8 +88,8 @@ import Network
 
     private func maybePrefetch() {
         let p = pending
-        guard prefetchTask == nil, DownloadPlan.mayPrefetch(consent, unmetered: unmetered, p) else { return }
-        prefetchProgress = 0
+        guard prefetchTask == nil, !cancelledThisRun, DownloadPlan.mayPrefetch(consent, unmetered: unmetered, p) else { return }
+        prefetchProgress = 0; prefetchTotal = p.total
         let reader = Prefs.reader
         StatusLog.add("prefetch \(SizeFormat.bytes(p.total))")
         // Speech first, on its own task: a recording started meanwhile waits for these files only, never
@@ -101,6 +107,13 @@ import Network
             }
             await MainActor.run { self.prefetchProgress = nil; self.prefetchTask = nil; self.prefetchSpeech = nil }
         }
+    }
+    /// Cancel button on the progress card: stops both parts of the prefetch (the partial file stays for a resume).
+    func cancelPrefetch() {
+        guard prefetchTask != nil else { return }
+        cancelledThisRun = true
+        StatusLog.add("prefetch cancelled")
+        prefetchSpeech?.cancel(); prefetchTask?.cancel()
     }
     /// Lets a run's own download start only once the prefetch left those files (speech: just its part).
     func awaitPrefetch(speechOnly: Bool) async {

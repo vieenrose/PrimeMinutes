@@ -24,6 +24,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                ModelDownloadSection(downloads: m.downloads)   // the first-use download in progress, with Cancel
                 Section {
                     Picker(L("language"), selection: $language) { ForEach(AppLanguage.allCases) { Text($0.autonym).tag($0.rawValue) } }
                 } header: { Text(L("settings_language")) } footer: { Text(L("settings_language_hint")) }

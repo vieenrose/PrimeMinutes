@@ -232,12 +232,7 @@ struct LibraryView: View {
                 if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6) }
                 else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
             }
-            if let p = m.downloads.prefetchProgress {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
-                    ProgressView(value: p)
-                }.padding(.horizontal, 16).padding(.top, 6)
-            }
+            if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, 16).padding(.top, 6) }
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")).font(.caption).foregroundStyle(.secondary) }.padding(.horizontal, 16).padding(.top, 6)
             }
@@ -378,5 +373,32 @@ struct BrandMark: View {
         }
         .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .accessibilityHidden(true)
+    }
+}
+
+/// The first-use model download while it runs: bytes so far / total, percent and Cancel. On the library (empty or
+/// not) and in Settings (Android ModelDownloadCard).
+struct ModelDownloadCard: View {
+    @ObservedObject var downloads: ModelDownloads
+    var body: some View {
+        if let p = downloads.prefetchProgress {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("\(SizeFormat.bytes(Int64(Double(downloads.prefetchTotal) * p))) / \(SizeFormat.bytes(downloads.prefetchTotal))").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button(L("cancel")) { downloads.cancelPrefetch() }.font(.subheadline)
+                }
+                ProgressView(value: p)
+                Text(L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
+            }.padding(12).background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+/// Settings: the download card in its own section while the prefetch runs (observes the downloads itself).
+struct ModelDownloadSection: View {
+    @ObservedObject var downloads: ModelDownloads
+    var body: some View {
+        if downloads.prefetchProgress != nil { Section { ModelDownloadCard(downloads: downloads) } }
     }
 }
