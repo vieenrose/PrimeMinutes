@@ -1,6 +1,8 @@
 package studio.primeminutes.core.library
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,5 +14,15 @@ class SpeechCheckTest {
     @Test fun englishAndDigitsAreSpeech() {
         assertTrue(SpeechCheck.hasSpeech(listOf("ok")))
         assertTrue(SpeechCheck.hasSpeech(listOf("2026")))
+    }
+
+    /** A re-run keeps a real title; the no-speech one a silent run gave the entry is dropped, so the
+     *  new run's generated title replaces it (iOS RerunTitle.kept). */
+    @Test fun aRerunKeepsOnlyARealTitle() {
+        assertEquals("Budget review", SpeechCheck.keptTitle(" Budget review "))
+        assertEquals("週會", SpeechCheck.keptTitle("週會"))
+        assertNull(SpeechCheck.keptTitle(null))
+        assertNull(SpeechCheck.keptTitle("  "))
+        for (t in listOf("No speech detected", "未偵測到語音", "未检测到语音", " No speech detected ")) assertNull(t, SpeechCheck.keptTitle(t))
     }
 }

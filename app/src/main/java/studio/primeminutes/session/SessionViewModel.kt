@@ -368,7 +368,10 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
 
     /** Re-transcribe IN PLACE: a library session re-runs its own entry's recording. */
     fun reTranscribe() {
-        val dir = now.libraryDir; val src = now.audioUri ?: return; val keepTitle = now.title
+        // The title is kept (pinned like a user's), except the "No speech detected" a silent run gave
+        // the entry: pinned, it would win over the title of the run that now finds speech.
+        val dir = now.libraryDir; val src = now.audioUri ?: return
+        val keepTitle = studio.primeminutes.core.library.SpeechCheck.keptTitle(now.title)
         viewModelScope.launch {
             // A manual re-run starts over: a stale checkpoint must not be picked up as progress.
             dir?.let { d -> withContext(Dispatchers.IO) { SessionLibrary.byId(ctx, d.name)?.let(SessionLibrary::clearProgress) } }

@@ -280,6 +280,18 @@ class SessionReducerTest {
         assertEquals(own, SessionReducer.queueEnded(own, env).state)
     }
 
+    @Test fun aNoSpeechTitleIsNotASavedTitle() {
+        val loaded = studio.primeminutes.core.session.PrimeMinutesSession.Loaded(
+            audio = File("/data/lib/e1/session.m4a"), utterances = listOf(utt(0)), speakerNames = emptyMap(),
+            summary = null, title = null, notes = null, asrModelId = null, asrBackend = null, llmModelId = null, recovered = true,
+        )
+        fun open(meta: String?) = SessionReducer.sessionOpened(s0, env, OpenedSession(entryUri("e1", "session.m4a"), loaded, meta, null, null)).state
+        assertTrue(open("Budget review").titleEdited)
+        // A re-summarize writes a title over it.
+        assertFalse(open("No speech detected").titleEdited)
+        assertFalse(open("未偵測到語音").titleEdited)
+    }
+
     @Test fun deletingTheOpenSessionStopsItsRun() {
         val s = SessionReducer.launchAudio(s0, env, entryUri("e1")).state
         val e = studio.primeminutes.core.library.SessionLibrary.Entry(

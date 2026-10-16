@@ -287,8 +287,9 @@ object SessionReducer {
             summaryStale = false, transcriptStale = false, transcriptDirty = false,
             sessionGen = s.sessionGen + 1,
             title = title, summary = loaded.summary, actionItems = loaded.actionItems, meetingNotes = notes,
-            // A saved title is intentional: a sticky edit re-summarize won't overwrite.
-            titleEdited = !title.isNullOrBlank(),
+            // A saved title is intentional: a sticky edit re-summarize won't overwrite (but not the
+            // "No speech detected" a silent run named the entry after).
+            titleEdited = studio.primeminutes.core.library.SpeechCheck.keptTitle(title) != null,
             // Attribute the text to the models that ACTUALLY produced it, not the current default.
             sessionModels = Triple(
                 loaded.llmModelId ?: s.config.llmModelId,

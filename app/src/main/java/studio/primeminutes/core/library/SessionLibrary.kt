@@ -177,7 +177,10 @@ object SessionLibrary {
             val u = entry.copy(
                 // A silent capture finished "Done" with a date for a title, indistinguishable from a
                 // real meeting in the list: name it after what happened.
-                title = byId(context, entry.id)?.title ?: entry.title ?: title?.trim()?.ifBlank { null }
+                // A run that found no speech named the entry "No speech detected": a later run of its
+                // audio that does find speech replaces that with its own title.
+                title = SpeechCheck.keptTitle(byId(context, entry.id)?.title) ?: SpeechCheck.keptTitle(entry.title)
+                    ?: title?.trim()?.ifBlank { null }
                     ?: context.getString(studio.primeminutes.R.string.status_no_speech).takeIf { utterances.isEmpty() },
                 status = Status.DONE,
                 noSpeech = !SpeechCheck.hasSpeech(utterances.map { it.text }),
