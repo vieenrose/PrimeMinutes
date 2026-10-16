@@ -52,7 +52,17 @@ actor LibraryStore {
         let files = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }
             .compactMap { try? dec.decode(Session.self, from: Data(contentsOf: $0)) }
+            .filter(Self.devShown)
             .sorted { $0.date > $1.date }
+    }
+    /// DEV (README media shot on a phone that holds a real library): VOX_ONLY=<token>,… lists only the meetings
+    /// whose id starts with, or whose title contains, a token, or that are newer than a `since:<epoch>` token.
+    private static func devShown(_ s: Session) -> Bool {
+        guard let only = Dev.env["VOX_ONLY"] else { return true }
+        return only.split(separator: ",").map(String.init).contains { t in
+            if t.hasPrefix("since:"), let e = Double(t.dropFirst(6)) { return s.date.timeIntervalSince1970 >= e }
+            return s.id.uuidString.hasPrefix(t) || s.title.contains(t)
+        }
     }
     func save(_ s: Session) throws {
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
