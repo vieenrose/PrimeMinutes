@@ -48,6 +48,13 @@ object ImportDownloads {
     /** Explicit user cancel: the `.part` is kept, so asking for the same item again resumes it. */
     fun cancel() { job?.cancel() }
 
+    /** Wakes a download paused by a lost network (Resume button, the app back in front). */
+    internal val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    fun resumeNow() { wake.trySend(Unit) }
+
+    /** A failure waiting can fix: the network (an [java.io.IOException]), not a 404 or a refused item. */
+    fun transient(e: Throwable): Boolean = e is java.io.IOException && e !is java.io.FileNotFoundException
+
     /** Called by the UI once it has handled [State.Ready] / [State.Failed]. */
     fun consume() { if (_state.value !is State.Running) _state.value = State.Idle }
 

@@ -47,6 +47,7 @@ fun ImportDownloadBanner(state: ImportDownloads.State.Running, above: Dp = 0.dp,
                     Text(state.title ?: stringResource(R.string.import_download_title), color = pal.Slate200,
                         style = MaterialTheme.typography.titleSmall, maxLines = 1,
                         modifier = Modifier.weight(1f).padding(end = 8.dp))
+                    if (state.stageRes == R.string.dl_paused) TextButton(onClick = { ImportDownloads.resumeNow() }) { Text(stringResource(R.string.dl_resume)) }
                     TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
                 }
                 DownloadStatusBar(state.stageRes, state.progress, Modifier.padding(end = 8.dp, bottom = 8.dp))

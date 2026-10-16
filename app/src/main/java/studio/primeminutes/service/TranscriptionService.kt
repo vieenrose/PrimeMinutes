@@ -652,6 +652,12 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     private var activeExports = 0
         set(v) { field = v; RunRegistry.exports(v) }
 
+    /** Some network with internet access. */
+    private fun online(): Boolean = runCatching {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java)
+        cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }.getOrDefault(true)
+
     private fun runImportDownload() {
         val req = studio.primeminutes.online.ImportDownloads.pending.also { studio.primeminutes.online.ImportDownloads.pending = null }
         if (req == null) {
@@ -667,18 +673,39 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         dl.job = lifecycleScope.launch(Dispatchers.IO) {
             var stageRes = R.string.dl_resolving
             var lastPct = -1
+            var lastP: Float? = null
+            var attempt = 0
             val result = runCatching {
-                req.work(
-                    { res -> stageRes = res; dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, res, null)) },
-                    { p ->
-                        val pct = (p * 100).toInt()
-                        if (pct != lastPct) {   // whole-percent throttle, like reportDownload
-                            lastPct = pct
-                            dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, stageRes, p))
-                            updateNotification("${getString(stageRes)} $pct %")
-                        }
-                    },
-                )
+                // A lost network PAUSES the download (the .part stays): it shows "paused", and continues once
+                // a network is back, on Resume, or when the app returns; only Cancel or a permanent error ends it.
+                while (true) {
+                    try {
+                        return@runCatching req.work(
+                            { res -> stageRes = res; dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, res, lastP)) },
+                            { p ->
+                                val pct = (p * 100).toInt()
+                                lastP = p
+                                if (pct != lastPct) {   // whole-percent throttle, like reportDownload
+                                    lastPct = pct
+                                    dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, stageRes, p))
+                                    updateNotification("${getString(stageRes)} $pct %")
+                                }
+                            },
+                        )
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException || !dl.transient(e)) throw e
+                        attempt++
+                        Log.w("primeminutes-import", "import download paused ($attempt): ${e.message}")
+                        dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, R.string.dl_paused, lastP))
+                        updateNotification(getString(R.string.dl_paused))
+                        while (dl.wake.tryReceive().isSuccess) { /* drop a stale wake */ }
+                        do {
+                            kotlinx.coroutines.withTimeoutOrNull(minOf(60_000L, 2_000L shl minOf(attempt - 1, 5))) { dl.wake.receive() }
+                        } while (!online())
+                        Log.i("primeminutes-import", "import download resumes")
+                    }
+                }
+                @Suppress("UNREACHABLE_CODE") error("unreachable")
             }
             val e = result.exceptionOrNull()
             dl.set(

@@ -509,6 +509,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Back in front: a model download paused by the interruption tries again at once.
         ModelPrefetch.resumeNow()
+        studio.primeminutes.online.ImportDownloads.resumeNow()
     }
 
     override fun onNewIntent(intent: Intent) {
