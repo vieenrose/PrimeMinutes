@@ -28,7 +28,19 @@ import java.net.URL
  */
 object YouTube {
 
-    data class YouTubeAudio(val title: String, val streamUrl: String, val ext: String)
+    /** [key] names the download file: the video id + stream itag, stable across resolves (see [fileName]). */
+    data class YouTubeAudio(val title: String, val streamUrl: String, val ext: String, val key: String? = null)
+
+    /**
+     * The download's file name. A resolve hands out a fresh signed stream URL every time, so a name
+     * derived from the URL changed on every retry: a download paused by a lost network (or cancelled
+     * and asked for again) re-resolved, missed its `.part` and restarted from zero, orphaning the old
+     * one. The video id + itag name the same bytes on every resolve, so the `Range` resume finds them.
+     */
+    internal fun fileName(key: String?, streamUrl: String, ext: String): String {
+        val k = key?.takeIf { it.isNotBlank() }?.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        return "youtube_${k ?: streamUrl.hashCode().toUInt().toString()}.$ext"
+    }
 
     /** A search result video. */
     data class YouTubeVideo(val title: String, val url: String, val uploader: String, val durationSec: Long) {
@@ -134,7 +146,8 @@ object YouTube {
             )
         val ext = best.format?.suffix?.takeIf { it.isNotBlank() } ?: "m4a"
         YouTubeAudio(title = info.name?.ifBlank { "YouTube audio" } ?: "YouTube audio",
-            streamUrl = best.content, ext = ext)
+            streamUrl = best.content, ext = ext,
+            key = info.id?.takeIf { it.isNotBlank() }?.let { "${it}_${best.itag}" })
     }
 
     /** Stream-download the resolved audio into filesDir/audio and return its file:// Uri. */
@@ -144,7 +157,7 @@ object YouTube {
                 "Unsupported stream URL"
             }
             val dir = File(ctx.filesDir, "audio").apply { mkdirs() }
-            val out = File(dir, "youtube_${audio.streamUrl.hashCode().toUInt()}.${audio.ext}")
+            val out = File(dir, fileName(audio.key, audio.streamUrl, audio.ext))
             resumableDownload(audio.streamUrl, out, USER_AGENT, onProgress = onProgress)
             enforceRetentionCap(dir, max = 20)
             Uri.fromFile(out)
