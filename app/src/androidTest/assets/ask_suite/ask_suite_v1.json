@@ -1,0 +1,1214 @@
+{
+ "version": 1,
+ "created": "2026-10-16",
+ "corpora": "AISHELL-4 test (L_R003S02C02 L_R004S06C01 M_R003S02C01 M_R003S05C01 S_R003S03C01 S_R004S01C01, channel 0), AMI Mix-Headset (ES2004b ES2004d IS1009c TS3003c)",
+ "method": "questions, expected answers, source spans (seconds in the source audio) and keyword groups written by Claude (Opus) from the gold transcripts (tools/quality-eval/SPEC.md); zh questions in Traditional Chinese, keywords in Simplified (answers are converted to Simplified before matching); meeting=null: no meeting answers it, the expected behaviour is to say so",
+ "questions": [
+  {
+   "id": "L_R003S02C02-q1",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在交警年終工作會議裡，騎電動車闖紅燈屢勸不改的人會被罰多少錢？",
+   "answer": "罚款二十元（首次警告教育）",
+   "span": [
+    123,
+    148
+   ],
+   "all": [
+    [
+     "二十",
+     "20"
+    ]
+   ]
+  },
+  {
+   "id": "L_R003S02C02-q2",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警年終會議上，事故科說今年的事故發生率比去年下降了多少？",
+   "answer": "下降了百分之七点五",
+   "span": [
+    449,
+    466
+   ],
+   "all": [
+    [
+     "7.5",
+     "七点五"
+    ]
+   ]
+  },
+  {
+   "id": "L_R003S02C02-q3",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警會議提到那起雙方都託人關說的事故，重新鑑定後責任比例怎麼劃分？",
+   "answer": "一方百分之三十，一方百分之七十",
+   "span": [
+    915,
+    935
+   ],
+   "all": [
+    [
+     "三十",
+     "30"
+    ],
+    [
+     "七十",
+     "70"
+    ]
+   ]
+  },
+  {
+   "id": "L_R003S02C02-q4",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警會議中安全科提到，法律規定幾歲以下不能騎電動車？",
+   "answer": "十六周岁以下",
+   "span": [
+    1285,
+    1313
+   ],
+   "all": [
+    [
+     "十六",
+     "16"
+    ]
+   ]
+  },
+  {
+   "id": "L_R003S02C02-q5",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警會議最後，二大隊說晚上開發區工程車主要有哪些問題要整治？",
+   "answer": "超载以及超速，红灯时刹不住车",
+   "span": [
+    2168,
+    2209
+   ],
+   "all": [
+    [
+     "超载"
+    ],
+    [
+     "超速"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-q1",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在那場生活安全知識的討論裡，工地高處作業超過幾米就必須使用安全帶？",
+   "answer": "1.8米",
+   "span": [
+    126,
+    144
+   ],
+   "all": [
+    [
+     "1.8",
+     "一点八"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-q2",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "安全知識討論會中提到，氣焊作業時乙炔瓶和氧氣瓶之間至少要相距多遠？",
+   "answer": "至少五米（气瓶距动火点至少十米）",
+   "span": [
+    275,
+    286
+   ],
+   "all": [
+    [
+     "五米",
+     "5米"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-q3",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在安全討論的食品安全部分，熟食在室溫下放超過多久就不該再吃？",
+   "answer": "两小时",
+   "span": [
+    889,
+    894
+   ],
+   "all": [
+    [
+     "两小时",
+     "2小时",
+     "两个小时",
+     "二小时"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-q4",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "安全討論會談開車安全時說，塞車時打開頭燈能讓車禍機率減少多少？",
+   "answer": "百分之三十二",
+   "span": [
+    1829,
+    1839
+   ],
+   "all": [
+    [
+     "32",
+     "三十二"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-q5",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "安全討論會談旅遊安全時，在飯店遇到被偷或被搶應該撥打什麼電話？",
+   "answer": "110",
+   "span": [
+    2148,
+    2166
+   ],
+   "all": [
+    [
+     "110",
+     "幺幺零",
+     "一一零"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-q1",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在商場經理的部門會議裡，女裝部建議雙十二的滿減活動怎麼設計？",
+   "answer": "满二百减二十，另外满三百五赠五十元优惠券",
+   "span": [
+    260,
+    298
+   ],
+   "all": [
+    [
+     "减二十",
+     "减20"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-q2",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議中，對那件顧客穿一週就起球要退貨的大衣，經理決定怎麼處理？",
+   "answer": "先拿回来送厂家鉴定，质量问题就退，不是质量问题就不退",
+   "span": [
+    598,
+    657
+   ],
+   "all": [
+    [
+     "厂家"
+    ],
+    [
+     "鉴定",
+     "检测",
+     "评测"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-q3",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議上，床上用品部提出雙十二要做什麼樣的滿贈活動？",
+   "answer": "满五百赠二百、买一千赠五百",
+   "span": [
+    1213,
+    1221
+   ],
+   "all": [
+    [
+     "五百",
+     "500"
+    ],
+    [
+     "二百",
+     "200"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-q4",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在商場會議裡，電子產品部說來看手機的客人以哪個年齡層居多？",
+   "answer": "年轻人",
+   "span": [
+    1407,
+    1422
+   ],
+   "all": [
+    [
+     "年轻"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-q5",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議最後經理談手機賣點時，說老人家通常喜歡什麼樣的手機？",
+   "answer": "待机时间长的手机",
+   "span": [
+    2274,
+    2288
+   ],
+   "all": [
+    [
+     "待机"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-q1",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在美容院新店開業的會議裡，建議推出的低價體驗套餐定價多少？",
+   "answer": "十九块九（19.9元），每人限用一次",
+   "span": [
+    101,
+    153
+   ],
+   "all": [
+    [
+     "19.9",
+     "十九块九",
+     "19块9"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-q2",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "美容院開業會議中，「一天一塊錢」的全年美容活動顧客總共要交多少錢？",
+   "answer": "三百六十五元",
+   "span": [
+    282,
+    306
+   ],
+   "all": [
+    [
+     "365",
+     "三百六十五"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-q3",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "討論美容院積分制度時，大家定的是消費多少錢積一分？",
+   "answer": "十元积一分",
+   "span": [
+    1394,
+    1430
+   ],
+   "all": [
+    [
+     "十元",
+     "10元",
+     "十块"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-q4",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "美容院會議裡，預存產生的積分和消費產生的積分在有效期上有什麼不同？",
+   "answer": "预存积分永久有效，消费积分每年清零",
+   "span": [
+    1451,
+    1480
+   ],
+   "all": [
+    [
+     "永久"
+    ],
+    [
+     "清零"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-q5",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "美容院開業會議的後段，建議把廣告和低價套餐主要投放到哪裡？",
+   "answer": "网上，主要是美团等平台",
+   "span": [
+    2140,
+    2196
+   ],
+   "all": [
+    [
+     "美团",
+     "网上",
+     "网络"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-q1",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在工廠年關安全會議上，生產部認為公司安全管理制度最大的問題是什麼？",
+   "answer": "制度只挂在墙上、停留在文字表面，没有切实落实",
+   "span": [
+    164,
+    228
+   ],
+   "all": [
+    [
+     "墙上",
+     "落实",
+     "表面"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-q2",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠安全會議宣讀的雙控知識點裡，風險等級分別用哪幾種顏色表示？",
+   "answer": "红、橙、黄、蓝四种颜色（重大、较大、一般、低风险）",
+   "span": [
+    415,
+    432
+   ],
+   "all": [
+    [
+     "红"
+    ],
+    [
+     "蓝",
+     "橙",
+     "黄"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-q3",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠年關安全會議裡，本單位列出的較大風險作業有哪些？",
+   "answer": "五十吨天车吊装作业、双频淬火作业、工频作业、液氮罐",
+   "span": [
+    488,
+    505
+   ],
+   "all": [
+    [
+     "天车",
+     "吊装",
+     "液氮"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-q4",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠安全會議中，安保部說年底要對進廠人員加強什麼檢查？",
+   "answer": "酒后上岗检查，对进场人员做酒精检测",
+   "span": [
+    1864,
+    1884
+   ],
+   "all": [
+    [
+     "酒"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-q5",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠安全會議快結束時，倉庫為了防止年底偷盜申請購置什麼？",
+   "answer": "几个监控摄像头",
+   "span": [
+    2187,
+    2233
+   ],
+   "all": [
+    [
+     "摄像头",
+     "监控"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-q1",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在商場樓層主管的季度早會上，上個季度的銷售為什麼表現不錯？",
+   "answer": "疫情过后客流量增加，各部门基本达到销售目标",
+   "span": [
+    30,
+    71
+   ],
+   "all": [
+    [
+     "客流",
+     "疫情"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-q2",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場季度會議中，鞋帽部提出消費滿多少錢就送襪子？",
+   "answer": "满二百九十九元",
+   "span": [
+    315,
+    346
+   ],
+   "all": [
+    [
+     "299",
+     "二百九十九",
+     "二九九"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-q3",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議裡童裝部的優惠券要怎麼發放和使用？",
+   "answer": "当天消费满200元送20元优惠券，之后任何一天都可抵用",
+   "span": [
+    1348,
+    1389
+   ],
+   "all": [
+    [
+     "200",
+     "二百",
+     "两百"
+    ],
+    [
+     "20元",
+     "二十块",
+     "二十元",
+     "20块"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-q4",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議中，鞋帽部針對夫妻一起進店買鞋設計了什麼優惠？",
+   "answer": "买男鞋的话女鞋打八折（一家三口买童鞋也打折）",
+   "span": [
+    1813,
+    1838
+   ],
+   "all": [
+    [
+     "八折",
+     "8折"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-q5",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議最後，主管要求男裝區的商務裝和潮流裝怎麼陳列？",
+   "answer": "风格要分开摆放，不要混在一起，门口模特也分开",
+   "span": [
+    2246,
+    2310
+   ],
+   "all": [
+    [
+     "分开",
+     "岔开"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q1",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what technology did the Industrial Designer say most remotes use to send signals to the TV?",
+   "answer": "Infrared signals.",
+   "span": [
+    261,
+    319
+   ],
+   "all": [
+    [
+     "infrared",
+     "IR "
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q2",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, roughly what wireless range did the Industrial Designer give for the infrared signal?",
+   "answer": "Up to about five metres.",
+   "span": [
+    361,
+    417
+   ],
+   "all": [
+    [
+     "five",
+     "5"
+    ],
+    [
+     "metre",
+     "meter"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q3",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "For the remote control project, how many subjects took part in the marketing team's usability lab study?",
+   "answer": "A hundred subjects.",
+   "span": [
+    845,
+    876
+   ],
+   "all": [
+    [
+     "100",
+     "hundred"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q4",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "According to the market research presented in the remote control meeting, what share of users find most remote controls ugly?",
+   "answer": "75 percent.",
+   "span": [
+    877,
+    895
+   ],
+   "all": [
+    [
+     "75",
+     "seventy-five",
+     "seventy five"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q5",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, why did the project manager say teletext would not be included?",
+   "answer": "Consumers consider teletext outdated now that there is the internet.",
+   "span": [
+    1051,
+    1061
+   ],
+   "all": [
+    [
+     "outdated",
+     "old",
+     "internet"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q6",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control meeting, what cheaper alternative to speech recognition did the project manager suggest for finding a lost remote?",
+   "answer": "A button on top of the TV that makes the remote beep so you can find it.",
+   "span": [
+    1200,
+    1237
+   ],
+   "all": [
+    [
+     "beep",
+     "bleep",
+     "button"
+    ],
+    [
+     "TV",
+     "television"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-q7",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control market research, which age group mostly wanted an LCD display and speech recognition?",
+   "answer": "The 35 and under age group.",
+   "span": [
+    946,
+    1026
+   ],
+   "all": [
+    [
+     "35",
+     "thirty-five",
+     "thirty five"
+    ],
+    [
+     "under",
+     "young",
+     "below"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q1",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the final remote control design meeting, what type of power source had the team decided to use?",
+   "answer": "A kinetic charger (kinetic battery).",
+   "span": [
+    36,
+    45
+   ],
+   "all": [
+    [
+     "kinetic"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q2",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control prototype presentation, what would the remote say when someone shouts asking where it is?",
+   "answer": "It would shout back \"I'm here\".",
+   "span": [
+    239,
+    275
+   ],
+   "all": [
+    [
+     "I'm here",
+     "I am here",
+     "im here"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q3",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control prototype, how many circuit boards were needed and why?",
+   "answer": "Two separate PCBs, because the device is split over two layers joined at the hinge.",
+   "span": [
+    291,
+    318
+   ],
+   "all": [
+    [
+     "two",
+     "2"
+    ],
+    [
+     "PCB",
+     "circuit",
+     "board"
+    ],
+    [
+     "hinge",
+     "layer",
+     "split",
+     "half",
+     "halves"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q4",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control evaluation, what rating scale did the marketing expert use for the criteria?",
+   "answer": "A seven-point scale where one is true and seven is false.",
+   "span": [
+    525,
+    544
+   ],
+   "all": [
+    [
+     "seven",
+     "7"
+    ],
+    [
+     "true",
+     "false",
+     "point",
+     "scale"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q5",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control prototype evaluation, which criterion got the weakest rating, and what was its average?",
+   "answer": "Minimising repetitive strain injury (RSI), averaging about 4.25.",
+   "span": [
+    846,
+    922
+   ],
+   "all": [
+    [
+     "RSI",
+     "repetitive",
+     "strain"
+    ],
+    [
+     "4.25",
+     "four point two",
+     "4",
+     "four"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q6",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control finance discussion, what did the unit cost come to after taking out voice recognition?",
+   "answer": "About 12.25 euros, within the 12.5 euro budget.",
+   "span": [
+    1565,
+    1625
+   ],
+   "all": [
+    [
+     "12.25",
+     "twelve point two five",
+     "12,25",
+     "12.5",
+     "twelve point five"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-q7",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control team's project review, which communication tool did they say they would have used more if they had more time?",
+   "answer": "The email system.",
+   "span": [
+    1826,
+    1842
+   ],
+   "all": [
+    [
+     "email",
+     "e-mail"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q1",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what situation did the interface designer give to explain why a mute button is useful?",
+   "answer": "When the viewer gets a telephone call, they can bring the sound down without switching off the TV and keep watching.",
+   "span": [
+    462,
+    488
+   ],
+   "all": [
+    [
+     "phone",
+     "call"
+    ],
+    [
+     "mute",
+     "volume",
+     "sound"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q2",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what example did the interface designer use for the subtitles button?",
+   "answer": "Watching a French program and wanting English subtitles.",
+   "span": [
+    418,
+    439
+   ],
+   "all": [
+    [
+     "french"
+    ],
+    [
+     "english"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q3",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, how many pins did the chip inside the opened-up remote have?",
+   "answer": "Eighteen pins.",
+   "span": [
+    1106,
+    1122
+   ],
+   "all": [
+    [
+     "eighteen",
+     "18"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q4",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, why did the industrial designer say the circuit board is cheap to build?",
+   "answer": "It is just printed rather than wired, the prints act as wires and circuits, and boards can be built in bulk.",
+   "span": [
+    1164,
+    1205
+   ],
+   "all": [
+    [
+     "print"
+    ],
+    [
+     "bulk",
+     "wire"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q5",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what outdoor temperatures did the industrial designer say the integrated circuit should withstand?",
+   "answer": "High temperatures like thirty-eight or forty degrees, as well as low temperatures.",
+   "span": [
+    846,
+    922
+   ],
+   "all": [
+    [
+     "forty",
+     "40",
+     "thirty-eight",
+     "38"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q6",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, how did the marketing expert research what the competition was doing?",
+   "answer": "By looking at press and ads for other remotes, surfing the internet, and noticing and asking about remotes in people's houses.",
+   "span": [
+    1386,
+    1430
+   ],
+   "all": [
+    [
+     "press",
+     "ads",
+     "internet"
+    ],
+    [
+     "competition",
+     "competitor"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-q7",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what example did the interface designer give of using the voice recognition feature in the morning?",
+   "answer": "Saying a prerecorded 'good morning' at around eight o'clock makes the TV recognise her voice and switch on to the news.",
+   "span": [
+    1603,
+    1620
+   ],
+   "all": [
+    [
+     "good morning"
+    ],
+    [
+     "news",
+     "switch on",
+     "eight",
+     "8"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q1",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, what age group of customers is the remote targeted at?",
+   "answer": "People aged sixty to eighty.",
+   "span": [
+    141,
+    163
+   ],
+   "all": [
+    [
+     "sixty",
+     "60"
+    ],
+    [
+     "eighty",
+     "80"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q2",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, to which cities did the marketing expert send trend-watchers?",
+   "answer": "Milan and Paris.",
+   "span": [
+    203,
+    235
+   ],
+   "all": [
+    [
+     "milan",
+     "paris"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q3",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, which two editions did the marketing expert advise bringing out, and for whom?",
+   "answer": "A wood-like edition for more exclusive, wealthier people and a grey-black edition for people with less means.",
+   "span": [
+    363,
+    427
+   ],
+   "all": [
+    [
+     "wood"
+    ],
+    [
+     "grey",
+     "gray",
+     "black"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q4",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, how would the proposed single subtitle button work?",
+   "answer": "One push gives small subtitles, a double push gives big subtitles for people who can't read small ones.",
+   "span": [
+    619,
+    651
+   ],
+   "all": [
+    [
+     "subtitle"
+    ],
+    [
+     "double",
+     "twice",
+     "big",
+     "large"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q5",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, how long did the interface designer think one battery would last?",
+   "answer": "Six months or more, since the small display uses little energy.",
+   "span": [
+    1052,
+    1073
+   ],
+   "all": [
+    [
+     "six",
+     "6"
+    ],
+    [
+     "month"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q6",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, why did the marketing expert advise against speech recognition, and where did he suggest putting it instead?",
+   "answer": "The survey showed the target group would not pay more for it; it would be better in the other product meant for younger people.",
+   "span": [
+    1159,
+    1196
+   ],
+   "all": [
+    [
+     "pay",
+     "price"
+    ],
+    [
+     "young"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-q7",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, how did the project manager propose that users find a lost remote?",
+   "answer": "A button on the docking station that makes the remote start beeping, which is cheaper than voice recognition.",
+   "span": [
+    1101,
+    1114
+   ],
+   "all": [
+    [
+     "beep"
+    ],
+    [
+     "dock",
+     "button"
+    ]
+   ]
+  },
+  {
+   "id": "none-zh1",
+   "meeting": null,
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在會議裡，公司明年的員工旅遊決定去哪裡？",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-zh2",
+   "meeting": null,
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "會議中提到的新辦公室每個月租金是多少？",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-en1",
+   "meeting": null,
+   "lang": "en",
+   "ui": "en",
+   "q": "What budget was approved for the marketing team's trip to Berlin?",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-en2",
+   "meeting": null,
+   "lang": "en",
+   "ui": "en",
+   "q": "Which programming language did the team choose for the backend server?",
+   "answer": null,
+   "span": null,
+   "all": []
+  }
+ ]
+}

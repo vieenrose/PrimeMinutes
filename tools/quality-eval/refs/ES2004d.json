@@ -1,0 +1,31 @@
+{
+ "name": "ES2004d", "lang": "en",
+ "method": "keypoints = AMI abstractive annotation (decisions, actions, problems, abstract sentences) mapped to keyword groups and spans by Claude (Opus); questions written by Claude from the gold transcript",
+ "keypoints": [
+  {"id": "prototype_presented", "kind": "topic", "text": "The Industrial Designer presented the prototype and discussed its look, its internal components, and its interface.", "span": [141, 216], "all": [["clam", "shell", "flip"], ["rubber", "plastic", "casing"]]},
+  {"id": "evaluation_vs_goals", "kind": "topic", "text": "The Marketing Expert evaluated the product according to the initial product goals.", "span": [456, 544], "all": [["criteria", "evaluat", "rating"]]},
+  {"id": "cost_exceeded", "kind": "topic", "text": "The Project Manager presented the final cost of the device which exceeded the initial projected price point.", "span": [1371, 1424], "all": [["budget", "cost", "price"], ["over", "exceed", "above", "higher", "too"]]},
+  {"id": "remove_speech_recognition", "kind": "decision", "text": "The group decided to remove speech recognition when the project exceeded its initial budget.", "span": [1489, 1573], "all": [["voice", "speech"], ["remov", "take out", "took out", "taken out", "drop", "without", "cut"]]},
+  {"id": "team_interaction", "kind": "topic", "text": "All members felt that they interacted well and that they felt they could be creative.", "span": [1689, 1725], "all": [["team"], ["interact", "creativ", "listened", "cohesive", "well"]]},
+  {"id": "market_research_approach", "kind": "topic", "text": "The Marketing Expert felt that the market-research based approach would help the project's success with consumers.", "span": [2011, 2039], "all": [["research"]]},
+  {"id": "budget_constraining", "kind": "topic", "text": "The group did express, however, that the budget was overly constraining.", "span": [2064, 2112], "all": [["budget"], ["increase", "constrain", "limit", "tight", "more", "raise"]]},
+  {"id": "suggest_speech_to_management", "kind": "action", "text": "The group will suggest to the management that speech recognition remain in the product design.", "span": [1502, 1546], "all": [["voice", "speech"], ["recommend", "suggest", "management", "head office", "propos"]]},
+  {"id": "final_questionnaire", "kind": "action", "text": "All members will fill out a final evaluation questionnaire.", "span": [2147, 2177], "all": [["questionnaire", "survey"]]},
+  {"id": "speech_locator_feasible", "kind": "decision", "text": "It was decided that the speech recognition component seemed feasible, so it was added to the prototype design to provide a device locator function.", "span": [239, 275], "all": [["voice", "speech"], ["locat", "find", "where", "I'm here", "lost"]]},
+  {"id": "neutral_plastic_case", "kind": "decision", "text": "The plastic case will be a neutral color.", "span": [153, 178], "all": [["white", "light blue", "neutral"]]},
+  {"id": "fruit_color_rubber_cases", "kind": "decision", "text": "The changeable rubber cases will be available in vibrant, fruit colors.", "span": [795, 825], "all": [["fruit", "vegetable", "colour", "color"], ["rubber", "case", "casing", "face", "changeable"]]},
+  {"id": "lcd_black_white", "kind": "decision", "text": "The LCD screen will appear only in black and white.", "span": [343, 376], "all": [["black and white", "black-and-white", "monochrome"]]},
+  {"id": "logo_inside", "kind": "decision", "text": "The company logo will appear on the inside of the device when opened.", "span": [376, 417], "all": [["logo"], ["inside", "inset", "engrav"]]},
+  {"id": "continue_production", "kind": "decision", "text": "The group decided that the device fulfilled enough of the project's initial goals to continue in production.", "span": [983, 1032], "all": [["go ahead", "continue", "proceed", "production", "ahead", "produce"]]},
+  {"id": "lack_cost_info", "kind": "problem", "text": "There was a lack of cost information at the beginning of the project; the prototype design may have been different had this information been available at the beginning.", "span": [1126, 1145], "all": [["beginning", "start", "earlier", "influenced", "influence"], ["cost", "price", "finance", "choice"]]}
+ ],
+ "questions": [
+  {"id": "ES2004d-q1", "lang": "en", "q": "In the final remote control design meeting, what type of power source had the team decided to use?", "answer": "A kinetic charger (kinetic battery).", "span": [36, 45], "all": [["kinetic"]]},
+  {"id": "ES2004d-q2", "lang": "en", "q": "In the remote control prototype presentation, what would the remote say when someone shouts asking where it is?", "answer": "It would shout back \"I'm here\".", "span": [239, 275], "all": [["I'm here", "I am here", "im here"]]},
+  {"id": "ES2004d-q3", "lang": "en", "q": "In the remote control prototype, how many circuit boards were needed and why?", "answer": "Two separate PCBs, because the device is split over two layers joined at the hinge.", "span": [291, 318], "all": [["two", "2"], ["PCB", "circuit", "board"], ["hinge", "layer", "split", "half", "halves"]]},
+  {"id": "ES2004d-q4", "lang": "en", "q": "In the remote control evaluation, what rating scale did the marketing expert use for the criteria?", "answer": "A seven-point scale where one is true and seven is false.", "span": [525, 544], "all": [["seven", "7"], ["true", "false", "point", "scale"]]},
+  {"id": "ES2004d-q5", "lang": "en", "q": "In the remote control prototype evaluation, which criterion got the weakest rating, and what was its average?", "answer": "Minimising repetitive strain injury (RSI), averaging about 4.25.", "span": [846, 922], "all": [["RSI", "repetitive", "strain"], ["4.25", "four point two", "4", "four"]]},
+  {"id": "ES2004d-q6", "lang": "en", "q": "In the remote control finance discussion, what did the unit cost come to after taking out voice recognition?", "answer": "About 12.25 euros, within the 12.5 euro budget.", "span": [1565, 1625], "all": [["12.25", "twelve point two five", "12,25", "12.5", "twelve point five"]]},
+  {"id": "ES2004d-q7", "lang": "en", "q": "In the remote control team's project review, which communication tool did they say they would have used more if they had more time?", "answer": "The email system.", "span": [1826, 1842], "all": [["email", "e-mail"]]}
+ ]
+}

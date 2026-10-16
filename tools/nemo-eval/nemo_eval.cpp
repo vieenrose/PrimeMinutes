@@ -5,6 +5,7 @@
 //
 //   nemo_eval <xasr.gguf> <diar.gguf> <in.wav> <out.json> [threads] [--max-seg S] [--live]
 //             [--settle S] [--timing 0|1|2] [--diar-opt K=V]... [--sweep-settle S1,S2,...]
+//             [--backend litert_host --xasr-tflite F --diar-tflite F --diar-pre F]
 //
 // --max-seg S  split single-speaker runs after a sentence end at S seconds (the app uses 10).
 // --live       also call Engine::live() every 0.5 s of audio, as the app does while recording, and
@@ -46,6 +47,12 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(argv[i], "--max-seg") && i + 1 < argc) cfg.max_segment_s = std::atof(argv[++i]);
         else if (!std::strcmp(argv[i], "--settle") && i + 1 < argc) cfg.live_settle_s = std::atof(argv[++i]);
         else if (!std::strcmp(argv[i], "--timing") && i + 1 < argc) cfg.timing = std::atoi(argv[++i]);
+        // The app's ggml-free engine (NEMO_NO_GGML, build_host_noggml.sh): --backend litert_host with
+        // xasr_host.bin / diar_host.bin as the two model arguments and the LiteRT graphs below.
+        else if (!std::strcmp(argv[i], "--backend") && i + 1 < argc) cfg.backend = argv[++i];
+        else if (!std::strcmp(argv[i], "--xasr-tflite") && i + 1 < argc) cfg.xasr_tflite = argv[++i];
+        else if (!std::strcmp(argv[i], "--diar-tflite") && i + 1 < argc) cfg.diar_tflite = argv[++i];
+        else if (!std::strcmp(argv[i], "--diar-pre") && i + 1 < argc) cfg.diar_pre_f32 = argv[++i];
         else if (!std::strcmp(argv[i], "--diar-opt") && i + 1 < argc) {
             const std::string kv = argv[++i];
             const size_t eq = kv.find('=');

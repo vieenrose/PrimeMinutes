@@ -7,6 +7,10 @@ android {
     namespace = "studio.primeminutes"
     compileSdk = 37
 
+    // -PpmEval (tools/quality-eval/run_harness.sh): the host quality harness needs the app's assets
+    // (OpenCC tables) under Robolectric. Off by default: the other unit tests do not need them.
+    if (project.hasProperty("pmEval")) testOptions.unitTests.isIncludeAndroidResources = true
+
     // Pin the NDK so F-Droid's build server uses the same toolchain we test with.
     ndkVersion = "29.0.14206865"
 
