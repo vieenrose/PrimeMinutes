@@ -118,7 +118,6 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -495,7 +494,7 @@ internal fun ActionItemsCard(
 internal fun LineMenu(
     current: Int?,
     speakerIds: List<Int>,
-    speakerNames: SnapshotStateMap<Int, SpeakerName>,
+    speakerNames: Map<Int, SpeakerName>,
     onEdit: () -> Unit,
     onReassign: (Int) -> Unit,
     onMerge: (Int) -> Unit,
@@ -816,7 +815,7 @@ internal fun UtteranceRow(
     active: Boolean,
     highlight: String,
     isEditing: Boolean,
-    speakerNames: SnapshotStateMap<Int, SpeakerName>,
+    speakerNames: Map<Int, SpeakerName>,
     editingSpeakerId: Int?,
     onSeek: (Double) -> Unit,
     onBeginEdit: () -> Unit,
