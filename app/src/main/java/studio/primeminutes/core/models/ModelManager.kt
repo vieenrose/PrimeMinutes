@@ -95,8 +95,8 @@ class ModelManager(context: Context) {
     suspend fun ensureAsrModels(onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
         if (asrReady()) { reclaimRetired(); onProgress(1f); return@withContext }
         nemoDir.mkdirs()
-        val marked = runCatching { File(nemoDir, REVISION_MARKER).readText().trim() }.getOrNull() == NEMO_REVISION
         val all = NEMO_FILES + LITERT_FILES
+        val marked = beginSet(nemoDir, NEMO_REVISION, all.keys)
         val total = all.values.sumOf { it.bytes }
         var done = 0L
         all.forEach { (name, meta) ->
@@ -110,7 +110,7 @@ class ModelManager(context: Context) {
             done += meta.bytes
             onProgress(done.toFloat() / total)
         }
-        runCatching { File(nemoDir, REVISION_MARKER).writeText(NEMO_REVISION) }
+        endSet(nemoDir, NEMO_REVISION)
         check(asrReady()) { "ASR model files missing after provisioning" }
         reclaimRetired()
         warmLitertCache(threads = 4)
@@ -165,7 +165,7 @@ class ModelManager(context: Context) {
     suspend fun ensureEmbed(spec: EmbedSpec, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
         if (embedReady(spec)) { onProgress(1f); return@withContext }
         val dir = embedDir(spec).apply { mkdirs() }
-        val marked = runCatching { File(dir, REVISION_MARKER).readText().trim() }.getOrNull() == spec.revision
+        val marked = beginSet(dir, spec.revision, spec.files.keys)
         val total = spec.totalBytes
         var done = 0L
         spec.files.forEach { (rel, meta) ->
@@ -180,7 +180,7 @@ class ModelManager(context: Context) {
             done += bytes
             onProgress(done.toFloat() / total)
         }
-        runCatching { File(dir, REVISION_MARKER).writeText(spec.revision) }
+        endSet(dir, spec.revision)
         check(embedReady(spec)) { "${spec.displayName} files missing after provisioning" }
         studio.primeminutes.core.embed.EmbedHost.provisioned.value++
     }
@@ -247,7 +247,7 @@ class ModelManager(context: Context) {
     suspend fun ensureLlmModel(spec: LlmSpec, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
         if (llmReady(spec)) { reclaimRetiredLlm(); onProgress(1f); return@withContext }
         val dir = llmDir(spec).apply { mkdirs() }
-        val marked = runCatching { File(dir, REVISION_MARKER).readText().trim() }.getOrNull() == spec.revision
+        val marked = beginSet(dir, spec.revision, spec.files.keys + WEIGHT_CACHE)
         val total = spec.totalBytes
         var done = 0L
         spec.files.forEach { (rel, meta) ->
@@ -267,7 +267,7 @@ class ModelManager(context: Context) {
             done += bytes
             onProgress(done.toFloat() / total)
         }
-        runCatching { File(dir, REVISION_MARKER).writeText(spec.revision) }
+        endSet(dir, spec.revision)
         check(llmReady(spec)) { "${spec.displayName} files missing after provisioning" }
         reclaimRetiredLlm()
     }
@@ -430,6 +430,31 @@ class ModelManager(context: Context) {
     companion object {
         /** Written next to a spec's files, recording the pinned revision they came from. */
         const val REVISION_MARKER = ".revision"
+        /** Written while a spec's files are being fetched: the revision the complete ones came from. */
+        const val FETCHING_MARKER = ".fetching"
+
+        /**
+         * A file set for [revision] is about to be provisioned in [dir]. Returns true when the files
+         * there that have the right size may be kept: the set is stamped with [revision], or an
+         * earlier pass of this same fetch (a paused prefetch that resumes, a retry, a relaunch)
+         * completed them. A paused prefetch used to fetch every finished file of the set again (the
+         * stamp is only written at the end), so its progress fell back and a 2 GB model restarted.
+         * Otherwise the set's [files] (from another revision, or of unknown origin) are deleted
+         * before the fetch is marked as begun, so nothing stale can later pass for complete.
+         */
+        internal fun beginSet(dir: File, revision: String, files: Collection<String>): Boolean {
+            fun read(name: String) = runCatching { File(dir, name).readText().trim() }.getOrNull()
+            if (read(REVISION_MARKER) == revision || read(FETCHING_MARKER) == revision) return true
+            files.forEach { File(dir, it).takeIf(File::exists)?.delete() }
+            runCatching { File(dir, FETCHING_MARKER).writeText(revision) }
+            return false
+        }
+
+        /** Every file of the set is in place: stamp it with [revision]. */
+        internal fun endSet(dir: File, revision: String) {
+            runCatching { File(dir, REVISION_MARKER).writeText(revision) }
+            File(dir, FETCHING_MARKER).delete()
+        }
         /** XNNPACK packed-weight cache next to a reader model's files (built on first load). */
         const val WEIGHT_CACHE = "weights.xnnpack_cache"
 
