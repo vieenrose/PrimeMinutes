@@ -354,6 +354,16 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
 
     override fun onDestroy() {
         wakeLock?.let { if (it.isHeld) it.release() }
+        // A run that never unwound (a native call deaf to cancellation outlived the Stop's drain, which
+        // then stops the service anyway) never reached its teardown: the process-wide registry still
+        // said it was running, so an open screen showed it in progress for good and the engines
+        // counted as busy. Nothing of this service runs any more. Clearing pipelineJob also keeps
+        // that run's late teardown, if it ever comes, from ending a newer service's run.
+        if (pipelineJob != null) {
+            Log.w(STOP_TAG, "service destroyed under a run that never unwound: run registry cleared")
+            pipelineJob = null
+            RunRegistry.pipelineEnded()
+        }
         super.onDestroy()
     }
 

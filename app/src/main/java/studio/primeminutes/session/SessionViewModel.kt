@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -128,6 +131,21 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                     apply(SessionReducer.runEnded(now, env))
                 }
             }
+        }
+        viewModelScope.launch {
+            // A watched queue item has no generation of its own in the service's work: it settles when
+            // the queue has nothing left going on (the notification's Stop, or the drain ending without
+            // a terminal event for it), after the same grace for the last events.
+            combine(
+                RunRegistry.jobs.map { it.queueWorking }.distinctUntilChanged(),
+                _state.map { it.watchingQueue && it.running }.distinctUntilChanged(),
+            ) { working, watching -> watching && !working }
+                .distinctUntilChanged()
+                .collectLatest { idle ->
+                    if (!idle) return@collectLatest
+                    delay(RUN_END_GRACE_MS)
+                    if (!RunRegistry.jobs.value.queueWorking) apply(SessionReducer.queueEnded(now, env))
+                }
         }
     }
 

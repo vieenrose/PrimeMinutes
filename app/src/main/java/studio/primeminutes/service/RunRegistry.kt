@@ -68,6 +68,11 @@ object RunRegistry {
     ) {
         val readerActive: Boolean get() = readerGen != null
 
+        /** The processing queue still has work going on: its drain loop, or a reading of one of its
+         *  items (a Stop leaves the item being read to finish). */
+        val queueWorking: Boolean
+            get() = queueDraining || readerGen == TranscriptionService.QUEUE_GEN || TranscriptionService.QUEUE_GEN in readerGens
+
         /** The engines are taken (Ask refuses, the library indexer waits). */
         val busy: Boolean get() = recordingJobActive || pipelineActive || readerActive
 

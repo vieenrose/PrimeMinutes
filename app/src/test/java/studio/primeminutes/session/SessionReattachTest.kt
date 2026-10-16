@@ -13,6 +13,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
 import studio.primeminutes.core.events.TranscriptEvent
+import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.reader.AgentEvent
 import studio.primeminutes.core.reader.AgentState
 import studio.primeminutes.service.RunRegistry
@@ -184,5 +185,58 @@ class SessionReattachTest {
             assertEquals("Q", queueTitle)
             assertFalse(running)   // not watched: the open session is untouched
         }
+    }
+
+    private fun watchedQueueItem(): SessionViewModel {
+        RunRegistry.runStarting(recording = false, queue = true)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.QUEUE, TranscriptionService.QUEUE_GEN))
+        RunRegistry.queueItem("q1")
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Status("transcribing"))
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Utterance(0, "l0", 0.0, 0.5, 0))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        val root = SessionLibrary.root(app)
+        vm.watchQueueItem(SessionLibrary.Entry("q1", java.io.File(root, "q1"), null, 0L, 0, SessionLibrary.Status.RECORDED))
+        ShadowLooper.idleMainLooper()
+        assertTrue(vm.now.watchingQueue); assertTrue(vm.now.running)
+        return vm
+    }
+
+    /** The drain's end as ACTION_STOP leaves it: the item released, the drain's nudge, the teardown. */
+    private fun drainStopped() {
+        RunRegistry.queueItem(null)
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Progress(0f))
+        RunRegistry.pipelineEnded()
+    }
+
+    @Test fun aWatchedQueueItemStoppedFromTheNotificationSettlesTheScreen() {
+        val vm = watchedQueueItem()
+        drainStopped()
+        ShadowLooper.idleMainLooper()
+        assertTrue("a grace for the run's last events", vm.now.running)
+        ShadowLooper.shadowMainLooper().idleFor(java.time.Duration.ofSeconds(2))
+        with(vm.now) {
+            assertFalse(running); assertFalse(watchingQueue)
+            assertEquals("#${studio.primeminutes.R.string.status_stopped}", status)
+            assertNull(queueItemId)   // the row is no longer "Processing"
+            assertEquals(listOf("l0"), utterances.map { it.text })   // what it had stays
+        }
+    }
+
+    @Test fun aWatchedQueueItemStillBeingReadAfterTheStopKeepsGoing() {
+        val vm = watchedQueueItem()
+        // The item was in its reading: a Stop leaves the reader to finish it (it has a library entry).
+        RunRegistry.readerTasks(listOf(TranscriptionService.QUEUE_GEN))
+        RunRegistry.readerReading(TranscriptionService.QUEUE_GEN)
+        drainStopped()
+        ShadowLooper.shadowMainLooper().idleFor(java.time.Duration.ofSeconds(3))
+        assertTrue(vm.now.running); assertTrue(vm.now.watchingQueue)
+        // The reading ends with its result, which settles the view itself.
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.SummaryComplete("sum"))
+        RunRegistry.readerReading(null); RunRegistry.readerTasks(emptyList())
+        ShadowLooper.shadowMainLooper().idleFor(java.time.Duration.ofSeconds(2))
+        assertFalse(vm.now.running)
+        assertEquals("sum", vm.now.summary)
+        assertEquals("#${studio.primeminutes.R.string.status_done}", vm.now.status)
     }
 }

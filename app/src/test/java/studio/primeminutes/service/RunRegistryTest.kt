@@ -170,4 +170,15 @@ class RunRegistryTest {
         job.cancel()
         assertEquals((0..200).toList(), seen.map { (it as TranscriptEvent.Utterance).index })
     }
+
+    @Test fun theQueueWorksWhileItDrainsOrOneOfItsItemsIsRead() {
+        assertFalse(RunRegistry.jobs.value.queueWorking)
+        RunRegistry.runStarting(recording = false, queue = true)
+        assertTrue(RunRegistry.jobs.value.queueWorking)
+        RunRegistry.readerTasks(listOf(TranscriptionService.QUEUE_GEN))
+        RunRegistry.pipelineEnded()
+        assertTrue("its item is still being read", RunRegistry.jobs.value.queueWorking)
+        RunRegistry.readerTasks(listOf(3)); RunRegistry.readerReading(3)
+        assertFalse("a session's reading is not the queue's", RunRegistry.jobs.value.queueWorking)
+    }
 }

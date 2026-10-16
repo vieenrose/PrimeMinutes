@@ -256,11 +256,28 @@ class SessionReducerTest {
         // Queue events stream into the watched view…
         s = SessionReducer.onEvent(s, env, TranscriptionService.QUEUE_GEN, TranscriptEvent.Utterance(1, "b", 2.0, 3.0), "q1").state
         assertEquals(2, s.utterances.size); assertEquals(2, s.queueUtterances.size)
-        // …until the drain moves on to the next item.
+        // …until the drain moves on to the next item: the view keeps what it showed, and is no longer
+        // in progress (nothing feeds it; it used to stay running, with Studio's processing banner).
         s = SessionReducer.onEvent(s, env, TranscriptionService.QUEUE_GEN, TranscriptEvent.Status("next"), "q2").state
         assertFalse(s.watchingQueue); assertEquals("q2", s.queueItemId); assertEquals(2, s.utterances.size)
+        assertFalse(s.running); assertEquals("reading", s.status)
         val back = SessionReducer.leaveToStudio(s.copy(watchingQueue = true), env).state
         assertFalse(back.running); assertEquals(Screen.Studio, back.screen)
+    }
+
+    @Test fun aWatchedQueueItemWhoseQueueEndedSettles() {
+        val e = studio.primeminutes.core.library.SessionLibrary.Entry(
+            id = "q1", dir = File(root, "q1"), createdAt = 0L, title = null,
+            status = studio.primeminutes.core.library.SessionLibrary.Status.RECORDED, durationSec = 0,
+        )
+        val watching = SessionReducer.watchQueueItem(s0.copy(queueItemId = "q1", queueLabel = "transcribing"), env, e, null).state
+        val n = SessionReducer.queueEnded(watching, env).state
+        assertFalse(n.running); assertFalse(n.watchingQueue); assertEquals("#${R.string.status_stopped}", n.status)
+        // A failed reading keeps its reason; a screen not watching the queue is not touched.
+        val failed = watching.copy(status = "#${R.string.svc_summary_failed} [oom]")
+        assertEquals(failed.status, SessionReducer.queueEnded(failed, env).state.status)
+        val own = SessionReducer.launchAudio(s0, env, Uri.parse("content://x/a.mp3")).state
+        assertEquals(own, SessionReducer.queueEnded(own, env).state)
     }
 
     @Test fun deletingTheOpenSessionStopsItsRun() {

@@ -224,6 +224,18 @@ object SessionReducer {
     }
 
     /**
+     * The queue item this screen watches gets nothing more: the drain was stopped from outside the
+     * screen (the notification's Stop) or ended, and no reading of the queue is left. No terminal
+     * event came for it, so the view settles like [runEnded] (which leaves watched items alone: their
+     * runs are the queue's, not this session's generation).
+     */
+    fun queueEnded(state: SessionState, env: SessionEnv): Next = tx(state, env) {
+        if (!s.watchingQueue || !s.running) return@tx
+        val failed = s.status.startsWith(str(R.string.svc_summary_failed))
+        s = s.copy(running = false, watchingQueue = false, status = if (failed) s.status else str(R.string.status_stopped))
+    }
+
+    /**
      * Back to Studio (system Back or the top bar). Leaving a watched queue item must release the
      * borrowed `running`, or Studio paints a phantom "processing" banner that never clears.
      */
@@ -506,6 +518,10 @@ object SessionReducer {
             if (queueItemId != null && queueItemId != s.queueItemId) {
                 // A new item started — reset the live buffers to it, and stop forwarding: item B's
                 // transcript must not stream into item A's open session view.
+                // The watched item's view keeps what it showed, but nothing feeds it any more: it is
+                // not running (left `running`, it stayed "in progress" for good, and Studio painted a
+                // phantom processing banner, since it no longer counted as a watched queue item).
+                if (s.watchingQueue) s = s.copy(running = false)
                 s = s.copy(
                     watchingQueue = false, queueUtterances = emptyList(), queueTitle = null, queueSummary = null,
                     queueItemId = queueItemId, queueFraction = 0f,
