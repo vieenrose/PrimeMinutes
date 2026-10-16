@@ -17,6 +17,8 @@ final class MeetingReader {
     private let temp: Float
 
     private(set) var journal: [Note] = []
+    /// Off-protocol output of this job so far (model guardrail).
+    private(set) var guardCounts = ReaderGuard()
     private var lines: [Line] = []
     private var k = 0
     var window: Int { k }
@@ -130,12 +132,19 @@ final class MeetingReader {
     private func parse(_ reply: String) -> Int {
         var cands: [(raw: String, note: Note)] = []
         for rawLine in reply.split(omittingEmptySubsequences: true, whereSeparator: \.isNewline).map(String.init) {
-            guard let m = groups(pc.act, rawLine), m[1] == pc.noteAct else { continue }
+            if rawLine.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let act = groups(pc.act, rawLine)
+            if let a = act, pc.guardrail.ignoreActs.contains(a[1]) { continue }
+            guardCounts.lines += 1
+            guard let m = act, m[1] == pc.noteAct else { guardCounts.nonNote += 1; continue }
             let raw = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let n = groups(pc.note, m[2].trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                guardCounts.malformed += 1
                 events(.noteDropped(window: k, line: raw, reason: .parse)); continue
             }
             let ts = n[1], tag: String? = n[2].isEmpty ? nil : n[2], text = n[3]
+            guardCounts.notes += 1
+            if !pc.guardrail.known(tag) { guardCounts.unknownTag += 1 }
             let seen = (journal.suffix(pc.dupLookback).map(\.text) + cands.map(\.note.text)).suffix(pc.dupLookback)
             let reason: DropReason? = resolve(ts) == nil ? .citation : (seen.contains { P.similar(text, $0) > pc.dupJaccard } ? .duplicate : nil)
             if let r = reason { events(.noteDropped(window: k, line: raw, reason: r)); continue }

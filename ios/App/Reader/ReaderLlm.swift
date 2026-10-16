@@ -57,6 +57,8 @@ enum AgentEvent {
     case noteKept(Note)
     case noteDropped(window: Int, line: String, reason: DropReason)
     case restart(count: Int, ctxBefore: Int, ctxAfter: Int)
+    /// End of a job: its off-protocol counts (model guardrail), and whether they pass the card's threshold.
+    case guardCounts(ReaderGuard, exceeded: Bool)
 }
 
 struct ReaderError: Error, CustomStringConvertible { let description: String }

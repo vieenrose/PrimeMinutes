@@ -18,7 +18,7 @@ struct SettingsView: View {
     @State private var delay = Prefs.speakerDelay
     @AppStorage("textSize") private var textSize = 0
     @AppStorage("showActions") private var showActions = false
-    @AppStorage("askEnabled") private var askEnabled = false
+    @AppStorage("askOn") private var askEnabled = true
     @ObservedObject private var indexer = LibraryIndexer.shared
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -43,7 +43,7 @@ struct SettingsView: View {
                     }.pickerStyle(.inline).labelsHidden()
                     .onChange(of: reader) { Prefs.readerId = reader }
                 } header: { Text(L("settings_reader_model")) } footer: {
-                    Text(L("reader_model_hint", 2200, 3300) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
+                    Text(L("reader_model_hint", SizeFormat.bytes(ReaderModel.e2b.totalBytes), SizeFormat.bytes(ReaderModel.e4b.totalBytes)) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
                 }
                 Section { Toggle(L("settings_hw_monitor"), isOn: $hwMonitor) } footer: { Text(L("settings_hw_monitor_hint")) }
                 Section {
@@ -59,7 +59,7 @@ struct SettingsView: View {
                 Section {
                     if !EmbedHost.ready {
                         if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).foregroundStyle(.secondary) }
-                        else { Button(L("settings_search_model_get", ByteCountFormatter.string(fromByteCount: ReaderModel.embed.files.reduce(0) { $0 + $1.size }, countStyle: .file))) { m.downloads.downloadEmbed() } }
+                        else { Button(L("settings_search_model_get", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() } }
                     } else {
                         let stale = LibraryIndexer.stale(m.library.sessions).count
                         if indexer.pending > 0 || !indexer.indexing.isEmpty { Text(L("settings_index_pending", indexer.pending + indexer.indexing.count)).foregroundStyle(.secondary) }
@@ -68,18 +68,20 @@ struct SettingsView: View {
                     }
                 } header: { Text(L("model_kind_embed")) } footer: { Text(L("settings_search_hint")) }
                 Section {
-                    Toggle(L("settings_show_actions"), isOn: $showActions)
                     Toggle(L("settings_ask"), isOn: $askEnabled)
-                } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint") + "\n\n" + L("settings_ask_hint")) }
+                } header: { Text(L("ask_title")) } footer: { Text(L("settings_ask_hint")) }
                 Section {
-                    if !Storage.ready(Prefs.reader) { Text(L("storage_model_pending", Int(Prefs.reader.files.reduce(0) { $0 + $1.size } / 1_000_000))).font(.footnote).foregroundStyle(.secondary) }
+                    Toggle(L("settings_show_actions"), isOn: $showActions)
+                } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint")) }
+                Section {
+                    if !Storage.ready(Prefs.reader) { Text(L("storage_model_pending", SizeFormat.bytes(Prefs.reader.totalBytes))).font(.footnote).foregroundStyle(.secondary) }
                     if models.isEmpty { Text(L("storage_none")).foregroundStyle(.secondary) }
                     ForEach(models) { i in
                         HStack { VStack(alignment: .leading) { Text(i.label); Text(L(i.kind)).font(.caption2).foregroundStyle(.secondary)
-                            if i.cacheBytes > 0 { Text(L("storage_compile_cache", ByteCountFormatter.string(fromByteCount: i.cacheBytes, countStyle: .file))).font(.caption2).foregroundStyle(.secondary) } }; Spacer(); Text(ByteCountFormatter.string(fromByteCount: i.bytes, countStyle: .file)).foregroundStyle(.secondary) }
+                            if i.cacheBytes > 0 { Text(L("storage_compile_cache", SizeFormat.bytes(i.cacheBytes))).font(.caption2).foregroundStyle(.secondary) } }; Spacer(); Text(SizeFormat.bytes(i.bytes)).foregroundStyle(.secondary) }
                             .swipeActions { if m.runner.activeJob == nil && !m.capture.recording { Button(L("storage_delete"), role: .destructive) { toDelete = i } } }   // not under a run: its models are mmaped
                     }
-                } header: { Text(L("settings_storage")) } footer: { if !models.isEmpty { Text(L("storage_total", ByteCountFormatter.string(fromByteCount: models.reduce(0) { $0 + $1.bytes }, countStyle: .file))) } }
+                } header: { Text(L("settings_storage")) } footer: { if !models.isEmpty { Text(L("storage_total", SizeFormat.bytes(models.reduce(0) { $0 + $1.bytes }))) } }
                 Section(L("settings_about")) {
                     HStack { Text("Prime Minutes"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "").foregroundStyle(.secondary) }
                     Text(L("about_license"))
@@ -90,7 +92,7 @@ struct SettingsView: View {
             }
             .confirmationDialog(L("storage_delete_title"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
                 Button(L("storage_delete"), role: .destructive) { if let i = toDelete { Storage.delete(i); models = Storage.models() } }
-            } message: { if let i = toDelete { Text(L("storage_delete_body", i.label, ByteCountFormatter.string(fromByteCount: i.bytes, countStyle: .file))) } }
+            } message: { if let i = toDelete { Text(L("storage_delete_body", i.label, SizeFormat.bytes(i.bytes))) } }
             .navigationTitle(L("settings"))
             .toolbar { Button(L("done")) { dismiss() } }
         }

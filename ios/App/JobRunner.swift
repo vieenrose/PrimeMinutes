@@ -81,14 +81,17 @@ final class ReaderWorker: @unchecked Sendable {
         }
         await syncQueue()
     } }
-    private func archive(lines: [Utterance], notes: [Note], title: String, summary: String, seconds: Double, job: Job? = nil) async {
+    private func archive(lines: [Utterance], notes: [Note], title: String, summary: String, seconds: Double, job: Job? = nil, readerGuard: ReaderGuard? = nil) async {
         // No speech: still a library entry with its audio (Android keeps the entry, status_no_speech), never a silent drop.
-        let summary = lines.isEmpty && summary.isEmpty ? L("status_no_speech") : summary
-        if lines.isEmpty && !recording { screen.status = L("status_no_speech") }
+        // Only fillers or noise tags count as no speech too (SpeechCheck): no "no notes" summary, its own status.
+        let silent = !SpeechCheck.hasSpeech(lines.map(\.text))
+        let summary = silent && (summary.isEmpty || summary == L("summary_no_notes")) ? L("status_no_speech") : summary
+        if silent && !recording { screen.status = L("status_no_speech") }
         let fallback = lines.first.map { String($0.text.prefix(20)) } ?? L("meeting")
-        var s = Session(title: title.isEmpty ? fallback : title, summary: summary, seconds: seconds, lines: lines, notes: notes)
+        var s = Session(title: silent ? L("status_no_speech") : title.isEmpty ? fallback : title, summary: summary, seconds: seconds, lines: lines, notes: silent ? [] : notes)
         if let job { s.id = job.id; s.date = job.date; s.audio = job.audio; if let t = job.title, !t.isEmpty { s.title = t } }
-        if !summary.isEmpty { s.reader = Prefs.readerId }
+        if !summary.isEmpty && !silent { s.reader = Prefs.readerId }
+        s.readerGuard = readerGuard
         let old = resummarized.removeValue(forKey: s.id)
         // Re-summarize keeps the transcript: the stored one, read NOW — lines, speaker names or a title the user
         // edited while the reader ran were overwritten by the snapshot taken at the tap.
@@ -128,8 +131,9 @@ final class ReaderWorker: @unchecked Sendable {
             let eng = cached != nil ? nil : ModelDownloads.nemoEngine()
             if cached == nil && eng == nil { await MainActor.run { self.screen.status = L("load_failed") }; return }
             let rm = Prefs.reader
+            if Dev.env["VOX_READER_DIR"] == nil { await self.downloads.awaitPrefetch(speechOnly: false) }
             if Dev.env["VOX_READER_DIR"] == nil, !(await self.downloads.store.isComplete(rm)) {   // like Android: the notes model downloads on first use
-                do { try await self.downloads.store.download(rm) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", Int(d / 1_000_000), Int(t / 1_000_000)) } } }
+                do { try await self.downloads.store.download(rm) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } } }
                 catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }
             }
             let stored = await self.downloads.store.isComplete(rm) ? await self.downloads.store.dir(rm).path : nil
@@ -190,24 +194,31 @@ final class ReaderWorker: @unchecked Sendable {
             let final: [Utterance]
             if let cached {
                 final = cached; StatusLog.add("trace transcript restored from checkpoint, \(cached.count) utterances")
-                for u in cached { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } }
+                if SpeechCheck.hasSpeech(cached.map(\.text)) { for u in cached { if let l = ReaderSummarizer.toLine(u) { worker.offer(l) } } }
             } else {
                 let fresh = eng?.finish() ?? []
                 final = full(fresh, stable: fresh.count).0
                 // The live view only ever fed frozen lines: the last segment and the settle window are in the
                 // final transcript only, and the meeting's closing decisions with them (Android: ReaderLane.finish).
                 var tail = 0
-                for u in final where u.start >= fedUntil - 0.01 { if let l = ReaderSummarizer.toLine(u) { worker.offer(l); tail += 1 } }
+                if SpeechCheck.hasSpeech(final.map(\.text)) { for u in final where u.start >= fedUntil - 0.01 { if let l = ReaderSummarizer.toLine(u) { worker.offer(l); tail += 1 } } }
                 StatusLog.add("trace finish: \(tail) closing lines to the reader")
                 if let job { Checkpoint.save(final, job.id) }
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }
-            worker.drain { d, t in Task { @MainActor in self.jobProgress = 0.8 + 0.2 * Double(d) / Double(max(t, 1)); guard live || !self.recording else { return }; self.screen.status = L("reading_s", d, t) } }
+            // No speech (silence, fillers, noise tags): the AI notes model is not run on it (Android SpeechCheck).
+            let silent = !SpeechCheck.hasSpeech(final.map(\.text))
+            if silent { worker.stop(); StatusLog.add("trace no speech: AI notes model not run") }
+            else { worker.drain { d, t in Task { @MainActor in self.jobProgress = 0.8 + 0.2 * Double(d) / Double(max(t, 1)); guard live || !self.recording else { return }; self.screen.status = L("reading_s", d, t) } } }
             var readError = worker.failure
-            if readError == nil { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
+            if readError == nil && !silent { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
+            // Model guardrail: this job's off-protocol counts, logged (a warning above the card's threshold), shown, saved.
+            let rg = reader.guardCounts, gc = Prefs.reader.card.reader.guardrail, over = rg.exceeds(gc)
+            StatusLog.add((over ? "WARNING guard: off-protocol output above \(gc.maxOffProtocolRate): " : "guard: ") + rg.summary)
+            await MainActor.run { agentUi.apply(.guardCounts(rg, exceeded: over)) }
             // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
             // cause on the status line (Android readFailed). The transcript is still archived.
-            let journal = readError == nil ? reader.journal : []
+            let journal = readError == nil && !silent ? reader.journal : []
             let sum = ReaderSummarizer(llm: r.llm, card: Prefs.reader.card)
             // No notes at all (a short or off-topic recording): one plain line, not five empty sections (Android summary_no_notes).
             let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? Prefs.reader.card.reader.minutes(journal)
@@ -215,7 +226,7 @@ final class ReaderWorker: @unchecked Sendable {
             let summaryText = fp.isEmpty && !fl.isEmpty && readError == nil ? L("summary_no_notes") : fp
             let why = readError.map { String(String(describing: $0).split(separator: "\n").first ?? "").prefix(120) }
             await MainActor.run { guard live || !self.recording else { return }; self.screen.lines = fl; self.screen.notes = fn; self.screen.title = ft; self.screen.summary = summaryText; let ns = Set(fl.map(\.speaker)).count; self.screen.status = why.map { L("summary_failed") + " [\($0)]" } ?? (ns > 1 ? L("status_transcript_lines_speakers", fl.count, ns) : L("status_transcript_lines", fl.count)); self.screen.agent.apply(.state(.done, notes: fn.count)) }
-            await self.archive(lines: fl, notes: fn, title: ft, summary: summaryText, seconds: live ? (eng?.fedSeconds ?? 0) : seconds, job: job)
+            await self.archive(lines: fl, notes: fn, title: ft, summary: summaryText, seconds: live ? (eng?.fedSeconds ?? 0) : seconds, job: job, readerGuard: silent ? nil : rg)
             if let job { Checkpoint.remove(job.id); await self.queue.remove(job.id) }
             Stage.set("idle")
         }.value

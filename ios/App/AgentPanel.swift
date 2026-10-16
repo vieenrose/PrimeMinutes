@@ -26,12 +26,15 @@ import SwiftUI
     @Published var notes: [Note] = []
     @Published var steps: [Step] = []
     @Published var log: [LogLine] = []
+    /// The reading's off-protocol counts (model guardrail), at the end of a job or from the saved meeting.
+    @Published var guardCounts: ReaderGuard?
+    @Published var guardExceeded = false
     var wholeTranscript = true
 
     var working: Bool { state != nil && state != .done }
     var windowsRead: Int { steps.filter { !$0.restart && $0.done }.count }
 
-    func reset() { state = nil; reply = ""; ctxTokens = 0; notesSoFar = 0; notes = []; steps = []; log = [] }
+    func reset() { state = nil; reply = ""; ctxTokens = 0; notesSoFar = 0; notes = []; steps = []; log = []; guardCounts = nil; guardExceeded = false }
 
     func apply(_ e: AgentEvent) {
         switch e {
@@ -60,6 +63,9 @@ import SwiftUI
             ctxTokens = after
             steps.append(Step(window: 0, restart: true, done: true, ctxBefore: before, ctxAfter: after))
             add("↺", "#\(count) · ctx \(before) → \(after)")
+        case let .guardCounts(g, exceeded):
+            guardCounts = g; guardExceeded = exceeded
+            add("⚑", "guard · \(g.summary)" + (exceeded ? " · ABOVE THRESHOLD" : ""))
         }
     }
     private func edit(_ f: (inout Step) -> Void) { if let i = steps.lastIndex(where: { !$0.restart }) { f(&steps[i]) } }
@@ -116,6 +122,11 @@ struct AgentPanel: View {
                     if detailed && hasProcess { Detailed(agent: agent, st: st, seek: seek, opened: $opened, color: color, line: line) }
                     else { Simple(agent: agent, st: st, seek: seek, line: line) }
                     if !agent.notes.isEmpty { Text(L("agent_notes_caution")).font(.caption2).foregroundStyle(.secondary) }
+                    // DEV builds: the model guardrail's off-protocol counts of this reading (ReaderGuard).
+                    if Dev.on, let g = agent.guardCounts {
+                        Text("DEV guard · " + g.summary).font(.caption2.monospaced())
+                            .foregroundStyle(agent.guardExceeded || g.exceeds(ModelCard.default.reader.guardrail) ? Color.red : Color.secondary)
+                    }
                     HStack(spacing: 20) {
                         if done { Button(L("agent_hide_process")) { expandedOverride = false } }
                         if hasProcess { Button(L(detailed ? "agent_view_simple" : "agent_view_detailed")) { detailed.toggle(); if !detailed { showLog = false } }.foregroundStyle(.secondary) }

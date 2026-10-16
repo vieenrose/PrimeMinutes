@@ -15,6 +15,8 @@ struct ReaderModel {
     var card: ModelCard = .default
     var template: ChatTemplate { card.template }
     var budget: ReaderBudget { card.budget }
+    /// Bytes to download for the whole model (the registry's sizes; the GPU graph is not part of it).
+    var totalBytes: Int64 { files.reduce(0) { $0 + $1.size } }
     func url(_ f: ModelFile) -> URL { URL(string: f.remote.hasPrefix("https://") ? f.remote : "https://huggingface.co/\(repo)/resolve/\(rev)/\(f.remote)")! }
 
     /// Speech engine (ASR + diarization), the two pins of Android `ModelManager.NEMO_FILES`; CPU only.

@@ -36,11 +36,13 @@ struct LibraryView: View {
             if !Task.isCancelled { hits = r; if densePending == q { densePending = nil } }
         }
     }
-    private var askReady: Bool { Prefs.askEnabled && AskEngine.available }
+    @AppStorage("askOn") private var askOn = true
+    /// Ask is on by default; its button shows once its models are downloaded (AskEngine.available).
+    private var askReady: Bool { askOn && AskEngine.available }
     /// DEV (README animations): VOX_TYPE types a query; then VOX_TYPE_ASK sends it to Ask, or VOX_TYPE_OPEN=<text>
     /// opens the first passage containing that text once the results are in.
     private func devType(_ q: String) {
-        if Dev.env["VOX_TYPE_ASK"] != nil { UserDefaults.standard.set(true, forKey: "askEnabled") }
+        if Dev.env["VOX_TYPE_ASK"] != nil { UserDefaults.standard.set(true, forKey: "askOn") }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             for i in 1...q.count { query = String(q.prefix(i)); try? await Task.sleep(nanoseconds: 220_000_000) }
@@ -65,9 +67,11 @@ struct LibraryView: View {
     }
     /// Android: NEW = recorded but not yet processed. Archived sessions are all processed (waiting jobs show in the queue line), so they are Done.
     private func isNew(_ s: Session) -> Bool { false }
+    /// Done = processed with something to read: a recording without speech is not (Android RowStatus.NoSpeech).
+    private func isDone(_ s: Session) -> Bool { !isNew(s) && !s.noSpeech }
     private var shown: [Session] {
         let base = m.library.sessions.filter { s in
-            switch filter { case .all: true; case .new: isNew(s); case .done: !isNew(s) }
+            switch filter { case .all: true; case .new: isNew(s); case .done: isDone(s) }
         }
         if query.trimmingCharacters(in: .whitespaces).isEmpty { return base }
         let order = Dictionary(uniqueKeysWithValues: hits.enumerated().map { ($0.element.session.id, $0.offset) })
@@ -99,7 +103,7 @@ struct LibraryView: View {
         return d.formatted(date: .abbreviated, time: .omitted)
     }
     private func chip(_ f: Filter) -> some View {
-        let n = f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : !isNew($0) }.count
+        let n = f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : isDone($0) }.count
         return Button { filter = f } label: {
             Text(L("filter_" + f.rawValue, n)).font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14).padding(.vertical, 7)
@@ -109,11 +113,11 @@ struct LibraryView: View {
     }
     private func card(_ s: Session) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: isNew(s) ? "waveform" : "checkmark")
+            Image(systemName: isNew(s) ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
                 .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                .foregroundStyle(isNew(s) ? Color.secondary : Color.green)
-                .background((isNew(s) ? Color.secondary : Color.green).opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
-                .accessibilityLabel(L(isNew(s) ? "cd_status_new" : "cd_status_done"))
+                .foregroundStyle(isDone(s) ? Color.green : Color.secondary)
+                .background((isDone(s) ? Color.green : Color.secondary).opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityLabel(L(isNew(s) ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(s.title.isEmpty ? L("recent_untitled") : s.title).font(.headline).lineLimit(2)
                 Text("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
@@ -193,7 +197,7 @@ struct LibraryView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askEnabled"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
+            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))
@@ -217,13 +221,22 @@ struct LibraryView: View {
                     .onSubmit { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
                     .onChange(of: query) { _, _ in runSearch() }
                 if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel(L("search_close")) }
-                if askReady && !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button { asking = query } label: { Image(systemName: "paperplane.fill") }.accessibilityLabel(L("ask_cd"))
+                if askReady {   // labeled, always there: an empty search opens Ask with an empty question
+                    Button { asking = query.trimmingCharacters(in: .whitespaces) } label: {
+                        Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 6).background(Color.accentColor.opacity(0.14), in: Capsule())
+                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).accessibilityLabel(L("ask_entry_cd"))
                 }
             }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
             if !EmbedHost.ready && !m.library.sessions.isEmpty {
                 if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6) }
-                else { Button(L("search_semantic_download", ByteCountFormatter.string(fromByteCount: ReaderModel.embed.files.reduce(0) { $0 + $1.size }, countStyle: .file))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
+                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
+            }
+            if let p = m.downloads.prefetchProgress {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
+                    ProgressView(value: p)
+                }.padding(.horizontal, 16).padding(.top, 6)
             }
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")).font(.caption).foregroundStyle(.secondary) }.padding(.horizontal, 16).padding(.top, 6)
@@ -244,6 +257,9 @@ struct LibraryView: View {
                                 pillar("banknote.fill", "pillar_cost")
                             }.padding(.top, 6)
                             Text(L("library_empty")).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.top, 4)
+                            if m.downloads.pending.any && m.downloads.prefetchProgress == nil {
+                                Text(L("first_run_download_notice", SizeFormat.bytes(m.downloads.pending.total))).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            }
                         }.frame(maxWidth: .infinity).padding(.top, 40)
                     }
                     if !m.library.sessions.isEmpty && days.isEmpty { Text(L(densePending != nil ? "studio_searching" : "studio_no_match")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 40) }
@@ -276,7 +292,7 @@ struct LibraryView: View {
                 Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
                     .buttonStyle(.bordered).padding(.horizontal, 16)
             }
-            Button { m.capture.toggleRecord() } label: {
+            Button { if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
                 Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
                     .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(m.capture.recording ? Color.red : Color.accentColor, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)

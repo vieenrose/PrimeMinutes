@@ -29,6 +29,9 @@ struct Session: Identifiable, Codable, Hashable {
     var reader: String? = nil     // reader model id that wrote the summary (Android sessionModels.first)
     var actionsEdited: String? = nil   // the action items as the user edited them; nil = derived from the notes
     var legacyNotes: String? = nil     // v2 NOTES text of a session written by the older summarizer (MeetingNotes)
+    var readerGuard: ReaderGuard? = nil   // the last reading's off-protocol counts (model guardrail, DEV diagnostics)
+    /// Processed, but nothing was said (SpeechCheck): shown as such, never as "Done", and never read by the reader.
+    var noSpeech: Bool { !SpeechCheck.hasSpeech(lines.map(\.text)) }
     func name(_ spk: Int) -> String { speakerNames?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
     static func == (a: Session, b: Session) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }

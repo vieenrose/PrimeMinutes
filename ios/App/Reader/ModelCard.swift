@@ -50,6 +50,13 @@ struct ModelCard {
             let act: String, note_act: String, note: String, compact_priority: [String], cap_priority: [[String]]
             let sections: [[String]], section_empty: String, proposal_tag: String, reclassify_tags: [String], action_tag: String
             let proposal_cue: String, decided: String, notes_chars: Int
+            struct G: Decodable { let known_tags: [String]?, ignore_acts: [String]?, max_off_protocol_rate: Double?, min_lines: Int? }
+            let guard_: G?
+            enum CodingKeys: String, CodingKey {
+                case read_max, max_notes, segment_s, stop, primer, dup_lookback, dup_jaccard, journal_header, journal_empty, window_header, omitted
+                case act, note_act, note, compact_priority, cap_priority, sections, section_empty, proposal_tag, reclassify_tags, action_tag
+                case proposal_cue, decided, notes_chars, guard_ = "guard"
+            }
         }
         struct O: Decodable { let prompt: String, max_tokens: Int, label: String? }
         struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String] }
@@ -72,7 +79,9 @@ struct ModelCard {
                 windowHeaderPattern: r.window_header, omittedPattern: r.omitted, act: rx(r.act), noteAct: r.note_act, note: rx(r.note),
                 compactPriority: r.compact_priority, capPriority: r.cap_priority, sections: r.sections.map { ($0[0], $0[1]) },
                 sectionEmpty: r.section_empty, proposalTag: r.proposal_tag, reclassifyTags: r.reclassify_tags, actionTag: r.action_tag,
-                proposalCue: rx(r.proposal_cue), decided: rx(r.decided), notesChars: r.notes_chars),
+                proposalCue: rx(r.proposal_cue), decided: rx(r.decided), notesChars: r.notes_chars,
+                guardrail: r.guard_.map { g in GuardCard(knownTags: Set((g.known_tags ?? []).map { $0.uppercased() }), ignoreActs: Set(g.ignore_acts ?? []),
+                                                     maxOffProtocolRate: g.max_off_protocol_rate ?? 0.2, minLines: g.min_lines ?? 10) } ?? GuardCard()),
             title: one(j.title), prose: one(j.prose),
             ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system))
     }
@@ -102,6 +111,8 @@ struct ReaderCard {
     let proposalCue: NSRegularExpression, decided: NSRegularExpression
     /// Title and prose read the journal compacted to this many characters (0 = all of it).
     let notesChars: Int
+    /// What counts as off-protocol output, and how much of it is too much (ReaderGuard).
+    var guardrail: GuardCard = GuardCard()
 
     func windowHeader(_ k: Int) -> String { windowHeaderPattern.replacingOccurrences(of: "{k}", with: String(k)) }
     func omitted(_ n: Int) -> String { omittedPattern.replacingOccurrences(of: "{n}", with: String(n)) }
@@ -157,4 +168,30 @@ struct ReaderCard {
     }
 
     func actions(_ journal: [Note]) -> [Note] { journal.map(reclassify).filter { $0.tag?.uppercased() == actionTag } }
+}
+
+/// The model card's guardrail settings (reader.guard, Android `GuardCard`). Absent from a card: no tag check, 20 %, 10 lines.
+struct GuardCard: Equatable {
+    /// The tags the model was trained to write; empty = any tag is fine.
+    var knownTags: Set<String> = []
+    /// Acts that end a turn rather than say something (NEXT).
+    var ignoreActs: Set<String> = []
+    var maxOffProtocolRate: Double = 0.2
+    var minLines: Int = 10
+    func known(_ tag: String?) -> Bool { tag == nil || knownTags.isEmpty || knownTags.contains(tag!.uppercased()) }
+}
+
+/// Model guardrail (Android `ReaderGuard`): how much of what the reader wrote in one job was off the
+/// protocol its card describes, per non-blank reply line (the card's `ignoreActs` are not counted):
+/// `nonNote` a line that is not a NOTE (never used); `malformed` a NOTE whose argument does not parse
+/// (dropped); `unknownTag` a NOTE with a tag the card does not list (kept, but counted: the first sign of
+/// a drifting model). Logged per job, a warning above the card's threshold, saved with the meeting, shown
+/// in the AI notes panel (DEV).
+struct ReaderGuard: Codable, Equatable {
+    var lines = 0, notes = 0, nonNote = 0, unknownTag = 0, malformed = 0
+    var offProtocol: Int { nonNote + unknownTag + malformed }
+    var rate: Double { lines == 0 ? 0 : Double(offProtocol) / Double(lines) }
+    /// Above the card's threshold, once there are enough lines for a rate to mean something.
+    func exceeds(_ card: GuardCard) -> Bool { lines >= card.minLines && rate > card.maxOffProtocolRate }
+    var summary: String { "lines=\(lines) notes=\(notes) nonNote=\(nonNote) unknownTag=\(unknownTag) malformed=\(malformed) rate=" + String(format: "%.2f", rate) }
 }

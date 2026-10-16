@@ -36,7 +36,9 @@ func L(_ key: String, _ args: CVarArg...) -> String {
 enum Prefs {
     /// Experimental, off by default (Android showActionItems).
     static var showActions: Bool { UserDefaults.standard.bool(forKey: "showActions") }
-    static var askEnabled: Bool { UserDefaults.standard.bool(forKey: "askEnabled") }
+    /// Ask: on by default (a new key — the old "askEnabled" was the off-by-default experiment). The Ask
+    /// button shows once its models are downloaded (AskEngine.available).
+    static var askEnabled: Bool { UserDefaults.standard.object(forKey: "askOn") as? Bool ?? true }
     static var cores: Int { ProcessInfo.processInfo.activeProcessorCount }
     static var threads: Int {
         get { UserDefaults.standard.integer(forKey: "threads") }

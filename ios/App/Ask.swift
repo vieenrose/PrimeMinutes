@@ -10,7 +10,15 @@ import Combine
     static let shared = AskEngine()
     nonisolated static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05, rrfK: Float = 60
 
-    enum Phase: Equatable { case idle, busy, retrieving, loading, answering, failed(String) }
+    /// `reading(n)`: the model loads (when not resident) and reads the n excerpts found — the long wait;
+    /// `answering` from the first token of the answer.
+    enum Phase: Equatable {
+        case idle, busy, retrieving, reading(Int), answering, failed(String)
+        /// A question is being worked on (the sheet shows the stage and the seconds since `startedAt`).
+        var working: Bool { switch self { case .retrieving, .reading, .answering: return true; default: return false } }
+    }
+    /// Whole seconds since `start`, never negative (Android AskEngine.elapsedSec).
+    nonisolated static func elapsedSec(_ start: Date?, _ now: Date) -> Int { start.map { max(0, Int(now.timeIntervalSince($0))) } ?? 0 }
     /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
     /// (115 for a line starting at 115.4 s opened the line before).
     /// `k` is the short tag the model sees (`[[k]]`), unique across the conversation.
@@ -68,10 +76,13 @@ import Combine
 
     @Published private(set) var phase = Phase.idle
     @Published private(set) var turns: [Turn] = []
+    /// When the question in progress was asked.
+    @Published private(set) var startedAt: Date?
     var busy: () -> Bool = { false }
     var recording: () -> Bool = { false }
-    static var enabled: Bool { UserDefaults.standard.bool(forKey: "askEnabled") }
-    /// Both models are on disk.
+    static var enabled: Bool { Prefs.askEnabled }
+    /// Both models are on disk: the AI notes model, and the search model whose index the excerpts come from
+    /// (its keyword pass too).
     static var available: Bool { EmbedHost.ready && Storage.ready(Prefs.reader) }
 
     private let holder = AskHolder()
@@ -85,19 +96,18 @@ import Combine
         let card = Prefs.reader.card
         let first = turns.isEmpty
         task = Task { [holder] in
-            phase = .retrieving
+            startedAt = Date(); phase = .retrieving
             var excerpts = await Task.detached(priority: .userInitiated) { holder.retrieve(sessions, question) }.value
             if Task.isCancelled { return }
             for i in excerpts.indices { excerpts[i].k = nextK; nextK += 1 }
             let pool = turns.flatMap(\.excerpts) + excerpts
             turns.append(Turn(question: question, answer: "", excerpts: excerpts, done: false, pool: pool))
-            phase = .loading
+            phase = .reading(excerpts.count)
             let isBusy = busy
             let result: Result<String, Error> = await Task.detached(priority: .userInitiated) {
                 do {
                     let s = try holder.open()
                     s.resume()
-                    await MainActor.run { AskEngine.shared.phase = .answering }
                     let t = s.template
                     var prompt = first ? t.p0 + Self.system(lang, card) + t.p1 : t.p3
                     prompt += Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
@@ -116,6 +126,7 @@ import Combine
                     var sb = ""
                     _ = s.generateContinue(maxTokens: card.ask.answerTokens, stop: "", temp: card.sampler.temp) { piece in
                         if Task.isCancelled { s.cancel() }
+                        if sb.isEmpty { DispatchQueue.main.async { if AskEngine.shared.phase.working { AskEngine.shared.phase = .answering } } }
                         sb += piece
                         let now = Self.expandTags(sb, pool)
                         DispatchQueue.main.async { AskEngine.shared.publish(now, done: false) }
@@ -230,6 +241,7 @@ struct AskSheet: View {
                             Text(t.question).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
                             VStack(alignment: .leading, spacing: 8) {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
+                                    if !t.done { phaseRow }
                                     Text(Self.linked(t.answer, t.pool)).font(.body).textSelection(.enabled)
                                         .environment(\.openURL, OpenURLAction { u in
                                             if u.scheme == "voxask", let s = t.pool.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.pool.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
@@ -260,8 +272,8 @@ struct AskSheet: View {
             .background(Color(.systemGroupedBackground))
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    TextField(L("ask_followup_hint"), text: $followup).submitLabel(.send).onSubmit(send)
-                    if ask.phase == .answering || ask.phase == .retrieving || ask.phase == .loading {
+                    TextField(L(ask.turns.isEmpty ? "ask_open_hint" : "ask_followup_hint"), text: $followup).submitLabel(.send).onSubmit(send)
+                    if ask.phase.working {
                         Button(L("ask_cancel")) { ask.cancel() }
                     } else {
                         Button(action: send) { Image(systemName: "paperplane.fill") }.disabled(followup.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityLabel(L("ask_cd"))
@@ -288,10 +300,20 @@ struct AskSheet: View {
         }
         .onDisappear { ask.release() }
     }
+    /// The stage and the seconds since the question: a 20 s wait with a bare spinner looked hung.
     private var phaseRow: some View {
-        HStack(spacing: 8) {
-            ProgressView().controlSize(.small)
-            Text(L(ask.phase == .retrieving ? "ask_retrieving" : ask.phase == .loading ? "ask_loading" : "ask_thinking")).font(.subheadline).foregroundStyle(.secondary)
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let secs = AskEngine.elapsedSec(ask.startedAt, ctx.date)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Group {
+                    switch ask.phase {
+                    case .retrieving: Text(L("ask_stage_searching", secs))
+                    case .reading(let n): Text(L("ask_stage_reading", n, secs))
+                    default: Text(L("ask_stage_answering", secs))
+                    }
+                }.font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+            }
         }
     }
     private func send() {

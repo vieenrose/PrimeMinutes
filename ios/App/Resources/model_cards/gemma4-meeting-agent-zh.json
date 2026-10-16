@@ -89,7 +89,22 @@
   "action_tag": "ACTION",
   "proposal_cue": "^(建議|提議|可以|可考慮|考慮|希望|應該|應|或許|是否|討論|研議)|建議|提議|可考慮",
   "decided": "通過|決定|決議|同意|定案",
-  "notes_chars": 3900
+  "notes_chars": 3900,
+  "guard": {
+   "about": "Model guardrail (ReaderGuard): per job, the share of non-blank reply lines that are off the protocol above: not a NOTE, a NOTE that does not parse, or a NOTE with a tag outside known_tags. ignore_acts end a turn and are not counted. Above max_off_protocol_rate (with at least min_lines lines) the app logs a warning.",
+   "known_tags": [
+    "DECISION",
+    "ACTION",
+    "NUMBER",
+    "OPEN-ISSUE",
+    "PROPOSAL"
+   ],
+   "ignore_acts": [
+    "NEXT"
+   ],
+   "max_off_protocol_rate": 0.2,
+   "min_lines": 10
+  }
  },
  "title": {
   "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。",

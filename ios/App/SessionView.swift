@@ -55,6 +55,10 @@ struct SessionView: View {
     @State private var editingActions = false
     @State private var summaryStale = false
     @State private var undoable: Session?
+    /// The last speaker move or merge, undoable for a few seconds (Android OfferSpeakerUndo snackbar).
+    @State private var speakerUndo: SpeakerUndo?
+    struct SpeakerUndo: Equatable { let id = UUID(); let message: String; let lines: [Utterance]; let names: [String: String]?; let after: [Int]; let earlierEdit: Bool
+        static func == (a: Self, b: Self) -> Bool { a.id == b.id } }
     @State private var exporting = false
     @State private var exportFile: URL?
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
@@ -168,6 +172,8 @@ struct SessionView: View {
                 if showProcess {
                     ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
                     Text(L("agent_notes_caution")).font(.caption2).foregroundStyle(.secondary)
+                    // DEV builds: the saved reading's off-protocol counts (model guardrail).
+                    if Dev.on, let g = s.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Color.red : Color.secondary) }
                 }
                 Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
             } }
@@ -298,7 +304,7 @@ struct SessionView: View {
                     if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) } }
                     if s.audio != nil {
                         Button(L("re_transcribe")) { rerun(s, true) }
-                        Button(L("re_summarize")) { rerun(s, false) }
+                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }   // nothing to summarize (Android canReSummarize)
                     }
                 } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
             }
@@ -343,7 +349,7 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) { merging = nil }
         }
         .alert(L("transcript_changed_resummarize"), isPresented: $transcriptDirty) {
-            if s.audio != nil { Button(L("re_summarize")) { rerun(s, false) } }
+            if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
             Button(L("cancel"), role: .cancel) {}
         }
         .overlay(alignment: .bottom) {
@@ -377,6 +383,14 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         .task { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
+        .task {   // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s
+            guard let mode = Dev.env["VOX_MERGE"] else { return }
+            var ids: [Int] = []; for l in s.lines where !ids.contains(l.speaker) { ids.append(l.speaker) }
+            guard ids.count >= 2 else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
+            else { merging = (ids[0], ids[1]) }
+        }
         .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
             guard let new = n.object as? Session, new.id == s.id else { return }
@@ -399,6 +413,20 @@ struct SessionView: View {
                     .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { undoable = nil } }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let u = speakerUndo {
+                HStack {
+                    Text(u.message).font(.subheadline); Spacer()
+                    Button(L("undo")) { undoSpeakerEdit(u) }.bold()
+                }.padding(14).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 110)
+                    .task(id: u.id) {
+                        try? await Task.sleep(nanoseconds: 8_000_000_000)
+                        guard speakerUndo == u else { return }
+                        withAnimation { speakerUndo = nil }
+                        if !s.summary.isEmpty { transcriptDirty = true }
+                    }
+            }
+        }
         .onDisappear { player.stop() }
     }
 
@@ -414,13 +442,26 @@ struct SessionView: View {
     /// Android SpeakerEdits: plain relabels, ids kept (labels and colours stay put); a speaker left without lines loses its name.
     private func reassign(_ id: UUID, _ to: Int) {
         guard let i = s.lines.firstIndex(where: { $0.id == id }) else { return }
+        let before = (s.lines, s.speakerNames)
         let old = s.lines[i].speaker; s.lines[i].speaker = to
         if !s.lines.contains(where: { $0.speaker == old }) { dropName(old) }
-        edited()
+        speakerEdited(L("speaker_line_moved"), before)
     }
     private func merge(_ from: Int, _ into: Int) {
+        let before = (s.lines, s.speakerNames)
         for i in s.lines.indices where s.lines[i].speaker == from { s.lines[i].speaker = into }
-        dropName(from); edited()
+        dropName(from); speakerEdited(L("speaker_merged"), before)
+    }
+    /// Saved at once with an Undo banner; the "re-summarize?" question waits until the banner is gone.
+    private func speakerEdited(_ message: String, _ before: ([Utterance], [String: String]?)) {
+        save(s)
+        withAnimation { speakerUndo = SpeakerUndo(message: message, lines: before.0, names: before.1, after: s.lines.map(\.speaker), earlierEdit: speakerUndo != nil) }
+    }
+    private func undoSpeakerEdit(_ u: SpeakerUndo) {
+        withAnimation { speakerUndo = nil }
+        guard s.lines.map(\.speaker) == u.after else { return }   // the transcript changed since: nothing safe to restore
+        s.lines = u.lines; s.speakerNames = u.names; save(s)
+        if u.earlierEdit && !s.summary.isEmpty { transcriptDirty = true }
     }
     private func dropName(_ k: Int) { s.speakerNames?[String(k)] = nil; if s.speakerNames?.isEmpty == true { s.speakerNames = nil } }
     private func edited() { save(s); if !s.summary.isEmpty { transcriptDirty = true } }
