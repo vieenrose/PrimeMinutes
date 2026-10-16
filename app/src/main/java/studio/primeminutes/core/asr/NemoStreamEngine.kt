@@ -30,7 +30,7 @@ class NemoStreamEngine(
     diarTflite: File? = null,
     /** Pre-encode [512,1024] fp32 matrix, read only when [backend] is "litert_cpu". */
     diarPreF32: File? = null,
-) : AutoCloseable {
+) : LiveAsrEngine {
 
     private var handle: Long = NemoNative.nativeCreate(
         files.xasr.path, files.diar.path, threads, speakerDelaySec.toDouble(),
@@ -39,7 +39,7 @@ class NemoStreamEngine(
         .also { check(it != 0L) { "nemo engine failed to load ${files.xasr.name} / ${files.diar.name}" } }
 
     /** Distinct speakers in the final snapshot; null until the stream has finished. */
-    var speakerCount: Int? = null
+    override var speakerCount: Int? = null
         private set
 
     /**
@@ -48,7 +48,7 @@ class NemoStreamEngine(
      * however long the recording runs; segments that can no longer change are frozen once and reused.
      * The last snapshot, after end of input, is the full final attribution.
      */
-    fun transcribeLive(chunks: Flow<FloatArray>): Flow<TranscriptEvent> = flow {
+    override fun transcribeLive(chunks: Flow<FloatArray>): Flow<TranscriptEvent> = flow {
         val frozen = ArrayList<TranscriptEvent.Utterance>()
         var lastTail: List<TranscriptEvent.Utterance> = emptyList()
         var nextAt = LIVE_EVERY_SEC

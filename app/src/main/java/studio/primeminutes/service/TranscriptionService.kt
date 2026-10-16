@@ -42,6 +42,7 @@ import kotlinx.coroutines.async
 import studio.primeminutes.core.asr.SeamEnrollment
 import studio.primeminutes.core.asr.SeamStitcher
 import studio.primeminutes.core.asr.AsrEngine
+import studio.primeminutes.core.asr.LiveAsrEngine
 import studio.primeminutes.core.asr.NemoStreamEngine
 import studio.primeminutes.core.asr.SnapshotConverter
 import studio.primeminutes.core.audio.AudioDecoder
@@ -1581,7 +1582,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         listOf(cfg.asrBackend, cfg.asrModelId, cfg.summaryScript).joinToString("|")
 
     /** The streaming ASR + diarization engine (nemo-x-asr-diarizer). */
-    private fun createEngine(models: ModelManager): NemoStreamEngine {
+    private fun createEngine(models: ModelManager): LiveAsrEngine {
         // audio.cpp caches converted GGUF tensors under std::filesystem::temp_directory_path(),
         // which is $TMPDIR or /data/local/tmp — writable on some phones (OPPO, the emulator) but
         // not on others (Galaxy Note 10+, Android 12: "create_directories: Permission denied"),
@@ -1590,58 +1591,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
         return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
             backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
-    }
-
-    /** Raw PCM16 of one of our own 16 kHz mono work WAVs, as float blocks. */
-    private fun wavChunks(wav: File, startSec: Double = 0.0, endSec: Double = Double.MAX_VALUE) = kotlinx.coroutines.flow.flow {
-        java.io.DataInputStream(wav.inputStream().buffered(1 shl 16)).use { ins ->
-            ins.skipBytes(WavIo.HEADER)
-            // Resume: skip the already-transcribed audio (16 kHz mono PCM16 → 2 bytes/sample).
-            var skip = (startSec * WavIo.SAMPLE_RATE).toLong() * 2
-            while (skip > 0) { val k = ins.skip(skip); if (k <= 0) break; skip -= k }
-            val bytes = ByteArray(2048 * 2)
-            // An enrollment clip ([SeamEnrollment]) reads only up to endSec.
-            var left = if (endSec == Double.MAX_VALUE) Long.MAX_VALUE else ((endSec - startSec) * WavIo.SAMPLE_RATE).toLong() * 2
-            while (left > 0) {
-                var n = 0
-                val want = minOf(bytes.size.toLong(), left).toInt()
-                while (n < want) {
-                    val k = ins.read(bytes, n, want - n)
-                    if (k < 0) break
-                    n += k
-                }
-                left -= n
-                if (n < 2) break
-                val f = FloatArray(n / 2)
-                for (i in f.indices) {
-                    val lo = bytes[2 * i].toInt() and 0xFF
-                    val hi = bytes[2 * i + 1].toInt()
-                    f[i] = ((hi shl 8) or lo).toShort() / 32768f
-                }
-                emit(f)
-                if (n < want) break
-            }
-        }
-    }.flowOn(Dispatchers.IO)
-
-    /** Peak amplitude → 0..5 display bucket (log-ish thresholds: quiet speech still registers). */
-    private fun micLevelBucket(peak: Float): Int = when {
-        peak > 0.5f -> 5
-        peak > 0.25f -> 4
-        peak > 0.12f -> 3
-        peak > 0.06f -> 2
-        peak > 0.02f -> 1
-        else -> 0
-    }
-
-    /** "≈3 min left" (localized) once enough of the phase has run to extrapolate; null early on. */
-    private fun etaText(startNs: Long, frac: Float): String? {
-        if (frac < 0.03f || frac >= 1f) return null
-        val elapsedSec = (System.nanoTime() - startNs) / 1e9
-        if (elapsedSec < 5.0) return null
-        val remain = elapsedSec * (1 - frac) / frac
-        return if (remain >= 90) getString(R.string.eta_minutes, ((remain + 30) / 60).toInt())
-        else getString(R.string.eta_seconds, ((remain / 5).toInt() + 1) * 5)
     }
 
     /** Final Complete (with speakers when diarization ran during the ASR phase) + summarization —
