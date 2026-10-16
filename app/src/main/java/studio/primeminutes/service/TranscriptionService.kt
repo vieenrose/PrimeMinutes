@@ -862,7 +862,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             NOTIF_ID + 2,
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.notif_session_ready))
-                .setContentText(title)
+                .setContentText(title.ifBlank { getString(R.string.app_name) })
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
                 .setContentIntent(open)
                 .setAutoCancel(true)
