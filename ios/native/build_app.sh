@@ -25,6 +25,9 @@ if [ $SDK = iphonesimulator ] && [ -f $LRT ]; then cp $LRT $APP/Frameworks/; fi
 if [ $ARCH = arm64 ]; then cp -R $FW/CLiteRTLM.framework $APP/Frameworks/; fi
 cp $A/Info.plist $A/Resources/PrivacyInfo.xcprivacy $A/Resources/AppIcon60x60@2x.png $A/Resources/AppIcon60x60@3x.png $A/Resources/sample.wav $A/Resources/pre_encode_512x1024.f32 $APP/
 cp -R $A/Resources/opencc $A/Resources/model_cards $A/Resources/en.lproj $A/Resources/zh-Hant.lproj $A/Resources/zh-Hans.lproj $APP/
+# App icon from the asset catalog (App Store: Assets.car + CFBundleIconName; also writes AppIcon60x60@2x/@3x.png)
+xcrun actool $A/Resources/Assets.xcassets --compile $APP --platform $SDK --minimum-deployment-target 17.0 --target-device iphone \
+  --app-icon AppIcon --output-partial-info-plist $B/assetcatalog-info.plist --output-format human-readable-text >/dev/null
 /usr/libexec/PlistBuddy -c "Add :UIDeviceFamily array" -c "Add :UIDeviceFamily:0 integer 1" $APP/Info.plist
 codesign -f -s - $APP/Frameworks/*.framework $APP 2>/dev/null || codesign -f -s - $APP   # the simulator refuses unsigned bundles
 echo "built $APP"

@@ -6,7 +6,7 @@
 <key>CFBundleDisplayName</key><string>Prime Minutes</string>
 <key>CFBundleExecutable</key><string>PrimeMinutes</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleVersion</key><string>2</string>
 <key>CFBundleShortVersionString</key><string>0.53.0</string>
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
@@ -16,7 +16,8 @@
 <key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Audio</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>public.audio</string><string>public.movie</string></array></dict></array>
 <key>MinimumOSVersion</key><string>17.0</string>
 <key>UILaunchScreen</key><dict/>
-<key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
+<key>CFBundleIconName</key><string>AppIcon</string>
+<key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconName</key><string>AppIcon</string><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
 <!-- Podcast enclosures are often plain http:// on hosts that cannot be listed, so cleartext stays allowed in
      general (as Android's network_security_config); the sensitive fetches (models, updates) are HTTPS-only. -->
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/>
