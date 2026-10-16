@@ -123,14 +123,13 @@ class SessionReducerTest {
         assertEquals(s, again.state); assertTrue(again.effects.isEmpty())
     }
 
-    @Test fun stopAndSaveQueuesTheCaptureOnceSaved() {
+    @Test fun stopAndSaveLeavesTheQueueingToTheService() {
         var s = SessionReducer.beginRecording(s0, env).state
         val stop = SessionReducer.stop(s, env)
         assertTrue(SessionEffect.StopRecording in stop.effects)
         s = stop.state
         assertEquals(Screen.Session, s.screen); assertTrue(s.pendingAutoProcess); assertTrue(s.running)
         val saved = SessionReducer.onEvent(s, env, s.sessionGen, TranscriptEvent.RecordingSaved(entryUri("e1").toString()), null)
-        assertEquals(listOf("e1"), saved.effects.one<SessionEffect.Enqueue>().ids)
         assertEquals(File(root, "e1"), saved.state.libraryDir)
         assertFalse(saved.state.pendingAutoProcess)
         assertTrue(saved.effects.none { it is SessionEffect.StartRecording })
@@ -143,12 +142,48 @@ class SessionReducerTest {
         s = n.state
         val g = s.sessionGen
         val saved = SessionReducer.onEvent(s, env, g, TranscriptEvent.RecordingSaved(entryUri("e1").toString()), null)
-        saved.effects.one<SessionEffect.Enqueue>()
         assertEquals(g + 1, saved.effects.one<SessionEffect.StartRecording>().gen)
         assertTrue(saved.state.isRecording); assertEquals(Screen.Capture, saved.state.screen)
-        // Left the booth meanwhile: the capture is queued, no new recording starts.
+        // Left the booth meanwhile: no new recording starts (the service queued the capture).
         val away = SessionReducer.onEvent(s.copy(screen = Screen.Studio), env, g, TranscriptEvent.RecordingSaved(entryUri("e1").toString()), null)
         assertTrue(away.effects.none { it is SessionEffect.StartRecording })
+    }
+
+    @Test fun aLibraryResummaryCarriesTheSessionForTheServiceToSave() {
+        val names = mapOf(0 to SpeakerName("Ann", confidence = "user"))
+        val s = s0.copy(
+            utterances = listOf(utt(0)), speakerNames = names, summary = "old", title = "T", actionItems = "- a",
+            transcriptReady = true, libraryDir = File(root, "e7"), audioUri = entryUri("e7", "session.m4a"),
+        )
+        val save = SessionReducer.reSummarize(s, env, journal = "j").effects.one<SessionEffect.StartSummarize>().save!!
+        assertEquals("e7", save.entryId)
+        assertEquals(listOf(utt(0)), save.utterances); assertEquals(names, save.speakerNames)
+        assertEquals("T", save.title)   // kept, or the fallback when a new one is not written
+        assertEquals(entryUri("e7", "session.m4a"), save.audioUri)
+        // Not a library session, or a watched queue item: nothing to save into.
+        assertNull(SessionReducer.reSummarize(s.copy(libraryDir = null), env, null).effects.one<SessionEffect.StartSummarize>().save)
+        assertTrue(SessionReducer.reSummarize(s.copy(watchingQueue = true), env, null).effects.none { it is SessionEffect.StartSummarize && it.save != null })
+    }
+
+    @Test fun aRunStoppedOutsideTheScreenSettlesIt() {
+        // An import the notification's Stop cancelled: no terminal event, the run just ends.
+        val running = SessionReducer.launchAudio(s0, env, Uri.parse("content://x/a.mp3")).state
+        val n = SessionReducer.runEnded(running, env)
+        assertFalse(n.state.running); assertEquals("#${R.string.status_stopped}", n.state.status)
+        assertTrue(n.effects.none { it is SessionEffect.StopRun })   // the service already stopped it
+        // A recording cancelled from the notification: the booth is left.
+        val rec = SessionReducer.runEnded(SessionReducer.beginRecording(s0, env).state, env).state
+        assertFalse(rec.isRecording); assertFalse(rec.running); assertEquals(Screen.Studio, rec.screen)
+        // A re-summarize stopped mid-way gets its old summary back.
+        val r = SessionReducer.reSummarize(s0.copy(utterances = listOf(utt(0)), summary = "old", transcriptReady = true), env, "j").state
+        assertEquals("old", SessionReducer.runEnded(r, env).state.summary)
+        // A failed reading keeps the reason on the status line.
+        val failed = running.copy(status = "#${R.string.svc_summary_failed} [oom]")
+        assertEquals(failed.status, SessionReducer.runEnded(failed, env).state.status)
+        // Idle or a watched queue item: untouched.
+        assertEquals(s0, SessionReducer.runEnded(s0, env).state)
+        val watching = running.copy(watchingQueue = true)
+        assertEquals(watching, SessionReducer.runEnded(watching, env).state)
     }
 
     @Test fun stoppedResummaryPutsTheOldSummaryBack() {

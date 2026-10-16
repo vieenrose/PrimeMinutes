@@ -500,11 +500,11 @@ internal class ReaderWorker(private val host: Host) {
     /** Re-summarize an existing transcript (no re-decode / re-ASR). Keeps the existing title unless
      *  asked — a re-run shouldn't churn a title the user likes. The reader produces the
      *  summary, title and action items in the same pass. */
-    suspend fun runSummarizeOnly(transcript: String, withTitle: Boolean = false) {
+    suspend fun runSummarizeOnly(transcript: String, withTitle: Boolean = false): SummaryResult {
         val cfg = TranscriptionConfig.Holder.config
-        if (transcript.isBlank()) { host.emitEvent(TranscriptEvent.ActionItemsComplete("-")); return }
+        if (transcript.isBlank()) { host.emitEvent(TranscriptEvent.ActionItemsComplete("-")); return SummaryResult(null, null) }
         val task = ReadTask(currentGen(), host.outputConverter(cfg), withTitle, text = transcript)
         task.final.complete(emptyList())
-        awaitRead(submitRead(task))
+        return awaitRead(submitRead(task))
     }
 }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.isActive
@@ -82,6 +83,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         const val EXTRA_WITH_TITLE = "with_title"   // ACTION_SUMMARIZE: also regenerate the title
         const val EXTRA_RUN_GEN = "run_gen"         // the UI sessionGen that owns this run (event tagging)
         const val EXTRA_REQUEST = "request"         // the Mailbox ticket of an export / persist / summarize request
+        /** ACTION_STOP_RECORDING(_DEFER) from the session screen: queue the capture once it is saved
+         *  (the service does it, so it happens even if that screen is gone by then). */
+        const val EXTRA_QUEUE_ON_SAVE = "queue_on_save"
         const val ACTION_STOP = "studio.primeminutes.STOP"
 
         /** How long a Stop waits for the pipeline's teardown (the library save) before stopping the
@@ -142,6 +146,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // (the audio is re-muxed), and an open of the same row meanwhile read the OLD file — then,
         // marked dirty by its own script re-render, wrote that stale state back over the edits
         // (seen: a renamed speaker and an edited line vanished on reopen). Opens wait on this.
+        /** Serializes the library-entry rebuilds [runPersist] makes. */
+        private val persistLock = kotlinx.coroutines.sync.Mutex()
         private val persistInFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Unit>>()
         fun persistQueued(entryId: String) { persistInFlight.putIfAbsent(entryId, kotlinx.coroutines.CompletableDeferred()) }
         private fun persistDone(entryId: String) { persistInFlight.remove(entryId)?.complete(Unit) }
@@ -150,10 +156,10 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             persistInFlight[entryId]?.let { kotlinx.coroutines.withTimeoutOrNull(120_000) { it.await() } }
         }
 
-        /** The transcript/summary text for ACTION_SUMMARIZE, by ticket. Rides a holder
-         *  rather than an Intent extra: a long meeting's transcript exceeds the ~1 MB Binder
-         *  transaction limit → TransactionTooLargeException crash. Consumed in onStartCommand. */
-        val pendingText = Mailbox<String>()
+        /** ACTION_SUMMARIZE's request, by ticket. Rides a holder rather than an Intent extra: a
+         *  long meeting's transcript exceeds the ~1 MB Binder transaction limit →
+         *  TransactionTooLargeException crash. Consumed in onStartCommand. */
+        val pendingSummarize = Mailbox<SummarizeRequest>()
 
 
         // Process-wide event bus the UI subscribes to. replay=0: UI must be collecting. Each event is
@@ -194,6 +200,14 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val asrBackend: String?,
         val llmModelId: String?,
     )
+
+    /**
+     * Re-summarize [text] (the formatted transcript). [save]: the library entry the result belongs
+     * to, as it stood when the re-summarize started — the service writes the new summary, notes,
+     * actions and title into it when the reading ends, so the result is kept even if the screen
+     * that asked is gone by then. It is also what a screen opened mid-run shows.
+     */
+    data class SummarizeRequest(val text: String, val save: PersistRequest? = null)
 
     data class ExportRequest(
         val share: Boolean,           // true → build to cache for sharing; false → write to [saveUri]
@@ -457,14 +471,13 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 }
                 return START_NOT_STICKY
             }
-            // End recording but let the job carry on into diarization/summary.
-            ACTION_STOP_RECORDING -> {
-                recordingPipeline.requestStop(defer = false)
-                return START_NOT_STICKY
-            }
-            // "Next talk": end recording, auto-save, skip processing — the mic frees up fast.
-            ACTION_STOP_RECORDING_DEFER -> {
-                recordingPipeline.requestStop(defer = true)
+            // End recording but let the job carry on into diarization/summary; "Next talk"
+            // (DEFER): end recording, auto-save, skip processing — the mic frees up fast. The
+            // request is published, so a screen opened while the capture winds down shows it.
+            ACTION_STOP_RECORDING, ACTION_STOP_RECORDING_DEFER -> {
+                val defer = intent.action == ACTION_STOP_RECORDING_DEFER
+                recordingPipeline.requestStop(defer, queueOnSave = intent.getBooleanExtra(EXTRA_QUEUE_ON_SAVE, false))
+                RunRegistry.captureStopping(nextTalk = defer)
                 return START_NOT_STICKY
             }
             ACTION_EXPORT -> {
@@ -513,10 +526,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val cfgSnapshot = TranscriptionConfig.Holder.config
         startForegroundTyped(recording, getString(R.string.svc_preparing))
         val uri = intent?.getStringExtra(EXTRA_AUDIO_URI)
-        // Transcript/summary text rides pendingText (Binder-limit safe), under this intent's ticket.
-        val pendingBody = if (summarizeOnly) pendingText.take(intent) else null
-        val transcript = pendingBody ?: intent?.getStringExtra(EXTRA_TRANSCRIPT)
-        val summaryExtra = pendingBody ?: intent?.getStringExtra(EXTRA_SUMMARY)
+        // The re-summarize request rides pendingSummarize (Binder-limit safe), under this intent's ticket.
+        val summarizeReq = if (summarizeOnly) pendingSummarize.take(intent) else null
+        val transcript = summarizeReq?.text ?: intent?.getStringExtra(EXTRA_TRANSCRIPT)
         val summarizeWithTitle = intent?.getBooleanExtra(EXTRA_WITH_TITLE, false) ?: false
         // Queue drains are tagged QUEUE_GEN so their events never reach the UI's open session.
         val runGen = if (processQueue) QUEUE_GEN else intent?.getIntExtra(EXTRA_RUN_GEN, UNTAGGED) ?: UNTAGGED
@@ -541,7 +553,19 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             if (!processQueue) TranscriptionConfig.Holder.config = cfgSnapshot
             runCatching {
                 when {
-                    summarizeOnly -> reader.runSummarizeOnly(transcript.orEmpty(), summarizeWithTitle)
+                    summarizeOnly -> {
+                        val r = reader.runSummarizeOnly(transcript.orEmpty(), summarizeWithTitle)
+                        // Read to the end (a Stop or a superseding run throws before this): write it
+                        // into its entry here, not only from the screen, which may be gone by now.
+                        val save = summarizeReq?.save
+                        if (save != null && r.summary != null) withContext(NonCancellable + Dispatchers.Main) {
+                            persistQueued(save.entryId)
+                            runPersist(save.copy(
+                                summary = r.summary, actionItems = r.actions ?: save.actionItems,
+                                title = r.title ?: save.title, notes = r.notes,
+                            ))
+                        }
+                    }
                     processQueue -> queueRunner.run()
                     recording -> recordingPipeline.run()
                     else -> importPipeline.run(uri)
@@ -603,7 +627,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 processQueue -> RunRegistry.Kind.QUEUE
                 else -> RunRegistry.Kind.IMPORT
             },
-            gen = runGen, audioUri = uri, startedAtMs = System.currentTimeMillis(),
+            gen = runGen, audioUri = uri ?: summarizeReq?.save?.audioUri?.toString(),
+            startedAtMs = System.currentTimeMillis(), resummary = summarizeReq?.save, resummaryTitle = summarizeWithTitle,
         ))
         pipelineJob = job
         // Now that the new job is the active one, supersede any in-flight run (e.g. Re-summarize
@@ -699,11 +724,13 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 // session's audio (safe even when that IS the entry's session.m4a: buildSession
                 // decodes the input to a temp before it overwrites the output).
                 val audio = if (entry.wavFile.exists()) Uri.fromFile(entry.wavFile) else req.audioUri
-                val updated = SessionLibrary.attachResults(
+                // One rebuild of an entry at a time: a finished re-summarize's own save and the
+                // screen's edits-persist can land together.
+                val updated = persistLock.withLock { SessionLibrary.attachResults(
                     this@TranscriptionService, entry, req.utterances, req.speakerNames,
                     req.summary, req.actionItems, req.title, req.notes, req.asrModelId, req.asrBackend, req.llmModelId,
                     audio = audio,
-                )
+                ) }
                 if (updated != null) {
                     emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
                     studio.primeminutes.core.embed.LibraryIndexer.request(this@TranscriptionService, updated.id)

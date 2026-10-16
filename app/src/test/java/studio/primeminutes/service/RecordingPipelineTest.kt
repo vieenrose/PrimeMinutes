@@ -34,6 +34,7 @@ class RecordingPipelineTest {
     @Before fun setUp() {
         ctx = stringlessContext(ApplicationProvider.getApplicationContext())
         SessionLibrary.root(ctx).deleteRecursively()
+        studio.primeminutes.core.library.ProcessingQueue.clear(ctx)
         RunRegistry.resetForTest()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -43,14 +44,14 @@ class RecordingPipelineTest {
         RecordingPipeline(host) { AudioRecorder(feed = testWav(File(ctx.cacheDir, "feed.wav"), 2.5)) }
 
     /** Run until [until] holds, then ask for a graceful stop; returns the host. */
-    private fun record(defer: Boolean, until: (FakePipelineHost) -> Boolean = { it.of<TranscriptEvent.UtteranceSnapshot>().size >= 3 }) = runBlocking {
+    private fun record(defer: Boolean, queueOnSave: Boolean = false, until: (FakePipelineHost) -> Boolean = { it.of<TranscriptEvent.UtteranceSnapshot>().size >= 3 }) = runBlocking {
         val host = FakePipelineHost(ctx, scope)
         val p = pipeline(host)
         val run = scope.async(RunGen(7)) { p.run() }
         withTimeout(20_000) {
             while (!until(host)) delay(20)
             assertTrue("the mic is live while recording", RunRegistry.recordingActive)
-            p.requestStop(defer)
+            p.requestStop(defer, queueOnSave)
             run.await()
         }
         host
@@ -87,12 +88,25 @@ class RecordingPipelineTest {
         assertEquals(1, SessionLibrary.list(ctx).size)
     }
 
+    @Test fun theScreensStopQueuesTheCaptureBeforeSayingItIsSaved() {
+        // The screen may be gone by the time the capture is saved: the service queues it itself.
+        val host = record(defer = true, queueOnSave = true)
+        val entry = SessionLibrary.list(ctx).single()
+        assertEquals(listOf(entry.id), studio.primeminutes.core.library.ProcessingQueue.ids(ctx))
+        assertEquals(1, host.of<TranscriptEvent.RecordingSaved>().size)
+    }
+
+    @Test fun theNotificationsStopQueuesNothing() {
+        record(defer = false)
+        assertTrue(studio.primeminutes.core.library.ProcessingQueue.ids(ctx).isEmpty())
+    }
+
     @Test fun aNewStartClearsTheStopFlags() {
         val p = RecordingPipeline(FakePipelineHost(ctx, scope))
-        p.requestStop(defer = true)
-        assertTrue(p.stopRequested && p.deferRequested)
+        p.requestStop(defer = true, queueOnSave = true)
+        assertTrue(p.stopRequested && p.deferRequested && p.queueOnSave)
         p.resetStopFlags()
-        assertFalse(p.stopRequested || p.deferRequested)
+        assertFalse(p.stopRequested || p.deferRequested || p.queueOnSave)
     }
 
     @Test fun cancellingKeepsTheCaptureAndTheFrozenTranscript() = runBlocking {

@@ -28,6 +28,19 @@ class RunRegistryTest {
         assertEquals(setOf(7), RunRegistry.jobs.value.activeSessionGens)
     }
 
+    @Test fun aStopRequestIsPublishedForTheRecordingUntilItsJobEnds() {
+        RunRegistry.captureStopping(nextTalk = true)
+        assertNull("no recording: nothing to stop", RunRegistry.jobs.value.captureStop)
+        RunRegistry.runStarting(recording = true, queue = false)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.RECORDING, gen = 4))
+        RunRegistry.captureStopping(nextTalk = false)
+        assertEquals(RunRegistry.CaptureStop(4, nextTalk = false), RunRegistry.jobs.value.captureStop)
+        RunRegistry.captureStopping(nextTalk = true)
+        assertEquals(RunRegistry.CaptureStop(4, nextTalk = true), RunRegistry.jobs.value.captureStop)
+        RunRegistry.pipelineEnded()
+        assertNull(RunRegistry.jobs.value.captureStop)
+    }
+
     @Test fun aNewStartOverwritesTheRunTypeInsteadOfAccumulating() {
         RunRegistry.runStarting(recording = true, queue = false)
         RunRegistry.runStarting(recording = false, queue = true)
@@ -109,9 +122,11 @@ class RunRegistryTest {
         assertEquals(listOf(utt0(), utt1(), TranscriptEvent.Status("two"), TranscriptEvent.Progress(0.2f)), log)
         RunRegistry.fold(log, TranscriptEvent.Complete(listOf(utt(0))))
         assertEquals(listOf(TranscriptEvent.Status("two"), TranscriptEvent.Progress(0.2f), TranscriptEvent.Complete(listOf(utt(0)))), log)
-        RunRegistry.fold(log, TranscriptEvent.Partial("Sum", reset = true))
+        // Streamed text joins, but not onto a reset (whose own text the screen ignores).
+        RunRegistry.fold(log, TranscriptEvent.Partial("", reset = true))
+        RunRegistry.fold(log, TranscriptEvent.Partial("Sum"))
         RunRegistry.fold(log, TranscriptEvent.Partial("mary"))
-        assertEquals(TranscriptEvent.Partial("Summary", reset = true), log.last())
+        assertEquals(listOf(TranscriptEvent.Partial("", reset = true), TranscriptEvent.Partial("Summary")), log.filterIsInstance<TranscriptEvent.Partial>())
         RunRegistry.fold(log, TranscriptEvent.SummaryComplete("Summary."))
         assertTrue(log.none { it is TranscriptEvent.Partial })
         // The AI notes trace: streamed tokens join, a new reading starts it over.

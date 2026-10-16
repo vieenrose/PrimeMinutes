@@ -32,7 +32,16 @@ object RunRegistry {
     enum class Kind { RECORDING, IMPORT, SUMMARIZE, QUEUE }
 
     /** The pipeline job: its kind, the session generation its events are tagged with, its source. */
-    data class Run(val kind: Kind, val gen: Int, val audioUri: String? = null, val startedAtMs: Long = 0L)
+    data class Run(
+        val kind: Kind, val gen: Int, val audioUri: String? = null, val startedAtMs: Long = 0L,
+        /** A re-summarize of a library session: that session as it was when the run started. */
+        val resummary: TranscriptionService.PersistRequest? = null,
+        /** That re-summarize also writes a new title. */
+        val resummaryTitle: Boolean = false,
+    )
+
+    /** The recording [gen] was asked to stop (⏹ Stop & save, or ⏭ Next talk: [nextTalk]). */
+    data class CaptureStop(val gen: Int, val nextTalk: Boolean)
 
     data class Jobs(
         /** A pipeline job is active in this process (set once launched, cleared by its teardown). */
@@ -46,6 +55,8 @@ object RunRegistry {
         val recordingActive: Boolean = false,
         /** The pipeline job the flags above describe, for the UI to re-attach to. */
         val pipeline: Run? = null,
+        /** The recording's capture is winding down after a stop request (until the job ends). */
+        val captureStop: CaptureStop? = null,
         /** Library entry the queue drain is processing right now. */
         val queueItemId: String? = null,
         /** Generation of the task the AI notes worker is reading now (null: not reading). */
@@ -87,19 +98,25 @@ object RunRegistry {
 
     /** A start command is about to launch a new job: it supersedes whatever ran before. */
     fun runStarting(recording: Boolean, queue: Boolean) =
-        _jobs.update { it.copy(recordingJobActive = recording, queueDraining = queue) }
+        _jobs.update { it.copy(recordingJobActive = recording, queueDraining = queue, captureStop = null) }
+
+    /** A stop request reached the running recording (ignored when no recording runs). */
+    fun captureStopping(nextTalk: Boolean) = _jobs.update { j ->
+        val run = j.pipeline?.takeIf { j.pipelineActive && it.kind == Kind.RECORDING } ?: return@update j
+        j.copy(captureStop = CaptureStop(run.gen, nextTalk || j.captureStop?.takeIf { it.gen == run.gen }?.nextTalk == true))
+    }
 
     /** The new job is launched and is now the service's active one. */
     fun pipelineStarted(run: Run) = _jobs.update { it.copy(pipelineActive = true, pipeline = run) }
 
     /** A finished foreground run goes on draining the queue in the same job. */
     fun queueResumed() = _jobs.update {
-        it.copy(queueDraining = true, pipeline = it.pipeline?.copy(gen = TranscriptionService.QUEUE_GEN))
+        it.copy(queueDraining = true, captureStop = null, pipeline = it.pipeline?.copy(gen = TranscriptionService.QUEUE_GEN, resummary = null))
     }
 
     /** The active job's teardown (or the system's time limit): nothing runs any more. */
     fun pipelineEnded() = _jobs.update {
-        it.copy(pipelineActive = false, recordingJobActive = false, queueDraining = false, pipeline = null)
+        it.copy(pipelineActive = false, recordingJobActive = false, queueDraining = false, pipeline = null, captureStop = null)
     }
 
     fun micLive(live: Boolean) = _jobs.update { it.copy(recordingActive = live) }
@@ -211,7 +228,8 @@ object RunRegistry {
             is TranscriptEvent.SummaryComplete -> log.removeAll { it is TranscriptEvent.Partial || it is TranscriptEvent.SummaryComplete }
             is TranscriptEvent.Partial ->
                 if (e.reset) log.removeAll { it is TranscriptEvent.Partial }
-                else if (last is TranscriptEvent.Partial) {
+                // (not onto a reset, whose own text a replay ignores)
+                else if (last is TranscriptEvent.Partial && !last.reset) {
                     log[log.lastIndex] = last.copy(chunk = last.chunk + e.chunk); return
                 }
             is TranscriptEvent.Agent -> {

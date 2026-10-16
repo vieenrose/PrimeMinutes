@@ -200,6 +200,30 @@ object SessionReducer {
     }
 
     /**
+     * The service no longer runs anything for this session's run, yet no terminal event came: it
+     * was stopped from outside the screen (the notification's Stop, the system's time limit). The
+     * session settles like a Stop from the screen, without asking the service again.
+     */
+    fun runEnded(state: SessionState, env: SessionEnv): Next = tx(state, env) {
+        if (!(s.running || s.isRecording) || s.watchingQueue) return@tx
+        // A failed reading said why on the status line (and sent no terminal event): keep that.
+        val failed = s.status.startsWith(str(R.string.svc_summary_failed))
+        s = s.copy(
+            running = false, isRecording = false, micLevel = 0f,
+            status = if (failed) s.status else str(R.string.status_stopped),
+            pendingNextTalk = false, pendingAutoProcess = false, deferStopped = false,
+        )
+        // The booth's timer and buttons are dead now.
+        if (s.screen == Screen.Capture) s = s.copy(screen = Screen.Studio)
+        s.resummaryUndo?.takeIf { s.summary == null }?.let { u ->
+            s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited)
+            emit(SessionEffect.AgentReset(whole = null))
+            u.journal?.let { emit(SessionEffect.AgentRestore(it)) }
+        }
+        s = s.copy(resummaryUndo = null)
+    }
+
+    /**
      * Back to Studio (system Back or the top bar). Leaving a watched queue item must release the
      * borrowed `running`, or Studio paints a phantom "processing" banner that never clears.
      */
@@ -320,6 +344,19 @@ object SessionReducer {
 
     private fun Tx.resummarize(journal: String?, regenerateTitle: Boolean) {
         if (s.running || s.utterances.isEmpty()) return
+        // A library session: the service writes the result into its entry itself (the screen may be
+        // gone when the reading ends), and a screen opened meanwhile shows the run from this.
+        val save = s.libraryDir?.takeIf { !s.watchingQueue }?.let { dir ->
+            SessionEffect.Persist(
+                entryId = dir.name, audioUri = s.audioUri, utterances = s.utterances, speakerNames = s.speakerNames,
+                summary = null, actionItems = s.actionItems,
+                // The title stays when it is not regenerated, and is the fallback when it is.
+                title = s.title, notes = null,
+                asrModelId = s.sessionModels?.second ?: s.config.asrModelId,
+                asrBackend = s.sessionModels?.third ?: s.config.asrBackend,
+                llmModelId = s.config.llmModelId,
+            )
+        }
         emit(SessionEffect.ApplyConfig(s.config))
         emit(SessionEffect.AgentReset(whole = true))
         s = s.copy(
@@ -333,7 +370,7 @@ object SessionReducer {
         s = s.copy(running = true, progress = 0f, status = str(R.string.status_starting))   // transcript persists
         emit(SessionEffect.StartSummarize(
             studio.primeminutes.core.llm.TranscriptFormat.format(s.utterances, s.speakerNames.mapValues { it.value.name }),
-            withTitle = regenerateTitle, gen = s.sessionGen,
+            withTitle = regenerateTitle, gen = s.sessionGen, save = save,
         ))
     }
 
@@ -592,17 +629,13 @@ object SessionReducer {
         val savedDir = env.entryDirOf(newUri)
         // Auto-saved into the library: refresh the home list and bind the session to its entry.
         s = s.copy(isRecording = false, micLevel = 0f, libraryDir = savedDir ?: s.libraryDir, recentsVersion = s.recentsVersion + 1)
-        // ⏹ Stop & save: the capture is safe — queue it (no drain: this run finishes the talk itself;
-        // the service resumes the queue afterwards and drops the item if it is DONE by then).
-        if (s.pendingAutoProcess) {
-            s = s.copy(pendingAutoProcess = false)
-            savedDir?.name?.let { emit(SessionEffect.Enqueue(listOf(it))) }
-        }
-        // "Next talk": the previous capture is confirmed safe — queue it and roll straight into the
-        // next recording, but only while the user is STILL in the capture flow.
+        // ⏹ Stop & save / ⏭ Next talk: the service queued the capture before saying it is saved
+        // (EXTRA_QUEUE_ON_SAVE), so that holds even when this screen is gone by then.
+        if (s.pendingAutoProcess) s = s.copy(pendingAutoProcess = false)
+        // "Next talk": the previous capture is confirmed safe — roll straight into the next
+        // recording, but only while the user is STILL in the capture flow.
         if (s.pendingNextTalk) {
             s = s.copy(pendingNextTalk = false)
-            savedDir?.name?.let { emit(SessionEffect.Enqueue(listOf(it))) }
             if (s.screen == Screen.Capture) record()
         }
     }

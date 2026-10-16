@@ -21,8 +21,9 @@ sealed interface SessionEffect {
     data object StopRecording : SessionEffect
     data object StopRecordingDefer : SessionEffect
     data object ProcessQueue : SessionEffect
-    /** ACTION_SUMMARIZE over [text] (the formatted transcript), tagged [gen]. */
-    data class StartSummarize(val text: String, val withTitle: Boolean, val gen: Int) : SessionEffect
+    /** ACTION_SUMMARIZE over [text] (the formatted transcript), tagged [gen]. [save]: the library
+     *  session it re-summarizes, which the service updates with the result itself. */
+    data class StartSummarize(val text: String, val withTitle: Boolean, val gen: Int, val save: Persist? = null) : SessionEffect
 
     /** Put [config] in the process-wide holder the service reads when a run starts. */
     data class ApplyConfig(val config: TranscriptionConfig) : SessionEffect
@@ -63,8 +64,6 @@ sealed interface SessionEffect {
     data class QueueAgentApply(val event: AgentEvent) : SessionEffect
 
     // --- The library. ---
-    /** Add [ids] to the processing queue without starting it, then refresh the rows. */
-    data class Enqueue(val ids: List<String>) : SessionEffect
     /** Add [ids] to the queue and start the drain unless a foreground import must not be superseded. */
     data class EnqueueAndStart(val ids: List<String>) : SessionEffect
     data class DeleteEntries(val victims: List<SessionLibrary.Entry>) : SessionEffect

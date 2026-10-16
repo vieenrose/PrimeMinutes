@@ -16,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,8 +46,6 @@ interface SessionUi {
     fun startImport(uri: Uri, gen: Int)
     fun startRecording(gen: Int)
     fun stopRun()
-    fun stopRecording()
-    fun stopRecordingDefer()
     fun processQueue()
     /** Pause a playing track and show it paused. */
     fun pausePlayer()
@@ -113,6 +113,22 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                     apply(SessionReducer.onEvent(now, env, st.gen, st.event, RunRegistry.currentQueueItemId))
                 }
         }
+        viewModelScope.launch {
+            // A run stopped outside this screen (the notification's Stop, the system's time limit)
+            // sends no terminal event: notice its gen leaving the service's work instead. The gen
+            // must have been seen working first (a start takes a moment to reach the service), and
+            // a short grace lets the run's last events, emitted just before, land first.
+            var seen = Int.MIN_VALUE
+            RunRegistry.jobs.collectLatest { j ->
+                val gen = now.sessionGen
+                if (gen in j.activeSessionGens) { seen = gen; return@collectLatest }
+                if (seen != gen) return@collectLatest
+                delay(RUN_END_GRACE_MS)
+                if (now.sessionGen == gen && gen !in RunRegistry.jobs.value.activeSessionGens) {
+                    apply(SessionReducer.runEnded(now, env))
+                }
+            }
+        }
     }
 
     /**
@@ -126,7 +142,10 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         // Number this screen's runs above any the service has seen, so a gen can never collide.
         var s = now.copy(sessionGen = maxOf(now.sessionGen, snap.highestGen + 1))
         val jobs = snap.jobs
-        val run = jobs.pipeline?.takeIf { jobs.pipelineActive && it.gen >= 0 && it.kind != RunRegistry.Kind.SUMMARIZE }
+        // A re-summarize is shown when it is of a library session (it carries that session).
+        val run = jobs.pipeline?.takeIf {
+            jobs.pipelineActive && it.gen >= 0 && (it.kind != RunRegistry.Kind.SUMMARIZE || it.resummary != null)
+        }
         val gen = jobs.activeSessionGens.sortedDescending().firstOrNull { g ->
             run?.gen == g || snap.sessions[g].orEmpty().any {
                 it is TranscriptEvent.Utterance || it is TranscriptEvent.UtteranceSnapshot || it is TranscriptEvent.Complete
@@ -138,12 +157,26 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
             val recording = own?.kind == RunRegistry.Kind.RECORDING
             val src = own?.audioUri?.let(Uri::parse)
             val dir = src?.let(env::entryDirOf)
+            // A stop already asked of this recording: its capture is winding down.
+            val stopping = jobs.captureStop?.takeIf { recording && it.gen == gen }
             s = s.copy(
                 sessionGen = gen, running = true, transcriptReady = false, progress = 0f,
-                status = strings.str(if (recording) R.string.status_recording else R.string.status_starting),
+                status = strings.str(if (recording && stopping == null) R.string.status_recording else R.string.status_starting),
                 audioUri = src, libraryDir = dir, recordingRun = recording || dir != null,
-                isRecording = recording && jobs.recordingActive,
+                isRecording = recording && jobs.recordingActive && stopping == null,
+                deferStopped = stopping?.nextTalk == true,
             )
+            // A re-summarize: the session it re-reads, as it was when it started.
+            own?.resummary?.let { r ->
+                s = s.copy(
+                    utterances = r.utterances, speakerNames = r.speakerNames, transcriptReady = true,
+                    libraryDir = File(env.libraryRoot, r.entryId), recordingRun = true,
+                    // A title being rewritten is left empty for the new one (titles fill, never overwrite).
+                    title = r.title.takeIf { !own.resummaryTitle }, titleEdited = !own.resummaryTitle && !r.title.isNullOrBlank(),
+                    actionItems = r.actionItems,
+                    sessionModels = Triple(r.llmModelId ?: s.config.llmModelId, r.asrModelId ?: s.config.asrModelId, r.asrBackend ?: s.config.asrBackend),
+                )
+            }
             for (e in snap.sessions[gen].orEmpty()) {
                 val n = SessionReducer.onEvent(s, env, gen, e, null)
                 s = n.state; replayFx += n.effects
@@ -415,12 +448,24 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 setAction(TranscriptionService.ACTION_RECORD).putExtra(TranscriptionService.EXTRA_RUN_GEN, e.gen)
             }
             SessionEffect.StopRun -> ui?.stopRun() ?: service(false) { setAction(TranscriptionService.ACTION_STOP) }
-            SessionEffect.StopRecording -> ui?.stopRecording() ?: service(false) { setAction(TranscriptionService.ACTION_STOP_RECORDING) }
-            SessionEffect.StopRecordingDefer -> ui?.stopRecordingDefer() ?: service(false) { setAction(TranscriptionService.ACTION_STOP_RECORDING_DEFER) }
+            // The service queues the capture once it is saved, and publishes the request: neither
+            // depends on this screen still being there when the capture is finished.
+            SessionEffect.StopRecording -> service(false) {
+                setAction(TranscriptionService.ACTION_STOP_RECORDING).putExtra(TranscriptionService.EXTRA_QUEUE_ON_SAVE, true)
+            }
+            SessionEffect.StopRecordingDefer -> service(false) {
+                setAction(TranscriptionService.ACTION_STOP_RECORDING_DEFER).putExtra(TranscriptionService.EXTRA_QUEUE_ON_SAVE, true)
+            }
             SessionEffect.ProcessQueue -> ui?.processQueue() ?: service(true) { setAction(TranscriptionService.ACTION_PROCESS_QUEUE) }
             is SessionEffect.StartSummarize -> {
-                // Transcript rides the holder, not an Intent extra (Binder 1 MB limit → crash on long meetings).
-                val ticket = TranscriptionService.pendingText.post(e.text)
+                // The request rides the holder, not an Intent extra (Binder 1 MB limit → crash on long meetings).
+                val ticket = TranscriptionService.pendingSummarize.post(TranscriptionService.SummarizeRequest(e.text, e.save?.let { p ->
+                    TranscriptionService.PersistRequest(
+                        entryId = p.entryId, audioUri = p.audioUri, utterances = p.utterances, speakerNames = p.speakerNames,
+                        summary = p.summary, actionItems = p.actionItems, title = p.title, notes = p.notes,
+                        asrModelId = p.asrModelId, asrBackend = p.asrBackend, llmModelId = p.llmModelId,
+                    )
+                }))
                 ContextCompat.startForegroundService(ctx, Intent(ctx, TranscriptionService::class.java)
                     .setAction(TranscriptionService.ACTION_SUMMARIZE)
                     .putExtra(TranscriptionService.EXTRA_WITH_TITLE, e.withTitle)
@@ -466,10 +511,6 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
             is SessionEffect.AgentApply -> agent.apply(e.event)
             is SessionEffect.QueueAgentReset -> { queueAgent.reset(); queueAgent.wholeTranscript = e.whole }
             is SessionEffect.QueueAgentApply -> queueAgent.apply(e.event)
-            is SessionEffect.Enqueue -> viewModelScope.launch {
-                withContext(Dispatchers.IO) { ProcessingQueue.enqueue(ctx, e.ids) }
-                bumpRecents()
-            }
             is SessionEffect.EnqueueAndStart -> viewModelScope.launch {
                 withContext(Dispatchers.IO) { ProcessingQueue.enqueue(ctx, e.ids) }
                 // Starting the drain supersedes the single service job: fine for library-backed runs
@@ -559,6 +600,9 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     }
 
     companion object {
+        /** How long a run's gen must stay gone from the service's work before the screen settles it. */
+        private const val RUN_END_GRACE_MS = 1_500L
+
         /** Human-facing name of a SAF document (post-conflict, so it reflects any "(1)" the system added). */
         fun documentLabel(context: android.content.Context, uri: Uri): String =
             runCatching {

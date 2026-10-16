@@ -20,6 +20,7 @@ import studio.primeminutes.core.audio.WavIo
 import studio.primeminutes.core.audio.WavNormalizer
 import studio.primeminutes.core.config.TranscriptionConfig
 import studio.primeminutes.core.events.TranscriptEvent
+import studio.primeminutes.core.library.ProcessingQueue
 import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.models.ModelManager
 import java.io.File
@@ -44,17 +45,23 @@ internal class RecordingPipeline(
     // diarization + summary, auto-save the capture as RECORDED, and return immediately.
     @Volatile var deferRequested = false
         private set
+    // The screen's ⏹ Stop & save / ⏭ Next talk: queue the capture once it is saved — done here, not
+    // by that screen, which may be gone by then (the notification's Stop & save does not ask).
+    @Volatile var queueOnSave = false
+        private set
 
     /** ACTION_STOP_RECORDING (defer = false) / ACTION_STOP_RECORDING_DEFER (defer = true). */
-    fun requestStop(defer: Boolean) {
+    fun requestStop(defer: Boolean, queueOnSave: Boolean = false) {
         if (defer) deferRequested = true
+        if (queueOnSave) this.queueOnSave = true
         stopRequested = true
     }
 
-    /** A new start of any kind clears both flags (they belong to the run that is starting). */
+    /** A new start of any kind clears the flags (they belong to the run that is starting). */
     fun resetStopFlags() {
         stopRequested = false
         deferRequested = false
+        queueOnSave = false
     }
 
     /**
@@ -85,6 +92,7 @@ internal class RecordingPipeline(
         // a new ACTION_RECORD (which resets the service-global flag) while THIS run is still
         // finishing — the run must keep the defer decision it stopped under.
         var deferred = false
+        var queueIt = false
         // Resume checkpoint inputs (see ImportPipeline): frozen prefix length, and whether live ASR ended cleanly.
         var frozenCount = 0
         var asrEnded = false
@@ -168,6 +176,7 @@ internal class RecordingPipeline(
                     }
                 }
             deferred = deferRequested   // capture just ended — freeze this run's defer decision
+            queueIt = queueOnSave
             // Playback-volume normalization for the capture: a too-quiet recording is fixed in
             // the WAV itself (players can only attenuate, never amplify). Imported files don't
             // need this — their work WAV was already normalized at decode.
@@ -213,6 +222,9 @@ internal class RecordingPipeline(
         host.startForegroundTyped(recording = false, text = ctx.getString(R.string.svc_processing))
         if (recorder.totalSamples == 0L) { if (!captureFailed.get()) host.emitEvent(TranscriptEvent.Failed(ctx.getString(R.string.svc_no_audio_recorded))); return }
         val savedWav = libEntry?.wavFile ?: wav
+        // The capture is safe: queue it as a safety net (the worker finishes it below; the service
+        // resumes the queue afterwards and drops the item if it is DONE by then).
+        if (queueIt) libEntry?.let { e -> withContext(Dispatchers.IO) { ProcessingQueue.enqueue(ctx, listOf(e.id)) } }
         host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(savedWav).toString()))
 
         // The live pass already transcribed and tagged this talk with the same engine the queue

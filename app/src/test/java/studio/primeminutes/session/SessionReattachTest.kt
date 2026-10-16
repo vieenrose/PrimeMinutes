@@ -97,6 +97,77 @@ class SessionReattachTest {
         assertNull(vm.now.summary)
     }
 
+    @Test fun aResummaryOfALibrarySessionIsAdoptedWithThatSession() {
+        val names = mapOf(0 to studio.primeminutes.data.SpeakerName("Ann", confidence = "user"))
+        val save = TranscriptionService.PersistRequest(
+            entryId = "20261016-090000", audioUri = android.net.Uri.parse("file:///lib/20261016-090000/session.m4a"),
+            utterances = listOf(utt(0), utt(1)), speakerNames = names, summary = null, actionItems = "- a",
+            title = "Old title", notes = null, asrModelId = null, asrBackend = null, llmModelId = null,
+        )
+        RunRegistry.runStarting(recording = false, queue = false)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.SUMMARIZE, 6, save.audioUri.toString(), 1L, save, resummaryTitle = true))
+        RunRegistry.tryEmit(6, TranscriptEvent.Agent(AgentEvent.State(AgentState.LISTENING, window = 2)))
+        RunRegistry.tryEmit(6, TranscriptEvent.Partial("", reset = true))
+        RunRegistry.tryEmit(6, TranscriptEvent.Partial("new "))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        with(vm.now) {
+            assertEquals(6, sessionGen); assertTrue(running); assertTrue(transcriptReady)
+            assertEquals(listOf("l0", "l1"), utterances.map { it.text })
+            assertEquals(names, speakerNames)
+            assertEquals("20261016-090000", libraryDir?.name)
+            assertNull(title)   // being rewritten: the new one fills it
+            assertEquals("new ", summary)
+        }
+        assertTrue(vm.agent.active)
+        RunRegistry.tryEmit(6, TranscriptEvent.SummaryComplete("new summary"))
+        RunRegistry.tryEmit(6, TranscriptEvent.Title("New title"))
+        ShadowLooper.idleMainLooper()
+        with(vm.now) { assertEquals("new summary", summary); assertEquals("New title", title); assertFalse(running) }
+    }
+
+    @Test fun aRecordingAlreadyAskedToStopIsShownWindingDown() {
+        RunRegistry.runStarting(recording = true, queue = false)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.RECORDING, 8, null, 1L))
+        RunRegistry.micLive(true)
+        RunRegistry.captureStopping(nextTalk = true)
+        RunRegistry.tryEmit(8, TranscriptEvent.UtteranceSnapshot(listOf(utt(0)), stable = 1))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        with(vm.now) { assertEquals(8, sessionGen); assertTrue(running); assertFalse(isRecording); assertTrue(deferStopped) }
+        // The deferred capture's terminal event is Complete: the session settles.
+        RunRegistry.tryEmit(8, TranscriptEvent.Complete(listOf(utt(0)), speakerCount = null))
+        ShadowLooper.idleMainLooper()
+        assertFalse(vm.now.running)
+    }
+
+    @Test fun aRunStoppedFromTheNotificationSettlesTheScreen() {
+        importRunning(gen = 5)
+        RunRegistry.tryEmit(5, TranscriptEvent.Utterance(0, "l0", 0.0, 0.5, 0))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        assertTrue(vm.now.running)
+        // ACTION_STOP from the notification: the job ends, no terminal event is sent.
+        RunRegistry.pipelineEnded()
+        ShadowLooper.idleMainLooper()
+        assertTrue("a grace for the run's last events", vm.now.running)
+        ShadowLooper.shadowMainLooper().idleFor(java.time.Duration.ofSeconds(2))
+        assertFalse(vm.now.running)
+        assertEquals(listOf("l0"), vm.now.utterances.map { it.text })   // what it had stays
+    }
+
+    @Test fun aRunThatFinishesNormallyIsNotMarkedStopped() {
+        importRunning(gen = 5)
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        RunRegistry.tryEmit(5, TranscriptEvent.Complete(listOf(utt(0)), speakerCount = 1))
+        RunRegistry.tryEmit(5, TranscriptEvent.SummaryComplete("sum"))
+        RunRegistry.pipelineEnded()
+        ShadowLooper.shadowMainLooper().idleFor(java.time.Duration.ofSeconds(2))
+        assertEquals("sum", vm.now.summary)
+        assertEquals("#${studio.primeminutes.R.string.status_done}", vm.now.status)
+    }
+
     @Test fun theQueueItemInProgressIsShownOnItsRow() {
         RunRegistry.runStarting(recording = false, queue = true)
         RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.QUEUE, TranscriptionService.QUEUE_GEN))

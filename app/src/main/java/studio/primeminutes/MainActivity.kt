@@ -404,7 +404,7 @@ class MainActivity : ComponentActivity() {
                             }
                             return@Surface
                         }
-                        TranscribeScreen(sessionVm, ::startTranscription, ::stopTranscription, ::startRecording, ::stopRecording, ::stopRecordingDefer, ::processQueue)
+                        TranscribeScreen(sessionVm, ::startTranscription, ::stopTranscription, ::startRecording, ::processQueue)
                     }
                 }
             }
@@ -430,19 +430,6 @@ class MainActivity : ComponentActivity() {
             this,
             Intent(this, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_RECORD)
                 .putExtra(TranscriptionService.EXTRA_RUN_GEN, gen),
-        )
-    }
-
-    private fun stopRecording() {
-        startService(
-            Intent(this, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_STOP_RECORDING)
-        )
-    }
-
-    /** "Next talk": end the live recording but defer its processing (auto-saved as RECORDED). */
-    private fun stopRecordingDefer() {
-        startService(
-            Intent(this, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_STOP_RECORDING_DEFER)
         )
     }
 
@@ -529,8 +516,6 @@ private fun TranscribeScreen(
     onPicked: (Uri, Int) -> Unit,
     onStop: () -> Unit,
     onRecord: (Int) -> Unit,
-    onStopRecording: () -> Unit,
-    onStopRecordingDefer: () -> Unit,
     onProcessQueue: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
@@ -746,8 +731,6 @@ private fun TranscribeScreen(
             override fun startImport(uri: Uri, gen: Int) = onPicked(uri, gen)
             override fun startRecording(gen: Int) = onRecord(gen)
             override fun stopRun() = onStop()
-            override fun stopRecording() = onStopRecording()
-            override fun stopRecordingDefer() = onStopRecordingDefer()
             override fun processQueue() = onProcessQueue()
             override fun pausePlayer() {
                 runCatching { pc.player?.takeIf { it.isPlaying }?.pause() }
