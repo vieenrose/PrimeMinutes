@@ -354,13 +354,13 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
 
     override fun onDestroy() {
         wakeLock?.let { if (it.isHeld) it.release() }
-        // A run that never unwound (a native call deaf to cancellation outlived the Stop's drain, which
-        // then stops the service anyway) never reached its teardown: the process-wide registry still
-        // said it was running, so an open screen showed it in progress for good and the engines
-        // counted as busy. Nothing of this service runs any more. Clearing pipelineJob also keeps
-        // that run's late teardown, if it ever comes, from ending a newer service's run.
+        // A run that never reached its teardown (a native call deaf to cancellation outlived the
+        // Stop's drain, which then stops the service anyway): the process-wide registry still said
+        // it was running, so an open screen showed it in progress for good and the engines counted
+        // as busy. Nothing of this service runs any more. Clearing pipelineJob also keeps that run's
+        // late teardown, if it ever comes, from ending a newer service's run.
         if (pipelineJob != null) {
-            Log.w(STOP_TAG, "service destroyed under a run that never unwound: run registry cleared")
+            Log.w(STOP_TAG, "service destroyed under a run that never reached its teardown: run registry cleared")
             pipelineJob = null
             RunRegistry.pipelineEnded()
         }
@@ -634,28 +634,41 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // mid-model-load: mic never captured, no RecordingSaved, no Failed (cancellation is
             // deliberately not reported) — the Capture screen waited forever and the talk was
             // LOST. Serializing on main makes check-then-stop atomic w.r.t. new starts.
-            val resumeQueue = withContext(NonCancellable + Dispatchers.Main) {
-                val r = !processQueue && pipelineJob === job && ProcessingQueue.size(this@TranscriptionService) > 0
-                // The resumed drain must be guarded like a plain one — flag flips on MAIN.
-                if (r) RunRegistry.queueResumed()
-                r
-            }
-            if (resumeQueue) {
-                runCatching { withContext(RunGen(QUEUE_GEN)) { queueRunner.run() } }
-            }
-            // Only tear down if still the active job — a newer run may have superseded this one.
-            withContext(NonCancellable + Dispatchers.Main) {
-                if (pipelineJob === job) {
-                    // Done with it (the rest of this hop is the job's last step): nothing waits on it any more.
-                    pipelineJob = null
-                    RunRegistry.pipelineEnded()
-                    // Leave the service (and its foreground notification) up for an in-flight
-                    // export — the last export's own tail stops it. stopSelf(lastStartId): a stop
-                    // must never bring the service down under a newer, already-accepted start.
-                    // …and for the AI notes worker, which outlives runs: it stops the service itself.
-                    if (activeExports == 0 && !reader.readerBusy()) {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                        stopSelf(lastStartId)
+            //
+            // The teardown sits in a `finally`: coming back from a hop to MAIN into a CANCELLED
+            // coroutine throws (withContext's prompt cancellation applies on the way back, even with
+            // NonCancellable inside), so after a Stop the resume-queue hop below threw and the
+            // teardown never ran — the registry kept the stopped run "running" for the life of the
+            // process: an open screen stayed "in progress", the engines counted as busy. Seen on
+            // the Note10+ (no teardown after "drain finished … jobCompleted=true").
+            try {
+                val resumeQueue = withContext(NonCancellable + Dispatchers.Main) {
+                    // A stopped/superseded run never resumes the queue (its result would be thrown
+                    // away on the way back, after flipping the registry to a drain that never runs).
+                    val r = !processQueue && pipelineJob === job && job?.isCancelled == false &&
+                        ProcessingQueue.size(this@TranscriptionService) > 0
+                    // The resumed drain must be guarded like a plain one — flag flips on MAIN.
+                    if (r) RunRegistry.queueResumed()
+                    r
+                }
+                if (resumeQueue) {
+                    runCatching { withContext(RunGen(QUEUE_GEN)) { queueRunner.run() } }
+                }
+            } finally {
+                // Only tear down if still the active job — a newer run may have superseded this one.
+                withContext(NonCancellable + Dispatchers.Main) {
+                    if (pipelineJob === job) {
+                        // Done with it (the rest of this hop is the job's last step): nothing waits on it any more.
+                        pipelineJob = null
+                        RunRegistry.pipelineEnded()
+                        // Leave the service (and its foreground notification) up for an in-flight
+                        // export — the last export's own tail stops it. stopSelf(lastStartId): a stop
+                        // must never bring the service down under a newer, already-accepted start.
+                        // …and for the AI notes worker, which outlives runs: it stops the service itself.
+                        if (activeExports == 0 && !reader.readerBusy()) {
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            stopSelf(lastStartId)
+                        }
                     }
                 }
             }
