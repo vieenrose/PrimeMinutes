@@ -400,14 +400,25 @@ enum LibrarySearch {
         return hits.sorted { $0.score > $1.score }
     }
     /// Keyword pass for Ask (Android LibrarySearch.keyword): BM25 (Keywords) over the indexed notes and chunks of
-    /// every meeting, normalized like `lexical`; `maxPassages` best per meeting.
+    /// every meeting, folded to one script; `maxPassages` best per meeting. A passage's BM25 doc is kept while its
+    /// text is unchanged (folding and term codes are the cost; the passages themselves are cheap to rebuild).
     static func keyword(_ sessions: [Session], query: String, maxPassages: Int = maxPassages, snippetChars: Int = 200) -> [Hit] {
-        var units: [(Session, Passage)] = []
+        let table = OpenCC.simplifiedChars
+        var units: [(Session, Passage, Keywords.Doc)] = []
         for s in sessions {
             guard let x = index(s.id) else { continue }
-            for v in x.vectors where v.kind != .meeting { if let p = passage(s, v, 0, snippetChars) { units.append((s, p)) } }
+            let ps = x.vectors.filter { $0.kind != .meeting }.compactMap { passage(s, $0, 0, snippetChars) }
+            kwLock.lock(); let old = kwCache[s.id] ?? [:]; kwLock.unlock()
+            var fresh: [String: Keywords.Doc] = [:]
+            for p in ps {
+                let d = old[p.snippet] ?? fresh[p.snippet] ?? Keywords.doc(Keywords.fold(p.snippet, table))
+                fresh[p.snippet] = d; units.append((s, p, d))
+            }
+            kwLock.lock(); kwCache[s.id] = fresh; kwLock.unlock()
         }
-        let scores = Keywords.bm25(norm(query), units.map { norm($0.1.snippet) })
+        let ids = Set(sessions.map(\.id))
+        kwLock.lock(); kwCache = kwCache.filter { ids.contains($0.key) }; kwLock.unlock()
+        let scores = Keywords.score(Keywords.fold(query, table), units.map(\.2))
         var per: [UUID: [Int]] = [:]
         for i in units.indices where scores[i] > 0 { per[units[i].0.id, default: []].append(i) }
         return per.values.map { ix -> Hit in
@@ -417,6 +428,8 @@ enum LibrarySearch {
             return Hit(session: units[ix[0]].0, score: ps[0].score, passages: Array(ps))
         }.sorted { $0.score > $1.score }
     }
+    private static var kwCache: [UUID: [String: Keywords.Doc]] = [:]
+    private static let kwLock = NSLock()
 
     private static func passage(_ s: Session, _ v: SessionIndex.Vector, _ cos: Float, _ chars: Int) -> Passage? {
         switch v.kind {

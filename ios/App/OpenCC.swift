@@ -72,6 +72,22 @@ final class OpenCC: @unchecked Sendable {
             }
         }
     }
+    /// Character-level Traditional→Simplified table (TSCharacters, first choice, BMP) for search normalization
+    /// (Android OpenCcConverter.simplifiedChars): a lookup per UTF-16 unit, no phrase matching — `convert` costs
+    /// milliseconds per passage, which made scanning a whole library seconds long. Other units map to themselves.
+    static let simplifiedChars: [UInt16] = {
+        var t = (0..<65536).map { UInt16($0) }
+        guard let url = Bundle.main.url(forResource: "TSCharacters", withExtension: "txt", subdirectory: "opencc"),
+              let s = try? String(contentsOf: url, encoding: .utf8) else { return t }
+        for line in s.split(separator: "\n") where !line.hasPrefix("#") {
+            let u = Array(line.utf16)
+            guard u.count >= 3, u[1] == 9 else { continue }   // one BMP character, then a tab
+            let v = line.split(separator: "\t").dropFirst().first?.split(separator: " ").first.map { Array($0.utf16) } ?? []
+            if v.count == 1 { t[Int(u[0])] = v[0] }
+        }
+        return t
+    }()
+
     /// Transcripts: character-level only.
     static func transcript(_ s: ChineseScript) -> OpenCC {
         memo("tr-" + s.rawValue) {

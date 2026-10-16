@@ -33,25 +33,51 @@ enum Keywords {
         return out
     }
 
-    /// BM25 of each document for `query`; 0 for a document sharing no term with it.
-    static func bm25(_ query: String, _ docs: [String]) -> [Float] {
-        let q = Set(terms(query))
-        guard !q.isEmpty, !docs.isEmpty else { return Array(repeating: 0, count: docs.count) }
-        let tf: [(Int, [String: Int])] = docs.map { d in
-            let ts = terms(d); var c: [String: Int] = [:]
-            for t in ts where q.contains(t) { c[t, default: 0] += 1 }
-            return (ts.count, c)
+    /// Lower case and the `table` script (OpenCC.simplifiedChars), one UTF-16 unit at a time.
+    static func fold(_ text: String, _ table: [UInt16]) -> String {
+        String(decoding: text.lowercased().utf16.map { table[Int($0)] }, as: UTF16.self)
+    }
+
+    /// A term as an Int: a CJK bigram packs its two characters (exact), anything else is hashed (Android Keywords.code).
+    static func code(_ term: String) -> Int32 {
+        let u = Array(term.utf16)
+        if u.count == 2 && cjk(u[0]) && cjk(u[1]) { return Int32(bitPattern: UInt32(u[0]) << 16 | UInt32(u[1])) }
+        var h: Int32 = 0
+        for c in u { h = h &* 31 &+ Int32(c) }   // Java String.hashCode
+        return h
+    }
+
+    /// A passage reduced to what BM25 needs: its term count and its term codes, sorted.
+    struct Doc {
+        let length: Int, codes: [Int32]
+        func tf(_ c: Int32) -> Int {
+            var lo = 0, hi = codes.count
+            while lo < hi { let m = (lo + hi) / 2; if codes[m] < c { lo = m + 1 } else { hi = m } }
+            var n = 0; while lo + n < codes.count && codes[lo + n] == c { n += 1 }
+            return n
         }
-        let avg = max(Double(tf.reduce(0) { $0 + $1.0 }) / Double(docs.count), 1)
-        var df: [String: Int] = [:]
-        for (_, c) in tf { for t in c.keys { df[t, default: 0] += 1 } }
+    }
+
+    static func doc(_ text: String) -> Doc { let ts = terms(text); return Doc(length: ts.count, codes: ts.map(code).sorted()) }
+
+    /// BM25 of each document for `query`; 0 for a document sharing no term with it.
+    static func bm25(_ query: String, _ docs: [String]) -> [Float] { score(query, docs.map(doc)) }
+
+    static func score(_ query: String, _ docs: [Doc]) -> [Float] {
+        var seen = Set<Int32>(); let q = terms(query).map(code).filter { seen.insert($0).inserted }
+        guard !q.isEmpty, !docs.isEmpty else { return Array(repeating: 0, count: docs.count) }
+        let tf = docs.map { d in q.map { d.tf($0) } }
+        let avg = max(Double(docs.reduce(0) { $0 + $1.length }) / Double(docs.count), 1)
+        let df = q.indices.map { t in tf.filter { $0[t] > 0 }.count }
         let n = Double(docs.count)
-        return tf.map { len, counts in
-            Float(counts.reduce(0.0) { acc, e in
-                let d = Double(df[e.key]!), f = Double(e.value)
-                let idf = log(1 + (n - d + 0.5) / (d + 0.5))
-                return acc + idf * f * (k1 + 1) / (f + k1 * (1 - b + b * Double(len) / avg))
-            })
+        return docs.indices.map { d in
+            var s = 0.0
+            for t in q.indices where tf[d][t] > 0 {
+                let f = Double(tf[d][t]), dft = Double(df[t])
+                let idf = log(1 + (n - dft + 0.5) / (dft + 0.5))
+                s += idf * f * (k1 + 1) / (f + k1 * (1 - b + b * Double(docs[d].length) / avg))
+            }
+            return Float(s)
         }
     }
 }
