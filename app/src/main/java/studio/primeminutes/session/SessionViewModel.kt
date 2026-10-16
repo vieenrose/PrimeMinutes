@@ -181,7 +181,6 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     private fun update(f: (SessionState) -> SessionState) { _state.value = f(_state.value) }
 
     fun persistEdits() = apply(SessionReducer.persistEdits(now, env))
-    fun clearSession() = apply(SessionReducer.clearSession(now, env))
     fun launchAudio(uri: Uri, sourceTitle: String? = null) = apply(SessionReducer.launchAudio(now, env, uri, sourceTitle))
     fun beginRecording() = apply(SessionReducer.beginRecording(now, env))
     fun nextTalk() = apply(SessionReducer.nextTalk(now, env))
@@ -219,8 +218,6 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
 
     // --- Plain view switches the session owns (a new session resets them). ---
     fun showScreen(screen: Screen) = update { it.copy(screen = screen) }
-    fun setRunning(running: Boolean) = update { it.copy(running = running) }
-    fun setWatchingQueue(on: Boolean) = update { it.copy(watchingQueue = on) }
     fun setStatus(status: String) = update { it.copy(status = status) }
     fun setExporting(on: Boolean) = update { it.copy(exporting = on) }
     fun clearTranscriptDirty() = update { it.copy(transcriptDirty = false) }
