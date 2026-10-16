@@ -201,6 +201,24 @@ object LibrarySearch {
         }
     }
 
+    /** A meeting's transcript chunks as indexed, in order (utterance ranges): Ask widens a hit with its neighbours. */
+    fun chunkRanges(e: SessionLibrary.Entry): List<IntRange> =
+        index(e)?.vectors?.filter { it.kind == SessionIndex.Kind.CHUNK }?.map { it.a..it.b }?.sortedBy { it.first } ?: emptyList()
+
+    /** A meeting's loaded session as cached by [refresh] (null before it). */
+    private fun cached(e: SessionLibrary.Entry): PrimeMinutesSession.Loaded? = synchronized(docs) { docs[e.id]?.loaded }
+
+    /** The utterances [a]..[b] of a meeting as one passage, joined like a chunk's snippet (Ask's widened
+     *  excerpts; the meeting's text as loaded by [refresh]). */
+    fun span(e: SessionLibrary.Entry, a: Int, b: Int): Passage? {
+        val s = cached(e) ?: return null
+        if (a < 0 || a > b || a >= s.utterances.size) return null
+        val us = s.utterances.subList(a, minOf(b + 1, s.utterances.size))
+        val u = us.first()
+        return Passage(SessionIndex.Kind.CHUNK, a, a + us.size - 1, u.startSec, u.speaker?.let { s.speakerNames[it]?.name },
+            us.joinToString(" ") { it.text }, false, 0f, u.speaker)
+    }
+
     private fun noteTime(d: Doc, line: Int): Double {
         val raw = d.loaded?.notes?.lines()?.getOrNull(line) ?: return 0.0
         return Regex("\\[(\\d+):(\\d{2})(?::(\\d{2}))?\\]").find(raw)?.let { m ->

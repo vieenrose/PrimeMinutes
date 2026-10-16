@@ -585,6 +585,8 @@ private fun TranscribeScreen(
     val devQuery = devExtras?.getString("vox_query") ?: ""
     LaunchedEffect(Unit) {
         val q = devExtras?.getString("vox_ask") ?: return@LaunchedEffect
+        // `--ez vox_ask_legacy true`: the retrieval before meeting routing, for before/after timings.
+        if (devExtras.getBoolean("vox_ask_legacy")) studio.primeminutes.core.ask.AskEngine.retrieval = studio.primeminutes.core.ask.AskEngine.Retrieval.LEGACY
         delay(3_000); askQuestion = q.trim()
     }
     // DEV: `--ez vox_merge true` asks to merge the open meeting's first speaker into its second (the

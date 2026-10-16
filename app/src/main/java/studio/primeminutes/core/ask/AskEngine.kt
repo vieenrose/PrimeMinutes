@@ -42,9 +42,13 @@ import java.io.File
 object AskEngine {
     private const val TAG = "primeminutes-ask"
     private const val MAX_PASSAGES = 8
-    private const val PASSAGE_TOKENS = 1500   // ≤ ~1 500 tokens of excerpts in the mobile 4k context
+    /** Tokens of excerpts per question: what 8 fused passages used to fill on the median (quality eval
+     *  2026-10, "Ask after fixes"); routing makes them count, a larger budget only slowed the prefill. */
+    private const val PASSAGE_TOKENS = 800
     private const val NOTE_BONUS = 0.05f      // notes are denser than raw chunks: prefer them at equal score
     private const val RRF_K = 60f
+    /** The tokens of an excerpt's header line (`[[k]] title · m:ss`) and spacing. */
+    private const val HEADER_TOKENS = 24
 
     sealed class Phase {
         object Idle : Phase()
@@ -68,7 +72,49 @@ object AskEngine {
     /** [sec] is the whole second of the citation tag; [at] the passage's exact start, where a tap opens it
      *  (115 for a line starting at 115.4 s opened the line before). */
     /** [k] is the short tag the model sees (`[[k]]`), unique across the conversation. */
-    data class Excerpt(val entry: SessionLibrary.Entry, val sec: Int, val text: String, val score: Float, val at: Double = sec.toDouble(), val k: Int = 0)
+    /** [a]..[b]: the transcript utterances a CHUNK excerpt covers (-1 for a note), so neighbours can widen it. */
+    data class Excerpt(
+        val entry: SessionLibrary.Entry, val sec: Int, val text: String, val score: Float, val at: Double = sec.toDouble(), val k: Int = 0,
+        val a: Int = -1, val b: Int = -1,
+    )
+
+    /**
+     * Retrieval knobs, model-agnostic (the token budget is counted with the loaded model's tokenizer).
+     * Meeting routing: the [routeMeetings] meetings ranked first by their passages (dense and keyword
+     * evidence, see the function [routeMeetings]) give [routeDepth] candidates per list instead of [perMeeting], and their
+     * passages lead the ranking — near-duplicate meetings stole the slots of the one asked about.
+     * [seeds] best passages are taken, overlapping transcript passages of a meeting merged into one;
+     * then each excerpt is widened [widen] times by the transcript chunk after it and the one before it
+     * while [budgetTokens] lasts. [rrfK]: the reciprocal-rank constant of the passage fusion.
+     */
+    data class Retrieval(
+        val maxExcerpts: Int = MAX_PASSAGES,
+        val budgetTokens: Int = PASSAGE_TOKENS,
+        val perMeeting: Int = 4,
+        val seeds: Int = MAX_PASSAGES,
+        val widen: Int = 0,
+        val routeMeetings: Int = 2,
+        val routeDepth: Int = 16,
+        val rrfK: Float = RRF_K,
+    ) {
+        companion object {
+            /** The retrieval before meeting routing (8 fused passages, ≤ 1 500 tokens): DEV before/after timings. */
+            val LEGACY = Retrieval(budgetTokens = 1500, routeMeetings = 0)
+        }
+    }
+
+    /** What [select] needs from the library: a meeting's chunk ranges and the text of an utterance range. */
+    interface Transcripts {
+        fun chunks(e: SessionLibrary.Entry): List<IntRange>
+        /** The utterances [a]..[b] as an excerpt (score 0), or null. */
+        fun span(e: SessionLibrary.Entry, a: Int, b: Int): Excerpt?
+    }
+
+    @Volatile var retrieval = Retrieval()
+
+    /** Tokens of the last question's prompt (this turn's part of the conversation), for logs and the eval harness. */
+    @Volatile var lastPromptTokens = 0
+        private set
 
     /** [pool]: every excerpt of the conversation so far, this turn's included — what a citation may point to. */
     data class Turn(val question: String, val answer: String, val excerpts: List<Excerpt>, val done: Boolean, val pool: List<Excerpt> = excerpts)
@@ -76,8 +122,19 @@ object AskEngine {
     private val SHORT_TAG = Regex("""\[{1,2}(\d{1,3})]{1,2}""")
 
     /** The model's `[[k]]` tags rewritten `[[entryId@sec]]`; a number no excerpt carries is left for the sheet to drop. */
-    fun expandTags(answer: String, pool: List<Excerpt>): String = SHORT_TAG.replace(answer) { m ->
+    fun expandTags(answer: String, pool: List<Excerpt>): String = dedupeTags(SHORT_TAG.replace(answer) { m ->
         pool.firstOrNull { it.k == m.groupValues[1].toInt() }?.let { "[[${it.entry.id}@${it.sec}]]" } ?: m.value
+    })
+
+    private val LONG_TAG = Regex("""\[\[[^\[\]@]+@\d+]]""")
+    private val TAG_RUN = Regex("""\[\[[^\[\]@]+@\d+]](?:[ \t]*[,，、;；]?[ \t]*\[\[[^\[\]@]+@\d+]])+""")
+
+    /** A run of citations naming the same passage twice (`[[x@879]], [[x@879]]`) keeps it once. */
+    fun dedupeTags(text: String): String = TAG_RUN.replace(text) { m ->
+        val tags = LONG_TAG.findAll(m.value).map { it.value }.toList()
+        val distinct = tags.distinct()
+        if (distinct.size == tags.size) m.value
+        else distinct.joinToString(m.value.substring(LONG_TAG.find(m.value)!!.range.last + 1, LONG_TAG.findAll(m.value).elementAt(1).range.first))
     }
 
     /** Whole seconds since [startedAt] (both SystemClock.elapsedRealtime), never negative. */
@@ -92,7 +149,7 @@ object AskEngine {
      * score per passage: 1/(k+rank) in each list it appears in. A note outranks a chunk at equal
      * cosine in the dense list ([NOTE_BONUS]); the keyword list keeps the BM25 order.
      */
-    fun fuse(dense: List<LibrarySearch.Hit>, keyword: List<LibrarySearch.Hit>): List<Excerpt> {
+    fun fuse(dense: List<LibrarySearch.Hit>, keyword: List<LibrarySearch.Hit>, k: Float = RRF_K): List<Excerpt> {
         data class Key(val id: String, val kind: SessionIndex.Kind, val a: Int)
         val score = LinkedHashMap<Key, Float>()
         val first = HashMap<Key, Excerpt>()
@@ -101,13 +158,90 @@ object AskEngine {
                 .sortedByDescending { (_, p) -> p.score + if (bonus && p.kind == SessionIndex.Kind.NOTE) NOTE_BONUS else 0f }
                 .forEachIndexed { rank, (e, p) ->
                     val key = Key(e.id, p.kind, p.uttIndex)
-                    score[key] = (score[key] ?: 0f) + 1f / (RRF_K + rank + 1)
-                    first.getOrPut(key) { Excerpt(e, p.timeSec.toInt(), p.snippet, 0f, p.timeSec) }
+                    score[key] = (score[key] ?: 0f) + 1f / (k + rank + 1)
+                    first.getOrPut(key) {
+                        if (p.kind == SessionIndex.Kind.CHUNK) Excerpt(e, p.timeSec.toInt(), p.snippet, 0f, p.timeSec, a = p.uttIndex, b = p.uttEnd)
+                        else Excerpt(e, p.timeSec.toInt(), p.snippet, 0f, p.timeSec)
+                    }
                 }
         }
         add(dense, bonus = true)
         add(keyword, bonus = false)
         return score.entries.sortedByDescending { it.value }.map { (key, v) -> first.getValue(key).copy(score = v) }
+    }
+
+    /**
+     * The excerpts handed to the model, from the ranking [ranked] (routed meetings first, [retrieve]): seeds,
+     * overlapping transcript passages merged, then widening by neighbour chunks while the budget lasts.
+     * [tokens] counts an excerpt's text.
+     */
+    fun select(ranked: List<Excerpt>, p: Retrieval, tokens: (String) -> Int, src: Transcripts?): List<Excerpt> {
+        val out = ArrayList<Excerpt>()
+        val cost = HashMap<Excerpt, Int>()
+        var used = 0
+        fun price(x: Excerpt) = tokens(x.text) + HEADER_TOKENS
+        /** Puts [x] (a widened or merged excerpt) in place of [olds], if the budget allows. */
+        fun replace(olds: List<Excerpt>, x: Excerpt): Boolean {
+            val n = price(x); val freed = olds.sumOf { cost.getValue(it) }
+            if (used - freed + n > p.budgetTokens) return false
+            val at = olds.minOf { out.indexOf(it) }   // where the earliest of them stood
+            olds.forEach { out.remove(it); cost.remove(it) }
+            out.add(at.coerceIn(0, out.size), x); cost[x] = n; used += n - freed
+            return true
+        }
+        fun widened(x: Excerpt, a: Int, b: Int): Excerpt? = src?.span(x.entry, a, b)?.copy(score = x.score)
+        /** Excerpts of [x]'s meeting overlapping or touching the utterances [a]..[b]. */
+        fun touching(x: Excerpt, a: Int, b: Int) = out.filter { it.entry.id == x.entry.id && it.a >= 0 && it.a <= b + 1 && it.b >= a - 1 }
+        for (c in ranked) {
+            if (out.size >= minOf(p.seeds, p.maxExcerpts)) break
+            // A note and its transcript chunk, or a meeting imported twice, can carry the same words: one excerpt is enough.
+            if (out.any { it.text == c.text }) continue
+            val near = if (c.a >= 0) touching(c, c.a, c.b) else emptyList()
+            if (near.isNotEmpty()) {
+                val a = minOf(c.a, near.minOf { it.a }); val b = maxOf(c.b, near.maxOf { it.b })
+                if (near.size == 1 && near[0].a <= c.a && near[0].b >= c.b) continue   // already inside
+                widened(c, a, b)?.let { replace(near, it.copy(score = near.maxOf { n -> n.score })) }
+                continue
+            }
+            val n = price(c)
+            if (used + n > p.budgetTokens) continue
+            out += c; cost[c] = n; used += n
+        }
+        if (src == null) return out
+        repeat(p.widen) {
+            for (dir in intArrayOf(1, -1)) {
+                for (x in out.toList()) {
+                    if (x !in out || x.a < 0) continue
+                    val cs = src.chunks(x.entry)
+                    val r = if (dir > 0) cs.firstOrNull { it.last > x.b && it.first <= x.b + 1 } else cs.lastOrNull { it.first < x.a && it.last >= x.a - 1 }
+                    if (r == null) continue
+                    val a = minOf(x.a, r.first); val b = maxOf(x.b, r.last)
+                    val olds = listOf(x) + touching(x, a, b).filter { it !== x }
+                    val a2 = minOf(a, olds.minOf { it.a }); val b2 = maxOf(b, olds.maxOf { it.b })
+                    widened(x, a2, b2)?.let { replace(olds, it) }
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * Meeting routing: the [n] meetings ranked first by reciprocal-rank fusion of two meeting scores —
+     * the mean cosine of its 3 best passages (dense, summaries left out) and the sum of its 3 best BM25
+     * scores (keyword). Empty when [n] ≤ 0.
+     */
+    fun routeMeetings(dense: List<LibrarySearch.Hit>, keyword: List<LibrarySearch.Hit>, n: Int): Set<String> {
+        if (n <= 0) return emptySet()
+        val score = LinkedHashMap<String, Float>()
+        fun add(per: List<Pair<String, Float>>) = per.sortedByDescending { it.second }.forEachIndexed { r, (id, _) ->
+            score[id] = (score[id] ?: 0f) + 1f / (RRF_K + r + 1)
+        }
+        add(dense.mapNotNull { h ->
+            val top = h.passages.filter { it.kind != SessionIndex.Kind.MEETING }.map { it.score }.sortedDescending().take(3)
+            if (top.isEmpty()) null else h.entry.id to top.sum() / 3f
+        })
+        add(keyword.map { h -> h.entry.id to h.passages.map { it.score }.sortedDescending().take(3).sum() })
+        return score.entries.sortedByDescending { it.value }.take(n).map { it.key }.toSet()
     }
 
     /** A citation checked against the excerpts the model was given for THIS answer: the exact tag, else the
@@ -171,6 +305,7 @@ object AskEngine {
                     val tPrompt = System.nanoTime()
                     val card = card()
                     val toks = s.tokenize(prompt, special = true)
+                    lastPromptTokens = toks.size
                     // A follow-up that would leave no room for a whole answer, or that the cache refuses,
                     // starts a fresh conversation with this question only (the answer was cut short before).
                     if (!first && !followUpFits(s.seqLength(), toks.size, card.ask.answerTokens, engine?.context ?: 0)
@@ -243,29 +378,33 @@ object AskEngine {
         _turns.value = ts.dropLast(1) + ts.last().copy(answer = answer, done = done)
     }
 
-    /** Hybrid retrieval ([fuse]): dense (when the embedder is there) and keyword passages, ≤ [PASSAGE_TOKENS]. */
-    private suspend fun retrieve(app: Context, entries: List<SessionLibrary.Entry>, question: String): List<Excerpt> {
+    /** Hybrid retrieval: dense (when the embedder is there) and keyword passages, meeting routing
+     *  ([routeMeetings]), [fuse], then [select] with [retrieval]. */
+    internal suspend fun retrieve(app: Context, entries: List<SessionLibrary.Entry>, question: String): List<Excerpt> {
+        val p = retrieval
         LibrarySearch.refresh(app, entries)
+        val depth = if (p.routeMeetings > 0) maxOf(p.perMeeting, p.routeDepth) else p.perMeeting
         val qv = EmbedHost.use(app, 2) { it.embed(Embedder.Prompts.query(question)) }
-        val dense = if (qv != null) LibrarySearch.dense(app, entries, qv, maxPassages = 4, snippetChars = 1200) else emptyList()
-        val keyword = LibrarySearch.keyword(app, entries, question, maxPassages = 4, snippetChars = 1200)
-        val all = fuse(dense, keyword)
-        val out = ArrayList<Excerpt>()
-        var tokens = 0
+        val dense = if (qv != null) LibrarySearch.dense(app, entries, qv, maxPassages = depth, snippetChars = 1200) else emptyList()
+        val keyword = LibrarySearch.keyword(app, entries, question, maxPassages = depth, snippetChars = 1200)
+        val routed = routeMeetings(dense, keyword, p.routeMeetings)
+        // The other meetings keep perMeeting candidates per list (the passages are in score order).
+        fun trim(hs: List<LibrarySearch.Hit>) = hs.map { h -> if (h.entry.id in routed) h else h.copy(passages = h.passages.take(p.perMeeting)) }
+        val fused = fuse(trim(dense), trim(keyword), p.rrfK)
+        val ranked = fused.filter { it.entry.id in routed } + fused.filter { it.entry.id !in routed }
         val t = mutex.withLock { tok ?: tokenizer(app) }
-        for (x in all) {
-            if (out.size >= MAX_PASSAGES) break
-            // A note and its transcript chunk, or a meeting imported twice, can carry the same words: one excerpt is enough.
-            if (out.any { it.text == x.text }) continue
-            val n = withContext(Dispatchers.Default) { t.encode(x.text).size } + 24
-            if (tokens + n > PASSAGE_TOKENS) continue
-            tokens += n; out += x
+        val src = object : Transcripts {
+            override fun chunks(e: SessionLibrary.Entry) = LibrarySearch.chunkRanges(e)
+            override fun span(e: SessionLibrary.Entry, a: Int, b: Int) = LibrarySearch.span(e, a, b)?.let { x ->
+                Excerpt(e, x.timeSec.toInt(), x.snippet, 0f, x.timeSec, a = x.uttIndex, b = x.uttEnd)
+            }
         }
-        return out
+        if (routed.isNotEmpty()) Log.d(TAG, "routed to ${routed.joinToString()}")
+        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
     }
 
     /** The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts). */
-    private fun render(xs: List<Excerpt>, lang: String): String = buildString {
+    internal fun render(xs: List<Excerpt>, lang: String): String = buildString {
         if (xs.isEmpty()) { append(card().ask.noExcerpts + "\n"); return@buildString }
         xs.forEachIndexed { i, x ->
             append("[[${x.k}]] "); append(x.entry.title ?: ""); append(" · "); append(ReaderProtocol.formatTs(x.sec))
