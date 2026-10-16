@@ -449,4 +449,8 @@
     <string name="ask_entry_cd">Ask a question about your meetings</string>
     <string name="speaker_merge_confirm">Merge “%1$s” into “%2$s”? All of its lines move to %2$s.</string>
     <string name="speaker_merge">Merge</string>
+    <string name="bg_long_job_title">Keep long jobs running?</string>
+    <string name="bg_long_job_message">A long transcription can take a while with the screen off. Some phones (Samsung, Xiaomi…) freeze apps that are not exempt from battery optimization, and the work stops until you open the app again. Allow Prime Minutes to run unrestricted in the background?</string>
+    <string name="bg_long_job_allow">Allow</string>
+    <string name="bg_long_job_not_now">Not now</string>
 </resources>

@@ -405,27 +405,49 @@ class MainActivity : ComponentActivity() {
                             return@Surface
                         }
                         TranscribeScreen(sessionVm, ::startTranscription, ::stopTranscription, ::startRecording, ::processQueue)
+                        BatteryExemptionDialog()
                     }
                 }
             }
         }
     }
 
+    /** The long-job battery explanation is up (see [maybeAskBatteryExemption]). */
+    private var batteryAsk by mutableStateOf(false)
+
     /**
-     * The first time the user kicks off background work, ask (once) for a battery-optimization
-     * exemption so screen-off runs aren't frozen. Portable across OEMs; the dialog is a separate
-     * activity so it never blocks the run that's starting. Manual re-entry lives in Settings.
+     * A long job is starting (an import of 10 min or more, a recording, a queue drain): unless the app
+     * is already exempt, explain once why it should run unrestricted, then open the system dialog.
+     * Samsung's FreecessController froze a screen-off import for 15 min despite the foreground
+     * service, because the app was still battery-optimized. The answer is remembered (Allow or Not
+     * now); dismissing without answering asks again on the next long job. Settings keeps the manual way.
      */
-    private fun maybeRequestBackgroundExemptionOnce() {
-        val prefs = getSharedPreferences("primeminutes", MODE_PRIVATE)
-        if (prefs.getBoolean("bg_opt_prompted", false)) return
+    private fun maybeAskBatteryExemption() {
         if (BackgroundReliability.isIgnoringBatteryOptimizations(this)) return
-        prefs.edit().putBoolean("bg_opt_prompted", true).apply()
-        BackgroundReliability.requestIgnoreBatteryOptimizations(this)
+        if (getSharedPreferences("primeminutes", MODE_PRIVATE).contains(BATTERY_ASK_KEY)) return
+        batteryAsk = true
+    }
+
+    private fun answerBatteryAsk(allow: Boolean) {
+        batteryAsk = false
+        getSharedPreferences("primeminutes", MODE_PRIVATE).edit().putString(BATTERY_ASK_KEY, if (allow) "allow" else "not_now").apply()
+        if (allow) BackgroundReliability.requestIgnoreBatteryOptimizations(this)
+    }
+
+    @Composable
+    private fun BatteryExemptionDialog() {
+        if (!batteryAsk) return
+        AlertDialog(
+            onDismissRequest = { batteryAsk = false },
+            title = { Text(stringResource(R.string.bg_long_job_title)) },
+            text = { Text(stringResource(R.string.bg_long_job_message)) },
+            confirmButton = { TextButton(onClick = { answerBatteryAsk(true) }) { Text(stringResource(R.string.bg_long_job_allow)) } },
+            dismissButton = { TextButton(onClick = { answerBatteryAsk(false) }) { Text(stringResource(R.string.bg_long_job_not_now)) } },
+        )
     }
 
     private fun startRecording(gen: Int) {
-        maybeRequestBackgroundExemptionOnce()
+        maybeAskBatteryExemption()   // a meeting recording is a long job by nature
         ContextCompat.startForegroundService(
             this,
             Intent(this, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_RECORD)
@@ -435,7 +457,7 @@ class MainActivity : ComponentActivity() {
 
     /** Drain the processing queue over the library's pending recordings. */
     private fun processQueue() {
-        maybeRequestBackgroundExemptionOnce()
+        maybeAskBatteryExemption()
         ContextCompat.startForegroundService(
             this,
             Intent(this, TranscriptionService::class.java).setAction(TranscriptionService.ACTION_PROCESS_QUEUE),
@@ -443,7 +465,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startTranscription(uri: Uri, gen: Int) {
-        maybeRequestBackgroundExemptionOnce()
+        lifecycleScope.launch {
+            val sec = withContext(Dispatchers.IO) { probeSeconds(uri) }
+            if (sec >= LONG_JOB_SEC) maybeAskBatteryExemption()
+        }
         // content:// (SAF) needs a persistable grant; file:// from our own filesDir/audio
         // (podcast downloads) is already owned by the app.
         if (uri.scheme == "content") {
@@ -455,6 +480,14 @@ class MainActivity : ComponentActivity() {
             .putExtra(TranscriptionService.EXTRA_AUDIO_URI, uri.toString())
             .putExtra(TranscriptionService.EXTRA_RUN_GEN, gen)
         ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun probeSeconds(uri: Uri): Double {
+        val mmr = android.media.MediaMetadataRetriever()
+        return try {
+            mmr.setDataSource(this, uri)
+            (mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) / 1000.0
+        } catch (t: Throwable) { 0.0 } finally { runCatching { mmr.release() } }
     }
 
     private fun stopTranscription() {
@@ -496,6 +529,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Latest audio/video Uri received via share / open-with; the UI consumes it once. */
         val sharedAudioUri = MutableStateFlow<Uri?>(null)
+        /** An import at least this long asks for the battery exemption ([maybeAskBatteryExemption]). */
+        const val LONG_JOB_SEC = 600.0
+        /** The remembered answer to the long-job battery question ("allow" / "not_now"). */
+        const val BATTERY_ASK_KEY = "bg_long_job_answer"
     }
 }
 

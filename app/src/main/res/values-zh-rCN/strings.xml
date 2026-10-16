@@ -441,4 +441,8 @@
     <string name="ask_entry_cd">针对你的会议提问</string>
     <string name="speaker_merge_confirm">将“%1$s”合并至“%2$s”？其所有语句都会改为 %2$s。</string>
     <string name="speaker_merge">合并</string>
+    <string name="bg_long_job_title">让长时间工作持续运行？</string>
+    <string name="bg_long_job_message">屏幕关闭时，长篇转录需要一段时间。部分手机（Samsung、小米…）会冻结未排除电池优化的 App，工作会停到你再次打开 App 为止。要允许 Prime Minutes 在后台不受限制地运行吗？</string>
+    <string name="bg_long_job_allow">允许</string>
+    <string name="bg_long_job_not_now">暂时不要</string>
 </resources>
