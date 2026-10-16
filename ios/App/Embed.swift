@@ -56,9 +56,10 @@ final class Embedder {
 enum EmbedHost {
     private static let idle: TimeInterval = 60
     private static let lock = NSLock()
-    private static var emb: Embedder?
-    private static var lastUse = Date()
-    private static var timer: DispatchWorkItem?
+    // Guarded by `lock` (the embedder is used from the search, Ask and index workers).
+    nonisolated(unsafe) private static var emb: Embedder?
+    nonisolated(unsafe) private static var lastUse = Date()
+    nonisolated(unsafe) private static var timer: DispatchWorkItem?
     static var dir: String { Storage.modelsRoot.appendingPathComponent(ReaderModel.embedId).path }
     /// The three files are there.
     static var ready: Bool { Storage.ready(.embed) }
@@ -372,7 +373,7 @@ enum LibrarySearch {
         return hits.sorted { $0.score > $1.score }
     }
 
-    private static var cache: [UUID: (Date, SessionIndex.Index)] = [:]
+    nonisolated(unsafe) private static var cache: [UUID: (Date, SessionIndex.Index)] = [:]   // guarded by cacheLock
     private static let cacheLock = NSLock()
     static func index(_ id: UUID) -> SessionIndex.Index? {
         let u = SessionIndex.url(id)
@@ -428,7 +429,7 @@ enum LibrarySearch {
             return Hit(session: units[ix[0]].0, score: ps[0].score, passages: Array(ps))
         }.sorted { $0.score > $1.score }
     }
-    private static var kwCache: [UUID: [String: Keywords.Doc]] = [:]
+    nonisolated(unsafe) private static var kwCache: [UUID: [String: Keywords.Doc]] = [:]   // guarded by kwLock
     private static let kwLock = NSLock()
 
     private static func passage(_ s: Session, _ v: SessionIndex.Vector, _ cos: Float, _ chars: Int) -> Passage? {

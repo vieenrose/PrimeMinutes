@@ -27,12 +27,7 @@ enum AudioDecode {
             if inBuf.frameLength == 0 { break }
             let cap = AVAudioFrameCount(Double(inBuf.frameLength) * 16000 / inFmt.sampleRate) + 32
             guard let o = AVAudioPCMBuffer(pcmFormat: out, frameCapacity: cap) else { break }
-            var fed = false
-            var err: NSError?
-            conv.convert(to: o, error: &err) { _, st in
-                if fed { st.pointee = .noDataNow; return nil }; fed = true; st.pointee = .haveData; return inBuf
-            }
-            if let err { throw err }
+            try conv.convert(inBuf, to: o, then: .noDataNow)
             if let p = o.floatChannelData?[0], o.frameLength > 0,
                !onChunk(Array(UnsafeBufferPointer(start: p, count: Int(o.frameLength)))) { return }
         }

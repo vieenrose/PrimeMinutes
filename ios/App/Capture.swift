@@ -47,8 +47,9 @@ import AVFoundation
             let readerReady = Dev.env["VOX_READER_DIR"] != nil ? true : await downloads.store.isComplete(Prefs.reader)
             if runner.liveJob == nil && runner.activeJob == nil && readerReady && Dev.env["VOX_LEGACYREC"] == nil { await recordLive(job, wav, r); return }
             Task.detached { [weak self] in
-                guard let self, let eng = ModelDownloads.nemoEngine() else {
-                    await MainActor.run { self?.screen.status = L("models_missing"); self?.recording = false; UIApplication.shared.isIdleTimerDisabled = false }; return }
+                guard let self else { return }
+                guard let eng = ModelDownloads.nemoEngine() else {
+                    await MainActor.run { self.screen.status = L("models_missing"); self.recording = false; UIApplication.shared.isIdleTimerDisabled = false }; return }
                 let agc = LiveAgc()
                 do { try r.start { [buffer = self.buffer] c in var c = c; agc.process(&c); wav.append(c); buffer.add(c) } }
                 catch { await MainActor.run { self.screen.status = L("mic_error", "\(error)"); self.recording = false }; return }

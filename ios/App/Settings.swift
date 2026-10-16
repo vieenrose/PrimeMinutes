@@ -156,13 +156,16 @@ enum ThreadBench {
     private static func measure(_ n: Int, _ a: UnsafeMutablePointer<Float>, _ b: UnsafeMutablePointer<Float>) -> Double {
         let sinks = UnsafeMutablePointer<Float>.allocate(capacity: n); defer { sinks.deallocate() }
         let group = DispatchGroup(), t0 = DispatchTime.now().uptimeNanoseconds
+        // Shared with the worker threads: they only read a and b, each writes its own sinks slot, and group.wait()
+        // ends every access before the buffers are freed.
+        nonisolated(unsafe) let pa = a, pb = b, out = sinks
         for w in 0..<n {
             group.enter()
             let th = Thread {
                 let from = elements * w / n, to = elements * (w + 1) / n
                 var acc: Float = 0
-                for _ in 0..<passes { for i in from..<to { acc += a[i] * b[i] } }
-                sinks[w] = acc; group.leave()
+                for _ in 0..<passes { for i in from..<to { acc += pa[i] * pb[i] } }
+                out[w] = acc; group.leave()
             }
             th.qualityOfService = .userInitiated; th.start()
         }

@@ -8,7 +8,7 @@ import Combine
 /// into "title · m:ss" links.
 @MainActor final class AskEngine: ObservableObject {
     static let shared = AskEngine()
-    static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05, rrfK: Float = 60
+    nonisolated static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05, rrfK: Float = 60
 
     enum Phase: Equatable { case idle, busy, retrieving, loading, answering, failed(String) }
     /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
@@ -114,7 +114,6 @@ import Combine
                     }
                     let pre = s.lastStats   // the prompt's prefill (append runs its own generate call)
                     var sb = ""
-                    let t0 = Date()
                     _ = s.generateContinue(maxTokens: card.ask.answerTokens, stop: "", temp: card.sampler.temp) { piece in
                         if Task.isCancelled { s.cancel() }
                         sb += piece
@@ -317,7 +316,7 @@ struct AskSheet: View {
             let same = xs.filter { $0.session.id.uuidString == id }
             if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
                 var a = AttributedString(x.session.title + " · " + ReaderProtocol.formatTs(x.sec))
-                a.link = URL(string: "voxask://\(id)/\(x.sec)"); a.foregroundColor = .accentColor
+                a[Attr.Link.self] = URL(string: "voxask://\(id)/\(x.sec)"); a[Attr.Foreground.self] = .accentColor   // Attr: Sendable-safe keys
                 out += a
             }
             last = mt.range.location + mt.range.length

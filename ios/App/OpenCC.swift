@@ -44,12 +44,12 @@ final class OpenCC: @unchecked Sendable {
             else if let f = vals.first, f != src { m[src] = f }
         }
     }
-    private static var s2tCache: [String: String]?
+    nonisolated(unsafe) private static var s2tCache: [String: String]?   // only read and set inside memo, under lock
     private static func s2t() -> [String: String] {
         if let c = s2tCache { return c }
         var m: [String: String] = [:]; load("STPhrases", into: &m); load("STCharacters", into: &m); s2tCache = m; return m
     }
-    private static var cache: [String: OpenCC] = [:]; private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: OpenCC] = [:]; private static let lock = NSLock()   // cache guarded by lock
     private static func memo(_ k: String, _ b: () -> OpenCC) -> OpenCC { lock.lock(); defer { lock.unlock() }; if let c = cache[k] { return c }; let c = b(); cache[k] = c; return c }
 
     /// Generated text (summary, title, notes, speaker names).

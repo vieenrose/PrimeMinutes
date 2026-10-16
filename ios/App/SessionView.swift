@@ -434,7 +434,7 @@ struct SessionView: View {
         var a = AttributedString(text)
         guard !q.isEmpty else { return a }
         var from = a.startIndex
-        while let r = a[from...].range(of: q, options: .caseInsensitive) { a[r].backgroundColor = .yellow.opacity(0.5); from = r.upperBound }
+        while let r = a[from...].range(of: q, options: .caseInsensitive) { a[r][Attr.Background.self] = .yellow.opacity(0.5); from = r.upperBound }
         return a
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }

@@ -83,15 +83,22 @@ enum Frames {
     @MainActor static func start(_ every: Double) {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("frames")
         try? FileManager.default.removeItem(at: dir); try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
-        var n = 0
+        let c = Capture(dir)
         Timer.scheduledTimer(withTimeInterval: every, repeats: true) { t in
-            MainActor.assumeIsolated {
-                if FileManager.default.fileExists(atPath: dir.appendingPathComponent("STOP").path) { t.invalidate(); return }
-                guard let w = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
-                let img = UIGraphicsImageRenderer(bounds: w.bounds, format: fmt).image { _ in w.drawHierarchy(in: w.bounds, afterScreenUpdates: false) }
-                n += 1; try? img.jpegData(compressionQuality: 0.8)?.write(to: dir.appendingPathComponent(String(format: "f%05d.jpg", n)))
-            }
+            if !MainActor.assumeIsolated({ c.frame() }) { t.invalidate() }   // a main run loop timer
+        }
+    }
+    /// The frame counter and render format, main actor only.
+    @MainActor private final class Capture {
+        let dir: URL, fmt = UIGraphicsImageRendererFormat(); var n = 0
+        init(_ dir: URL) { self.dir = dir; fmt.scale = 1 }
+        /// False once Documents/frames/STOP exists.
+        func frame() -> Bool {
+            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("STOP").path) { return false }
+            guard let w = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return true }
+            let img = UIGraphicsImageRenderer(bounds: w.bounds, format: fmt).image { _ in w.drawHierarchy(in: w.bounds, afterScreenUpdates: false) }
+            n += 1; try? img.jpegData(compressionQuality: 0.8)?.write(to: dir.appendingPathComponent(String(format: "f%05d.jpg", n)))
+            return true
         }
     }
 }

@@ -26,7 +26,7 @@ import UIKit
         var vm = vm_statistics64(); var c = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
         let r = withUnsafeMutablePointer(to: &vm) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(c)) { host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &c) } }
         if r == KERN_SUCCESS {
-            let page = UInt64(vm_kernel_page_size)
+            let page = UInt64(sysconf(_SC_PAGESIZE))   // vm_kernel_page_size is a mutable C global
             let used = (UInt64(vm.active_count) + UInt64(vm.wire_count) + UInt64(vm.compressor_page_count)) * page
             ram = min(100, Int(100 * Double(used) / Double(ProcessInfo.processInfo.physicalMemory)))
         }

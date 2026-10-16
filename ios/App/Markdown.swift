@@ -1,5 +1,16 @@
 import SwiftUI
 
+/// AttributedString keys spelled out: the `a.font = …` shorthand forms key paths over non-Sendable attribute scopes,
+/// which strict concurrency rejects.
+enum Attr {
+    typealias Link = AttributeScopes.FoundationAttributes.LinkAttribute
+    typealias Intent = AttributeScopes.FoundationAttributes.InlinePresentationIntentAttribute
+    typealias Foreground = AttributeScopes.SwiftUIAttributes.ForegroundColorAttribute
+    typealias Background = AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute
+    typealias Font = AttributeScopes.SwiftUIAttributes.FontAttribute
+    typealias Baseline = AttributeScopes.SwiftUIAttributes.BaselineOffsetAttribute
+}
+
 /// Android renderMarkdown: bold, italic, inline code, hash headings and dash/star/plus bullets for the reader's prose,
 /// with each `[m:ss]` / `[h:mm:ss]` anchor drawn as a tappable superscript (no brackets, grey, small, glued to the
 /// word before it) that opens `vox://<seconds>`, and speaker names in their transcript colour.
@@ -22,7 +33,7 @@ enum Markdown {
         let lines = md.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
         for (i, raw) in lines.enumerated() {
             if let h = raw.firstMatch(of: #/^\s{0,3}#{1,6}\s+(.*)$/#) {
-                var a = withAnchors(String(h.1), anchors); for r in a.runs { a[r.range].inlinePresentationIntent = (r.inlinePresentationIntent ?? []).union(.stronglyEmphasized) }; out += a
+                var a = withAnchors(String(h.1), anchors); for r in a.runs { a[r.range][Attr.Intent.self] = (r[Attr.Intent.self] ?? []).union(.stronglyEmphasized) }; out += a
             } else if let b = raw.firstMatch(of: #/^(\s*)[-*+]\s+(.*)$/#) {
                 out += AttributedString("•  ") + withAnchors(String(b.2), anchors)
             } else { out += withAnchors(raw, anchors) }
@@ -30,7 +41,7 @@ enum Markdown {
         }
         for (name, color) in speakers where !name.isEmpty {
             var from = out.startIndex
-            while let r = out[from...].range(of: name) { out[r].foregroundColor = color; out[r].inlinePresentationIntent = .stronglyEmphasized; from = r.upperBound }
+            while let r = out[from...].range(of: name) { out[r][Attr.Foreground.self] = color; out[r][Attr.Intent.self] = .stronglyEmphasized; from = r.upperBound }
         }
         return out
     }
@@ -48,13 +59,13 @@ enum Markdown {
             var before = String(text[last..<r.lowerBound]); while before.hasSuffix(" ") { before.removeLast() }
             if prevAnchor && before.isEmpty {
                 // "[0:44] [4:09]": with the space trimmed the two labels read as one ("0:444:09").
-                var sep = AttributedString(", "); sep.foregroundColor = color; sep.font = .caption2.weight(.medium); sep.baselineOffset = 6
+                var sep = AttributedString(", "); sep[Attr.Foreground.self] = color; sep[Attr.Font.self] = .caption2.weight(.medium); sep[Attr.Baseline.self] = 6
                 out += sep
             } else { out += inline(before) }
             out += AttributedString("\u{2060}"); prevAnchor = true
             var mark = AttributedString(c.map { _ in "\(text[a]):\(text[b]):\(text[Range(m.range(at: 3), in: text)!])" } ?? "\(text[a]):\(text[b])")
-            mark.link = URL(string: "vox://\(secs)"); mark.foregroundColor = color
-            mark.font = .caption2.weight(.medium); mark.baselineOffset = 6
+            mark[Attr.Link.self] = URL(string: "vox://\(secs)"); mark[Attr.Foreground.self] = color
+            mark[Attr.Font.self] = .caption2.weight(.medium); mark[Attr.Baseline.self] = 6
             out += mark; last = r.upperBound
         }
         return out + inline(String(text[last...]))
@@ -66,7 +77,7 @@ enum Markdown {
         func flush() { if !plain.isEmpty { out += AttributedString(plain); plain = "" } }
         func span(_ mark: String, _ intent: InlinePresentationIntent) -> Bool {
             guard t[i...].hasPrefix(mark), let end = t.range(of: mark, range: t.index(i, offsetBy: mark.count)..<t.endIndex) else { return false }
-            flush(); var a = AttributedString(String(t[t.index(i, offsetBy: mark.count)..<end.lowerBound])); a.inlinePresentationIntent = intent
+            flush(); var a = AttributedString(String(t[t.index(i, offsetBy: mark.count)..<end.lowerBound])); a[Attr.Intent.self] = intent
             out += a; i = end.upperBound; return true
         }
         while i < t.endIndex {

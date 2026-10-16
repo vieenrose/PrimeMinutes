@@ -46,7 +46,7 @@ struct LibraryView: View {
             for i in 1...q.count { query = String(q.prefix(i)); try? await Task.sleep(nanoseconds: 220_000_000) }
             if Dev.env["VOX_TYPE_ASK"] != nil { try? await Task.sleep(nanoseconds: 1_000_000_000); asking = query; return }
             guard let pick = Dev.env["VOX_TYPE_OPEN"] else { return }
-            func found() -> (Session, Double)? {
+            @MainActor func found() -> (Session, Double)? {
                 for h in hits { if let p = h.passages.first(where: { $0.snippet.contains(pick) }) { return (h.session, p.timeSec) } }
                 return nil
             }

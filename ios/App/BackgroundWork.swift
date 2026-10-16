@@ -8,6 +8,8 @@ enum BackgroundWork {
     @MainActor static weak var model: Model?
     static func register() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
+            // Handed to the main actor below and not touched here after that (BGTask is not Sendable).
+            nonisolated(unsafe) let task = task
             StatusLog.add("trace background task started")
             // Out of time: checkpoint the running job and leave it queued (not parked), or iOS kills the app mid-run.
             task.expirationHandler = { StatusLog.add("trace background task expired"); Task { @MainActor in Model.shared.runner.yieldToSystem() }; schedule() }
@@ -28,7 +30,9 @@ enum BackgroundWork {
     /// found for a submitted id (NSInternalInconsistencyException); continued tasks may register after launch.
     @available(iOS 26, *) private static func registerContinued(_ id: String) -> Bool {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
-            guard let task = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
+            // Handed to the main actor below and not touched here after that (BGTask is not Sendable).
+            guard let continued = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
+            nonisolated(unsafe) let task = continued
             StatusLog.add("trace continued task started")
             task.progress.totalUnitCount = 1000
             // The system takes the time back (user cancel, load): checkpoint the job and leave it queued.
