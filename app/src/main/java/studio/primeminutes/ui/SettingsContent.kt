@@ -100,6 +100,9 @@ fun SettingsContent(
     val pal = LocalPrimeMinutesPalette.current
     Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val ctx = androidx.compose.ui.platform.LocalContext.current
+        // The first-use model download in progress, with Cancel: Settings covers the library while it runs.
+        val prefetch by studio.primeminutes.core.models.ModelPrefetch.status.collectAsState()
+        prefetch?.let { st -> studio.primeminutes.ui.components.ModelDownloadCard(st, onCancel = { studio.primeminutes.core.models.ModelPrefetch.cancel() }) }
         // Everyday choices first (look, language, the notes model), tuning and housekeeping after.
         Section(stringResource(R.string.settings_appearance)) {
         AppearanceSelector(enabled)

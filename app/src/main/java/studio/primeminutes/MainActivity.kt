@@ -903,12 +903,12 @@ private fun TranscribeScreen(
                 dlAsk = null
                 ModelPrefetch.setConsent(context, DownloadPlan.Consent.ANY_NETWORK)
                 // With a run waiting, the run fetches what it needs (with its own progress); else prefetch now.
-                if (action != null) action() else ModelPrefetch.maybeStart(context)
+                if (action != null) action() else ModelPrefetch.maybeStart(context, userAsked = true)
             },
             onWifiOnly = {
                 dlAsk = null
                 ModelPrefetch.setConsent(context, DownloadPlan.Consent.WIFI_ONLY)
-                if (dlUnmetered) { if (action != null) action() else ModelPrefetch.maybeStart(context) }
+                if (dlUnmetered) { if (action != null) action() else ModelPrefetch.maybeStart(context, userAsked = true) }
                 else Toast.makeText(context, R.string.dl_consent_waiting_wifi, Toast.LENGTH_LONG).show()
             },
             onLater = { dlAsk = null; ModelPrefetch.laterThisRun = true },

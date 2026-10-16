@@ -28,9 +28,20 @@ object ModelPrefetch {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    /** A running prefetch: the fraction done and the bytes it fetches in all. */
+    data class Status(val fraction: Float, val totalBytes: Long) {
+        val doneBytes: Long get() = (totalBytes * fraction.coerceIn(0f, 1f).toDouble()).toLong()
+    }
+    private val _status = MutableStateFlow<Status?>(null)
+    /** The prefetch while it runs (shown on the library and in Settings, with Cancel), else null. */
+    val status: StateFlow<Status?> = _status
     private val _progress = MutableStateFlow<Float?>(null)
     /** Fraction of the prefetch done while it runs, else null. */
     val progress: StateFlow<Float?> = _progress
+    private fun report(f: Float?, total: Long) { _progress.value = f; _status.value = f?.let { Status(it, total) } }
+    /** Cancel on the progress card: no automatic restart (network change) until the app restarts or the
+     *  user agrees again; a recording or an import still fetches what it needs. */
+    @Volatile private var cancelledThisRun = false
     /** "Later" on the first-launch prompt: not asked again until the app restarts (a recording or an
      *  import that needs the models still asks). */
     @Volatile var laterThisRun = false
@@ -58,9 +69,12 @@ object ModelPrefetch {
         return DownloadPlan.pending(mm.asrReady(), mm.asrDownloadBytes(), mm.llmReady(llm), llm.totalBytes)
     }
 
-    /** Starts the background prefetch when the user's consent covers the current network. */
-    fun maybeStart(context: Context) {
+    /** Starts the background prefetch when the user's consent covers the current network. [userAsked]:
+     *  the user just agreed (download prompt), which lifts an earlier Cancel. */
+    fun maybeStart(context: Context, userAsked: Boolean = false) {
         val app = context.applicationContext
+        if (userAsked) cancelledThisRun = false
+        if (cancelledThisRun) return
         scope.launch {
             val p = pending(app)
             if (!DownloadPlan.mayPrefetch(consent(app), unmetered(app), p)) return@launch
@@ -73,30 +87,37 @@ object ModelPrefetch {
         job = scope.launch {
             Log.i(TAG, "prefetch ${SizeFormat.bytes(p.total)} (speech ${SizeFormat.bytes(p.speechBytes)}, AI notes ${SizeFormat.bytes(p.readerBytes)})")
             val agg = DownloadAggregate()
-            _progress.value = 0f
+            report(0f, p.total)
             try {
                 val mm = ModelManager(app)
                 if (p.speechBytes > 0) agg.begin("asr", p.speechBytes)
                 if (p.readerBytes > 0) agg.begin("llm", p.readerBytes)
                 if (p.speechBytes > 0) {
-                    mm.ensureAsrModels { f -> _progress.value = agg.update("asr", f).first }
+                    mm.ensureAsrModels { f -> report(agg.update("asr", f).first, p.total) }
                     agg.end("asr")
                 }
                 if (p.readerBytes > 0) {
                     val llm = LlmRegistry.byId(ConfigStore.load(app).llmModelId)
-                    mm.ensureLlmModel(llm) { f -> _progress.value = agg.update("llm", f).first }
+                    mm.ensureLlmModel(llm) { f -> report(agg.update("llm", f).first, p.total) }
                     agg.end("llm")
                 }
                 Log.i(TAG, "prefetch done")
             } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.i(TAG, "prefetch cancelled")
                 throw e
             } catch (e: Exception) {
                 // A lost network or a pipeline fetching the same files: they resume from the partial files.
                 Log.w(TAG, "prefetch stopped: ${e.message}")
             } finally {
-                _progress.value = null
+                report(null, 0L)
             }
         }
+    }
+
+    /** Cancel button: stops the prefetch (the file being fetched starts over next time). */
+    @Synchronized fun cancel() {
+        cancelledThisRun = true
+        job?.cancel()
     }
 
     /** Re-checks on every network change: "Wi-Fi only" starts as soon as the phone joins Wi-Fi.

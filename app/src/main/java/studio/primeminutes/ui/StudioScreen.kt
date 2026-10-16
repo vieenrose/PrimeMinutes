@@ -387,6 +387,16 @@ fun StudioScreen(
             // only inside an open session. Renders nothing when there's no update / it's dismissed.
             Box(Modifier.padding(horizontal = Gutter)) { updateBanner() }
 
+            // The first-use model download, with or without meetings in the list (it used to show only
+            // on the empty home, so "Download now" over a full library looked like it did nothing).
+            val prefetch by studio.primeminutes.core.models.ModelPrefetch.status.collectAsState()
+            prefetch?.let { st ->
+                studio.primeminutes.ui.components.ModelDownloadCard(
+                    st, onCancel = { studio.primeminutes.core.models.ModelPrefetch.cancel() },
+                    modifier = Modifier.padding(start = Gutter, end = Gutter, top = 8.dp),
+                )
+            }
+
             // Status filter chips — pairs with multi-select for "clear all junk" (New → Select all → Delete).
             // A chip that would list exactly what "All" lists is noise, so it is left out; with
             // nothing left to choose between, so is the whole row.
@@ -451,11 +461,8 @@ fun StudioScreen(
                     LaunchedEffect(prefetch == null) {
                         pendingBytes = withContext(Dispatchers.IO) { studio.primeminutes.core.models.ModelPrefetch.pending(context).total }
                     }
-                    val f = prefetch
-                    if (f != null) {
-                        Spacer(Modifier.height(12.dp))
-                        studio.primeminutes.ui.components.DownloadStatusBar(R.string.dl_prefetching, f)
-                    } else if (pendingBytes > 0) {
+                    // While it downloads, the card at the top says how far (with Cancel).
+                    if (prefetch == null && pendingBytes > 0) {
                         Spacer(Modifier.height(12.dp))
                         Text(
                             stringResource(R.string.first_run_download_notice, studio.primeminutes.core.models.SizeFormat.bytes(pendingBytes)),
