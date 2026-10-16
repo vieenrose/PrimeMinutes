@@ -146,6 +146,12 @@ enum BackgroundWork {
             await r.syncQueue(); StatusLog.add("trace probe clear queue: \(r.waiting.count) left to remove"); for j in r.waiting { r.unqueue(j) } } }
         // VOX_RESUME=s: Resume every parked job.
         after("VOX_RESUME") { let r = Model.shared.runner; StatusLog.add("trace probe resume \(r.parked.count) parked"); for j in r.waiting where r.parked.contains(j.id) { r.resume(j) } }
+        // VOX_LIBLOG=s: write every meeting's id, listed length and audio length to status.log (stop/resume checks).
+        after("VOX_LIBLOG") { Task { @MainActor in for x in await Model.shared.library.all() { StatusLog.add("trace probe lib \(x.id.uuidString.prefix(8)) \(Int(x.seconds)) s audio \(x.audio.flatMap { AudioDecode.duration(JobQueue.audioDir.appendingPathComponent($0)) }.map { Int($0) } ?? -1) s lines \(x.lines.count) end \(Int(x.lines.last?.end ?? 0)) \(x.title.prefix(20))") } } }
+        // VOX_DELETE=<id prefix>: delete the meetings whose id starts with it (removing test meetings from a real library).
+        if let pre = env["VOX_DELETE"]?.uppercased(), pre.count >= 6 { Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            for x in await Model.shared.library.all() where x.id.uuidString.hasPrefix(pre) { StatusLog.add("trace probe delete \(x.id.uuidString.prefix(8))"); Model.shared.library.remove(x) } } }
     }
 }
 #endif
