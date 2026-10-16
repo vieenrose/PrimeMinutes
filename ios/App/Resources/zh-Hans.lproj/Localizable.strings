@@ -187,6 +187,7 @@
 "studio_return_capture" = "录音中…（返回）";
 "action_watch_live" = "即时查看";
 "watch_live_hint" = "阅读器写下的笔记会实时显示在这里。";
+"watch_live_queued" = "处理时，逐字稿和笔记会实时显示在这里。";
 "dl_resolving" = "解析视频中…";
 
 "settings_hw_monitor" = "硬件状态栏";

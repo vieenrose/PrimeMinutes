@@ -3,11 +3,10 @@ import SwiftUI
 /// Home screen (Android library): search, filter chips, sessions grouped by day as cards, row menu, queue link, record button.
 struct LibraryView: View {
     @ObservedObject var m: Model
-    @Binding var path: [Session]
+    @Binding var path: [Route]
     let onAdd: () -> Void
     let onSettings: () -> Void
     @State private var query = ""
-    @State private var watching = Dev.env["VOX_WATCH"] != nil
     @State private var filter = Filter.all
     @State private var renaming: Session?
     @State private var deleting: Session?
@@ -58,7 +57,7 @@ struct LibraryView: View {
             if let (s, t) = found() { openAt(s, t) }
         }
     }
-    private func openAt(_ s: Session, _ t: Double) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; m.openAt = (s.id, t); path.append(s) }
+    private func openAt(_ s: Session, _ t: Double) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; m.openAt = (s.id, t); path.append(.session(s)) }
 
     enum Filter: String, CaseIterable { case all, new, done }
     private var seen: Set<String> { Set(seenRaw.split(separator: ",").map(String.init)) }
@@ -133,7 +132,7 @@ struct LibraryView: View {
                 if let a = s.audio, FileManager.default.fileExists(atPath: JobQueue.audioDir.appendingPathComponent(a).path) {
                     Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { sharing = JobQueue.audioDir.appendingPathComponent(a) }
                 }
-                Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(s) }
+                Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
                 Button(L("rename"), systemImage: "pencil") { draft = s.title; renaming = s }
                 Button(L("delete"), systemImage: "trash", role: .destructive) { deleting = s }
             } label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
@@ -152,7 +151,7 @@ struct LibraryView: View {
     }
     private func activate(_ s: Session) {
         if !selected.isEmpty { toggle(s); return }
-        Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(s)
+        Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
     }
 
     /// Row identity: Session equality is by id only, so a card whose search passages changed could keep
@@ -169,7 +168,7 @@ struct LibraryView: View {
                 .accessibilityLabel(L(active ? "cd_status_processing" : "cd_status_queued"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(j.title ?? L("meeting")).font(.headline).lineLimit(2)
-                Text(active ? m.screen.status : m.runner.failed[j.id] ?? L(m.runner.parked.contains(j.id) ? "stop_resumable" : "cd_status_queued")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(m.jobStatus(j)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 0)
             if active {
@@ -184,6 +183,10 @@ struct LibraryView: View {
             }
         }
         .padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
+        .contentShape(Rectangle())
+        .onTapGesture { if selected.isEmpty { path.append(.job(j.id)) } }
+        .accessibilityAddTraits(.isButton).accessibilityAction { path.append(.job(j.id)) }
     }
     private func toggle(_ s: Session) { if selected.contains(s.id) { selected.remove(s.id) } else { selected.insert(s.id) } }
 
@@ -198,7 +201,7 @@ struct LibraryView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
+            Color.clear.frame(height: 0).onAppear { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))
@@ -295,7 +298,7 @@ struct LibraryView: View {
             }
             if m.runner.activeJob != nil {
                 HwStatusLine()
-                Button { watching = true } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
+                Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
                     .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)
             } else {
                 Text(m.screen.status).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 16)
@@ -321,7 +324,6 @@ struct LibraryView: View {
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
-        .sheet(isPresented: $watching) { WatchLive(m: m) }   // on the root, not on the banner: the banner leaves with the job and would tear the sheet down
         .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s) } }
         }
@@ -358,25 +360,114 @@ struct AddSourceSheet: View {
 }
 
 
-struct WatchLive: View {
+extension Model {
+    /// A queue row's second line (and the live view's status): what the job is doing or waiting for.
+    func jobStatus(_ j: Job) -> String {
+        if j.id == runner.activeJob { return screen.status }
+        return runner.failed[j.id] ?? L(runner.parked.contains(j.id) ? "stop_resumable" : "cd_status_queued")
+    }
+}
+
+/// A queued or processing job's screen (Android: the meeting screen watching the run). While it runs: the status and
+/// progress, the reader's notes and the transcript as they come, and the audio playable meanwhile (the source file is
+/// on disk before the run starts). Queued or stopped: the same screen with its actions. Once saved, it becomes the
+/// meeting itself.
+struct LiveJobView: View {
     @ObservedObject var m: Model
-    @Environment(\.dismiss) private var dismiss
+    let id: UUID
+    @Binding var path: [Route]
+    @StateObject private var player = Player(file: nil)
+    @State private var tab = 0
+    private var job: Job? { m.runner.waiting.first { $0.id == id } }
+    private var active: Bool { m.runner.activeJob == id }
+    /// A recording started meanwhile paints its own lines on the shared screen: the job's are not shown then.
+    private var showsRun: Bool { active && !m.capture.recording }
+    private static let palette = speakerPalette
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if active { ProgressView().controlSize(.small) } else { Image(systemName: "clock").foregroundStyle(.orange) }
+                Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(2)
+                Spacer(minLength: 0)
+            }
+            if active { ProgressView(value: m.runner.jobProgress) }
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+    private var transcript: some View {
+        LazyVStack(alignment: .leading, spacing: 8) {
+            if m.screen.lines.isEmpty { Text(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).font(.footnote).foregroundStyle(.secondary).padding(.top, 8) }
+            ForEach(m.screen.lines) { l in
+                let c = Self.palette[max(0, l.speaker) % Self.palette.count]
+                HStack(alignment: .top, spacing: 10) {
+                    RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(L("speaker_n", max(0, l.speaker) + 1)).font(.caption.bold()).foregroundStyle(c)
+                            Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Text(l.text)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .id(l.id).contentShape(Rectangle())
+                .onTapGesture { if player.available { player.seek(l.start) } }
+            }
+        }
+    }
     var body: some View {
-        NavigationStack {
+        ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text(m.screen.status).font(.subheadline) }
-                    if m.screen.agent.state == nil { Text(L("watch_live_hint")).font(.footnote).foregroundStyle(.secondary) }
-                    AgentPanel(agent: m.screen.agent) { _ in }
-                        // The live notes name speakers as the booth does (S2 → 語者 2); with no live lines yet, any S-number.
-                        .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
-                            SpeakerRefs.resolve(t, label: { L("speaker_n", $0 + 1) }, known: known.isEmpty ? nil : known) })
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    header
+                    if showsRun {
+                        Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }.pickerStyle(.segmented)
+                        if tab == 0 {
+                            if m.screen.agent.state == nil { Text(L("watch_live_hint")).font(.footnote).foregroundStyle(.secondary) }
+                            AgentPanel(agent: m.screen.agent) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } }
+                        } else { transcript }
+                    } else if job != nil {
+                        Text(L("watch_live_queued")).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }.padding(16)
             }
-            .navigationTitle(L("action_watch_live")).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("done")) { dismiss() } } }
-            .onChange(of: m.runner.activeJob) { _, j in if j == nil { dismiss() } }   // the job is over: the session is in the list, nothing left to watch
-        }.presentationDetents([.medium, .large])
+            .onChange(of: m.screen.lines.count) { _, _ in if showsRun, tab == 1, !player.playing, let l = m.screen.lines.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } } }
+        }
+        .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
+            SpeakerRefs.resolve(t, label: { L("speaker_n", $0 + 1) }, known: known.isEmpty ? nil : known) })
+        .background(Color(.systemGroupedBackground))
+        .safeAreaInset(edge: .bottom) { if player.available { PlayerBar(player: player) } }
+        .navigationTitle(job?.title ?? L("meeting")).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let j = job {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        if active { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
+                        else if m.runner.parked.contains(j.id) {
+                            Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }
+                            Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j); path.removeAll { $0 == .job(id) } }
+                        } else if j.id != m.capture.recordingJob {
+                            Button(L("action_process_now"), systemImage: "text.line.first.and.arrowtriangle.forward") { m.runner.processNext(j); if m.runner.activeJob == nil { m.runner.drain() } }
+                            Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j); path.removeAll { $0 == .job(id) } }
+                        }
+                    } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
+                }
+            }
+        }
+        .onAppear {
+            player.load(job?.audio)
+            StatusLog.add("live view \(id): active=\(active) player=\(player.available) lines=\(m.screen.lines.count)")
+            if Dev.env["VOX_PLAY"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if player.available && !player.playing { player.toggle() }; DispatchQueue.main.asyncAfter(deadline: .now() + 8) { StatusLog.add("live view player t=\(Int(player.time)) playing=\(player.playing) lines=\(m.screen.lines.count) status=\(m.screen.status)") } } }
+        }
+        .onChange(of: job?.audio) { _, a in player.load(a) }
+        .onDisappear { player.stop() }
+        // Saved: the live view becomes the meeting (Android: the watched item's screen shows the result).
+        .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
+            guard let s = n.object as? Session, s.id == id, let i = path.lastIndex(of: .job(id)) else { return }
+            player.stop(); path[i] = .session(s)
+        }
     }
 }
 
@@ -425,4 +516,32 @@ struct ModelDownloadSection: View {
 func pausedText(_ b: (Int64, Int64)?) -> String {
     guard let (got, total) = b, total > 0 else { return L("download_paused") }
     return L("download_paused_bytes", SizeFormat.bytes(got), SizeFormat.bytes(total))
+}
+
+/// DEV (device tests on a phone holding a real library): VOX_IDS writes Documents/ids.txt (queued jobs, then the
+/// newest meetings: id, title); VOX_DEL=<uuid>,… deletes exactly those jobs / meetings, their audio and checkpoints.
+@MainActor enum DevJobs {
+    static func run(_ m: Model) {
+        guard Dev.on else { return }
+        if let ids = Dev.env["VOX_DEL"] {
+            let del = Set(ids.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
+            Task {
+                for j in await m.queue.all where del.contains(j.id) {
+                    await m.queue.remove(j.id); Checkpoint.remove(j.id)
+                    try? FileManager.default.removeItem(at: JobQueue.url(j))
+                    StatusLog.add("DEV deleted job \(j.id)")
+                }
+                for s in await m.library.all() where del.contains(s.id) { m.library.remove(s); StatusLog.add("DEV deleted meeting \(s.id)") }
+                await m.runner.syncQueue()
+            }
+        }
+        if Dev.env["VOX_IDS"] != nil {
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                var o = (await m.queue.all).map { "job \($0.id) \($0.title ?? "")" }
+                o += (await m.library.all()).prefix(8).map { "meeting \($0.id) \($0.date.timeIntervalSince1970) \($0.title)" }
+                try? o.joined(separator: "\n").write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/ids.txt"), atomically: true, encoding: .utf8)
+            }
+        }
+    }
 }
