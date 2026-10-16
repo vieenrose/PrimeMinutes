@@ -1,0 +1,117 @@
+package studio.primeminutes.session
+
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowLooper
+import studio.primeminutes.core.events.TranscriptEvent
+import studio.primeminutes.core.reader.AgentEvent
+import studio.primeminutes.core.reader.AgentState
+import studio.primeminutes.service.RunRegistry
+import studio.primeminutes.service.TranscriptionService
+
+/** A screen created while the service works picks the run up where it is. */
+@RunWith(RobolectricTestRunner::class)
+class SessionReattachTest {
+    private val app: Application get() = ApplicationProvider.getApplicationContext()
+
+    @Before fun setUp() = RunRegistry.resetForTest()
+    @After fun tearDown() = RunRegistry.resetForTest()
+
+    private val strings = object : SessionStrings {
+        override fun str(id: Int, vararg args: Any) = "#$id"
+        override fun plural(id: Int, n: Int, vararg args: Any) = "#$id:$n"
+    }
+    private fun newScreen() = SessionViewModel(app, strings)
+
+    private fun utt(i: Int) = TranscriptEvent.Utterance(i, "l$i", i.toDouble(), i + 0.5, 0)
+
+    private fun importRunning(gen: Int) {
+        RunRegistry.runStarting(recording = false, queue = false)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.IMPORT, gen, "content://x/a.mp3", 1L))
+    }
+
+    @Test fun aNewScreenReattachesToTheImportInProgress() {
+        importRunning(gen = 5)
+        RunRegistry.tryEmit(5, TranscriptEvent.Status("transcribing"))
+        RunRegistry.tryEmit(5, TranscriptEvent.Utterance(0, "l0", 0.0, 0.5, 0))
+        RunRegistry.tryEmit(5, TranscriptEvent.Progress(0.4f))
+        RunRegistry.tryEmit(5, TranscriptEvent.Agent(AgentEvent.State(AgentState.LISTENING, window = 1)))
+
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        with(vm.now) {
+            assertEquals(5, sessionGen)
+            assertTrue(running)
+            assertEquals(Screen.Studio, screen)   // the Studio banner leads back to it
+            assertEquals("transcribing", status)
+            assertEquals(listOf("l0"), utterances.map { it.text })
+            assertEquals(0.4f, progress)
+            assertEquals("content://x/a.mp3", audioUri.toString())
+        }
+        assertTrue(vm.agent.active)
+
+        // …and follows it live from there, without replaying anything twice.
+        RunRegistry.tryEmit(5, TranscriptEvent.Utterance(1, "l1", 1.0, 1.5, 0))
+        RunRegistry.tryEmit(5, TranscriptEvent.Complete(listOf(utt(0), utt(1)), speakerCount = 1))
+        RunRegistry.tryEmit(5, TranscriptEvent.SummaryComplete("sum"))
+        ShadowLooper.idleMainLooper()
+        with(vm.now) {
+            assertEquals(listOf("l0", "l1"), utterances.map { it.text })
+            assertTrue(transcriptReady)
+            assertEquals("sum", summary)
+            assertFalse(running)
+        }
+    }
+
+    @Test fun nothingRunningMeansAFreshScreenNumberedAboveOldRuns() {
+        RunRegistry.tryEmit(9, TranscriptEvent.Status("finished long ago"))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        assertFalse(vm.now.running)
+        assertTrue(vm.now.utterances.isEmpty())
+        // Its own first run (gen + 1 on start) can't be mistaken for run 9.
+        assertTrue(vm.now.sessionGen >= 10)
+        // A late event of run 9 does not reach it.
+        RunRegistry.tryEmit(9, TranscriptEvent.Status("late"))
+        ShadowLooper.idleMainLooper()
+        assertFalse(vm.now.status == "late")
+    }
+
+    @Test fun aResummaryOfAnotherScreensSessionIsNotAdopted() {
+        // Re-summarize carries no transcript in its events: nothing to show, so nothing is adopted.
+        RunRegistry.runStarting(recording = false, queue = false)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.SUMMARIZE, 3))
+        RunRegistry.tryEmit(3, TranscriptEvent.Partial("x", reset = true))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        assertFalse(vm.now.running)
+        assertNull(vm.now.summary)
+    }
+
+    @Test fun theQueueItemInProgressIsShownOnItsRow() {
+        RunRegistry.runStarting(recording = false, queue = true)
+        RunRegistry.pipelineStarted(RunRegistry.Run(RunRegistry.Kind.QUEUE, TranscriptionService.QUEUE_GEN))
+        RunRegistry.queueItem("20261014-175615")
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Status("reading"))
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Progress(0.7f))
+        RunRegistry.tryEmit(TranscriptionService.QUEUE_GEN, TranscriptEvent.Title("Q"))
+        val vm = newScreen()
+        ShadowLooper.idleMainLooper()
+        with(vm.now) {
+            assertEquals("20261014-175615", queueItemId)
+            assertEquals("reading", queueLabel)
+            assertEquals(0.7f, queueFraction)
+            assertEquals("Q", queueTitle)
+            assertFalse(running)   // not watched: the open session is untouched
+        }
+    }
+}

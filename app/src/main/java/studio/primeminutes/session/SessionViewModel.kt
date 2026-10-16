@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import studio.primeminutes.R
@@ -62,12 +63,15 @@ interface SessionUi {
  * Composables read [state] and call the intent functions below; they keep only view state
  * (scroll position, the player, search-box matches, dialogs about app-level recovery).
  */
-class SessionViewModel(app: Application) : AndroidViewModel(app) {
+class SessionViewModel internal constructor(app: Application, testStrings: SessionStrings?) : AndroidViewModel(app) {
+
+    /** What the ViewModel factory calls. */
+    constructor(app: Application) : this(app, null)
 
     private val ctx get() = getApplication<Application>()
 
     /** Strings in the language chosen in Settings, like the screen's own (read on every call). */
-    private val strings = object : SessionStrings {
+    private val strings = testStrings ?: object : SessionStrings {
         private var code: String? = null
         private var res: android.content.res.Resources? = null
         private fun res(): android.content.res.Resources {
@@ -99,11 +103,71 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            TranscriptionService.eventStream.collect { (gen, e) ->
-                apply(SessionReducer.onEvent(now, env, gen, e, RunRegistry.currentQueueItemId))
-            }
+            // Subscribe, then catch up on what the service already did (see RunRegistry.attach):
+            // events up to the snapshot come from its replay, the ones after from the bus.
+            var caughtUp = Long.MAX_VALUE
+            RunRegistry.events
+                .onSubscription { caughtUp = attach(RunRegistry.attach()) }
+                .collect { st ->
+                    if (st.seq <= caughtUp) return@collect
+                    apply(SessionReducer.onEvent(now, env, st.gen, st.event, RunRegistry.currentQueueItemId))
+                }
         }
     }
+
+    /**
+     * Re-attach to the service's work in progress (the app reopened, or this screen recreated, while
+     * a run goes on): the latest session run that still works and has a source — a recording, an
+     * import, a reading of one — and the queue item being processed. Their events are replayed
+     * through the reducer onto a session tagged with that run's generation; the user stays on
+     * Studio, whose banners lead back to it. Returns the last event number replayed.
+     */
+    private fun attach(snap: RunRegistry.Snapshot): Long {
+        // Number this screen's runs above any the service has seen, so a gen can never collide.
+        var s = now.copy(sessionGen = maxOf(now.sessionGen, snap.highestGen + 1))
+        val jobs = snap.jobs
+        val run = jobs.pipeline?.takeIf { jobs.pipelineActive && it.gen >= 0 && it.kind != RunRegistry.Kind.SUMMARIZE }
+        val gen = jobs.activeSessionGens.sortedDescending().firstOrNull { g ->
+            run?.gen == g || snap.sessions[g].orEmpty().any {
+                it is TranscriptEvent.Utterance || it is TranscriptEvent.UtteranceSnapshot || it is TranscriptEvent.Complete
+            }
+        }
+        val replayFx = ArrayList<SessionEffect>()
+        if (gen != null) {
+            val own = run?.takeIf { it.gen == gen }
+            val recording = own?.kind == RunRegistry.Kind.RECORDING
+            val src = own?.audioUri?.let(Uri::parse)
+            val dir = src?.let(env::entryDirOf)
+            s = s.copy(
+                sessionGen = gen, running = true, transcriptReady = false, progress = 0f,
+                status = strings.str(if (recording) R.string.status_recording else R.string.status_starting),
+                audioUri = src, libraryDir = dir, recordingRun = recording || dir != null,
+                isRecording = recording && jobs.recordingActive,
+            )
+            for (e in snap.sessions[gen].orEmpty()) {
+                val n = SessionReducer.onEvent(s, env, gen, e, null)
+                s = n.state; replayFx += n.effects
+            }
+        }
+        snap.queueItemId?.let { item ->
+            for (e in snap.queue) {
+                val n = SessionReducer.onEvent(s, env, TranscriptionService.QUEUE_GEN, e, item)
+                s = n.state; replayFx += n.effects
+            }
+        }
+        _state.value = s
+        // Only the AI notes panels are rebuilt: the rest of what those events once asked for
+        // (toasts, retries, the player) already happened, or belongs to a screen that is gone.
+        replayFx.filter {
+            it is SessionEffect.AgentApply || it is SessionEffect.AgentReset || it is SessionEffect.AgentRestore ||
+                it is SessionEffect.QueueAgentApply || it is SessionEffect.QueueAgentReset
+        }.forEach(::run)
+        return snap.seq
+    }
+
+    /** When the recording this screen shows started (re-attached ones included), for its timer. */
+    fun recordingStartedAt(): Long? = RunRegistry.jobs.value.pipeline
+        ?.takeIf { it.kind == RunRegistry.Kind.RECORDING && it.gen == now.sessionGen && it.startedAtMs > 0 }?.startedAtMs
 
     // ---------------------------------------------------------------------------------------------
     // Transitions

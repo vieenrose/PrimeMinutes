@@ -746,7 +746,8 @@ private fun TranscribeScreen(
     // Live-recording timer.
     var recSeconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(s.isRecording) {
-        recSeconds = 0
+        // A recording this screen re-attached to has been going for a while already.
+        recSeconds = vm.recordingStartedAt()?.let { ((System.currentTimeMillis() - it) / 1000).toInt().coerceAtLeast(0) } ?: 0
         while (vm.now.isRecording) { delay(1000); recSeconds++ }
     }
 

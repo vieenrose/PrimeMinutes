@@ -196,8 +196,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // tagged with the run generation (the UI's sessionGen, via EXTRA_RUN_GEN) so the collector can
         // drop a superseded run's still-buffered events instead of letting them mutate the new session.
         // UNTAGGED (-1) = not from a gen'd pipeline job (e.g. export) → always accepted.
-        val events = MutableSharedFlow<Pair<Int, TranscriptEvent>>(extraBufferCapacity = 256)
-        val eventStream = events.asSharedFlow()
+        // The bus itself lives in RunRegistry, which also keeps each run's events for a screen that
+        // attaches mid-run; this keeps the (gen to event) API the pipeline and the tests use.
+        val events = EventSink
         const val UNTAGGED = -1
 
         // Queue-drain runs are tagged with this generation: never equal to UNTAGGED (always
@@ -205,6 +206,12 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // routes queue events to the Studio list's per-row progress instead of the open session.
         const val QUEUE_GEN = -2
 
+    }
+
+    /** Where the service's events go: [RunRegistry.events], numbered and kept per run. */
+    object EventSink {
+        fun tryEmit(e: Pair<Int, TranscriptEvent>): Boolean = RunRegistry.tryEmit(e.first, e.second)
+        suspend fun emit(e: Pair<Int, TranscriptEvent>) = RunRegistry.emit(e.first, e.second)
     }
 
     /** A pending session export, handed to the service via [pendingExport] (utterances can be large,
