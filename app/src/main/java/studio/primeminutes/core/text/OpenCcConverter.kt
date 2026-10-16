@@ -118,6 +118,27 @@ class OpenCcConverter private constructor(
                 }
             }
 
+        @Volatile private var tsChars: CharArray? = null
+
+        /**
+         * Character-level Traditional→Simplified table (TSCharacters, first choice, BMP) for search
+         * normalization: a lookup per character, no phrase matching — [convert] costs ~5 ms per
+         * 200-character passage on a Note10+, which made scanning a whole library seconds long.
+         * Any other character maps to itself.
+         */
+        fun simplifiedChars(context: Context): CharArray = tsChars ?: synchronized(this) {
+            tsChars ?: CharArray(65536) { it.toChar() }.also { t ->
+                context.assets.open("opencc/TSCharacters.txt").bufferedReader(Charsets.UTF_8).useLines { seq ->
+                    seq.forEach { line ->
+                        if (line.startsWith('#') || line.indexOf('\t') != 1) return@forEach
+                        val v = line.substring(2).substringBefore(' ')
+                        if (v.length == 1) t[line[0].code] = v[0]
+                    }
+                }
+                tsChars = t
+            }
+        }
+
         /** Build once per script (call off the main thread); later calls return the cached instance. */
         fun get(context: Context, script: ChineseScript): OpenCcConverter = when (script) {
             ChineseScript.TRADITIONAL ->

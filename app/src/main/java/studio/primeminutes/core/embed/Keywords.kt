@@ -40,21 +40,50 @@ object Keywords {
         return out
     }
 
+    /** Lower case and the [table] script (OpenCcConverter.simplifiedChars), one character at a time. */
+    fun fold(text: String, table: CharArray): String {
+        val out = CharArray(text.length)
+        for (i in text.indices) out[i] = table[text[i].lowercaseChar().code]
+        return String(out)
+    }
+
+    /** A term as an Int: a CJK bigram packs its two characters (exact), anything else is hashed. */
+    fun code(term: String): Int =
+        if (term.length == 2 && cjk(term[0]) && cjk(term[1])) (term[0].code shl 16) or term[1].code else term.hashCode()
+
+    /** A passage reduced to what BM25 needs: its term count and its term codes, sorted. */
+    class Doc(val length: Int, val codes: IntArray) {
+        fun tf(code: Int): Int {
+            var i = codes.binarySearch(code)
+            if (i < 0) return 0
+            while (i > 0 && codes[i - 1] == code) i--
+            var n = 0
+            while (i + n < codes.size && codes[i + n] == code) n++
+            return n
+        }
+    }
+
+    fun doc(text: String): Doc = terms(text).let { ts -> Doc(ts.size, IntArray(ts.size) { code(ts[it]) }.also { it.sort() }) }
+
     /** BM25 of each document for [query]; 0 for a document sharing no term with it. */
-    fun bm25(query: String, docs: List<String>): FloatArray {
-        val q = terms(query).toSet()
+    fun bm25(query: String, docs: List<String>): FloatArray = score(query, docs.map(::doc))
+
+    fun score(query: String, docs: List<Doc>): FloatArray {
+        val q = terms(query).map(::code).distinct()
         if (q.isEmpty() || docs.isEmpty()) return FloatArray(docs.size)
-        val tf = docs.map { d -> terms(d).let { ts -> Pair(ts.size, ts.filter { it in q }.groupingBy { it }.eachCount()) } }
-        val avg = tf.sumOf { it.first }.toDouble() / docs.size
-        val df = HashMap<String, Int>()
-        tf.forEach { (_, c) -> c.keys.forEach { df[it] = (df[it] ?: 0) + 1 } }
+        val tf = Array(docs.size) { d -> IntArray(q.size) { docs[d].tf(q[it]) } }
+        val avg = maxOf(docs.sumOf { it.length }.toDouble() / docs.size, 1.0)
+        val df = IntArray(q.size) { t -> tf.count { it[t] > 0 } }
         val n = docs.size.toDouble()
-        return FloatArray(docs.size) { i ->
-            val (len, counts) = tf[i]
-            counts.entries.sumOf { (t, f) ->
-                val idf = ln(1 + (n - df.getValue(t) + 0.5) / (df.getValue(t) + 0.5))
-                idf * f * (K1 + 1) / (f + K1 * (1 - B + B * len / maxOf(avg, 1.0)))
-            }.toFloat()
+        return FloatArray(docs.size) { d ->
+            var s = 0.0
+            for (t in q.indices) {
+                val f = tf[d][t].toDouble()
+                if (f == 0.0) continue
+                val idf = ln(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
+                s += idf * f * (K1 + 1) / (f + K1 * (1 - B + B * docs[d].length / avg))
+            }
+            s.toFloat()
         }
     }
 }

@@ -21,6 +21,20 @@ class AskRetrievalTest {
         assertEquals(listOf("車"), Keywords.terms("車"))
     }
 
+    @Test fun docCountsTermsByCode() {
+        val d = Keywords.doc("禮券禮券 iphone 16")
+        assertEquals(5, d.length)   // 禮券 券禮 禮券 iphone 16
+        assertEquals(2, d.tf(Keywords.code("禮券")))
+        assertEquals(1, d.tf(Keywords.code("券禮")))
+        assertEquals(1, d.tf(Keywords.code("16")))
+        assertEquals(0, d.tf(Keywords.code("手機")))
+    }
+
+    @Test fun foldLowersAndMapsCharacters() {
+        val table = CharArray(65536) { it.toChar() }.also { it['禮'.code] = '礼' }
+        assertEquals("礼券 iphone", Keywords.fold("禮券 iPhone", table))
+    }
+
     @Test fun bm25RanksTheRareTermFirst() {
         val docs = listOf("會議討論預算", "會議討論禮券五百元", "會議討論場地")
         val s = Keywords.bm25("禮券多少", docs)

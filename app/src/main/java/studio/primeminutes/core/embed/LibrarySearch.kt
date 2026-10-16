@@ -55,6 +55,9 @@ object LibrarySearch {
 
     private val docs = HashMap<String, Doc>()
     private val vectors = HashMap<String, Pair<Long, SessionIndex.Index?>>()
+    /** Keyword units of a meeting (passage + BM25 doc), valid for the session and index mtimes and snippet size. */
+    private class KwUnits(val key: Triple<Long, Long, Int>, val units: List<Pair<Passage, Keywords.Doc>>)
+    private val keywords = HashMap<String, KwUnits>()
     @Volatile private var cc: OpenCcConverter? = null
 
     private fun norm(context: Context, s: String): String {
@@ -68,6 +71,7 @@ object LibrarySearch {
         val ids = entries.map { it.id }.toSet()
         synchronized(docs) { docs.keys.retainAll(ids) }
         synchronized(vectors) { vectors.keys.retainAll(ids) }
+        synchronized(keywords) { keywords.keys.retainAll(ids) }
         for (e in entries) doc(context, e)
     }
 
@@ -161,20 +165,30 @@ object LibrarySearch {
         context: Context, entries: List<SessionLibrary.Entry>, query: String,
         maxPassages: Int = MAX_PASSAGES, snippetChars: Int = 200,
     ): List<Hit> = withContext(Dispatchers.IO) {
-        val units = ArrayList<Pair<SessionLibrary.Entry, Passage>>()
-        for (e in entries) {
-            val idx = index(e) ?: continue
-            val d = doc(context, e)
-            idx.vectors.filter { it.kind != SessionIndex.Kind.MEETING }.forEach { v -> units += e to passage(d, v, 0f, snippetChars) }
-        }
-        val scores = Keywords.bm25(norm(context, query), units.map { norm(context, it.second.snippet) })
+        val table = OpenCcConverter.simplifiedChars(context)
+        val units = ArrayList<Pair<SessionLibrary.Entry, Pair<Passage, Keywords.Doc>>>()
+        for (e in entries) keywordUnits(context, e, snippetChars, table)?.forEach { units += e to it }
+        val scores = Keywords.score(Keywords.fold(query, table), units.map { it.second.second })
         units.indices.filter { scores[it] > 0f }
             .groupBy { units[it].first.id }
             .map { (_, ix) ->
-                val ps = ix.sortedByDescending { scores[it] }.take(maxPassages).map { units[it].second.copy(semanticOnly = false, score = scores[it]) }
+                val ps = ix.sortedByDescending { scores[it] }.take(maxPassages).map { units[it].second.first.copy(semanticOnly = false, score = scores[it]) }
                 Hit(units[ix.first()].first, ps.first().score, ps)
             }
             .sortedByDescending { it.score }
+    }
+
+    /** A meeting's indexed notes and chunks, folded and reduced to BM25 docs once per version. */
+    private suspend fun keywordUnits(context: Context, e: SessionLibrary.Entry, snippetChars: Int, table: CharArray): List<Pair<Passage, Keywords.Doc>>? {
+        val idx = index(e) ?: return null
+        val d = doc(context, e)
+        val f = SessionIndex.file(e.dir)
+        val key = Triple(d.modified, if (f.exists()) f.lastModified() else 0L, snippetChars)
+        synchronized(keywords) { keywords[e.id]?.takeIf { it.key == key }?.let { return it.units } }
+        val units = idx.vectors.filter { it.kind != SessionIndex.Kind.MEETING }
+            .map { v -> passage(d, v, 0f, snippetChars).let { p -> p to Keywords.doc(Keywords.fold(p.snippet, table)) } }
+        synchronized(keywords) { keywords[e.id] = KwUnits(key, units) }
+        return units
     }
 
     private fun passage(d: Doc, v: SessionIndex.Vector, cos: Float, snippetChars: Int = 200): Passage = when (v.kind) {
