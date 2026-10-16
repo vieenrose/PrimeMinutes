@@ -19,8 +19,9 @@ enum Notifier {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
     static func done(_ title: String) {
-        let c = UNMutableNotificationContent(); c.title = L("notif_session_ready"); c.body = title; c.sound = .default
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
+        // One notification that each new meeting replaces (Android reuses one id); never an empty body (untitled meeting).
+        let c = UNMutableNotificationContent(); c.title = L("notif_session_ready"); c.body = title.isEmpty ? L("meeting") : title; c.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "session-ready", content: c, trigger: nil))
     }
     /// Android: a queued item that could not be processed (it stays in the queue with Retry).
     static func failed(_ title: String) {
