@@ -252,7 +252,7 @@ final class ReaderWorker: @unchecked Sendable {
     /// Android re-transcribe / re-summarize: re-queues the session's saved audio under the same id (summarize reuses the stored transcript, so only the reader runs).
     func rerun(_ s: Session, transcribe: Bool) {
         guard let a = s.audio else { StatusLog.add("trace rerun: no audio"); return }
-        let j = Job(id: s.id, date: s.date, audio: a, title: s.title)
+        let j = Job(id: s.id, date: s.date, audio: a, title: RerunTitle.kept(s.title, placeholders: [L("meeting"), L("status_no_speech")], firstLine: s.lines.first?.text))
         guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { StatusLog.add("trace rerun: audio file missing"); return }
         Task { guard !(await queue.contains(s.id)) else { return }   // already queued (double tap): one row, one run
         if transcribe { Checkpoint.remove(s.id); resummarized[s.id] = nil } else { Checkpoint.save(s.lines, s.id); resummarized[s.id] = s }

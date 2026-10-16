@@ -36,6 +36,15 @@ final class Counter: @unchecked Sendable {
         check(ResumePlan<[Int], String>.decide(full: [1], partial: "p").partial, nil, "no partial handed on when complete")
         check(ResumePlan<[Int], String>.decide(full: nil, partial: "p").partial, "p", "partial handed on")
 
+        // RerunTitle: a re-run keeps a real title, drops the placeholders so the reader's title replaces them
+        let ph = ["Meeting", "No speech"]
+        check(RerunTitle.kept("Budget review", placeholders: ph, firstLine: "So let us start"), "Budget review", "a real title is kept")
+        check(RerunTitle.kept("Meeting", placeholders: ph, firstLine: nil), nil, "the unprocessed placeholder is dropped")
+        check(RerunTitle.kept("No speech", placeholders: ph, firstLine: nil), nil, "the no-speech title is dropped")
+        check(RerunTitle.kept("  ", placeholders: ph, firstLine: nil), nil, "a blank title is dropped")
+        check(RerunTitle.kept("So let us start with", placeholders: ph, firstLine: "So let us start with the budget"), nil, "the first-words fallback is dropped")
+        check(RerunTitle.kept("So let us start", placeholders: ph, firstLine: "So let us start"), nil, "a short first line used whole is dropped")
+
         print(failures == 0 ? "engine+resume tests: all passed" : "engine+resume tests: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }
