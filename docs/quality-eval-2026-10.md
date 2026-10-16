@@ -207,6 +207,7 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
    *Fix:* detect the transcript language (script ratio is enough for zh/en) and pass a language
    directive or an English prompt variant from the model card (keep it in the card, not in the
    harness); add one English meeting to `ReaderRegressionGate`.
+   *Fixed 2026-10-17:* see §8 (notes, title and summary in English; Chinese meetings unchanged).
 2. **Ask retrieval misses the passage in about half of the questions** (judged: 29 of 35 failures are
    retrieval; keyword check: the answer passage was among the excerpts for 57 % of answerable questions).
    Excerpts are short (median 144 chars) and the 1500-token budget is mostly unused; facts sit just
@@ -232,6 +233,8 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
    *Fix:* validate/repair `[m:ss]` tags against the transcript's line times after generation (drop or
    snap invalid ones); in the card's prompt, add a cue for agreement markers ("OK, let's go with",
    "就這樣定了") → DECISION; gate on the mean over ≥ 4 meetings (this set's refs can serve).
+   *Fixed 2026-10-17 (in part):* timestamp tags are repaired; the agreement cue is applied to English
+   meetings only (it lowered Chinese coverage); see §8.
 
 Also found while building the harness (engineering, not quality):
 - Two `MfaEngine`s in one process crash (SIGSEGV in `i8_attn` `Run` `_omp_fn.4`): the fused-attention op
@@ -272,3 +275,58 @@ python3 -E -P tools/quality-eval/score_ask.py <suite> library.json ask.<model>.j
 python3 -E -P tools/quality-eval/report_tables.py asr|notes|ask ...
 ```
 Config formats: see the harness header and `run_harness.sh`.
+
+## 8. After fixes (2026-10-17)
+
+Changes (Android and iOS, same model card):
+- **Meeting language.** `MeetingLanguage` counts Han/kana characters against Latin words (a word weighs one
+  character, at least 20 units) over the transcript read so far; `zh` or `en`. The card's `languages.en`
+  adds a directive after each transcript window (write the NOTEs in English, tags unchanged), an
+  agreement rule at the end of the reader's system prompt (agreed items are DECISION), English minutes
+  headers and English title/prose prompts (same budgets). Chinese meetings read the upstream prompt
+  unchanged: S_R004S01C01 gives byte-identical notes, title and summary to the baseline (E2B).
+  The display language setting still only switches Traditional/Simplified script.
+- **Timestamp tags in the summary** are checked against the notes' times: kept when known, snapped to a
+  note within 30 s, dropped otherwise; lists and ranges are split, bare numbers dropped.
+- **Titles** are cut at 40 characters, or at a word end within 60 for English.
+
+Variants tried (E2B, host; keyword coverage / decisions on 4 AMI and 6 AISHELL-4 meetings):
+
+| Variant | AMI cov / dec | AISHELL-4 cov / dec |
+|---|---|---|
+| baseline | 0.01 / 0.00 (notes in Chinese) | 0.70 / 0.80 |
+| language directive only | 0.86 / 0.80 | unchanged |
+| + agreement cue after each window, all languages | 0.77 / 0.69 | 0.63 / 0.83 |
+| + agreement rule in the system prompt, all languages | 0.78 / 0.74 | 0.60 / 0.85 |
+| **shipped**: directive + system rule, English only | **0.84 / 0.83** | unchanged (identical output) |
+
+A directive written in English was ignored (notes stayed Chinese); the Chinese-written directive works.
+Any agreement hint on Chinese meetings lowered AISHELL-4 coverage, so Chinese keeps the upstream prompt.
+
+Blind LLM judgement (same protocol as §3, one round with baseline, the all-language variant and the
+shipped card side by side; 69 AMI key points, 35 of them decisions/actions):
+
+| AMI, E2B | covered / partial / missing | decisions+actions covered | DECISION notes agreed / proposed / wrong | contradictions | malformed tags |
+|---|---|---|---|---|---|
+| baseline | 25 / 30 / 14 | 6 | 7 / 3 / 1 | 8 | 4 |
+| all-language rule | 30 / 24 / 15 | 10 | 11 / 2 / 2 | 6 | 0 |
+| shipped | 28 / 30 / 11 | 8 | 9 / 3 / 1 | 9 | 0 |
+
+The judge rates meaning, not language, so the baseline's Chinese notes still score; the gain for an
+English reader is mostly that the notes are readable. Differences between the last two rows are within
+one round's noise.
+
+E4B (host, shipped card, 4 AMI meetings): all notes and summaries in English, keyword coverage / decisions
+0.78 / 0.68 (baseline on ES2004b: 0.06 / 0.00, in Chinese; the other three were not run before).
+
+Devices (E2B, 2026-10-17):
+- Note10+: `ReaderRegressionGate` — English (IS1009c, new): recall 0.79, notes and summary English;
+  move 0.92 and weiya 0.75, equal to the 2026-10-16 baseline. A 6-minute English clip (IS1009c 24:00–30:00)
+  imported through the app: English title, 13 English notes, English summary, valid tags only.
+- iPhone 14 Pro Max: the same clip gives an English title, 11 English notes and summary; a Chinese
+  meeting (move) stays Chinese.
+
+Still open: the first transcript window is read before the language is known for the agreement rule
+(the system prompt is fixed at the first prefill; the language directive applies from the first window).
+English minutes keep the Chinese proposal-guard cues (`proposal_cue`), so an English DECISION note is never
+demoted in the minutes. Only one run per variant.

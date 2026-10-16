@@ -30,12 +30,18 @@ class MeetingReader(
     private val pc: ReaderCard = ModelCard.DEFAULT.reader,
     /** The reading turn's temperature (model card). */
     private val temp: Float = ModelCard.DEFAULT.sampler.temp,
+    /** The protocol for a meeting in a given language ([MeetingLanguage] code, null = not known yet):
+     *  the card's per-language directive, minutes sections and proposal guard. */
+    private val byLanguage: (String?) -> ReaderCard = { pc },
 ) {
     val journal = ArrayList<Note>()
     /** Off-protocol output of this job so far (model guardrail). */
     var guard = ReaderGuard()
         private set
     private val lines = ArrayList<Line>()          // every line fed so far (citation resolution)
+    private val lang = MeetingLanguage()           // the meeting's language, from every line fed so far
+    /** The meeting's language so far ([MeetingLanguage] code), null while too little was said. */
+    val language: String? get() = lang.code
     @Volatile private var k = 0                    // windows opened
     /** Windows opened so far (the last one is being filled or read). */
     val window: Int get() = k
@@ -70,6 +76,7 @@ class MeetingReader(
         events(AgentEvent.State(AgentState.STARTING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget))
         journal.clear(); journal += cp.journal
         lines.clear(); lines += seen
+        seen.forEach { lang.add(it.text) }
         k = cp.window
         offered = cp.offered
         digest = cp.digest
@@ -122,6 +129,7 @@ class MeetingReader(
         // The previous segment was not the window's last: it takes its newline and is prefilled now.
         closedSeg?.let { append(it + "\n", special = false, what = "segment"); closedSeg = null }
         lines += line
+        lang.add(line.text)
         windowLines++
         windowTok += t
         segLines += line.render()
@@ -137,7 +145,7 @@ class MeetingReader(
         if (windowLines > 0) closeWindow()
         // Reading is over; the summary and title calls follow (the caller reports DONE after them).
         events(AgentEvent.State(AgentState.SUMMARIZING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, ctxTokens = llm.seqLength(), notes = journal.size))
-        return pc.minutes(journal)
+        return byLanguage(language).minutes(journal)
     }
 
     private fun openWindow(first: Line) {
@@ -155,6 +163,9 @@ class MeetingReader(
         closedSeg = null
         segLines.clear()
         if (last.isNotEmpty()) append(last, special = false, what = "segment")
+        // The card's word for this meeting's language (e.g. "write the notes in English"), read with
+        // the window: decided on everything said so far, so a live reading follows the meeting too.
+        byLanguage(language).directive?.let { append(it, special = false, what = "directive") }
         events(AgentEvent.State(AgentState.READING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = llm.seqLength(), notes = journal.size))
         val t0 = clock()
         llm.append(pieces.getValue("p2"))
@@ -236,7 +247,8 @@ class MeetingReader(
     }
 
     private fun prefillFresh(journalText: String) {
-        val toks = pieces.getValue("p0") + llm.tokenize(systemPrompt, false) + pieces.getValue("p1") +
+        val suffix = byLanguage(language).systemSuffix.orEmpty()
+        val toks = pieces.getValue("p0") + llm.tokenize(systemPrompt + suffix, false) + pieces.getValue("p1") +
             llm.tokenize(pc.journalHeader + journalText, false) + pieces.getValue("p2") +
             llm.tokenize(pc.primer, false) + pieces.getValue("p3")
         timedAppend(toks, "prefix")

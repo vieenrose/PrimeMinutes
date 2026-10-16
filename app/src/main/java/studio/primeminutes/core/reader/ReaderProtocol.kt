@@ -1,5 +1,7 @@
 package studio.primeminutes.core.reader
 
+import java.util.TreeMap
+
 /**
  * The meeting reader's protocol, ported from github.com/vieenrose/meeting-summarizer
  * (`eval/phone_live.py`, `eval/realtime_agent.py` harness v3, `summarizer/ingest.py`): the transcript
@@ -25,6 +27,57 @@ object ReaderProtocol {
             3 -> p[0] * 3600 + p[1] * 60 + p[2]
             else -> null
         }
+    }
+
+    /** How far (seconds) a cited time may be from a citable one to be moved onto it ([repairTimestamps]). */
+    const val SNAP_S = 30
+
+    /** A bracket holding only digits and separators: a timestamp tag, well-formed or not. */
+    private val TS_TAG = Regex("""(?<!\[)\[([0-9:：\s,，、;；\-–~～]*\d[0-9:：\s,，、;；\-–~～]*)\](?!\])""")
+    private val TS_SEP = Regex("""[\s,，、;；\-–~～]+""")
+
+    /**
+     * The timestamp tags of model-written text checked against the times it may cite ([known], as the
+     * notes write them): a tag naming a known time stays; one within [snapS] seconds of a known time is
+     * moved onto it; anything else is dropped. Covers what small models write besides `[m:ss]`: `[5:6]`
+     * (one-digit seconds, or m:s0–m:s9 cut off), lists and ranges (`[8:03, 11:04, 7]`, `[1:02-1:30]`, each item
+     * checked on its own) and bare numbers (`[21]`, ambiguous: dropped). A bracket holding anything
+     * but digits and separators is not a timestamp and is left alone.
+     */
+    fun repairTimestamps(text: String, known: Collection<String>, snapS: Int = SNAP_S): String {
+        val bySec = TreeMap<Int, String>()
+        known.forEach { k -> parseTs(k)?.let { bySec.putIfAbsent(it, k) } }
+        return TS_TAG.replace(text) { m ->
+            m.groupValues[1].replace('：', ':').split(TS_SEP).filter { it.isNotEmpty() }
+                .mapNotNull { item -> tsSpans(item)?.let { nearest(bySec, it, snapS) } }
+                .distinct().joinToString(" ") { "[$it]" }
+        }
+    }
+
+    /** The second ranges a cited item can mean: `m:ss`/`h:mm:ss` exactly; `m:s` m:0s, or a cut-off
+     *  m:s0–m:s9 when that is a time. Null for a bare number or nonsense. */
+    private fun tsSpans(item: String): List<IntRange>? {
+        val p = item.split(":")
+        if (p.any { it.isEmpty() || it.length > 3 || !it.all(Char::isDigit) }) return null
+        val n = p.map { it.toInt() }
+        return when {
+            p.size == 2 && p[1].length == 2 && n[1] < 60 -> listOf(n[0] * 60 + n[1]).map { it..it }
+            p.size == 2 && p[1].length == 1 -> listOf(n[0] * 60 + n[1]..n[0] * 60 + n[1]) +
+                (if (n[1] <= 5) listOf(n[0] * 60 + n[1] * 10..n[0] * 60 + n[1] * 10 + 9) else emptyList())
+            p.size == 3 && p[1].length == 2 && p[2].length == 2 && n[1] < 60 && n[2] < 60 -> listOf(n[0] * 3600 + n[1] * 60 + n[2]).map { it..it }
+            else -> null
+        }
+    }
+
+    /** The known time closest to any of [spans] (the earliest on a tie), if within [snapS]. */
+    private fun nearest(bySec: TreeMap<Int, String>, spans: List<IntRange>, snapS: Int): String? {
+        var best: String? = null
+        var bestD = Int.MAX_VALUE
+        for ((k, v) in bySec) {
+            val d = spans.minOf { r -> if (k in r) 0 else minOf(kotlin.math.abs(k - r.first), kotlin.math.abs(k - r.last)) }
+            if (d < bestD) { bestD = d; best = v }
+        }
+        return best.takeIf { bestD <= snapS }
     }
 
     private val LINE = Regex("""^\[(\d+:\d{2}(?::\d{2})?)\]\s*(.*)$""")

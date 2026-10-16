@@ -32,6 +32,7 @@ import studio.primeminutes.core.llm.MfaEngine
 import studio.primeminutes.core.llm.MfaSession
 import studio.primeminutes.core.llm.SpTokenizer
 import studio.primeminutes.core.models.LlmRegistry
+import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.reader.AgentEvent
 import studio.primeminutes.core.reader.ReaderLane
@@ -174,6 +175,10 @@ class QualityEvalHarness {
     private suspend fun readAll(id: String, models: File, threads: Int) {
             val spec = LlmRegistry.byId(id)
             check(spec.id == id) { "unknown model $id" }
+            // Prompt experiments: another card file in place of the model's own ("card"), and only the
+            // first "limit_sec" seconds of each meeting.
+            val card = cfg.optString("card").ifEmpty { null }?.let { ModelCard.parse(File(it).readText()) } ?: spec.card
+            val limitSec = cfg.optDouble("limit_sec", 0.0)
             val dir = File(models, spec.dirName)
             val todo = items().filter { !File(out, "${it.getString("name")}.reader.${spec.id}.json").exists() }
             if (todo.isEmpty()) return
@@ -185,12 +190,13 @@ class QualityEvalHarness {
             try {
                 for (item in todo) {
                     val name = item.getString("name")
-                    val utts = utterances(File(item.getString("utts")))
+                    val utts = utterances(File(item.getString("utts"))).let { u -> if (limitSec > 0) u.filter { it.startSec < limitSec } else u }
                     val drops = HashMap<String, Int>()
                     val t0 = System.nanoTime()
                     val session = MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
                     var tFinish = 0.0; var tProse = 0.0
-                    val (res, prose, title) = ReaderLane(session, File(dir, spec.systemPromptFile).readText(), spec.card) { ev ->
+                    var language: String? = null; var proseRaw: String? = null
+                    val (res, prose, title) = ReaderLane(session, File(dir, spec.systemPromptFile).readText(), card) { ev ->
                         if (ev is AgentEvent.NoteDropped) synchronized(drops) { drops.merge(ev.reason.name, 1, Int::plus) }
                     }.use { lane ->
                         lane.start()
@@ -198,6 +204,7 @@ class QualityEvalHarness {
                         tFinish = (System.nanoTime() - t0) / 1e9
                         val p = runCatching { lane.prose(r.journal) }.getOrNull()
                         tProse = (System.nanoTime() - t0) / 1e9
+                        language = lane.language; proseRaw = lane.lastProseRaw
                         Triple(r, p, runCatching { lane.title(r.journal) }.getOrNull())
                     }
                     val secs = (System.nanoTime() - t0) / 1e9
@@ -211,10 +218,19 @@ class QualityEvalHarness {
                         .put("notes_count", res.journal.size).put("actions_count", res.actions.size).put("dropped", JSONObject(drops as Map<*, *>))
                         .put("title", title).put("summary", minutes).put("prose_ok", prose != null).put("minutes_raw", res.minutes)
                         .put("actions", actions).put("notes", notes)
+                        .put("language", language ?: JSONObject.NULL).put("card", card.name).put("limit_sec", limitSec)
+                        .put("prose_raw", proseRaw ?: JSONObject.NULL)
+                        .put("tags_raw", JSONArray(TS_ANY.findAll(proseRaw.orEmpty()).map { it.value }.toList()))
+                        .put("tags_bad_raw", JSONArray(TS_ANY.findAll(proseRaw.orEmpty()).map { it.value }.filter { !WELL_FORMED.matches(it) || it.substring(1, it.length - 1) !in res.journal.map { n -> n.ts } }.toList()))
+                        .put("tags_bad_out", JSONArray(TS_ANY.findAll(minutes).map { it.value }.filter { !WELL_FORMED.matches(it) || it.substring(1, it.length - 1) !in res.journal.map { n -> n.ts } }.toList()))
                         .put("hay_hans", hans.convert(listOf(title.orEmpty(), minutes, actions, notes).joinToString("\n"))).toString(1))
                 }
             } finally { engine.close(); tok.close() }
     }
+
+    /** Any bracket of digits and separators (a timestamp tag, well-formed or not), and a well-formed one. */
+    private val TS_ANY = Regex("""\[[0-9:：\s,，、;；\-–~～]*\d[0-9:：\s,，、;；\-–~～]*\]""")
+    private val WELL_FORMED = Regex("""\[\d+:\d{2}(?::\d{2})?\]""")
 
     // ---------------------------------------------------------------------------------------- ask
 

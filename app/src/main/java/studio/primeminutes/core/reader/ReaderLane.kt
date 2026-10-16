@@ -36,7 +36,19 @@ class ReaderLane(
         }, "primeminutes-reader")
     }
     private val dispatcher = executor.asCoroutineDispatcher()
-    private val reader = MeetingReader(llm, systemPrompt, events = events, budget = budget, pc = card.reader, temp = card.sampler.temp)
+    private val reader = MeetingReader(llm, systemPrompt, events = events, budget = budget, pc = card.reader, temp = card.sampler.temp,
+        byLanguage = { card.forLanguage(it).reader })
+
+    /** The card for this meeting's language (as heard so far; call on the lane's thread). */
+    private fun langCard() = card.forLanguage(reader.language)
+
+    /** The meeting's language as the reader detected it ([MeetingLanguage] code), after [finish]. */
+    @Volatile var language: String? = null
+        private set
+
+    /** The last prose reply as the model wrote it, before [cleanProse] (diagnostics, the quality harness). */
+    @Volatile var lastProseRaw: String? = null
+        private set
 
     /** Utterances already handed to the reader (by index in the live snapshot). */
     private var fed = 0
@@ -112,7 +124,8 @@ class ReaderLane(
             if (exceeded) android.util.Log.w("primeminutes-reader", "guard: off-protocol output above ${card.reader.guard.maxOffProtocolRate} (${card.name}): ${g.summary()}")
             else android.util.Log.i("primeminutes-reader", "guard: ${g.summary()}")
             events(AgentEvent.Guard(g, exceeded))
-            ReaderResult(reader.journal.toList(), minutes, card.reader.actions(reader.journal), g)
+            language = reader.language
+            ReaderResult(reader.journal.toList(), minutes, langCard().reader.actions(reader.journal), g)
         }
     }
 
@@ -131,13 +144,14 @@ class ReaderLane(
     suspend fun title(journal: List<Note>): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
         llm.reset()
-        val toks = fitting(journal, card.title.maxTokens, card.title::render)
+        val c = langCard()
+        val toks = fitting(journal, c.title.maxTokens, c.title::render)
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(card.title.maxTokens, llm.template.end, card.sampler.temp) {}
+        val raw = llm.generateContinue(c.title.maxTokens, llm.template.end, c.sampler.temp) {}
         raw.substringBefore(llm.template.end).lines().firstOrNull { it.isNotBlank() }
             ?.trim()?.trim('「', '」', '"', '*', '#', ' ')
-            ?.let { t -> card.title.label?.let { t.replace(it, "") } ?: t }   // "會議：…" / "標題：…" — the model labels its answer now and then
-            ?.trim('「', '」', '"', '*', '#', ' ')?.take(40)?.ifBlank { null }
+            ?.let { t -> c.title.label?.let { t.replace(it, "") } ?: t }   // "會議：…" / "標題：…" — the model labels its answer now and then
+            ?.trim('「', '」', '"', '*', '#', ' ')?.let(::cutTitle)?.ifBlank { null }
     }
 
     /**
@@ -149,9 +163,11 @@ class ReaderLane(
     suspend fun prose(journal: List<Note>): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
         llm.reset()
-        val toks = fitting(journal, card.prose.maxTokens, card.prose::render)
+        val c = langCard()
+        val toks = fitting(journal, c.prose.maxTokens, c.prose::render)
         if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(card.prose.maxTokens, llm.template.end, card.sampler.temp) {}
+        val raw = llm.generateContinue(c.prose.maxTokens, llm.template.end, c.sampler.temp) {}
+        lastProseRaw = raw
         cleanProse(raw, journal.map { it.ts }.toSet(), llm.template.end)
     }
 
@@ -182,14 +198,15 @@ class ReaderLane(
     }
 
     companion object {
-        /** The prose reply made presentable: unknown `[ts]` stripped (with the space it leaves before
-         *  punctuation), no headings or bullets, and a reply cut off by the card's prose budget (no end-of-turn)
+        /** The prose reply made presentable: `[ts]` tags checked against the notes' times
+         *  ([ReaderProtocol.repairTimestamps]: kept, snapped onto a near one, or stripped with the space
+         *  it leaves before punctuation), no headings or bullets, and a reply cut off by the card's prose budget (no end-of-turn)
          *  ends at its last whole sentence — a long meeting's summary stopped mid-word on "[12:28".
          *  [turnEnd] is the template's end of turn. */
         fun cleanProse(raw: String, known: Set<String>, turnEnd: String = ModelCard.DEFAULT.template.end): String? {
             val ended = raw.contains(turnEnd)
-            var text = raw.substringBefore(turnEnd)
-                .replace(Regex("""\[(\d+:\d{2}(?::\d{2})?)\]""")) { m -> if (m.groupValues[1] in known) m.value else "" }
+            var text = ReaderProtocol.repairTimestamps(raw.substringBefore(turnEnd), known)
+                .replace(Regex("""(?<=\S)[ \t]{2,}(?=\S)"""), " ")
                 .replace(Regex("""[ \t]+([。，、；：！？.,;:!?])"""), "$1")
                 .lines().map { it.trim().removePrefix("#").trim() }.filter { it.isNotEmpty() && !it.startsWith("-") && !it.startsWith("*") }
                 .joinToString("\n\n")
@@ -199,6 +216,15 @@ class ReaderLane(
                 if (end != null) text = text.substring(0, end.range.last + 1).trim()
             }
             return text.takeIf { it.length >= 20 }
+        }
+
+        /** A title kept short: 40 characters, or 60 cut at a word end for a spaced (English) one —
+         *  40 characters cut an English title mid-word. */
+        fun cutTitle(t: String): String = when {
+            t.length <= 40 -> t
+            ' ' !in t -> t.take(40)
+            t.length <= 60 -> t
+            else -> t.take(61).substringBeforeLast(' ').trimEnd(',', ';', ':', '-', ' ')
         }
 
         /** An utterance as the model reads it (ingest.segments_to_lines): cleaned text, `S{n}`

@@ -51,6 +51,11 @@ data class ReaderCard(
     val notesChars: Int,
     /** What counts as off-protocol output, and how much of it is too much ([ReaderGuard]). */
     val guard: GuardCard = GuardCard(),
+    /** Appended verbatim after each window's transcript, just before the model's reading turn (null =
+     *  none, upstream's protocol). A card sets it per meeting language ([ModelCard.forLanguage]). */
+    val directive: String? = null,
+    /** Appended to the reader's system prompt (the one shipped with the weights), or null. */
+    val systemSuffix: String? = null,
 ) {
     fun windowHeader(k: Int) = windowHeaderPattern.replace("{k}", k.toString())
     fun omitted(n: Int) = omittedPattern.replace("{n}", n.toString())

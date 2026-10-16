@@ -1,0 +1,1915 @@
+{
+ "name": "ami_is1009c",
+ "lang": "en",
+ "source": "AMI Meeting Corpus IS1009c (Mix-Headset, CC BY 4.0, https://groups.inf.ed.ac.uk/ami/corpus/), transcribed by the app's ASR on the host (docs/quality-eval-2026-10.md); facts = tools/quality-eval/refs/IS1009c.json key points (AMI abstractive annotation)",
+ "threshold": 0.63,
+ "baseline": {
+  "measured": "2026-10-17, Note10+, model card with languages.en (notes in English: checked)",
+  "recall": {
+   "gemma4-e2b-meeting-agent-zh-mobile-v1": 0.79
+  },
+  "not_measured": "E4B (not installed in the test app on the Note10+)"
+ },
+ "facts": [
+  {
+   "id": "remote_functions",
+   "all": [
+    [
+     "channel",
+     "volume",
+     "subtitle"
+    ],
+    [
+     "button",
+     "function"
+    ]
+   ]
+  },
+  {
+   "id": "how_remote_works",
+   "all": [
+    [
+     "infrared",
+     "infra-red"
+    ],
+    [
+     "transistor",
+     "chip",
+     "LED",
+     "signal"
+    ]
+   ]
+  },
+  {
+   "id": "strong_shell",
+   "all": [
+    [
+     "strong",
+     "durable",
+     "break"
+    ],
+    [
+     "case",
+     "shell",
+     "plastic"
+    ]
+   ]
+  },
+  {
+   "id": "rechargeable_battery",
+   "all": [
+    [
+     "rechargeable",
+     "recharge"
+    ],
+    [
+     "batter"
+    ]
+   ]
+  },
+  {
+   "id": "no_scroll_wheel",
+   "all": [
+    [
+     "scroll"
+    ],
+    [
+     "chip",
+     "cost",
+     "expensive",
+     "price"
+    ]
+   ]
+  },
+  {
+   "id": "small_simple_cute",
+   "all": [
+    [
+     "small"
+    ],
+    [
+     "simple",
+     "eye-catching",
+     "cute",
+     "appealing"
+    ]
+   ]
+  },
+  {
+   "id": "fruit_soft",
+   "all": [
+    [
+     "fruit",
+     "vegetable"
+    ],
+    [
+     "soft",
+     "spongy",
+     "cloth"
+    ]
+   ]
+  },
+  {
+   "id": "speech_costly",
+   "all": [
+    [
+     "speech",
+     "voice"
+    ],
+    [
+     "cost",
+     "expensive",
+     "price"
+    ]
+   ]
+  },
+  {
+   "id": "case_bright_trendy",
+   "all": [
+    [
+     "bright",
+     "colorful",
+     "colourful"
+    ],
+    [
+     "trendy",
+     "compact",
+     "strong"
+    ]
+   ]
+  },
+  {
+   "id": "push_buttons",
+   "all": [
+    [
+     "push"
+    ],
+    [
+     "button"
+    ]
+   ]
+  },
+  {
+   "id": "supplements",
+   "all": [
+    [
+     "mute",
+     "swap"
+    ]
+   ]
+  },
+  {
+   "id": "battery_power",
+   "all": [
+    [
+     "batter"
+    ],
+    [
+     "cost",
+     "energy",
+     "power"
+    ]
+   ]
+  },
+  {
+   "id": "research_voice_cost",
+   "all": [
+    [
+     "speech",
+     "voice"
+    ],
+    [
+     "research",
+     "pending",
+     "find out",
+     "investigat"
+    ]
+   ]
+  },
+  {
+   "id": "voice_cost_unsure",
+   "all": [
+    [
+     "speech",
+     "voice"
+    ],
+    [
+     "cost",
+     "expensive",
+     "price"
+    ]
+   ]
+  },
+  {
+   "id": "voice_needs_research",
+   "all": [
+    [
+     "research",
+     "investigat",
+     "find out"
+    ],
+    [
+     "engineer",
+     "designer",
+     "speech",
+     "voice"
+    ]
+   ]
+  },
+  {
+   "id": "product_evaluation",
+   "all": [
+    [
+     "evaluation",
+     "evaluate"
+    ]
+   ]
+  },
+  {
+   "id": "clay_prototype",
+   "all": [
+    [
+     "clay",
+     "prototype"
+    ]
+   ]
+  },
+  {
+   "id": "ui_design",
+   "all": [
+    [
+     "user interface",
+     "interface design",
+     "look and feel",
+     "look-and-feel"
+    ]
+   ]
+  },
+  {
+   "id": "coach_instructions",
+   "all": [
+    [
+     "coach"
+    ],
+    [
+     "instruction",
+     "question"
+    ]
+   ]
+  }
+ ],
+ "utterances": [
+  {
+   "index": 0,
+   "start": 33.78,
+   "end": 40.18,
+   "speaker": 0,
+   "text": "Any good here?"
+  },
+  {
+   "index": 1,
+   "start": 40.18,
+   "end": 45.38,
+   "speaker": 1,
+   "text": "Okay Hello everyone."
+  },
+  {
+   "index": 2,
+   "start": 45.38,
+   "end": 93.38,
+   "speaker": 0,
+   "text": "Um, how how are we doing? Yeah, good. Uh, first we're going uh over the minutes of the last meeting more or less Um, in the last meeting, uh, the marketing manager had presented her method of working, meaning gathering suggestions from everyone to see how she best could market this this product at within the budget that was given Uh in general The idea is that it should be something that is not difficult to use It's also an item that people lose a lot So we should address that."
+  },
+  {
+   "index": 3,
+   "start": 93.38,
+   "end": 134.8,
+   "speaker": 0,
+   "text": "And of course it should be something That is very simple to use In addition to that, to make it sell of course, the marketing manager wishes that it'd be very attractive or like she says, put some sizzle into it in one way or another So that the people are buying it now because in particular with smaller items, that's a very important fact because If they say, well, I go home and think about it, that won't work."
+  },
+  {
+   "index": 4,
+   "start": 134.8,
+   "end": 163.48,
+   "speaker": 0,
+   "text": "Um, also mentioned was it should be it should have a very short learning curve And maybe it could be sold by using a slogan Our technical manager has then said that she feels she should have a chip that has infrared bits and it has an interface controls interface that controls the chip."
+  },
+  {
+   "index": 5,
+   "start": 163.48,
+   "end": 190.86,
+   "speaker": 0,
+   "text": "Therefore messages will be controlled in the same manner. There should be extra features like lit buttons, maybe a beep, if too many buttons are pressed child lock, And maybe a display clock so that people could You could see the time, you know what show they want to watch."
+  },
+  {
+   "index": 6,
+   "start": 190.86,
+   "end": 212.67,
+   "speaker": 0,
+   "text": "Also mentioned was uh maybe different shapes So the components of the thing should be button bulbs, infra infrared bulbs, battery, chips, wires, and maybe some kind of a holder for the for the uh item Franchina, who is"
+  },
+  {
+   "index": 7,
+   "start": 212.67,
+   "end": 215.31,
+   "speaker": 1,
+   "text": "our Interface"
+  },
+  {
+   "index": 8,
+   "start": 215.31,
+   "end": 240.31,
+   "speaker": 0,
+   "text": "designer has mentioned that the there of course you have an on off button and also has mentioned an interesting feature that it should have maybe a channel lock particularly with maybe small children that they couldn't watch a channel that is undesirable."
+  },
+  {
+   "index": 9,
+   "start": 240.31,
+   "end": 277.66,
+   "speaker": 0,
+   "text": "It should be compact for personal favorite was it should be T-shaped and maybe have an alarm clock and material should possibly be of non allergic nature Uh the different systems that exist are infrared or radio waves Maybe it should have electricity electricity saving feature And even possibly a timer too that people can program their favorite program on right from the remote."
+  },
+  {
+   "index": 10,
+   "start": 278.14,
+   "end": 283.9,
+   "speaker": 0,
+   "text": "Yes Uh, are we all in agreement that that's about what we discussed last time?"
+  },
+  {
+   "index": 11,
+   "start": 283.9,
+   "end": 284.78,
+   "speaker": 1,
+   "text": "Okay."
+  },
+  {
+   "index": 12,
+   "start": 284.78,
+   "end": 285.62,
+   "speaker": 0,
+   "text": "Pretty"
+  },
+  {
+   "index": 13,
+   "start": 285.62,
+   "end": 287.02,
+   "speaker": 2,
+   "text": "much is it."
+  },
+  {
+   "index": 14,
+   "start": 287.02,
+   "end": 298.57,
+   "speaker": 0,
+   "text": "Okay then we, I'm looking for three presentations and uh I don't know whether the order matters much. Uh I don't I don't think so. So whoever wants"
+  },
+  {
+   "index": 15,
+   "start": 298.57,
+   "end": 299.09,
+   "speaker": 1,
+   "text": "that"
+  },
+  {
+   "index": 16,
+   "start": 299.09,
+   "end": 300.2,
+   "speaker": 0,
+   "text": "yeah okay."
+  },
+  {
+   "index": 17,
+   "start": 300.2,
+   "end": 307.94,
+   "speaker": 1,
+   "text": "Okay."
+  },
+  {
+   "index": 18,
+   "start": 307.94,
+   "end": 323.66,
+   "speaker": 0,
+   "text": "Okay Come on, close already And that's number two, right?"
+  },
+  {
+   "index": 19,
+   "start": 323.66,
+   "end": 324.46,
+   "speaker": 1,
+   "text": "Three."
+  },
+  {
+   "index": 20,
+   "start": 324.46,
+   "end": 325.62,
+   "speaker": 0,
+   "text": "Three."
+  },
+  {
+   "index": 21,
+   "start": 325.62,
+   "end": 335.89,
+   "speaker": 1,
+   "text": "But it's been three. Yes."
+  },
+  {
+   "index": 22,
+   "start": 335.89,
+   "end": 338.14,
+   "speaker": 0,
+   "text": "Okay Now as"
+  },
+  {
+   "index": 23,
+   "start": 338.14,
+   "end": 350.47,
+   "speaker": 1,
+   "text": "an interface designer, I would give more emphasis on the interface, how the remote looks like, so that it is sellable, it is attractive to customers Next, please."
+  },
+  {
+   "index": 24,
+   "start": 350.47,
+   "end": 371.72,
+   "speaker": 1,
+   "text": "Okay, now the function of a remote is to send messages to the television. This messages could be a switch on off message or switch to next channel message or swapping the channels or switching on to a particular channel like you can have the numbers one, two, three, four, up to"
+  },
+  {
+   "index": 25,
+   "start": 371.72,
+   "end": 377.02,
+   "speaker": 0,
+   "text": "nine Nine, what nine channel uh switches?"
+  },
+  {
+   "index": 26,
+   "start": 377.02,
+   "end": 378.07,
+   "speaker": 1,
+   "text": "Pardon me,"
+  },
+  {
+   "index": 27,
+   "start": 378.07,
+   "end": 380.86,
+   "speaker": 0,
+   "text": "nine channel switches yes. Yeah. Nine numbers."
+  },
+  {
+   "index": 28,
+   "start": 380.86,
+   "end": 386.18,
+   "speaker": 1,
+   "text": "Mhm And then you have swapping uh button"
+  },
+  {
+   "index": 29,
+   "start": 386.18,
+   "end": 387.1,
+   "speaker": 0,
+   "text": "by which using"
+  },
+  {
+   "index": 30,
+   "start": 387.1,
+   "end": 408.18,
+   "speaker": 1,
+   "text": "which you can swap the channels if you don't want to see the third channel, you can swap it to the fourth channel or vice versa Then it should have a next button, next button channel by which you can keep on uh scrolling the channels one by one. Next slide, please."
+  },
+  {
+   "index": 31,
+   "start": 410.26,
+   "end": 424.42,
+   "speaker": 1,
+   "text": "Then you should have a button which should which can which can be used for increasing or decreasing the volume Then there should be a button which can give subtitles for a particular program which is going on at elevation."
+  },
+  {
+   "index": 32,
+   "start": 424.42,
+   "end": 430.87,
+   "speaker": 1,
+   "text": "For example, if you are watching a French program and you would like to have a subtitles in English,"
+  },
+  {
+   "index": 33,
+   "start": 430.87,
+   "end": 431.78,
+   "speaker": 0,
+   "text": "then there should be a"
+  },
+  {
+   "index": 34,
+   "start": 431.78,
+   "end": 462.64,
+   "speaker": 1,
+   "text": "channel which can trigger this mechanism in the television so that the user can see uh the the subtitles on the screen Then they should there should be some buttons which can control features like the color color of the picture, the contrast, sharpness, brightness of the picture Now there should be a memory switch There should be a mute button."
+  },
+  {
+   "index": 35,
+   "start": 462.64,
+   "end": 475.22,
+   "speaker": 1,
+   "text": "Suddenly if if uh a viewer he gets a telephone call and if he wants he doesn't want to switch off the uh TV, but he he can reduce the sound."
+  },
+  {
+   "index": 36,
+   "start": 475.22,
+   "end": 483.24,
+   "speaker": 1,
+   "text": "He can bring the volume down and he can watch, he can while talking, he can watch the TV."
+  },
+  {
+   "index": 37,
+   "start": 483.24,
+   "end": 492.7,
+   "speaker": 1,
+   "text": "Now the most important feature I would like to have in my remote would be the speech recognition feature."
+  },
+  {
+   "index": 38,
+   "start": 492.7,
+   "end": 507.33,
+   "speaker": 1,
+   "text": "It's an integrated program programmable sample sensor speaker unit So remote can be can be uh designed which can have the voice recognizes. You can record your own"
+  },
+  {
+   "index": 39,
+   "start": 507.33,
+   "end": 510.46,
+   "speaker": 0,
+   "text": "voice"
+  },
+  {
+   "index": 40,
+   "start": 510.46,
+   "end": 527.58,
+   "speaker": 1,
+   "text": "Which can be recognized by a voice recognizer in the television. For example, if you want to see if you want to see the ninth channel, if you say just say ninth channel, uh the the uh yeah the remote will automatically it will switch to the ninth channel."
+  },
+  {
+   "index": 41,
+   "start": 527.58,
+   "end": 528.46,
+   "speaker": 0,
+   "text": "Mhm. So the"
+  },
+  {
+   "index": 42,
+   "start": 528.46,
+   "end": 535.5,
+   "speaker": 1,
+   "text": "TV will have some recognizer which will recognize the user's voice and accordingly it will change its functionalities."
+  },
+  {
+   "index": 43,
+   "start": 535.5,
+   "end": 536.46,
+   "speaker": 0,
+   "text": "So this is one"
+  },
+  {
+   "index": 44,
+   "start": 536.46,
+   "end": 547.42,
+   "speaker": 1,
+   "text": "of the very important feature, a remote control can have So this is one one of the interface which can be created"
+  },
+  {
+   "index": 45,
+   "start": 547.42,
+   "end": 547.82,
+   "speaker": 0,
+   "text": "A very"
+  },
+  {
+   "index": 46,
+   "start": 547.82,
+   "end": 562.06,
+   "speaker": 1,
+   "text": "simple interface which has all the important features. Then please next Then these are some of the remotes which are different in shape and color, but they have many buttons."
+  },
+  {
+   "index": 47,
+   "start": 562.06,
+   "end": 563.3,
+   "speaker": 0,
+   "text": "So"
+  },
+  {
+   "index": 48,
+   "start": 563.3,
+   "end": 575.74,
+   "speaker": 1,
+   "text": "sometimes the user finds it very difficult to recognize which button is for what function and all that. So you can you can design an interface which is very simple and which is user friendly. Even a kid can use that."
+  },
+  {
+   "index": 49,
+   "start": 575.74,
+   "end": 576.52,
+   "speaker": 0,
+   "text": "So can"
+  },
+  {
+   "index": 50,
+   "start": 576.52,
+   "end": 584.94,
+   "speaker": 1,
+   "text": "you go on to the next slide? Yeah. So this is one of the interface or one of the remote which has this voice recognizer."
+  },
+  {
+   "index": 51,
+   "start": 584.94,
+   "end": 585.82,
+   "speaker": 0,
+   "text": "And this has"
+  },
+  {
+   "index": 52,
+   "start": 585.82,
+   "end": 602.85,
+   "speaker": 1,
+   "text": "multipurpose use. It can be used for TV, it can be used for cable satellites, it can be used for VCR, DVDs and audio And this has inbuilt voice recognizer Can I go on to the ninth slide?"
+  },
+  {
+   "index": 53,
+   "start": 602.85,
+   "end": 610.08,
+   "speaker": 1,
+   "text": "Yeah, now this is an interface for a child for a remote which a child can use."
+  },
+  {
+   "index": 54,
+   "start": 610.08,
+   "end": 610.82,
+   "speaker": 0,
+   "text": "Uh this is"
+  },
+  {
+   "index": 55,
+   "start": 610.82,
+   "end": 627.06,
+   "speaker": 1,
+   "text": "user friendly, it's very attractive and children can use it as well as they can play with it. And this comes with different colors, different shapes"
+  },
+  {
+   "index": 56,
+   "start": 627.06,
+   "end": 627.5,
+   "speaker": 0,
+   "text": "And this"
+  },
+  {
+   "index": 57,
+   "start": 627.5,
+   "end": 645.32,
+   "speaker": 1,
+   "text": "this child interface has minimum buttons and all the important buttons are there in this small compact attractive child interface Next slide please."
+  },
+  {
+   "index": 58,
+   "start": 645.32,
+   "end": 658.45,
+   "speaker": 1,
+   "text": "Now this is a big oversized remote which cannot be misplaced or it's impossible to misplaced. You don't know"
+  },
+  {
+   "index": 59,
+   "start": 658.45,
+   "end": 664.5,
+   "speaker": 0,
+   "text": "me I could lose that in a minute. This is a very vegu"
+  },
+  {
+   "index": 60,
+   "start": 664.5,
+   "end": 690.22,
+   "speaker": 1,
+   "text": "killer. Let's play it anyway. So this is a Jumbo Universal reward control. It's impossible to misplace or lose This is one such interface which can be created And the personal preference would be a speed to incorporate speech recognizes which will respond to user's voice for a particular function."
+  },
+  {
+   "index": 61,
+   "start": 690.22,
+   "end": 691.42,
+   "speaker": 0,
+   "text": "Right."
+  },
+  {
+   "index": 62,
+   "start": 691.42,
+   "end": 693.34,
+   "speaker": 1,
+   "text": "Thank you. That's."
+  },
+  {
+   "index": 63,
+   "start": 693.34,
+   "end": 720.66,
+   "speaker": 0,
+   "text": "Mhm. Okay, thank you very much. Uh, any comments on her presentation"
+  },
+  {
+   "index": 64,
+   "start": 720.66,
+   "end": 728.94,
+   "speaker": 2,
+   "text": "Well, um, looks like we still have quite a choice of things out there Um, what, uh, I'm no suggestion is bad,"
+  },
+  {
+   "index": 65,
+   "start": 728.94,
+   "end": 729.5,
+   "speaker": 1,
+   "text": "but"
+  },
+  {
+   "index": 66,
+   "start": 729.5,
+   "end": 743.82,
+   "speaker": 2,
+   "text": "we're gonna have to narrow it down a little more. I don't think that we can get uh the T shape is good, the child one is good. It's a too big to misplace. I think it's just funny"
+  },
+  {
+   "index": 67,
+   "start": 743.82,
+   "end": 744.44,
+   "speaker": 0,
+   "text": "I don't think"
+  },
+  {
+   "index": 68,
+   "start": 744.44,
+   "end": 750.93,
+   "speaker": 2,
+   "text": "that's gonna be our impulse purchase at the checkout counter. It's gonna be a little bit too unwielded. These are"
+  },
+  {
+   "index": 69,
+   "start": 750.93,
+   "end": 756.83,
+   "speaker": 0,
+   "text": "representations, but uh as far as the decision making, we getting to that week after. Okay."
+  },
+  {
+   "index": 70,
+   "start": 756.83,
+   "end": 757.06,
+   "speaker": 2,
+   "text": "But"
+  },
+  {
+   "index": 71,
+   "start": 757.06,
+   "end": 762.67,
+   "speaker": 0,
+   "text": "if I just wanted to know whether anybody had any anything to add to"
+  },
+  {
+   "index": 72,
+   "start": 762.67,
+   "end": 767.22,
+   "speaker": 2,
+   "text": "her She really explored all the options. Mhm."
+  },
+  {
+   "index": 73,
+   "start": 767.22,
+   "end": 769.14,
+   "speaker": 0,
+   "text": "Who wants to go next?"
+  },
+  {
+   "index": 74,
+   "start": 770.86,
+   "end": 771.34,
+   "speaker": 1,
+   "text": "Okay,"
+  },
+  {
+   "index": 75,
+   "start": 771.34,
+   "end": 778.54,
+   "speaker": 0,
+   "text": "and you. Okay. Uh,"
+  },
+  {
+   "index": 76,
+   "start": 778.54,
+   "end": 780.26,
+   "speaker": 3,
+   "text": "the next one. Oops,"
+  },
+  {
+   "index": 77,
+   "start": 780.26,
+   "end": 782.22,
+   "speaker": 0,
+   "text": "it's it was the end."
+  },
+  {
+   "index": 78,
+   "start": 782.22,
+   "end": 788.42,
+   "speaker": 3,
+   "text": "The components"
+  },
+  {
+   "index": 79,
+   "start": 788.42,
+   "end": 795.54,
+   "speaker": 0,
+   "text": "design. Mhm. Okay"
+  },
+  {
+   "index": 80,
+   "start": 795.54,
+   "end": 803.74,
+   "speaker": 3,
+   "text": "Yeah. Um, this time I'm I'm going to uh concentrate more on the components and"
+  },
+  {
+   "index": 81,
+   "start": 803.74,
+   "end": 804.5,
+   "speaker": 2,
+   "text": "the technical"
+  },
+  {
+   "index": 82,
+   "start": 804.5,
+   "end": 817.4,
+   "speaker": 3,
+   "text": "side of the remote controller design. Uh, can you go on to the next slide please? I have just brief uh done a few uh components which we require for the remote control construction."
+  },
+  {
+   "index": 83,
+   "start": 817.4,
+   "end": 825.1,
+   "speaker": 3,
+   "text": "Uh the first one is case to keep all the components like integrated circuit, battery, et cetera, et cetera."
+  },
+  {
+   "index": 84,
+   "start": 825.1,
+   "end": 837.78,
+   "speaker": 3,
+   "text": "It's like uh it can be a plastic one, hard plastic, so that it can be strong even if you just uh you know if you if it falls down, then it doesn't break. So it should be strong."
+  },
+  {
+   "index": 85,
+   "start": 837.78,
+   "end": 838.3,
+   "speaker": 0,
+   "text": "And"
+  },
+  {
+   "index": 86,
+   "start": 838.3,
+   "end": 845.18,
+   "speaker": 3,
+   "text": "uh there are no harmful materials used in that and it should be recyclable"
+  },
+  {
+   "index": 87,
+   "start": 845.18,
+   "end": 845.8,
+   "speaker": 0,
+   "text": "Uh"
+  },
+  {
+   "index": 88,
+   "start": 845.8,
+   "end": 846.74,
+   "speaker": 3,
+   "text": "and good point."
+  },
+  {
+   "index": 89,
+   "start": 846.74,
+   "end": 847.02,
+   "speaker": 2,
+   "text": "Yeah,"
+  },
+  {
+   "index": 90,
+   "start": 847.02,
+   "end": 854.48,
+   "speaker": 3,
+   "text": "and also uh using of coloring component components like if we want to have different colors, blue, red, green."
+  },
+  {
+   "index": 91,
+   "start": 854.48,
+   "end": 871.44,
+   "speaker": 3,
+   "text": "So uh uh we have to use uh some coloring component component components. And uh the second important thing is uh uh uh integrated circuit which we can use a highly sophisticated one because it's like the it's like the heart of the remote controller."
+  },
+  {
+   "index": 92,
+   "start": 871.44,
+   "end": 897.35,
+   "speaker": 3,
+   "text": "If it is not efficient, then everything is going to be uh like less efficient. So it you should we should have a highly sophisticated one and it should be resistant to high as well as uh low temperatures, suppose if it is thirty eight degrees outside forty degrees outside, it should it should be able to resist the temperature uh uh hesen uh high temperature and low temperatures."
+  },
+  {
+   "index": 93,
+   "start": 897.35,
+   "end": 921.03,
+   "speaker": 3,
+   "text": "And uh it should be with uh um equipped with timer and alarm facility and uh other component we should uh we have in the remote controller is a system which is like it is very very much important for the electricity uh flow through through the remote controller and also a capacitor which is a which is a I think it's it's like a battery capacitor."
+  },
+  {
+   "index": 94,
+   "start": 921.03,
+   "end": 923.74,
+   "speaker": 3,
+   "text": "Can you go on to the next slide please?"
+  },
+  {
+   "index": 95,
+   "start": 926.14,
+   "end": 938.03,
+   "speaker": 3,
+   "text": "Uh a diote, a tranceor, a resonator, these are all this technical uh elect electronic components components which are which we have to use in a remote controller."
+  },
+  {
+   "index": 96,
+   "start": 938.03,
+   "end": 950.22,
+   "speaker": 3,
+   "text": "A battery uh I would like to suggest one thing. Uh if we uh if we will be able to make a rechargeable battery, then we we need not go for a high performance battery."
+  },
+  {
+   "index": 97,
+   "start": 950.22,
+   "end": 951.1,
+   "speaker": 2,
+   "text": "Even if it is a low"
+  },
+  {
+   "index": 98,
+   "start": 951.1,
+   "end": 957.76,
+   "speaker": 3,
+   "text": "performance battery, it it can't it can't charge much. It it's not a high voltage battery."
+  },
+  {
+   "index": 99,
+   "start": 957.76,
+   "end": 964.43,
+   "speaker": 3,
+   "text": "Then also we can, if width is a rechargeable one, then people can use it for a long time."
+  },
+  {
+   "index": 100,
+   "start": 964.43,
+   "end": 971.68,
+   "speaker": 3,
+   "text": "So in that way we can cut cut the cost, but that we have to make the battery as rechargeable one."
+  },
+  {
+   "index": 101,
+   "start": 971.68,
+   "end": 978.87,
+   "speaker": 3,
+   "text": "And we we have a circuit board uh in a remote control deck. Can you go to the next slide please?"
+  },
+  {
+   "index": 102,
+   "start": 978.87,
+   "end": 984.42,
+   "speaker": 3,
+   "text": "And how it works, how the remote controller works. When you press a button"
+  },
+  {
+   "index": 103,
+   "start": 984.42,
+   "end": 985.62,
+   "speaker": 0,
+   "text": "Go away."
+  },
+  {
+   "index": 104,
+   "start": 985.62,
+   "end": 991.54,
+   "speaker": 3,
+   "text": "Thank you. Uh when you press a button, when you do that, you complete a specific connection."
+  },
+  {
+   "index": 105,
+   "start": 991.54,
+   "end": 1000.93,
+   "speaker": 3,
+   "text": "That means when you when you press a button, there will be a small circuit underneath the button and it will send some signals through the wires."
+  },
+  {
+   "index": 106,
+   "start": 1000.93,
+   "end": 1009.35,
+   "speaker": 3,
+   "text": "And then the chip will sense that connection and notice that which button is pressed. Suppose you have pressed channel one button."
+  },
+  {
+   "index": 107,
+   "start": 1009.35,
+   "end": 1015.53,
+   "speaker": 3,
+   "text": "Number one you have pressed. Then the uh chip will know that the number one button was pressed."
+  },
+  {
+   "index": 108,
+   "start": 1015.53,
+   "end": 1023.76,
+   "speaker": 3,
+   "text": "It produces a more more scored line signal specific to that button. Every button, every individual button has its own MOS code."
+  },
+  {
+   "index": 109,
+   "start": 1023.76,
+   "end": 1032.51,
+   "speaker": 3,
+   "text": "Suppose the user has pressed button button one, then it will have a the circuit will generate a specific mark code to that that button."
+  },
+  {
+   "index": 110,
+   "start": 1032.51,
+   "end": 1040.1,
+   "speaker": 3,
+   "text": "And the transistor will amplify the signal and send them to the LED. Which translates the signal into inforded light."
+  },
+  {
+   "index": 111,
+   "start": 1040.1,
+   "end": 1047.18,
+   "speaker": 3,
+   "text": "Like you have got a signal by pressing a button that Morse code has been generated by the integrated circuit."
+  },
+  {
+   "index": 112,
+   "start": 1047.18,
+   "end": 1057.08,
+   "speaker": 3,
+   "text": "Now that signal that Morse code has to be amplified by the transestor. That is the use of transestor transestor we which we use in the remote controller."
+  },
+  {
+   "index": 113,
+   "start": 1057.08,
+   "end": 1064.74,
+   "speaker": 3,
+   "text": "It will amplify the signal and it will send it to the LED and which translates the signal into an infra infrared bits."
+  },
+  {
+   "index": 114,
+   "start": 1064.74,
+   "end": 1080.17,
+   "speaker": 3,
+   "text": "The sensor in the TV can see the infrared light and seeing this signal, seeing the signal it reacts appropriately, that when it sees the amplified more more score signal, then it will uh it will uh know which what what action it has to do."
+  },
+  {
+   "index": 115,
+   "start": 1080.17,
+   "end": 1088.08,
+   "speaker": 3,
+   "text": "Then it will do the appropriate action. So uh this is how the remote controller works Can you go to the next slide please?"
+  },
+  {
+   "index": 116,
+   "start": 1088.08,
+   "end": 1096.06,
+   "speaker": 3,
+   "text": "Yeah, I have few pictures. When you look at the uh um remote controller, uh it's it's it this is a normal remote controller"
+  },
+  {
+   "index": 117,
+   "start": 1096.2,
+   "end": 1106.28,
+   "speaker": 3,
+   "text": "and to the next slide please. And we had a few buttons and all. And if you open the remote controller, you have this circum circuit board"
+  },
+  {
+   "index": 118,
+   "start": 1106.28,
+   "end": 1107.34,
+   "speaker": 0,
+   "text": "and few electronic"
+  },
+  {
+   "index": 119,
+   "start": 1107.34,
+   "end": 1110.42,
+   "speaker": 3,
+   "text": "components. Like you can see a chip there which"
+  },
+  {
+   "index": 120,
+   "start": 1110.5,
+   "end": 1110.98,
+   "speaker": 0,
+   "text": "is having"
+  },
+  {
+   "index": 121,
+   "start": 1110.98,
+   "end": 1123.98,
+   "speaker": 3,
+   "text": "eighteen pins and also a capacity a capacitor three resistors and also resonator uh um yeah and and the diode transestor"
+  },
+  {
+   "index": 122,
+   "start": 1123.98,
+   "end": 1124.24,
+   "speaker": 0,
+   "text": "The"
+  },
+  {
+   "index": 123,
+   "start": 1124.24,
+   "end": 1149.5,
+   "speaker": 3,
+   "text": "electronic components all of the electronic components have all those uh things like chip and diode transestors Yeah, the can you can see the TA double one eight three five labeled uh chip Uh you can also see the the green two green things are uh there's a they they are resistors"
+  },
+  {
+   "index": 124,
+   "start": 1149.5,
+   "end": 1150.14,
+   "speaker": 1,
+   "text": "and just"
+  },
+  {
+   "index": 125,
+   "start": 1150.14,
+   "end": 1161.82,
+   "speaker": 3,
+   "text": "beside that you can see a transistor and a cylinder shape uh that one is a capacitor uh and also there are uh resistors sorry, there is a diode."
+  },
+  {
+   "index": 126,
+   "start": 1161.82,
+   "end": 1162.78,
+   "speaker": 0,
+   "text": "Can you"
+  },
+  {
+   "index": 127,
+   "start": 1162.78,
+   "end": 1175.13,
+   "speaker": 3,
+   "text": "go on to the next? So uh this is the circuit board, the green one is a circuit board. Actually building a circuit board is pretty pretty uh easy and also it's it's inexpensive."
+  },
+  {
+   "index": 128,
+   "start": 1175.13,
+   "end": 1193.86,
+   "speaker": 3,
+   "text": "It's it costs less than what you print on a paper because uh when you when you are building some circuits some circuits and also wires, it's it's better to go for printing because you can build these kind of circuit boards on on a bulk and it's just printing nothing"
+  },
+  {
+   "index": 129,
+   "start": 1193.86,
+   "end": 1194.34,
+   "speaker": 1,
+   "text": "like you"
+  },
+  {
+   "index": 130,
+   "start": 1194.34,
+   "end": 1207.23,
+   "speaker": 3,
+   "text": "know you you don't need to use wires and doll it's not exactly wires we are using. It's just printing something on a board that those prints will act as wires and circuits."
+  },
+  {
+   "index": 131,
+   "start": 1207.23,
+   "end": 1214.73,
+   "speaker": 3,
+   "text": "So that green uh thing is a circuit board and also you can see uh there are like Accessful buttons."
+  },
+  {
+   "index": 132,
+   "start": 1214.73,
+   "end": 1228.97,
+   "speaker": 3,
+   "text": "Like when you press a button, the circuit under the button will be activated. It will it will get some signals from it and it will it will send the signal signals to the integrated circuit."
+  },
+  {
+   "index": 133,
+   "start": 1228.97,
+   "end": 1235.71,
+   "speaker": 3,
+   "text": "Can you go to the next step? Uh so this is these are the circuits underneath the buttons."
+  },
+  {
+   "index": 134,
+   "start": 1235.71,
+   "end": 1250.33,
+   "speaker": 3,
+   "text": "Uh can you see the black round marks? They they are the circuits. Next please. And um Like uh we have designed before we have seen some uh few things like instead of buttons we had some scrolls."
+  },
+  {
+   "index": 135,
+   "start": 1250.33,
+   "end": 1267.19,
+   "speaker": 3,
+   "text": "Uh but a push button requires a simple chip underneath it, but whereas a scroll wheel requires normally a regular chip, which is a higher price range like for scrolls we have to go for a sophisticated and full complete ship."
+  },
+  {
+   "index": 136,
+   "start": 1267.19,
+   "end": 1280.08,
+   "speaker": 3,
+   "text": "Uh and as energy source, we offer a basic battery, uh more engineers, hard dynamo. Acciendic provision of energy, modern watches that you shake casually to provide energy."
+  },
+  {
+   "index": 137,
+   "start": 1280.08,
+   "end": 1285.18,
+   "speaker": 3,
+   "text": "So that also we can have in a battery uh or we can use solar cells."
+  },
+  {
+   "index": 138,
+   "start": 1285.93,
+   "end": 1286.34,
+   "speaker": 3,
+   "text": "That's"
+  },
+  {
+   "index": 139,
+   "start": 1286.34,
+   "end": 1286.86,
+   "speaker": 2,
+   "text": "interesting."
+  },
+  {
+   "index": 140,
+   "start": 1286.86,
+   "end": 1302.21,
+   "speaker": 3,
+   "text": "Yeah. Uh yeah, the product can be delivered into different cases. Uh usually the case is uncard flat that we see usually uh normal remote controller."
+  },
+  {
+   "index": 141,
+   "start": 1302.21,
+   "end": 1303.71,
+   "speaker": 0,
+   "text": "Um okay."
+  },
+  {
+   "index": 142,
+   "start": 1303.71,
+   "end": 1304.38,
+   "speaker": 3,
+   "text": "Yeah. And you"
+  },
+  {
+   "index": 143,
+   "start": 1304.38,
+   "end": 1307.42,
+   "speaker": 0,
+   "text": "have more pictures. Uh we have five minutes to the end of the meeting."
+  },
+  {
+   "index": 144,
+   "start": 1307.42,
+   "end": 1318.87,
+   "speaker": 3,
+   "text": "I have just one more slide, I think. Um Like we can have a material such as plastic rubble wood titan in, but titanium we can't use."
+  },
+  {
+   "index": 145,
+   "start": 1318.87,
+   "end": 1327.03,
+   "speaker": 3,
+   "text": "Um and also for electronics we can use a simple and regular or an advanced chip on the print."
+  },
+  {
+   "index": 146,
+   "start": 1327.03,
+   "end": 1340.65,
+   "speaker": 3,
+   "text": "Um also in it includes the infrared sender. Um yeah for the movie just develop uh sample sensors, sample speaker Yeah, that's it. It's all for me now. Okay,"
+  },
+  {
+   "index": 147,
+   "start": 1340.65,
+   "end": 1347.22,
+   "speaker": 0,
+   "text": "well thank you Any particular comments by anybody"
+  },
+  {
+   "index": 148,
+   "start": 1347.22,
+   "end": 1353.1,
+   "speaker": 2,
+   "text": "On the scroll on the push button. Um you can achieve scrolling by repeatedly pushing a button?"
+  },
+  {
+   "index": 149,
+   "start": 1353.1,
+   "end": 1359.66,
+   "speaker": 3,
+   "text": "No, no, the the scrolling was a different like you can go for switches like buttons or scrolls,"
+  },
+  {
+   "index": 150,
+   "start": 1359.66,
+   "end": 1360.14,
+   "speaker": 2,
+   "text": "uh"
+  },
+  {
+   "index": 151,
+   "start": 1360.14,
+   "end": 1371.68,
+   "speaker": 3,
+   "text": "which which we used to do before ten ten years before I think now nobody uses it because you need you need a sophisticated chip and all. So I think it's better we go for ordinary buttons. We'll just go for"
+  },
+  {
+   "index": 152,
+   "start": 1371.68,
+   "end": 1375.17,
+   "speaker": 2,
+   "text": "push buttons for inst interest of cost. Yeah. Okay. We"
+  },
+  {
+   "index": 153,
+   "start": 1375.17,
+   "end": 1381.1,
+   "speaker": 0,
+   "text": "don't have a lot of time left and we will still have to make a decision at the marketing expert has to present her."
+  },
+  {
+   "index": 154,
+   "start": 1381.1,
+   "end": 1383.66,
+   "speaker": 2,
+   "text": "Okay. Herth my first my next slide."
+  },
+  {
+   "index": 155,
+   "start": 1383.66,
+   "end": 1386.9,
+   "speaker": 0,
+   "text": "Okay"
+  },
+  {
+   "index": 156,
+   "start": 1386.9,
+   "end": 1396.34,
+   "speaker": 2,
+   "text": "Um, all right, my method is, uh I'm interested in what the competition is doing and want to see how we can make ourselves different from the competition."
+  },
+  {
+   "index": 157,
+   "start": 1396.34,
+   "end": 1402.7,
+   "speaker": 2,
+   "text": "So, I've really been looking at the press and the ads that are out there for other remote controllers."
+  },
+  {
+   "index": 158,
+   "start": 1402.7,
+   "end": 1415.91,
+   "speaker": 2,
+   "text": "I I spend a lot of time on the internet surfing around doing the same thing. And then when I'm out in people's houses or at meetings or anything like that, I try to notice what kind of remote controls people have."
+  },
+  {
+   "index": 159,
+   "start": 1415.91,
+   "end": 1426.52,
+   "speaker": 2,
+   "text": "And if it's convenient in the conversation I ask about it. And I would encourage you all to do the same Um and my findings from this is that, you know, small is beautiful."
+  },
+  {
+   "index": 160,
+   "start": 1426.52,
+   "end": 1430.1,
+   "speaker": 2,
+   "text": "Um, people like something that really fits in their hand."
+  },
+  {
+   "index": 161,
+   "start": 1430.1,
+   "end": 1430.7,
+   "speaker": 1,
+   "text": "Simple"
+  },
+  {
+   "index": 162,
+   "start": 1430.7,
+   "end": 1440.55,
+   "speaker": 2,
+   "text": "is beautiful. They don't want to have to squint at small print. Um, they want buttons whose functions are obvious and they want um as few buttons as possible."
+  },
+  {
+   "index": 163,
+   "start": 1440.55,
+   "end": 1447.41,
+   "speaker": 2,
+   "text": "And they don't care for the mode thing. They want each button to do something. And eye catching is important."
+  },
+  {
+   "index": 164,
+   "start": 1447.41,
+   "end": 1453.39,
+   "speaker": 2,
+   "text": "It's got to look cute. It's got to look appealing. Go ahead, I'm trying to finish fast for you."
+  },
+  {
+   "index": 165,
+   "start": 1453.39,
+   "end": 1459.87,
+   "speaker": 2,
+   "text": "Um And our preferences as far as I'm concerned, are we got to get to the market before the competition."
+  },
+  {
+   "index": 166,
+   "start": 1459.87,
+   "end": 1471.09,
+   "speaker": 2,
+   "text": "Ours has to be look really great and it has to come out before the others so that we have a leg up on time to sell it and push it before other people get out there christmas item."
+  },
+  {
+   "index": 167,
+   "start": 1471.09,
+   "end": 1483.62,
+   "speaker": 2,
+   "text": "And we should develop one or two features we can really dwell on in our ad campaign. If we try to tell people it has too many great features, the consumer just gets confused and we don't get anywhere."
+  },
+  {
+   "index": 168,
+   "start": 1483.62,
+   "end": 1497.15,
+   "speaker": 2,
+   "text": "So we've got to narrow our selection down to two things I think that we're going to say are really great about our our new product And I've been looking around at what designs every year different things are popular."
+  },
+  {
+   "index": 169,
+   "start": 1497.15,
+   "end": 1506.25,
+   "speaker": 2,
+   "text": "And in my research this year, i found out that fruit and vegetable shapes are really popular and people are tired of hard plastic and hard metal."
+  },
+  {
+   "index": 170,
+   "start": 1506.25,
+   "end": 1512.36,
+   "speaker": 2,
+   "text": "They're more back into soft feel spongy feeling things, things with maybe a little cloth on them."
+  },
+  {
+   "index": 171,
+   "start": 1512.36,
+   "end": 1517.22,
+   "speaker": 2,
+   "text": "So those are things maybe we want to look at as far as salability of the item"
+  },
+  {
+   "index": 172,
+   "start": 1517.22,
+   "end": 1545.3,
+   "speaker": 0,
+   "text": "Okay That concludes the presentation of everyone And what we really have to decide in this meeting is The concept of the remote And So what do we think on the concept of the remote"
+  },
+  {
+   "index": 173,
+   "start": 1545.3,
+   "end": 1549.42,
+   "speaker": 2,
+   "text": "You want to try to come back to yours and I would like to include"
+  },
+  {
+   "index": 174,
+   "start": 1549.42,
+   "end": 1552.18,
+   "speaker": 1,
+   "text": "this feature which is called this voice recognizer."
+  },
+  {
+   "index": 175,
+   "start": 1552.18,
+   "end": 1553.1,
+   "speaker": 2,
+   "text": "Okay."
+  },
+  {
+   "index": 176,
+   "start": 1553.1,
+   "end": 1556.34,
+   "speaker": 0,
+   "text": "Mhm"
+  },
+  {
+   "index": 177,
+   "start": 1556.34,
+   "end": 1559.7,
+   "speaker": 2,
+   "text": "So speech recognition is most important as far as you're concerned."
+  },
+  {
+   "index": 178,
+   "start": 1560.04,
+   "end": 1563.06,
+   "speaker": 1,
+   "text": "This could be a one feature which could be sellable. Yeah,"
+  },
+  {
+   "index": 179,
+   "start": 1563.06,
+   "end": 1568.46,
+   "speaker": 2,
+   "text": "that could that could that could be our star feature. That that might be really good. Yeah. I agree with that. But"
+  },
+  {
+   "index": 180,
+   "start": 1568.46,
+   "end": 1576.73,
+   "speaker": 3,
+   "text": "I'm very very much doubtful how how uh far it will work because recognize that like it it has its"
+  },
+  {
+   "index": 181,
+   "start": 1576.73,
+   "end": 1578.62,
+   "speaker": 2,
+   "text": "own Yeah,"
+  },
+  {
+   "index": 182,
+   "start": 1578.62,
+   "end": 1587.64,
+   "speaker": 3,
+   "text": "it's not distance problem. It it's recognizing a person's voice like maybe different people will be having different voices. So okay, like everything well you you"
+  },
+  {
+   "index": 183,
+   "start": 1587.64,
+   "end": 1589.8,
+   "speaker": 0,
+   "text": "teach, you have to teach to get a"
+  },
+  {
+   "index": 184,
+   "start": 1589.8,
+   "end": 1593.46,
+   "speaker": 3,
+   "text": "good recognize recognizing system Yeah, it's it's"
+  },
+  {
+   "index": 185,
+   "start": 1593.46,
+   "end": 1603.86,
+   "speaker": 1,
+   "text": "like you're recording uh all uh um a question already And then you're expecting an answer from, for example you have a TV system, I am the user"
+  },
+  {
+   "index": 186,
+   "start": 1603.86,
+   "end": 1604.18,
+   "speaker": 3,
+   "text": "and"
+  },
+  {
+   "index": 187,
+   "start": 1604.18,
+   "end": 1607.17,
+   "speaker": 1,
+   "text": "my family members are the user. I will already"
+  },
+  {
+   "index": 188,
+   "start": 1607.17,
+   "end": 1608.82,
+   "speaker": 3,
+   "text": "record"
+  },
+  {
+   "index": 189,
+   "start": 1608.82,
+   "end": 1613.41,
+   "speaker": 1,
+   "text": "question like uh good morning like around eight o'clock, I want to see the news in"
+  },
+  {
+   "index": 190,
+   "start": 1613.41,
+   "end": 1613.64,
+   "speaker": 3,
+   "text": "the"
+  },
+  {
+   "index": 191,
+   "start": 1613.64,
+   "end": 1617.74,
+   "speaker": 1,
+   "text": "television. So I'll say just good morning and the TV will switch on. It"
+  },
+  {
+   "index": 192,
+   "start": 1617.74,
+   "end": 1618.02,
+   "speaker": 3,
+   "text": "will"
+  },
+  {
+   "index": 193,
+   "start": 1618.02,
+   "end": 1619.55,
+   "speaker": 1,
+   "text": "recognize my voice and"
+  },
+  {
+   "index": 194,
+   "start": 1619.55,
+   "end": 1620.26,
+   "speaker": 3,
+   "text": "it'll switch on"
+  },
+  {
+   "index": 195,
+   "start": 1620.26,
+   "end": 1620.86,
+   "speaker": 1,
+   "text": "okay before"
+  },
+  {
+   "index": 196,
+   "start": 1620.86,
+   "end": 1630.54,
+   "speaker": 0,
+   "text": "we get too far off here, um the components of the concept is the energy. What kind of energy do we foresee"
+  },
+  {
+   "index": 197,
+   "start": 1630.54,
+   "end": 1637.06,
+   "speaker": 2,
+   "text": "Battery, I think battery. And I think we all agreed on that. That that's that's going to be most cost effective and the best thing."
+  },
+  {
+   "index": 198,
+   "start": 1637.06,
+   "end": 1639.66,
+   "speaker": 0,
+   "text": "Okay then chip on print. Yeah."
+  },
+  {
+   "index": 199,
+   "start": 1639.66,
+   "end": 1640.22,
+   "speaker": 3,
+   "text": "Yes."
+  },
+  {
+   "index": 200,
+   "start": 1640.72,
+   "end": 1648.02,
+   "speaker": 0,
+   "text": "Okay. And the case. And I think we all agree on the case, we want to have something uh maybe bright colorful."
+  },
+  {
+   "index": 201,
+   "start": 1648.02,
+   "end": 1648.54,
+   "speaker": 3,
+   "text": "Bright"
+  },
+  {
+   "index": 202,
+   "start": 1648.57,
+   "end": 1652.94,
+   "speaker": 2,
+   "text": "colorful Trendy trendy design. Trendy design and strong. Compact."
+  },
+  {
+   "index": 203,
+   "start": 1652.94,
+   "end": 1654.74,
+   "speaker": 1,
+   "text": "Mhm"
+  },
+  {
+   "index": 204,
+   "start": 1654.74,
+   "end": 1657.74,
+   "speaker": 0,
+   "text": "Trendy design, compact and strong."
+  },
+  {
+   "index": 205,
+   "start": 1657.74,
+   "end": 1658.7,
+   "speaker": 2,
+   "text": "Yes."
+  },
+  {
+   "index": 206,
+   "start": 1658.7,
+   "end": 1670.82,
+   "speaker": 0,
+   "text": "User interface concept Uh, interface type supplements That would be your"
+  },
+  {
+   "index": 207,
+   "start": 1670.82,
+   "end": 1671.26,
+   "speaker": 3,
+   "text": "area,"
+  },
+  {
+   "index": 208,
+   "start": 1671.26,
+   "end": 1673.27,
+   "speaker": 0,
+   "text": "I think you"
+  },
+  {
+   "index": 209,
+   "start": 1673.27,
+   "end": 1679.42,
+   "speaker": 3,
+   "text": "know Like the switches, like we use buttons for user interface. Push buttons."
+  },
+  {
+   "index": 210,
+   "start": 1679.42,
+   "end": 1680.3,
+   "speaker": 1,
+   "text": "Push buttons."
+  },
+  {
+   "index": 211,
+   "start": 1680.3,
+   "end": 1681.5,
+   "speaker": 3,
+   "text": "I guess"
+  },
+  {
+   "index": 212,
+   "start": 1681.5,
+   "end": 1689.64,
+   "speaker": 0,
+   "text": "for yeah And I'm not sure what I mean by supplements."
+  },
+  {
+   "index": 213,
+   "start": 1689.64,
+   "end": 1690.5,
+   "speaker": 3,
+   "text": "Supplements"
+  },
+  {
+   "index": 214,
+   "start": 1690.5,
+   "end": 1692.66,
+   "speaker": 1,
+   "text": "like different types of features, buttons."
+  },
+  {
+   "index": 215,
+   "start": 1692.66,
+   "end": 1693.69,
+   "speaker": 2,
+   "text": "Oh,"
+  },
+  {
+   "index": 216,
+   "start": 1693.69,
+   "end": 1696.98,
+   "speaker": 1,
+   "text": "mute buttons. Or like Chris feature recognition would also be a supplement."
+  },
+  {
+   "index": 217,
+   "start": 1696.98,
+   "end": 1699.86,
+   "speaker": 2,
+   "text": "Right, right. Yes."
+  },
+  {
+   "index": 218,
+   "start": 1699.86,
+   "end": 1700.3,
+   "speaker": 1,
+   "text": "Okay,"
+  },
+  {
+   "index": 219,
+   "start": 1700.3,
+   "end": 1703.4,
+   "speaker": 2,
+   "text": "so why don't we put down speech recognition if possible,"
+  },
+  {
+   "index": 220,
+   "start": 1703.4,
+   "end": 1703.98,
+   "speaker": 3,
+   "text": "pending some"
+  },
+  {
+   "index": 221,
+   "start": 1703.98,
+   "end": 1707.54,
+   "speaker": 2,
+   "text": "more research from our industrial engineer on how expensive that is."
+  },
+  {
+   "index": 222,
+   "start": 1707.54,
+   "end": 1708.14,
+   "speaker": 3,
+   "text": "Right."
+  },
+  {
+   "index": 223,
+   "start": 1708.14,
+   "end": 1717.22,
+   "speaker": 0,
+   "text": "Okay Uh, our next meeting will be in thirty minutes"
+  },
+  {
+   "index": 224,
+   "start": 1717.22,
+   "end": 1718.1,
+   "speaker": 3,
+   "text": "And"
+  },
+  {
+   "index": 225,
+   "start": 1718.1,
+   "end": 1742.58,
+   "speaker": 0,
+   "text": "the ID is to, this is the individual actions to be taken until then. To have the look and feel design And uh the UID is supposed to uh come up with the user interface design And the marketing expert with the product evaluation."
+  },
+  {
+   "index": 226,
+   "start": 1742.58,
+   "end": 1743.22,
+   "speaker": 2,
+   "text": "Okay."
+  },
+  {
+   "index": 227,
+   "start": 1743.22,
+   "end": 1758.62,
+   "speaker": 0,
+   "text": "In this phase, the two of you, Jana and Francine, have to work together on a prototype using a modeling clay. It says here You will receive specific instructions will be sent to you by your coaches."
+  },
+  {
+   "index": 228,
+   "start": 1758.62,
+   "end": 1759.42,
+   "speaker": 1,
+   "text": "Okay."
+  },
+  {
+   "index": 229,
+   "start": 1759.42,
+   "end": 1772.63,
+   "speaker": 0,
+   "text": "Um, if you have any questions, you know you you can always uh contact me Um or or your coach, I suppose Wherever they're hiding."
+  },
+  {
+   "index": 230,
+   "start": 1772.63,
+   "end": 1784.49,
+   "speaker": 0,
+   "text": "Um, so um I think we conclude the meeting here and we come back in uh uh thirty minutes according to our timetable"
+  },
+  {
+   "index": 231,
+   "start": 1784.49,
+   "end": 1788.58,
+   "speaker": 0,
+   "text": "here Thank you very much. Thank"
+  },
+  {
+   "index": 232,
+   "start": 1788.58,
+   "end": 1795.38,
+   "speaker": 3,
+   "text": "you"
+  },
+  {
+   "index": 233,
+   "start": 1795.38,
+   "end": 1798.58,
+   "speaker": 0,
+   "text": "Okay,"
+  },
+  {
+   "index": 234,
+   "start": 1798.58,
+   "end": 1800.34,
+   "speaker": 3,
+   "text": "Stuck"
+  },
+  {
+   "index": 235,
+   "start": 1800.34,
+   "end": 1800.98,
+   "speaker": 0,
+   "text": "There we go."
+  }
+ ]
+}

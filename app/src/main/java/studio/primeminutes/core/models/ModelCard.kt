@@ -22,7 +22,33 @@ data class ModelCard(
     val title: OneShot,
     val prose: OneShot,
     val ask: AskCard,
+    /** Per meeting language (`zh`, `en`, as [studio.primeminutes.core.reader.MeetingLanguage] detects
+     *  it): what the card changes for a meeting in that language. A language without an entry uses the
+     *  card as it is. */
+    val languages: Map<String, LanguageVariant> = emptyMap(),
 ) {
+    /** Card fields a meeting language overrides; null = keep the card's own. */
+    data class LanguageVariant(
+        val directive: String? = null,
+        val systemSuffix: String? = null,
+        val sections: List<Pair<String, String>>? = null,
+        val sectionEmpty: String? = null,
+        val title: OneShot? = null,
+        val prose: OneShot? = null,
+    )
+
+    /** This card for a meeting in [language] (null or a language the card does not list: unchanged). */
+    fun forLanguage(language: String?): ModelCard {
+        val v = languages[language ?: return this] ?: return this
+        return copy(
+            reader = reader.copy(
+                directive = v.directive ?: reader.directive, systemSuffix = v.systemSuffix ?: reader.systemSuffix, sections = v.sections ?: reader.sections,
+                sectionEmpty = v.sectionEmpty ?: reader.sectionEmpty,
+            ),
+            title = v.title ?: title, prose = v.prose ?: prose,
+        )
+    }
+
     /** A one-shot instruction over the notes; [prompt] has a `{notes}` slot. [label] strips a label
      *  the model puts before its answer ("標題：…"), or null. */
     data class OneShot(val prompt: String, val maxTokens: Int, val label: Regex? = null) {
@@ -56,6 +82,12 @@ data class ModelCard(
             val a = j.getJSONObject("ask")
             fun JSONArray.strings() = (0 until length()).map { getString(it) }
             fun oneShot(o: JSONObject) = OneShot(o.getString("prompt"), o.getInt("max_tokens"), o.optString("label").ifEmpty { null }?.let(::Regex))
+            // A language's prompt keeps the base budget and label unless it gives its own.
+            fun oneShotOver(o: JSONObject?, base: JSONObject) = o?.let {
+                OneShot(it.getString("prompt"), it.optInt("max_tokens", base.getInt("max_tokens")),
+                    (it.optString("label").ifEmpty { null } ?: base.optString("label").ifEmpty { null })?.let(::Regex))
+            }
+            fun JSONArray.pairs() = (0 until length()).map { getJSONArray(it).getString(0) to getJSONArray(it).getString(1) }
             val sys = a.getJSONObject("system")
             return ModelCard(
                 name = j.getString("name"),
@@ -75,7 +107,7 @@ data class ModelCard(
                     act = Regex(r.getString("act")), noteAct = r.getString("note_act"), note = Regex(r.getString("note")),
                     compactPriority = r.getJSONArray("compact_priority").strings(),
                     capPriority = r.getJSONArray("cap_priority").let { g -> (0 until g.length()).map { g.getJSONArray(it).strings() } },
-                    sections = r.getJSONArray("sections").let { g -> (0 until g.length()).map { g.getJSONArray(it).getString(0) to g.getJSONArray(it).getString(1) } },
+                    sections = r.getJSONArray("sections").pairs(),
                     sectionEmpty = r.getString("section_empty"),
                     proposalTag = r.getString("proposal_tag"), reclassifyTags = r.getJSONArray("reclassify_tags").strings(), actionTag = r.getString("action_tag"),
                     proposalCue = Regex(r.getString("proposal_cue")), decided = Regex(r.getString("decided")),
@@ -88,10 +120,25 @@ data class ModelCard(
                             minLines = g.optInt("min_lines", 10),
                         )
                     } ?: studio.primeminutes.core.reader.GuardCard(),
+                    directive = r.optString("directive").ifEmpty { null },
+                    systemSuffix = r.optString("system_suffix").ifEmpty { null },
                 ),
                 title = oneShot(j.getJSONObject("title")),
                 prose = oneShot(j.getJSONObject("prose")),
                 ask = AskCard(a.getInt("answer_tokens"), a.getString("no_excerpts"), sys.keys().asSequence().associateWith { sys.getString(it) }),
+                languages = j.optJSONObject("languages")?.let { l ->
+                    l.keys().asSequence().filter { l.opt(it) is JSONObject }.associateWith { code ->
+                        val v = l.getJSONObject(code)
+                        LanguageVariant(
+                            directive = v.optString("directive").ifEmpty { null },
+                            systemSuffix = v.optString("system_suffix").ifEmpty { null },
+                            sections = v.optJSONArray("sections")?.pairs(),
+                            sectionEmpty = v.optString("section_empty").ifEmpty { null },
+                            title = oneShotOver(v.optJSONObject("title"), j.getJSONObject("title")),
+                            prose = oneShotOver(v.optJSONObject("prose"), j.getJSONObject("prose")),
+                        )
+                    }
+                } ?: emptyMap(),
             )
         }
     }

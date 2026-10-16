@@ -16,6 +16,7 @@ import studio.primeminutes.core.llm.SpTokenizer
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.reader.AgentEvent
+import studio.primeminutes.core.reader.MeetingLanguage
 import studio.primeminutes.core.reader.ReaderLane
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.core.text.ChineseScript
@@ -28,9 +29,11 @@ import java.io.File
  * through the app's own path — ReaderLane with the model's card, then prose and title — and the
  * output must state at least `threshold` of the meeting's key facts (decisions, amounts, dates).
  * The threshold sits below the measured `baseline` (2026-10-16, max_notes 12: 0.75–0.92 for E2B and
- * E4B; 0.67–0.75 with the former 6). The reading is deterministic (same output run after run), so
+ * E4B; 0.67–0.75 with the former 6; the English meeting: E2B 0.79 on 2026-10-17). The reading is deterministic (same output run after run), so
  * any change in recall comes from the change under test.
- * The facts are written in Traditional Chinese; the output is converted to it before matching.
+ * The facts are written in Traditional Chinese (English for an English meeting, matched ignoring case);
+ * the output is converted to Traditional before matching. A reference with a `lang` also checks that the
+ * notes and the summary are written in that language ([MeetingLanguage]).
  *
  * Needs the model installed in the app under test (skipped otherwise). Pick it with
  * `-e llm <LlmRegistry id>` (default: the default reader). Report: logcat `ReaderGate` and
@@ -42,6 +45,8 @@ import java.io.File
 class ReaderRegressionGate {
     @Test fun move() = gate("move")
     @Test fun weiya() = gate("weiya")
+    /** An English meeting (AMI IS1009c, 30 min): the notes and summary must be in English too. */
+    @Test fun english() = gate("ami_is1009c")
 
     private fun gate(name: String) = runBlocking {
         val ins = InstrumentationRegistry.getInstrumentation()
@@ -82,22 +87,26 @@ class ReaderRegressionGate {
         val notes = res.journal.joinToString("\n") { ReaderProtocol.render(it) }
         val zhTw = OpenCcConverter.get(ctx, ChineseScript.TRADITIONAL)
         // Digits grouped or spaced either way ("110,000", "11 萬") match the plain spelling.
-        val hay = zhTw.convert(listOf(notes, res.minutes, prose.orEmpty(), title.orEmpty()).joinToString("\n"))
+        val hay = zhTw.convert(listOf(notes, res.minutes, prose.orEmpty(), title.orEmpty()).joinToString("\n")).lowercase()
             .replace(Regex("""(?<=\d)[ ,](?=\d)"""), "").replace(Regex("""(?<=\d) (?=\D)|(?<=\D) (?=\d)"""), "")
         val facts = ref.getJSONArray("facts").let { a -> List(a.length()) { a.getJSONObject(it) } }
         val missed = facts.filterNot { f ->
             val groups = f.getJSONArray("all")
-            (0 until groups.length()).all { g -> groups.getJSONArray(g).let { alts -> (0 until alts.length()).any { hay.contains(alts.getString(it)) } } }
+            (0 until groups.length()).all { g -> groups.getJSONArray(g).let { alts -> (0 until alts.length()).any { hay.contains(alts.getString(it).lowercase()) } } }
         }.map { it.getString("id") }
         val recall = 1.0 - missed.size.toDouble() / facts.size
         // Format: the protocol must not leak into what the user reads.
+        // Language: the notes and the summary follow the meeting's.
+        val lang = ref.optString("lang").ifEmpty { null }
+        val notesLang = MeetingLanguage.detect(res.journal.map { it.text })
+        val proseLang = MeetingLanguage.detect(listOf(prose.orEmpty()))
         val leaks = listOf("NOTE", "NEXT", "<|", "[[").filter { prose.orEmpty().contains(it) || title.orEmpty().contains(it) }
 
         val report = JSONObject().put("meeting", name).put("model", spec.id).put("seconds", secs.toInt())
             .put("recall", recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
             .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
-            .put("prose", prose).put("journal", notes)
+            .put("prose", prose).put("journal", notes).put("lang", lang).put("notes_lang", notesLang).put("prose_lang", proseLang)
         File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$name-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
         android.util.Log.i("ReaderGate", "$name ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s"
             .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks))
@@ -107,5 +116,6 @@ class ReaderRegressionGate {
         assertTrue("$name: no title", !title.isNullOrBlank())
         assertTrue("$name: no summary prose", !prose.isNullOrBlank())
         assertTrue("$name: protocol leaked into the output: $leaks", leaks.isEmpty())
+        if (lang != null) assertTrue("$name: notes in $notesLang, summary in $proseLang, meeting in $lang", notesLang == lang && proseLang == lang)
     }
 }
