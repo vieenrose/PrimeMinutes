@@ -130,7 +130,7 @@ class UiComponentsTest {
         compose.setContent {
             Text(renderMarkdown("[1:23]", anchorColor = Color.Blue, onSeek = { seekedMs = it }))
         }
-        compose.onNodeWithText("1:23").assertIsDisplayed().performClick()
+        compose.onNodeWithText("1:23", substring = true).assertIsDisplayed().performClick()   // the label follows a word joiner (U+2060)
         assertEquals(83_000, seekedMs)
     }
 
@@ -139,7 +139,7 @@ class UiComponentsTest {
         compose.setContent {
             Text(renderMarkdown("[1:02:03]", anchorColor = Color.Blue, onSeek = { seekedMs = it }))
         }
-        compose.onNodeWithText("1:02:03").assertIsDisplayed().performClick()
+        compose.onNodeWithText("1:02:03", substring = true).assertIsDisplayed().performClick()   // the label follows a word joiner (U+2060)
         assertEquals((1 * 3600 + 2 * 60 + 3) * 1000, seekedMs)
     }
 
