@@ -8,7 +8,7 @@ import Combine
 /// into "title · m:ss" links.
 @MainActor final class AskEngine: ObservableObject {
     static let shared = AskEngine()
-    nonisolated static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05, rrfK: Float = 60
+    nonisolated static let noteBonus: Float = 0.05, rrfK: Float = 60
 
     /// `reading(n)`: the model loads (when not resident) and reads the n excerpts found — the long wait;
     /// `answering` from the first token of the answer.
@@ -22,7 +22,11 @@ import Combine
     /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
     /// (115 for a line starting at 115.4 s opened the line before).
     /// `k` is the short tag the model sees (`[[k]]`), unique across the conversation.
-    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var k = 0; var id: String { session.id.uuidString + "@\(sec)" } }
+    /// `a`...`b`: the transcript utterances a passage covers (-1 for a note), so neighbours can widen it.
+    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var k = 0; var a = -1, b = -1
+        var id: String { session.id.uuidString + "@\(sec)" } }
+    /// Retrieval knobs (AskSelect.Retrieval; Android AskEngine.retrieval).
+    nonisolated static let retrieval = AskSelect.Retrieval()
     /// `pool`: every excerpt of the conversation so far, this turn's included — what a citation may point to.
     struct Turn: Identifiable { let id = UUID(); let question: String; var answer: String; let excerpts: [Excerpt]; var done: Bool; var pool: [Excerpt] = [] }
 
@@ -37,7 +41,7 @@ import Combine
             if let x = pool.first(where: { $0.k == k }) { out += "[[\(x.session.id.uuidString)@\(x.sec)]]" } else { out += ns.substring(with: m.range) }
             last = m.range.location + m.range.length
         }
-        return out + ns.substring(from: last)
+        return AskSelect.dedupeTags(out + ns.substring(from: last))
     }
 
     /// A follow-up continues the conversation only if its prompt and a whole answer still fit the cache.
@@ -48,7 +52,7 @@ import Combine
     /// Reciprocal-rank fusion of the dense and keyword passages (meeting summaries left out), one score per
     /// passage: 1/(k+rank) in each list it appears in. A note outranks a chunk at equal cosine in the dense
     /// list (noteBonus); the keyword list keeps the BM25 order.
-    nonisolated static func fuse(_ dense: [LibrarySearch.Hit], _ keyword: [LibrarySearch.Hit]) -> [Excerpt] {
+    nonisolated static func fuse(_ dense: [LibrarySearch.Hit], _ keyword: [LibrarySearch.Hit], k: Float = rrfK) -> [Excerpt] {
         struct Key: Hashable { let id: UUID, kind: UInt8, a: Int }
         var score: [Key: Float] = [:], first: [Key: Excerpt] = [:], order: [Key] = []
         func add(_ hits: [LibrarySearch.Hit], bonus: Bool) {
@@ -60,8 +64,12 @@ import Combine
             }.map(\.element)
             for (rank, (s, p)) in ranked.enumerated() {
                 let key = Key(id: s.id, kind: p.kind.rawValue, a: p.uttIndex)
-                score[key, default: 0] += 1 / (rrfK + Float(rank + 1))
-                if first[key] == nil { first[key] = Excerpt(session: s, sec: Int(p.timeSec), text: p.snippet, score: 0, at: p.timeSec); order.append(key) }
+                score[key, default: 0] += 1 / (k + Float(rank + 1))
+                if first[key] == nil {
+                    let chunk = p.kind == .chunk
+                    first[key] = Excerpt(session: s, sec: Int(p.timeSec), text: p.snippet, score: 0, at: p.timeSec, a: chunk ? p.uttIndex : -1, b: chunk ? p.uttEnd : -1)
+                    order.append(key)
+                }
             }
         }
         add(dense, bonus: true); add(keyword, bonus: false)
@@ -70,7 +78,7 @@ import Combine
             return sa != sb ? sa > sb : a.offset < b.offset
         }.map { e in
             let x = first[e.element]!
-            return Excerpt(session: x.session, sec: x.sec, text: x.text, score: score[e.element]!, at: x.at)
+            return Excerpt(session: x.session, sec: x.sec, text: x.text, score: score[e.element]!, at: x.at, a: x.a, b: x.b)
         }
     }
 
@@ -132,6 +140,11 @@ import Combine
                         DispatchQueue.main.async { AskEngine.shared.publish(now, done: false) }
                     }
                     let st = s.lastStats; StatusLog.add(String(format: "ask answered in %.1f s: prefilled %d (reused %d) in %.1f s, generated %d in %.1f s; seq %d / ctx %d", Date().timeIntervalSince(tPrompt), Int(pre[0]), Int(pre[1]), pre[3], Int(st[2]), st[4], s.seqLength, s.context))
+                    #if VOX_DEV
+                    // DEV: the excerpt tags and the answer, so a device run can be checked from status.log (Android logcat).
+                    StatusLog.add("ask excerpts: " + excerpts.map { "[[\($0.k)]]=\($0.session.title.prefix(16))@\($0.sec)" }.joined(separator: " "))
+                    StatusLog.add("ask answer: " + Self.expandTags(sb, pool).replacingOccurrences(of: "\n", with: " ⏎ "))
+                    #endif
                     return .success(Self.expandTags(sb.trimmingCharacters(in: .whitespacesAndNewlines), pool))
                 } catch { return .failure(error) }
             }.value
@@ -204,21 +217,44 @@ final class AskHolder: @unchecked Sendable {
     private func count(_ text: String) -> Int { text.count / 3 }
     #endif
 
-    /// Hybrid retrieval (AskEngine.fuse): dense (when the embedder is there) and keyword passages, ≤ passageTokens.
+    /// Hybrid retrieval: dense (when the embedder is there) and keyword passages, meeting routing
+    /// (AskSelect.routeMeetings), AskEngine.fuse, then AskSelect.select with AskEngine.retrieval.
     func retrieve(_ sessions: [Session], _ question: String) -> [AskEngine.Excerpt] {
+        let p = AskEngine.retrieval
+        let depth = p.routeMeetings > 0 ? max(p.perMeeting, p.routeDepth) : p.perMeeting
         let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil
-        let dense = qv.map { LibrarySearch.dense(sessions, qv: $0, maxPassages: 4, snippetChars: 1200) } ?? []
-        let all = AskEngine.fuse(dense, LibrarySearch.keyword(sessions, query: question, maxPassages: 4, snippetChars: 1200))
-        var out: [AskEngine.Excerpt] = [], tokens = 0
-        for x in all {
-            if out.count >= AskEngine.maxPassages { break }
-            // A note and its transcript chunk, or a meeting imported twice, can carry the same words: one excerpt is enough.
-            if out.contains(where: { $0.text == x.text }) { continue }
-            let n = count(x.text) + 24
-            if tokens + n > AskEngine.passageTokens { continue }
-            tokens += n; out.append(x)
+        let dense = qv.map { LibrarySearch.dense(sessions, qv: $0, maxPassages: depth, snippetChars: 1200) } ?? []
+        let keyword = LibrarySearch.keyword(sessions, query: question, maxPassages: depth, snippetChars: 1200)
+        let routed = AskSelect.routeMeetings(
+            dense: dense.map { h in (h.session.id.uuidString, h.passages.filter { $0.kind != .meeting }.map(\.score)) },
+            keyword: keyword.map { h in (h.session.id.uuidString, h.passages.map(\.score)) }, p.routeMeetings)
+        // The other meetings keep perMeeting candidates per list (the passages are in score order).
+        func trim(_ hs: [LibrarySearch.Hit]) -> [LibrarySearch.Hit] {
+            hs.map { h in routed.contains(h.session.id.uuidString) ? h : LibrarySearch.Hit(session: h.session, score: h.score, passages: Array(h.passages.prefix(p.perMeeting))) }
         }
-        return out
+        let fused = AskEngine.fuse(trim(dense), trim(keyword), k: p.rrfK)
+        let ranked = fused.filter { routed.contains($0.session.id.uuidString) } + fused.filter { !routed.contains($0.session.id.uuidString) }
+        let byId = Dictionary(sessions.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { a, _ in a })
+        let items = ranked.map { AskSelect.Item(meeting: $0.session.id.uuidString, sec: $0.sec, at: $0.at, text: $0.text, score: $0.score, a: $0.a, b: $0.b) }
+        let chosen = AskSelect.select(items, p, tokens: { self.count($0) }, src: AskTranscripts(byId: byId))
+        return chosen.compactMap { x in
+            byId[x.meeting].map { AskEngine.Excerpt(session: $0, sec: x.sec, text: x.text, score: x.score, at: x.at, a: x.a, b: x.b) }
+        }
+    }
+}
+
+/// The library's transcripts as AskSelect sees them: a meeting's indexed chunks and the text of its utterances.
+private struct AskTranscripts: AskSelect.Transcripts {
+    let byId: [String: Session]
+    func chunks(_ meeting: String) -> [ClosedRange<Int>] {
+        guard let s = byId[meeting], let x = LibrarySearch.index(s.id) else { return [] }
+        return x.vectors.filter { $0.kind == .chunk }.map { Int($0.a)...Int($0.b) }.sorted { $0.lowerBound < $1.lowerBound }
+    }
+    func span(_ meeting: String, _ a: Int, _ b: Int) -> AskSelect.Item? {
+        guard let s = byId[meeting], s.lines.indices.contains(a), a <= b else { return nil }
+        let b = min(b, s.lines.count - 1)
+        return AskSelect.Item(meeting: meeting, sec: Int(s.lines[a].start), at: s.lines[a].start,
+                              text: s.lines[a...b].map(\.text).joined(separator: " "), score: 0, a: a, b: b)
     }
 }
 
