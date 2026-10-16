@@ -29,7 +29,7 @@ object ModelPrefetch {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
     /** A running prefetch: the fraction done and the bytes it fetches in all. */
-    data class Status(val fraction: Float, val totalBytes: Long) {
+    data class Status(val fraction: Float, val totalBytes: Long, val paused: Boolean = false) {
         val doneBytes: Long get() = (totalBytes * fraction.coerceIn(0f, 1f).toDouble()).toLong()
     }
     private val _status = MutableStateFlow<Status?>(null)
@@ -38,7 +38,11 @@ object ModelPrefetch {
     private val _progress = MutableStateFlow<Float?>(null)
     /** Fraction of the prefetch done while it runs, else null. */
     val progress: StateFlow<Float?> = _progress
-    private fun report(f: Float?, total: Long) { _progress.value = f; _status.value = f?.let { Status(it, total) } }
+    private fun report(f: Float?, total: Long, paused: Boolean = false) { _progress.value = f; _status.value = f?.let { Status(it, total, paused) } }
+    /** Wakes a paused prefetch: network back, the app back in front, or the Resume button. */
+    private val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    /** Resume button (and app/network events): a paused prefetch tries again now. */
+    fun resumeNow() { wake.trySend(Unit) }
     /** Cancel on the progress card: no automatic restart (network change) until the app restarts or the
      *  user agrees again; a recording or an import still fetches what it needs. */
     @Volatile private var cancelledThisRun = false
@@ -61,6 +65,12 @@ object ModelPrefetch {
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }.getOrDefault(false)
+
+    /** Some network with internet access (metered or not). */
+    private fun online(context: Context): Boolean = runCatching {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }.getOrDefault(true)
 
     /** What the speech engine and the chosen AI notes model still need (file checks only, call off the main thread). */
     fun pending(context: Context): DownloadPlan.Pending {
@@ -88,26 +98,48 @@ object ModelPrefetch {
             Log.i(TAG, "prefetch ${SizeFormat.bytes(p.total)} (speech ${SizeFormat.bytes(p.speechBytes)}, AI notes ${SizeFormat.bytes(p.readerBytes)})")
             val agg = DownloadAggregate()
             report(0f, p.total)
+            val mm = ModelManager(app)
+            if (p.speechBytes > 0) agg.begin("asr", p.speechBytes)
+            if (p.readerBytes > 0) agg.begin("llm", p.readerBytes)
+            var last = 0f
+            var attempt = 0
+            var asrDone = p.speechBytes <= 0
             try {
-                val mm = ModelManager(app)
-                if (p.speechBytes > 0) agg.begin("asr", p.speechBytes)
-                if (p.readerBytes > 0) agg.begin("llm", p.readerBytes)
-                if (p.speechBytes > 0) {
-                    mm.ensureAsrModels { f -> report(agg.update("asr", f).first, p.total) }
-                    agg.end("asr")
+                // A lost network, the phone asleep, a server hiccup: the prefetch PAUSES (the card says so, with
+                // Resume) and continues from the partial files when the network is back, the app returns, Resume
+                // is tapped, or after a backoff. Only Cancel or a permanent error (gone, disk full) ends it.
+                while (true) {
+                    try {
+                        if (!asrDone) {
+                            mm.ensureAsrModels { f -> last = agg.update("asr", f).first; report(last, p.total) }
+                            agg.end("asr"); asrDone = true
+                        }
+                        if (p.readerBytes > 0) {
+                            val llm = LlmRegistry.byId(ConfigStore.load(app).llmModelId)
+                            mm.ensureLlmModel(llm) { f -> last = agg.update("llm", f).first; report(last, p.total) }
+                            agg.end("llm")
+                        }
+                        Log.i(TAG, "prefetch done")
+                        break
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (mm.isPermanent(e)) { Log.w(TAG, "prefetch stopped: ${e.message}"); break }
+                        attempt++
+                        Log.w(TAG, "prefetch paused ($attempt): ${e.message}")
+                        report(last, p.total, paused = true)
+                        while (wake.tryReceive().isSuccess) { /* drop a stale wake */ }
+                        // Offline, it stays paused until a network comes back (onAvailable wakes it).
+                        do {
+                            kotlinx.coroutines.withTimeoutOrNull(minOf(60_000L, 2_000L shl minOf(attempt - 1, 5))) { wake.receive() }
+                        } while (!online(app))
+                        report(last, p.total)
+                        Log.i(TAG, "prefetch resumes")
+                    }
                 }
-                if (p.readerBytes > 0) {
-                    val llm = LlmRegistry.byId(ConfigStore.load(app).llmModelId)
-                    mm.ensureLlmModel(llm) { f -> report(agg.update("llm", f).first, p.total) }
-                    agg.end("llm")
-                }
-                Log.i(TAG, "prefetch done")
             } catch (e: kotlinx.coroutines.CancellationException) {
                 Log.i(TAG, "prefetch cancelled")
                 throw e
-            } catch (e: Exception) {
-                // A lost network or a pipeline fetching the same files: they resume from the partial files.
-                Log.w(TAG, "prefetch stopped: ${e.message}")
             } finally {
                 report(null, 0L)
             }
@@ -127,6 +159,7 @@ object ModelPrefetch {
         val cm = app.getSystemService(ConnectivityManager::class.java)
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { maybeStart(app) }
+            override fun onAvailable(network: Network) { resumeNow() }
         }
         runCatching { cm.registerDefaultNetworkCallback(cb) }
         return { runCatching { cm.unregisterNetworkCallback(cb) } }

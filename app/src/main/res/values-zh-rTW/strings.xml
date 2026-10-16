@@ -434,6 +434,8 @@
     <string name="dl_consent_later">稍後</string>
     <string name="dl_consent_waiting_wifi">連上 Wi‑Fi 後會自動下載模型。</string>
     <string name="dl_prefetching">正在下載模型…</string>
+    <string name="dl_paused">下載已暫停 · 會自動繼續</string>
+    <string name="dl_resume">繼續</string>
     <string name="ask_stage_searching">正在搜尋會議… %1$d 秒</string>
     <string name="ask_stage_reading">正在閱讀 %1$d 段摘錄… %2$d 秒</string>
     <string name="ask_stage_answering">正在回答… %1$d 秒</string>

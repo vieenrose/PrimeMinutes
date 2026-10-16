@@ -24,7 +24,7 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 
 /**
  * The first-use model download (ModelPrefetch) while it runs: percent, bytes so far over the total, and
- * Cancel. Shown wherever the user is likely to be (the library, empty or not, and Settings): it used to
+ * Cancel (Paused, with Resume, while an interruption is waited out). Shown wherever the user is likely to be (the library, empty or not, and Settings): it used to
  * be drawn only on the empty home, so after "Download now" a library with meetings showed nothing.
  */
 @Composable
@@ -41,8 +41,12 @@ fun ModelDownloadCard(status: ModelPrefetch.Status, onCancel: () -> Unit, modifi
                 color = pal.Slate200, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
+            if (status.paused) TextButton(onClick = { ModelPrefetch.resumeNow() }) { Text(stringResource(R.string.dl_resume)) }
             TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
         }
-        DownloadStatusBar(R.string.dl_prefetching, status.fraction, Modifier.padding(end = 8.dp))
+        if (status.paused) {
+            // Interrupted (network lost, phone asleep): the partial files stay and it continues by itself.
+            DownloadStatusBar(R.string.dl_paused, status.fraction, Modifier.padding(end = 8.dp))
+        } else DownloadStatusBar(R.string.dl_prefetching, status.fraction, Modifier.padding(end = 8.dp))
     }
 }

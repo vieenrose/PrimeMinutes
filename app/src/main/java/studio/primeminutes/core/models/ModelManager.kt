@@ -386,6 +386,14 @@ class ModelManager(context: Context) {
     private class ModelNotFound(msg: String) : java.io.IOException(msg)
     private class ChecksumMismatch(msg: String) : java.io.IOException(msg)
 
+    /** A failure waiting cannot fix (file gone from the server, disk full); anything else (network,
+     *  a suspended app, a 5xx) is worth resuming from the partial file. */
+    fun isPermanent(e: Throwable): Boolean {
+        var t: Throwable? = e
+        while (t != null) { if (t is ModelNotFound) return true; t = t.cause }
+        return isOutOfSpace(e)
+    }
+
     /** True if [e] (or a cause) is an out-of-disk-space failure — retrying the download can't help. */
     private fun isOutOfSpace(e: Throwable): Boolean {
         var t: Throwable? = e
