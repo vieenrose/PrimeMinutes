@@ -339,7 +339,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         if (p == null) { launchAudio(Uri.fromFile(e.wavFile)); return }
         if (p.asrComplete) {
             SessionLibrary.savePendingTranscript(e, p.utterances, p.fingerprint)
-            SessionLibrary.clearProgress(e)
+            // The notes of a reading stopped midway stay: the queue's reader continues from them.
+            SessionLibrary.clearProgress(e, keepNotes = true)
             enqueueAndStart(listOf(e.id))
         } else {
             TranscriptionService.resumeRequested = true

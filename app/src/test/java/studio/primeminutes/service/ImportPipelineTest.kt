@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -167,5 +168,77 @@ class ImportPipelineTest {
         val e = SessionLibrary.list(ctx).single()
         assertEquals(4, e.durationSec)
         assertNull(SessionLibrary.importSource(e))
+    }
+
+    /**
+     * Field bug (Note10+, 2026-10-16): Stop on a long import — the decoder far ahead of the speech
+     * engine, its channel full — logged "drained=false err=JobCancellationException", the run never
+     * unwound (its finally never ran), and Stop on the Resume that followed lost what the Resume had
+     * transcribed. Now the run unwinds, the audio is banked once, a repeated Stop banks nothing more,
+     * the screen is told where the meeting went, and no 44-byte decoded_*.wav is left behind.
+     */
+    @Test fun aStopWhileTheDecoderWaitsUnwindsTheRunAndBanksOnce() = runBlocking {
+        val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 40), durationSec = 60.0)
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(importCopy(60.0)).toString()) }
+        withTimeout(20_000) { while (p.inFlight.checkpoint == null || host.of<TranscriptEvent.UtteranceSnapshot>().size < 3) delay(10) }
+        assertFalse("the decoder is still at work", p.inFlight.decoded)
+        p.inFlight.bankOnStop { "model" }
+        p.inFlight.bankOnStop { "model" }   // the notification's Stop right after the screen's
+        run.cancel()
+        assertNotNull("the run unwinds (its finally runs) instead of hanging in the decoder's send",
+            withTimeoutOrNull(10_000) { runCatching { run.await() }; true })
+        val e = SessionLibrary.list(ctx).single()
+        val banked = SessionLibrary.loadProgress(e)!!
+        assertFalse(banked.asrComplete)
+        assertTrue(banked.utterances.isNotEmpty())
+        assertEquals("the screen follows the meeting to its entry", Uri.fromFile(e.wavFile).toString(),
+            host.of<TranscriptEvent.RecordingSaved>().last().uri)
+        assertEquals("nothing left in files/audio (the import copy went with the entry)", emptyList<String>(),
+            File(ctx.filesDir, "audio").list()?.toList().orEmpty())
+        assertEquals("the moved file's header counts all of its data", e.wavFile.length() - 44,
+            java.nio.ByteBuffer.wrap(e.wavFile.readBytes(), 40, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int.toLong())
+    }
+
+    /** "A second Stop then loses the progress": Stop, Resume, Stop again — the Resume's lines are kept. */
+    @Test fun aStopDuringAResumeBanksWhatTheResumeTranscribed() = runBlocking {
+        val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 20), durationSec = 30.0)
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(importCopy(30.0)).toString()) }
+        withTimeout(20_000) { while (p.inFlight.checkpoint == null || host.of<TranscriptEvent.UtteranceSnapshot>().size < 3) delay(10) }
+        p.inFlight.bankOnStop { "model" }
+        run.cancel(); withTimeout(10_000) { runCatching { run.await() } }
+        val e = SessionLibrary.list(ctx).single()
+        val first = SessionLibrary.loadProgress(e)!!
+
+        TranscriptionService.resumeRequested = true
+        val run2 = scope.async(RunGen(4)) { p.run(Uri.fromFile(e.wavFile).toString()) }
+        withTimeout(20_000) {
+            while ((p.inFlight.checkpoint?.progress?.asrDoneSec ?: 0.0) < first.asrDoneSec + 3) delay(10)
+        }
+        p.inFlight.bankOnStop { "model" }   // banked by the stop handler itself, whatever the run does next
+        val banked = SessionLibrary.loadProgress(e)!!
+        assertTrue("the Resume's own lines are banked (${banked.asrDoneSec} > ${first.asrDoneSec})", banked.asrDoneSec > first.asrDoneSec + 2)
+        assertEquals("the lines saved before stay as they were", first.utterances, banked.utterances.take(first.utterances.size))
+        run2.cancel(); withTimeout(10_000) { runCatching { run2.await() } }
+        assertEquals(1, SessionLibrary.list(ctx).size)
+        assertTrue(SessionLibrary.loadProgress(e)!!.asrDoneSec >= banked.asrDoneSec)
+    }
+
+    /** Stop while the notes are being read: the complete transcript stays complete, the reading's notes go to the entry. */
+    @Test fun aStopWhileReadingKeepsTheCompleteTranscript() = runBlocking {
+        val host = FakePipelineHost(ctx, scope, durationSec = 3.0)
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(workWav(3.0)).toString()) }
+        val task = withTimeout(20_000) {
+            while (host.reader.readTasks.firstOrNull()?.final?.isCompleted != true) delay(20)
+            host.reader.readTasks.single()
+        }
+        val e = SessionLibrary.list(ctx).single()
+        assertEquals("the reading's windows are kept with the entry", e.id, task.notesEntry?.id)
+        p.inFlight.bankOnStop { "model" }
+        assertTrue("not overwritten by the ASR phase's last checkpoint", SessionLibrary.loadProgress(e)!!.asrComplete)
+        run.cancel(); withTimeout(10_000) { runCatching { run.await() } }
+        assertTrue(SessionLibrary.loadProgress(e)!!.asrComplete)
     }
 }

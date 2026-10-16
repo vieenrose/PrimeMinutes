@@ -341,9 +341,11 @@ object SessionLibrary {
 
     fun hasProgress(entry: Entry): Boolean = File(entry.dir, PROGRESS).exists()
 
-    fun clearProgress(entry: Entry) {
+    /** [keepNotes]: the transcript moves on (Resume hands it to the queue) but the reading continues
+     *  from the notes read so far. */
+    fun clearProgress(entry: Entry, keepNotes: Boolean = false) {
         runCatching { File(entry.dir, PROGRESS).delete() }
-        clearNotes(entry)
+        if (!keepNotes) clearNotes(entry)
     }
 
     fun clearPendingTranscript(entry: Entry) {

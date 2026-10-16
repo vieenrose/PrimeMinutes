@@ -262,10 +262,21 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     override val context: Context get() = this
     override val scope: kotlinx.coroutines.CoroutineScope get() = lifecycleScope
     override fun threads(): Int = asrThreads()
+    /**
+     * A pipeline job is running or still unwinding. Not `isActive`: a cancelled job reports false at
+     * once, while its `finally` (the import's save) is still to run — the reader's idle stop took the
+     * service down under it, and under the Stop handler waiting for it.
+     */
+    private fun pipelineBusy(): Boolean = pipelineJob?.isCompleted == false
+
+    /** The run the last ACTION_STOP is draining, and that drain (a repeated Stop is ignored meanwhile). */
+    private var stopping: Job? = null
+    private var stopDrain: Job? = null
+
     override fun onReaderIdle() {
         // The run that started this reading may be long over: the worker brings the service
         // down when it is the last thing running.
-        if (pipelineJob?.isActive != true && activeExports == 0) {
+        if (!pipelineBusy() && activeExports == 0) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf(lastStartId)
         }
@@ -446,14 +457,29 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 // cancellation promptly must not wedge the service, so stop anyway after it.
                 val job = pipelineJob
                 Log.i(STOP_TAG, "ACTION_STOP received, job=${job != null} active=${job?.isActive}")
+                // A repeated Stop (the notification's and the screen's, a double tap) while this run is
+                // already being stopped: the first one banked and is draining it — nothing more to do.
+                if (job != null && stopping === job && stopDrain?.isActive == true) {
+                    Log.i(STOP_TAG, "ACTION_STOP again while stopping: ignored")
+                    return START_NOT_STICKY
+                }
                 // SAVE BEFORE CANCELLING. The pipeline coroutine cannot be counted on to unwind —
                 // see InFlightImport — so the audio is banked here, synchronously, while the service
                 // is still alive. The decoded WAV is already on disk and its writer is flushed by
                 // AudioDecoder's `use`, so what is saved is every second transcribed so far.
                 importPipeline.inFlight.bankOnStop(reader::readerModelId)
-                lifecycleScope.launch {
+                // The screen follows the stopped import to its new entry (Resume, the player's audio).
+                val runGen = RunRegistry.jobs.value.pipeline?.gen
+                importPipeline.inFlight.savedEntry?.takeIf { job != null && runGen != null }?.let { e ->
+                    events.tryEmit(runGen!! to TranscriptEvent.RecordingSaved(Uri.fromFile(e.wavFile).toString()))
+                }
+                stopping = job
+                stopDrain = lifecycleScope.launch {
                     val t0 = System.currentTimeMillis()
-                    val drained = runCatching { withTimeout(STOP_DRAIN_MS) { job?.cancelAndJoin() } }
+                    // NonCancellable: the wait must not end because the service is being destroyed under
+                    // it — that is what "drained=false err=JobCancellationException" was (the reader's
+                    // idle stop took the service down while the run was still unwinding).
+                    val drained = runCatching { withContext(NonCancellable) { withTimeout(STOP_DRAIN_MS) { job?.cancelAndJoin() } } }
                     val ms = System.currentTimeMillis() - t0
                     // The number that decides the design: if this reports a TIMEOUT, the pipeline
                     // coroutine never unwound, so no amount of finally/NonCancellable in it can save
@@ -461,9 +487,11 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     Log.i(STOP_TAG, "drain finished in ${ms}ms drained=${drained.isSuccess} " +
                         "err=${drained.exceptionOrNull()?.let { it::class.simpleName }} " +
                         "jobActive=${job?.isActive} jobCompleted=${job?.isCompleted}")
+                    // A newer run started meanwhile: it owns the service now.
+                    if (pipelineJob !== job && pipelineBusy()) return@launch
                     // The AI notes worker may still be finishing an earlier meeting: it stops the
                     // service itself when done.
-                    if (!reader.readerBusy()) {
+                    if (!reader.readerBusy() && activeExports == 0) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelf(lastStartId)
                         Log.i(STOP_TAG, "service stopped")
@@ -608,6 +636,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // Only tear down if still the active job — a newer run may have superseded this one.
             withContext(NonCancellable + Dispatchers.Main) {
                 if (pipelineJob === job) {
+                    // Done with it (the rest of this hop is the job's last step): nothing waits on it any more.
+                    pipelineJob = null
                     RunRegistry.pipelineEnded()
                     // Leave the service (and its foreground notification) up for an in-flight
                     // export — the last export's own tail stops it. stopSelf(lastStartId): a stop
@@ -662,7 +692,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val req = studio.primeminutes.online.ImportDownloads.pending.also { studio.primeminutes.online.ImportDownloads.pending = null }
         if (req == null) {
             satisfyForegroundContract()
-            if (pipelineJob?.isActive != true && activeExports == 0) {
+            if (!pipelineBusy() && activeExports == 0) {
                 stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(lastStartId)
             }
             return
@@ -718,7 +748,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             )
             withContext(NonCancellable + Dispatchers.Main) {
                 activeExports--
-                if (pipelineJob?.isActive != true && activeExports == 0) {
+                if (!pipelineBusy() && activeExports == 0) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf(lastStartId)
                 }
@@ -735,7 +765,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     private fun runPersist(req: PersistRequest?) {
         if (req == null) {
             satisfyForegroundContract()
-            if (pipelineJob?.isActive != true && activeExports == 0) {
+            if (!pipelineBusy() && activeExports == 0) {
                 stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(lastStartId)
             }
             return
@@ -766,7 +796,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             withContext(NonCancellable + Dispatchers.Main) {
                 persistDone(req.entryId)
                 activeExports--
-                if (pipelineJob?.isActive != true && activeExports == 0) {
+                if (!pipelineBusy() && activeExports == 0) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf(lastStartId)
                 }
@@ -780,7 +810,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // arrived via startForegroundService(), so satisfy the foreground contract, then stop
             // the service only if nothing else is running (don't kill a live job or export).
             satisfyForegroundContract()
-            if (pipelineJob?.isActive != true && activeExports == 0) {
+            if (!pipelineBusy() && activeExports == 0) {
                 stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(lastStartId)
             }
             return
@@ -843,7 +873,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // can never land under a newer, already-accepted start.
             withContext(NonCancellable + Dispatchers.Main) {
                 activeExports--
-                if (pipelineJob?.isActive != true && activeExports == 0) {
+                if (!pipelineBusy() && activeExports == 0) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf(lastStartId)
                 }

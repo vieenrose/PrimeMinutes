@@ -6,7 +6,6 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flowOn
@@ -142,10 +141,11 @@ internal class ImportPipeline(private val host: PipelineHost) {
             val clipAudio = ranges.map { (a, b) -> FloatArray((b - a).toInt()) }
             var pos = 0L
             var clipsSent = false
-            // Stop cancels this producer, but trySendBlocking only reports "closed" and the decoder would
-            // run on to EOF (CPU with no foreground service, the promoted WAV still growing): end it here.
+            // Stop cancels this producer: the decoder (blocking code) must end there too, also while it
+            // waits for room in a full channel (sendFromBlocking; trySendBlocking parked it forever).
             fun send(a: FloatArray) {
-                if (trySendBlocking(a).isClosed || !isActive) throw kotlinx.coroutines.CancellationException("import stopped")
+                if (!isActive) throw kotlinx.coroutines.CancellationException("import stopped")
+                sendFromBlocking(a)
             }
             host.decodeToWav16k(decodeUri, wav) { block, len ->
                 if (!isActive) throw kotlinx.coroutines.CancellationException("import stopped")
@@ -173,6 +173,10 @@ internal class ImportPipeline(private val host: PipelineHost) {
         // library capture is durable already, and the queue drain owns its own row.
         if (foreground && existing == null) {
             inFlight.begin(wav, totalDurationSec.toInt(), importCopy)
+        } else if (foreground && summarizeAfter && existing != null) {
+            // A Resume or re-run of a library entry: the entry is durable already, but what this run
+            // transcribes is not — Stop banks its checkpoint into the entry too (InFlightImport.owner).
+            inFlight.beginOwned(existing)
         }
 
         val utterances = ArrayList<TranscriptEvent.Utterance>()
@@ -295,13 +299,25 @@ internal class ImportPipeline(private val host: PipelineHost) {
             // resume instead of redoing it. Only the frozen prefix is safe — the tail is re-attributed.
             // The queue's pass 1 (summarizeAfter=false) has its own sidecar and is left alone.
             if (summarizeAfter && foreground) {
-                (entry ?: existing ?: inFlight.savedEntry)?.let { e ->
-                    val keep = if (asrFinished) utterances.toList() else utterances.take(frozenCount)
-                    if (keep.isNotEmpty()) {
-                        SessionLibrary.saveProgress(e, SessionLibrary.Progress(
-                            host.transcriptFingerprint(cfg), keep, keep.last().endSec, asrFinished, ""))
-                        live?.latestCp?.let { SessionLibrary.saveNotes(e, host.reader.readerModelId(), it) }
+                // One section with the stop handler's bank (InFlightImport.endAsr): the ASR phase is over,
+                // its checkpoint retires, and a later Stop (reader phase) cannot write it over this one.
+                inFlight.endAsr {
+                    (entry ?: existing ?: inFlight.savedEntry)?.let { e ->
+                        val keep = if (asrFinished) utterances.toList() else utterances.take(frozenCount)
+                        if (keep.isNotEmpty()) {
+                            SessionLibrary.saveProgress(e, SessionLibrary.Progress(
+                                host.transcriptFingerprint(cfg), keep, keep.last().endSec, asrFinished, ""))
+                            live?.latestCp?.let { SessionLibrary.saveNotes(e, host.reader.readerModelId(), it) }
+                        }
+                        // The reading goes on after the ASR phase: each of its windows is kept with the
+                        // entry from now on, so a Stop while it reads keeps the notes read so far.
+                        live?.let { t -> if (t.notesEntry == null) t.notesEntry = e }
                     }
+                }
+                // Stopped before the end, the audio was banked by the stop handler: the screen follows
+                // it to its entry (Resume, the player on the entry's audio rather than the moved file).
+                if (entry == null && existing == null) inFlight.savedEntry?.let { e ->
+                    withContext(NonCancellable) { host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(e.wavFile).toString())) }
                 }
             }
             // The audio is in the library now (or there was none to save): the shared copy is no

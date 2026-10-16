@@ -1,6 +1,10 @@
 package studio.primeminutes.service
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -45,5 +49,35 @@ class PcmBlocksTest {
         assertEquals(3, micLevelBucket(0.2f))
         assertEquals(4, micLevelBucket(0.3f))
         assertEquals(5, micLevelBucket(0.9f))
+    }
+
+    /**
+     * The import's decoder runs blocking code inside a `channelFlow` on IO and is ahead of the speech
+     * engine, so the channel is full when Stop cancels the run. With `trySendBlocking` the decoder stayed
+     * parked in its send forever and the run never finished (device: drained=false, the run's finally
+     * never ran); [sendFromBlocking] ends with the producer.
+     */
+    private fun stopWhileTheProducerWaits(push: kotlinx.coroutines.channels.ProducerScope<FloatArray>.(FloatArray) -> Unit): Boolean = runBlocking {
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+        val decoder = kotlinx.coroutines.flow.channelFlow {
+            val scope = this
+            for (i in 0 until 1_000_000) scope.push(FloatArray(4096))   // a blocking loop: no suspension point of its own
+        }.flowOn(kotlinx.coroutines.Dispatchers.IO)
+        val engine = kotlinx.coroutines.flow.flow { decoder.collect { kotlinx.coroutines.delay(20); emit(it.size) } }
+        val run = scope.launch { engine.collect { } }
+        kotlinx.coroutines.delay(300)   // the channel is full: the decoder waits in its send
+        run.cancel()
+        val unwound = kotlinx.coroutines.withTimeoutOrNull(5_000) { run.join(); true } ?: false
+        scope.cancel()
+        unwound
+    }
+
+    @Test fun trySendBlockingNeverUnwindsAStoppedRun() {
+        assertEquals("the hang this replaces (kotlinx.coroutines 1.11)", false,
+            stopWhileTheProducerWaits { if (trySendBlocking(it).isClosed) throw kotlinx.coroutines.CancellationException() })
+    }
+
+    @Test fun sendFromBlockingEndsWithTheStop() {
+        assertEquals(true, stopWhileTheProducerWaits { sendFromBlocking(it) })
     }
 }

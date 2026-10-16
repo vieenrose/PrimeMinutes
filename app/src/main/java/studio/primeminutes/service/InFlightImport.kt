@@ -49,13 +49,39 @@ internal class InFlightImport(
      */
     @Volatile var checkpoint: Checkpoint? = null
 
+    /**
+     * The library entry a foreground run over an existing entry (Resume, re-transcribe) writes into:
+     * its audio is durable already, but the transcript it adds is not — [bankOnStop] keeps it there.
+     */
+    @Volatile var owner: SessionLibrary.Entry? = null
+
     /** A foreground import that owns no library entry yet starts: publish its work WAV. */
-    fun begin(wav: File, durationSec: Int, source: File? = null) {
+    @Synchronized fun begin(wav: File, durationSec: Int, source: File? = null) {
         this.wav = wav
         this.durationSec = durationSec
         this.source = source
         decoded = false
         saved.set(false)
+        owner = null
+        checkpoint = null
+    }
+
+    /** A foreground run over the library entry [entry] starts (nothing to promote: only progress to bank). */
+    @Synchronized fun beginOwned(entry: SessionLibrary.Entry) {
+        wav = null; source = null; decoded = false
+        owner = entry
+        checkpoint = null
+    }
+
+    /**
+     * The ASR phase is over (the pipeline's `finally`): [write] saves its final progress, and the
+     * checkpoint retires in the same section, so a Stop during the reading that follows cannot bank the
+     * older, partial checkpoint over it.
+     */
+    @Synchronized fun endAsr(write: () -> Unit) {
+        checkpoint = null
+        owner = null
+        write()
     }
 
     /**
@@ -64,7 +90,7 @@ internal class InFlightImport(
      * Non-suspending on purpose — [SessionLibrary.promoteRecording] is a file rename — so the stop
      * handler can call it inline and be sure it completed before the service dies.
      */
-    fun save(reason: String): SessionLibrary.Entry? {
+    @Synchronized fun save(reason: String): SessionLibrary.Entry? {
         val wav = wav ?: return null
         val min = WavIo.HEADER + WavIo.SAMPLE_RATE * 2L
         if (!wav.exists() || wav.length() <= min) {
@@ -99,14 +125,18 @@ internal class InFlightImport(
      * service is still alive. The decoded WAV is already on disk and its writer is flushed by
      * AudioDecoder's `use`, so what is saved is every second transcribed so far.
      */
-    fun bankOnStop(readerModelId: () -> String) {
-        save("stop")?.let { e ->
-            checkpoint?.let { c ->
-                SessionLibrary.saveProgress(e, c.progress)
-                c.notes()?.let { SessionLibrary.saveNotes(e, readerModelId(), it) }
-            }
+    @Synchronized fun bankOnStop(readerModelId: () -> String) {
+        // A new import's audio is promoted into a new entry; a run over an existing entry has one.
+        val e = save("stop") ?: owner
+        val c = checkpoint
+        if (e != null && c != null) {
+            SessionLibrary.saveProgress(e, c.progress)
+            c.notes()?.let { SessionLibrary.saveNotes(e, readerModelId(), it) }
+            Log.i(STOP_TAG, "banked ${e.id}: ${c.progress.utterances.size} lines to ${c.progress.asrDoneSec.toInt()} s")
         }
+        // Once: a repeated Stop (the notification's, the screen's) finds nothing left to bank.
         checkpoint = null
+        owner = null
     }
 
     companion object {

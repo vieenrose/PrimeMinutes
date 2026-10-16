@@ -48,3 +48,28 @@ internal fun micLevelBucket(peak: Float): Int = when {
     peak > 0.02f -> 1
     else -> 0
 }
+
+/**
+ * Send [element] from blocking code running inside this producer (a decoder loop in `channelFlow`),
+ * waiting while the channel is full, and throw [kotlinx.coroutines.CancellationException] once the
+ * producer is cancelled.
+ *
+ * Not `trySendBlocking`: its `runBlocking` is detached from the producer's job, and a producer
+ * cancelled by its parent does not cancel its own channel while its body is still running (the
+ * consumer's `cancel()` is a no-op on an already-cancelled producer). A Stop while the decoder was
+ * ahead of the speech engine — the channel full, the usual case for a long file — left the decoder
+ * parked in that send forever: the run never unwound, its `finally` never ran, nothing was banked by
+ * it (measured on the Note10+, 2026-10-16: `drained=false`, `jobCompleted=false`, the decode thread
+ * parked in trySendBlocking). Bound to the producer's job, the wait ends with the Stop.
+ */
+internal fun <E> kotlinx.coroutines.channels.ProducerScope<E>.sendFromBlocking(element: E) {
+    if (trySend(element).isSuccess) return
+    val producer = this
+    try {
+        kotlinx.coroutines.runBlocking(coroutineContext[kotlinx.coroutines.Job] ?: kotlin.coroutines.EmptyCoroutineContext) {
+            producer.send(element)
+        }
+    } catch (e: Exception) {
+        throw (e as? kotlinx.coroutines.CancellationException) ?: kotlinx.coroutines.CancellationException("producer stopped").apply { initCause(e) }
+    }
+}

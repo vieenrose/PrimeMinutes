@@ -49,22 +49,27 @@ object WavIo {
  * (a >4 GB / ~37 h recording writes a maxed-out header rather than an Int that wraps to a wrong size).
  */
 fun patchWavHeader(file: File, sampleCount: Long) {
+    RandomAccessFile(file, "rw").use { raf -> raf.seek(0); raf.write(wavHeader(sampleCount).array()) }
+}
+
+/** The canonical 44-byte header for [sampleCount] samples (see [patchWavHeader]). */
+internal fun wavHeader(sampleCount: Long): ByteBuffer {
     val pcmBytes = sampleCount * 2
     val dataSize = minOf(pcmBytes, 0xFFFF_FFFFL).toInt()
     val riffSize = minOf(36 + pcmBytes, 0xFFFF_FFFFL).toInt()
-    RandomAccessFile(file, "rw").use { raf ->
-        val h = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-        h.put("RIFF".toByteArray()); h.putInt(riffSize); h.put("WAVE".toByteArray())
-        h.put("fmt ".toByteArray()); h.putInt(16); h.putShort(1); h.putShort(1)
-        h.putInt(WavIo.SAMPLE_RATE); h.putInt(WavIo.SAMPLE_RATE * 2); h.putShort(2); h.putShort(16)
-        h.put("data".toByteArray()); h.putInt(dataSize)
-        raf.seek(0); raf.write(h.array())
-    }
+    val h = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+    h.put("RIFF".toByteArray()); h.putInt(riffSize); h.put("WAVE".toByteArray())
+    h.put("fmt ".toByteArray()); h.putInt(16); h.putShort(1); h.putShort(1)
+    h.putInt(WavIo.SAMPLE_RATE); h.putInt(WavIo.SAMPLE_RATE * 2); h.putShort(2); h.putShort(16)
+    h.put("data".toByteArray()); h.putInt(dataSize)
+    h.flip()
+    return h
 }
 
 /** Append-only writer: floats in [-1,1] → little-endian PCM16, with a self-patching WAV header. */
 class WavWriter(private val file: File) : AutoCloseable {
-    private val out = BufferedOutputStream(file.outputStream(), 1 shl 16)
+    private val fos = java.io.FileOutputStream(file)
+    private val out = BufferedOutputStream(fos, 1 shl 16)
     private var samples = 0L
     private val buf = ByteArray(1 shl 16)
 
@@ -98,14 +103,26 @@ class WavWriter(private val file: File) : AutoCloseable {
      */
     fun checkpoint() {
         out.flush()
-        patchWavHeader(file, samples)
+        patchHeader()
     }
 
     override fun close() {
-        out.flush(); out.close()
+        out.flush()
         // Patch the canonical header now that the final data size is known. WavSlicer derives the
         // sample count from the file length, not these fields, so diarization is unaffected.
-        patchWavHeader(file, samples)
+        patchHeader()
+        out.close()
+    }
+
+    /**
+     * Through the open descriptor, never by path: the file may have been moved while it was written (a
+     * Stop banks an import's decoded WAV into its library entry mid-decode), and reopening [file] by
+     * name re-created it — a 44-byte decoded_*.wav left behind in files/audio after every such Stop.
+     */
+    private fun patchHeader() {
+        val h = wavHeader(samples)
+        var at = 0L
+        while (h.hasRemaining()) at += fos.channel.write(h, at)
     }
 }
 
