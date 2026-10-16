@@ -56,7 +56,7 @@
     <string name="settings_language">語言</string>
     <string name="settings_storage">儲存空間</string>
     <string name="storage_total">裝置上的模型：%1$s</string>
-    <string name="storage_model_pending">AI 筆記模型尚未下載（%1$d MB），首次使用時自動下載。</string>
+    <string name="storage_model_pending">AI 筆記模型尚未下載（%1$s），首次使用時自動下載。</string>
     <string name="storage_none">尚未下載任何模型</string>
     <string name="storage_delete">刪除模型</string>
     <string name="storage_delete_title">刪除這個模型？</string>
@@ -232,7 +232,7 @@
     <string name="svc_paused_time_limit">處理已因系統時間限制而暫停——重新開啟 Prime Minutes 即可繼續。</string>
 
     <string name="library_empty">尚無錄音——每段錄音都會自動儲存在這裡。</string>
-    <string name="first_run_download_notice">第一次錄音會下載語音與 AI 筆記模型（約 %1$d MB），建議使用 Wi‑Fi。</string>
+    <string name="first_run_download_notice">第一次錄音會下載語音與 AI 筆記模型（%1$s），建議使用 Wi‑Fi。</string>
 
     <!-- Studio refonte -->
     <string name="back">返回</string>
@@ -385,8 +385,8 @@
     <string name="settings_experimental">實驗功能</string>
     <string name="settings_show_actions">顯示行動項目</string>
     <string name="settings_show_actions_hint">在摘要下方列出模型擷取的行動項目。約五分之一可能與逐字稿不符，點時間即可核對。</string>
-    <string name="settings_ask">向會議提問（實驗性）</string>
-    <string name="settings_ask_hint">在首頁的會議搜尋框輸入問題並點「提問」按鈕：AI 筆記模型根據搜尋找到的段落作答並註明出處。需要搜尋模型和 AI 筆記模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。</string>
+    <string name="settings_ask">向會議提問</string>
+    <string name="settings_ask_hint">在首頁點「提問」（或在搜尋框輸入問題後點「提問」）：AI 筆記模型根據搜尋找到的段落作答並註明出處。需要 AI 筆記模型與語意搜尋模型，且裝置閒置（沒有錄音、轉寫或摘要在進行）。</string>
     <string name="ask_title">提問</string>
     <string name="ask_experimental">實驗性</string>
     <string name="ask_cd">向會議提問</string>
@@ -406,7 +406,7 @@
     <string name="settings_reader_model">AI 筆記模型</string>
     <string name="reader_model_e2b">行動版 E2B</string>
     <string name="reader_model_e4b">行動版 E4B</string>
-    <string name="reader_model_hint">行動版模型使用更快的引擎，記憶範圍較短。E2B：下載 %1$d MB，約佔 1.3 GB 記憶體。E4B：%2$d MB，約 3 GB 記憶體，錯誤較少。</string>
+    <string name="reader_model_hint">行動版模型使用更快的引擎，記憶範圍較短。E2B：下載 %1$s，約佔 1.3 GB 記憶體。E4B：%2$s，約 3 GB 記憶體，錯誤較少。</string>
     <string name="reader_model_e4b_ram">E4B 需要 8 GB 記憶體的手機。</string>
     <string name="summary_no_notes">這段錄音沒有需要記下的決議、待辦或數字。</string>
     <string name="agent_simple_reading_all">逐段閱讀逐字稿中</string>
@@ -423,4 +423,22 @@
     <string name="settings_ai_bench_run">執行 AI 基準測試</string>
     <string name="settings_ai_bench_running">執行中…</string>
     <string name="settings_ai_bench_failed">基準測試失敗：%s</string>
+    <string name="dl_consent_title">下載 AI 模型？</string>
+    <string name="dl_consent_total">需下載 %1$s</string>
+    <string name="dl_consent_speech">• 語音辨識模型：%1$s</string>
+    <string name="dl_consent_reader">• AI 筆記模型：%1$s</string>
+    <string name="dl_consent_body">只需下載一次，之後所有會議都在這支手機上離線轉寫與摘要。</string>
+    <string name="dl_consent_metered">目前未連上 Wi‑Fi，下載可能會使用行動數據。</string>
+    <string name="dl_consent_now">立即下載</string>
+    <string name="dl_consent_wifi_only">僅限 Wi‑Fi</string>
+    <string name="dl_consent_later">稍後</string>
+    <string name="dl_consent_waiting_wifi">連上 Wi‑Fi 後會自動下載模型。</string>
+    <string name="dl_prefetching">正在下載模型…</string>
+    <string name="ask_stage_searching">正在搜尋會議… %1$d 秒</string>
+    <string name="ask_stage_reading">正在閱讀 %1$d 段摘錄… %2$d 秒</string>
+    <string name="ask_stage_answering">正在回答… %1$d 秒</string>
+    <string name="ask_open_hint">針對你的會議提問…</string>
+    <string name="ask_entry_cd">針對你的會議提問</string>
+    <string name="speaker_merge_confirm">將「%1$s」合併至「%2$s」？其所有語句都會改為 %2$s。</string>
+    <string name="speaker_merge">合併</string>
 </resources>

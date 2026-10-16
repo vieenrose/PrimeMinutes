@@ -32,6 +32,9 @@ class MeetingReader(
     private val temp: Float = ModelCard.DEFAULT.sampler.temp,
 ) {
     val journal = ArrayList<Note>()
+    /** Off-protocol output of this job so far (model guardrail). */
+    var guard = ReaderGuard()
+        private set
     private val lines = ArrayList<Line>()          // every line fed so far (citation resolution)
     @Volatile private var k = 0                    // windows opened
     /** Windows opened so far (the last one is being filled or read). */
@@ -178,12 +181,19 @@ class MeetingReader(
     private fun parse(reply: String): Int {
         val cands = ArrayList<Pair<String, Note>>()   // raw line → note, past parse/citation/dup checks
         for (raw in reply.lines()) {
-            val m = pc.act.find(raw) ?: continue
-            if (m.groupValues[1] != pc.noteAct) continue
+            if (raw.isBlank()) continue
+            val m = pc.act.find(raw)
+            if (m != null && m.groupValues[1] in pc.guard.ignoreActs) continue
+            guard = guard.copy(lines = guard.lines + 1)
+            if (m == null || m.groupValues[1] != pc.noteAct) { guard = guard.copy(nonNote = guard.nonNote + 1); continue }
             val n = pc.note.find(m.groupValues[2].trim())
-            if (n == null) { events(AgentEvent.NoteDropped(k, raw.trim(), DropReason.PARSE)); continue }
+            if (n == null) {
+                guard = guard.copy(malformed = guard.malformed + 1)
+                events(AgentEvent.NoteDropped(k, raw.trim(), DropReason.PARSE)); continue
+            }
             val (ts, tagRaw, text) = n.destructured
             val tag = tagRaw.ifEmpty { null }
+            guard = guard.copy(notes = guard.notes + 1, unknownTag = guard.unknownTag + if (pc.guard.known(tag)) 0 else 1)
             val seen = journal.takeLast(pc.dupLookback).map { it.text } + cands.map { it.second.text }
             val reason = when {
                 resolve(ts) == null -> DropReason.CITATION
@@ -278,4 +288,6 @@ sealed interface AgentEvent {
     data class NoteKept(val note: Note) : AgentEvent
     data class NoteDropped(val window: Int, val line: String, val reason: DropReason) : AgentEvent
     data class Restart(val count: Int, val ctxBefore: Int, val ctxAfter: Int) : AgentEvent
+    /** End of a job: its off-protocol counts, and whether they pass the card's threshold. */
+    data class Guard(val guard: ReaderGuard, val exceeded: Boolean) : AgentEvent
 }

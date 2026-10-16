@@ -57,7 +57,7 @@
     <string name="settings_language">Language</string>
     <string name="settings_storage">Storage</string>
     <string name="storage_total">Models on device: %1$s</string>
-    <string name="storage_model_pending">AI notes model not downloaded yet (%1$d MB) — it downloads on first use.</string>
+    <string name="storage_model_pending">AI notes model not downloaded yet (%1$s) — it downloads on first use.</string>
     <string name="storage_none">No models downloaded yet</string>
     <string name="storage_delete">Delete model</string>
     <string name="storage_delete_title">Delete this model?</string>
@@ -251,7 +251,7 @@
     <string name="svc_paused_time_limit">Processing paused by the system time limit — reopen Prime Minutes to resume.</string>
 
     <string name="library_empty">No saved recordings yet — every recording is saved here automatically.</string>
-    <string name="first_run_download_notice">The first recording downloads the speech and AI notes models (about %1$d MB) — Wi‑Fi recommended.</string>
+    <string name="first_run_download_notice">The first recording downloads the speech and AI notes models (%1$s) — Wi‑Fi recommended.</string>
 
     <!-- Studio refonte -->
     <string name="back">Back</string>
@@ -393,8 +393,8 @@
     <string name="settings_experimental">Experimental</string>
     <string name="settings_show_actions">Show action items</string>
     <string name="settings_show_actions_hint">Lists the action items the model extracts under the summary. About one in five may not match the transcript — tap a time to check.</string>
-    <string name="settings_ask">Ask the meetings (experimental)</string>
-    <string name="settings_ask_hint">Type a question in the meeting search (home screen) and tap the Ask button: the AI notes model answers from the passages the search finds, citing where. Needs the search model and the AI notes model, and a free device (no recording, transcription or summary running).</string>
+    <string name="settings_ask">Ask the meetings</string>
+    <string name="settings_ask_hint">Tap Ask on the home screen (or type a question in the search and tap Ask): the AI notes model answers from the passages the search finds, citing where. Needs the AI notes model and the search-by-meaning model, and a free device (no recording, transcription or summary running).</string>
     <string name="ask_title">Ask</string>
     <string name="ask_experimental">Experimental</string>
     <string name="ask_cd">Ask the meetings</string>
@@ -414,7 +414,7 @@
     <string name="settings_reader_model">AI notes model</string>
     <string name="reader_model_e2b">Mobile E2B</string>
     <string name="reader_model_e4b">Mobile E4B</string>
-    <string name="reader_model_hint">Mobile models run on a faster engine with a shorter memory. E2B: %1$d MB download, about 1.3 GB RAM. E4B: %2$d MB, about 3 GB RAM, fewer mistakes.</string>
+    <string name="reader_model_hint">Mobile models run on a faster engine with a shorter memory. E2B: %1$s download, about 1.3 GB RAM. E4B: %2$s, about 3 GB RAM, fewer mistakes.</string>
     <string name="reader_model_e4b_ram">E4B needs a phone with 8 GB of RAM.</string>
     <string name="summary_no_notes">Nothing to note in this recording: no decisions, actions or figures.</string>
     <string name="agent_simple_reading_all">Reading the transcript, part by part</string>
@@ -431,4 +431,22 @@
     <string name="settings_ai_bench_run">Run AI benchmark</string>
     <string name="settings_ai_bench_running">Running…</string>
     <string name="settings_ai_bench_failed">Benchmark failed: %s</string>
+    <string name="dl_consent_title">Download the AI models?</string>
+    <string name="dl_consent_total">%1$s to download</string>
+    <string name="dl_consent_speech">• Speech recognition: %1$s</string>
+    <string name="dl_consent_reader">• AI notes model: %1$s</string>
+    <string name="dl_consent_body">Downloaded once; after that every meeting is transcribed and summarized on this phone, offline.</string>
+    <string name="dl_consent_metered">You are not on Wi‑Fi: this download may use your mobile data.</string>
+    <string name="dl_consent_now">Download now</string>
+    <string name="dl_consent_wifi_only">Wi‑Fi only</string>
+    <string name="dl_consent_later">Later</string>
+    <string name="dl_consent_waiting_wifi">The models will download as soon as you are on Wi‑Fi.</string>
+    <string name="dl_prefetching">Downloading the models…</string>
+    <string name="ask_stage_searching">Searching the meetings… %1$d s</string>
+    <string name="ask_stage_reading">Reading %1$d excerpts… %2$d s</string>
+    <string name="ask_stage_answering">Answering… %1$d s</string>
+    <string name="ask_open_hint">Ask a question about your meetings…</string>
+    <string name="ask_entry_cd">Ask a question about your meetings</string>
+    <string name="speaker_merge_confirm">Merge “%1$s” into “%2$s”? All of its lines move to %2$s.</string>
+    <string name="speaker_merge">Merge</string>
 </resources>

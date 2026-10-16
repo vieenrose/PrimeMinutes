@@ -458,7 +458,11 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
             SessionEffect.ShowPaused -> ui?.showPaused()
             is SessionEffect.CarryPlayhead -> ui?.carryPlayhead(e.uri)
             is SessionEffect.AgentReset -> { agent.reset(); e.whole?.let { agent.wholeTranscript = it } }
-            is SessionEffect.AgentRestore -> agent.restore(e.journal)
+            is SessionEffect.AgentRestore -> {
+                agent.restore(e.journal)
+                // The saved reading's guardrail counts, for the panel's DEV line.
+                now.libraryDir?.let { d -> viewModelScope.launch { agent.guard = withContext(Dispatchers.IO) { SessionLibrary.loadReaderGuard(d) } } }
+            }
             is SessionEffect.AgentApply -> agent.apply(e.event)
             is SessionEffect.QueueAgentReset -> { queueAgent.reset(); queueAgent.wholeTranscript = e.whole }
             is SessionEffect.QueueAgentApply -> queueAgent.apply(e.event)

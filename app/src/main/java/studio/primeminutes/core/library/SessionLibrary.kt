@@ -63,6 +63,8 @@ object SessionLibrary {
         val createdAt: Long,
         val durationSec: Int,
         val status: Status,
+        /** Processed, but no speech was found ([SpeechCheck]): shown as such, never as "Done". */
+        val noSpeech: Boolean = false,
     ) {
         val wavFile: File get() = File(dir, WAV_NAME)
         val sessionFile: File get() = File(dir, SESSION_NAME)
@@ -178,6 +180,7 @@ object SessionLibrary {
                 title = byId(context, entry.id)?.title ?: entry.title ?: title?.trim()?.ifBlank { null }
                     ?: context.getString(studio.primeminutes.R.string.status_no_speech).takeIf { utterances.isEmpty() },
                 status = Status.DONE,
+                noSpeech = !SpeechCheck.hasSpeech(utterances.map { it.text }),
             )
             runCatching { writeMeta(u) }.onFailure { Log.w(TAG, "could not update library meta", it) }
             u
@@ -293,6 +296,18 @@ object SessionLibrary {
     private const val NOTES = "pending_notes.json"
 
     /** The reader's checkpoint (journal + how many transcript lines it covers), atomic. */
+    /** The reader's off-protocol counts of the meeting's last reading (model guardrail, DEV
+     *  diagnostics): a sidecar next to the meta, rewritten by each reading. */
+    const val READER_GUARD = "reader_guard.json"
+
+    fun saveReaderGuard(dir: File, g: studio.primeminutes.core.reader.ReaderGuard, llmModelId: String) {
+        runCatching { File(dir, READER_GUARD).writeTextAtomic(g.toJson().put("model", llmModelId).put("at", System.currentTimeMillis()).toString()) }
+            .onFailure { Log.w(TAG, "could not save the reader guard counts", it) }
+    }
+
+    fun loadReaderGuard(dir: File): studio.primeminutes.core.reader.ReaderGuard? =
+        runCatching { studio.primeminutes.core.reader.ReaderGuard.fromJson(JSONObject(File(dir, READER_GUARD).readText())) }.getOrNull()
+
     fun saveNotes(entry: Entry, llmModelId: String, cp: studio.primeminutes.core.reader.ReaderCheckpoint) {
         runCatching {
             val arr = org.json.JSONArray()
@@ -371,6 +386,7 @@ object SessionLibrary {
             .put("createdAt", entry.createdAt)
             .put("durationSec", entry.durationSec)
             .put("status", entry.status.name)
+            .put("noSpeech", entry.noSpeech)
         entry.title?.let { o.put("title", it) }
         File(entry.dir, META).writeTextAtomic(o.toString())
     }
@@ -380,13 +396,18 @@ object SessionLibrary {
         if (!f.exists()) return null
         return runCatching {
             val o = JSONObject(f.readText())
+            val title = if (o.has("title")) o.getString("title") else null
+            val status = runCatching { Status.valueOf(o.getString("status")) }.getOrDefault(Status.RECORDED)
             Entry(
                 id = o.optString("id", dir.name),
                 dir = dir,
-                title = if (o.has("title")) o.getString("title") else null,
+                title = title,
                 createdAt = o.getLong("createdAt"),
                 durationSec = o.optInt("durationSec"),
-                status = runCatching { Status.valueOf(o.getString("status")) }.getOrDefault(Status.RECORDED),
+                status = status,
+                // Meta written before the flag: a silent meeting was a DONE entry titled "No speech detected".
+                noSpeech = if (o.has("noSpeech")) o.getBoolean("noSpeech")
+                    else status == Status.DONE && title in SpeechCheck.LEGACY_TITLES,
             )
         }.onFailure { Log.w(TAG, "corrupt library meta in ${dir.name}", it) }.getOrNull()
     }

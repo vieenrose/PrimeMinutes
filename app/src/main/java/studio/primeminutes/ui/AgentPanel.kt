@@ -105,6 +105,9 @@ class AgentUiState {
      *  recording: the "next notes when the bar fills" wording only fits the latter. Set by
      *  whoever starts the run; [reset] (which a STARTING event triggers) leaves it alone. */
     var wholeTranscript by mutableStateOf(false)
+    /** The reading's off-protocol counts (model guardrail), at the end of a job or from the saved meeting. */
+    var guard by mutableStateOf<studio.primeminutes.core.reader.ReaderGuard?>(null)
+    var guardExceeded by mutableStateOf(false)
     val notes = mutableStateListOf<Note>()
     val steps = mutableStateListOf<Step>()
     val log = mutableStateListOf<LogLine>()
@@ -133,7 +136,7 @@ class AgentUiState {
     val windowsRead: Int get() = steps.count { !it.restart && it.done }
 
     fun reset() {
-        state = null; reply = ""; ctxTokens = 0; notes.clear(); steps.clear(); log.clear()
+        state = null; reply = ""; ctxTokens = 0; notes.clear(); steps.clear(); log.clear(); guard = null; guardExceeded = false
     }
 
     /** Journal text as saved with a session ("#id [ts] (TYPE) text" per line). */
@@ -190,6 +193,10 @@ class AgentUiState {
             is AgentEvent.NoteDropped -> {
                 edit { it.copy(dropped = it.dropped + 1) }
                 add(Kind.DROPPED, "${e.reason.name.lowercase()} · ${e.line}")
+            }
+            is AgentEvent.Guard -> {
+                guard = e.guard; guardExceeded = e.exceeded
+                add(Kind.STATE, "guard · ${e.guard.summary()}${if (e.exceeded) " · ABOVE THRESHOLD" else ""}")
             }
             is AgentEvent.Restart -> {
                 ctxTokens = e.ctxAfter
@@ -271,6 +278,13 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
         if (agent.notes.isNotEmpty()) {
             Text(stringResource(R.string.agent_notes_caution), style = MaterialTheme.typography.labelSmall, color = pal.Slate400)
         }
+        // DEV (debug builds): the model guardrail's off-protocol counts of this reading (ReaderGuard).
+        val g = agent.guard
+        if (studio.primeminutes.BuildConfig.DEBUG && g != null) Text(
+            "DEV guard · ${g.summary()}",
+            style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+            color = if (agent.guardExceeded || g.exceeds(ModelCard.DEFAULT.reader.guard)) PrimeMinutesPalette.Red else pal.Slate400,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             if (done) Text(
                 stringResource(R.string.agent_hide_process),

@@ -49,6 +49,8 @@ data class ReaderCard(
     val decided: Regex,
     /** Title and prose read the journal compacted to this many characters (0 = all of it). */
     val notesChars: Int,
+    /** What counts as off-protocol output, and how much of it is too much ([ReaderGuard]). */
+    val guard: GuardCard = GuardCard(),
 ) {
     fun windowHeader(k: Int) = windowHeaderPattern.replace("{k}", k.toString())
     fun omitted(n: Int) = omittedPattern.replace("{n}", n.toString())

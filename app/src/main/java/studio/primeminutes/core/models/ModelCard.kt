@@ -80,6 +80,14 @@ data class ModelCard(
                     proposalTag = r.getString("proposal_tag"), reclassifyTags = r.getJSONArray("reclassify_tags").strings(), actionTag = r.getString("action_tag"),
                     proposalCue = Regex(r.getString("proposal_cue")), decided = Regex(r.getString("decided")),
                     notesChars = r.getInt("notes_chars"),
+                    guard = r.optJSONObject("guard")?.let { g ->
+                        studio.primeminutes.core.reader.GuardCard(
+                            knownTags = g.optJSONArray("known_tags")?.strings()?.map { it.uppercase() }?.toSet() ?: emptySet(),
+                            ignoreActs = g.optJSONArray("ignore_acts")?.strings()?.toSet() ?: emptySet(),
+                            maxOffProtocolRate = g.optDouble("max_off_protocol_rate", 0.2),
+                            minLines = g.optInt("min_lines", 10),
+                        )
+                    } ?: studio.primeminutes.core.reader.GuardCard(),
                 ),
                 title = oneShot(j.getJSONObject("title")),
                 prose = oneShot(j.getJSONObject("prose")),

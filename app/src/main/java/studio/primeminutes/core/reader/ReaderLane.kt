@@ -107,7 +107,12 @@ class ReaderLane(
         return withContext(dispatcher) {
             failure?.let { throw it }
             val minutes = reader.finish()
-            ReaderResult(reader.journal.toList(), minutes, card.reader.actions(reader.journal))
+            val g = reader.guard
+            val exceeded = g.exceeds(card.reader.guard)
+            if (exceeded) android.util.Log.w("primeminutes-reader", "guard: off-protocol output above ${card.reader.guard.maxOffProtocolRate} (${card.name}): ${g.summary()}")
+            else android.util.Log.i("primeminutes-reader", "guard: ${g.summary()}")
+            events(AgentEvent.Guard(g, exceeded))
+            ReaderResult(reader.journal.toList(), minutes, card.reader.actions(reader.journal), g)
         }
     }
 
@@ -207,4 +212,4 @@ class ReaderLane(
 }
 
 /** What a reader run produced: the journal, the minutes assembled from it and its actions (proposal guard applied). */
-data class ReaderResult(val journal: List<Note>, val minutes: String, val actions: List<Note>)
+data class ReaderResult(val journal: List<Note>, val minutes: String, val actions: List<Note>, val guard: ReaderGuard = ReaderGuard())

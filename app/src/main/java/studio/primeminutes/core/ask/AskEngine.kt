@@ -50,10 +50,19 @@ object AskEngine {
         object Idle : Phase()
         object Busy : Phase()                    // refused: a job is running
         object Retrieving : Phase()
-        object Loading : Phase()                 // reader model loading (seconds)
+        /** The model loads (when it is not resident) and reads the [excerpts] found: the long wait. */
+        data class Reading(val excerpts: Int) : Phase()
+        /** From the first token of the answer. */
         object Answering : Phase()
         data class Failed(val error: String) : Phase()
+
+        /** A question is being worked on (the sheet shows the stage and the seconds since [startedAt]). */
+        val working: Boolean get() = this is Retrieving || this is Reading || this is Answering
     }
+
+    /** When the question in progress was asked (SystemClock.elapsedRealtime), for the elapsed seconds. */
+    private val _startedAt = MutableStateFlow(0L)
+    val startedAt: StateFlow<Long> = _startedAt
 
     /** One excerpt handed to the model. */
     /** [sec] is the whole second of the citation tag; [at] the passage's exact start, where a tap opens it
@@ -70,6 +79,9 @@ object AskEngine {
     fun expandTags(answer: String, pool: List<Excerpt>): String = SHORT_TAG.replace(answer) { m ->
         pool.firstOrNull { it.k == m.groupValues[1].toInt() }?.let { "[[${it.entry.id}@${it.sec}]]" } ?: m.value
     }
+
+    /** Whole seconds since [startedAt] (both SystemClock.elapsedRealtime), never negative. */
+    fun elapsedSec(startedAt: Long, now: Long): Int = if (startedAt <= 0L) 0 else ((now - startedAt) / 1000L).toInt().coerceAtLeast(0)
 
     /** A follow-up continues the conversation only if its prompt and a whole answer still fit the cache. */
     fun followUpFits(seqLength: Int, promptTokens: Int, answerTokens: Int, context: Int): Boolean =
@@ -137,17 +149,17 @@ object AskEngine {
         job = scope.launch {
             if (busy()) { Log.i(TAG, "refused: a job is running"); _phase.value = Phase.Busy; return@launch }
             try {
+                _startedAt.value = android.os.SystemClock.elapsedRealtime()
                 _phase.value = Phase.Retrieving
                 val excerpts = retrieve(app, entries, question).map { it.copy(k = nextK++) }
                 val pool = _turns.value.flatMap { it.excerpts } + excerpts
                 _turns.value = _turns.value + Turn(question, "", excerpts, false, pool)
-                _phase.value = Phase.Loading
+                _phase.value = Phase.Reading(excerpts.size)
                 // The model is opened, prompted and run under the lock: release() cannot close the
                 // engine under a running generate (cancel() makes that generate return first).
                 mutex.withLock {
                     val s = open(app)
                     s.resume()
-                    _phase.value = Phase.Answering
                     val sb = StringBuilder()
                     val first = _turns.value.size == 1
                     val t = s.template
@@ -174,7 +186,7 @@ object AskEngine {
                     var cut = false
                     s.generateContinue(card.ask.answerTokens, "", card.sampler.temp) { piece ->
                         if (busy()) { cut = true; s.cancel() }   // a job started: the pipeline wins
-                        if (tFirst == 0L) tFirst = System.nanoTime()
+                        if (tFirst == 0L) { tFirst = System.nanoTime(); _phase.value = Phase.Answering }
                         sb.append(piece); publish(expandTags(sb.toString(), pool), done = false)
                     }
                     val st = engine?.lastStats

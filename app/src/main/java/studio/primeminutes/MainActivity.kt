@@ -193,6 +193,9 @@ import studio.primeminutes.core.text.OpenCcConverter
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
+import studio.primeminutes.core.models.DownloadPlan
+import studio.primeminutes.core.models.ModelPrefetch
+import studio.primeminutes.ui.DownloadConsentDialog
 import studio.primeminutes.core.session.RecentSession
 import studio.primeminutes.core.session.RecentSessions
 import studio.primeminutes.core.session.PrimeMinutesSession
@@ -539,6 +542,8 @@ private fun TranscribeScreen(
     val snackbarHostState = vm.snackbar
     // Ask (experimental, plan §6): the Studio question being answered; null = sheet closed.
     var askQuestion by remember { mutableStateOf<String?>(null) }
+    // A speaker merge (from, into) waiting for its confirmation.
+    var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // DEV (debug builds only): `am start … --es vox_query "…" --es vox_ask "…"` pre-fills the Studio
     // search or opens Ask with a question, so screenshots and device checks need no CJK typing;
     // `--es vox_type "…"` types the query in, one character at a time (README animations).
@@ -552,6 +557,13 @@ private fun TranscribeScreen(
     LaunchedEffect(Unit) {
         val q = devExtras?.getString("vox_ask") ?: return@LaunchedEffect
         delay(3_000); askQuestion = q.trim()
+    }
+    // DEV: `--ez vox_merge true` asks to merge the open meeting's first speaker into its second (the
+    // confirmation, then the Undo snackbar) once its transcript is loaded.
+    var devMergeAsked by remember { mutableStateOf(false) }
+    if (devExtras?.getBoolean("vox_merge") == true && !devMergeAsked) LaunchedEffect(s.utterances.size) {
+        val ids = s.utterances.mapNotNull { it.speaker }.distinct()
+        if (ids.size >= 2) { delay(2_000); devMergeAsked = true; mergeAsk = ids[0] to ids[1] }
     }
 
     // --- Update notifier: once/day GitHub release check → dismissible banner → download+install. ---
@@ -656,6 +668,13 @@ private fun TranscribeScreen(
     var pendingSeekSec by remember { mutableStateOf<Double?>(null) }
     // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
     var searchModelReady by remember { mutableStateOf(EmbedHost.ready(context)) }
+    // Ask's models (the AI notes model, and the search model its excerpts come from): re-checked when
+    // a run ends or a prefetch finishes.
+    val prefetching by ModelPrefetch.progress.collectAsState()
+    var askModelReady by remember { mutableStateOf(false) }
+    LaunchedEffect(s.config.llmModelId, s.running, prefetching == null, searchModelReady) {
+        askModelReady = withContext(Dispatchers.IO) { studio.primeminutes.core.ask.AskEngine.available(context) }
+    }
     var searchDownload by remember { mutableStateOf<Float?>(null) }
     val indexingIds by LibraryIndexer.indexing.collectAsState()
     LaunchedEffect(Unit) { if (searchModelReady) LibraryIndexer.catchUp(context) }
@@ -829,6 +848,53 @@ private fun TranscribeScreen(
         )
     }
 
+    // --- First-use model downloads (DownloadPlan): the size, and a warning off Wi-Fi, before any byte. ---
+    // Shown once at first launch, and again before a recording or an import that would download.
+    var dlAsk by remember { mutableStateOf<Pair<DownloadPlan.Pending, (() -> Unit)?>?>(null) }
+    var dlUnmetered by remember { mutableStateOf(true) }
+    fun withModels(action: () -> Unit) {
+        scope.launch {
+            val p = withContext(Dispatchers.IO) { ModelPrefetch.pending(context) }
+            val unmetered = ModelPrefetch.unmetered(context)
+            if (DownloadPlan.decide(ModelPrefetch.consent(context), unmetered, p) == DownloadPlan.Action.PROCEED) action()
+            else { dlUnmetered = unmetered; dlAsk = p to action }
+        }
+    }
+    LaunchedEffect(Unit) {
+        val p = withContext(Dispatchers.IO) { ModelPrefetch.pending(context) }
+        val unmetered = ModelPrefetch.unmetered(context)
+        // DEV (debug builds): `--ez vox_dlgate true` shows the prompt with the full sizes, models present or not.
+        if (devExtras?.getBoolean("vox_dlgate") == true) {
+            val mm = ModelManager(context); val llm = LlmRegistry.byId(s.config.llmModelId)
+            dlUnmetered = devExtras.getBoolean("vox_dlgate_wifi", false)
+            dlAsk = DownloadPlan.pending(false, mm.asrDownloadBytes(), false, llm.totalBytes) to null
+        } else if (p.any && ModelPrefetch.consent(context) == DownloadPlan.Consent.UNSET && !ModelPrefetch.laterThisRun) {
+            dlUnmetered = unmetered; dlAsk = p to null
+        } else ModelPrefetch.maybeStart(context)
+    }
+    DisposableEffect(Unit) {
+        val off = ModelPrefetch.watchNetwork(context)
+        onDispose { off() }
+    }
+    dlAsk?.let { (p, action) ->
+        DownloadConsentDialog(
+            pending = p, unmetered = dlUnmetered,
+            onNow = {
+                dlAsk = null
+                ModelPrefetch.setConsent(context, DownloadPlan.Consent.ANY_NETWORK)
+                // With a run waiting, the run fetches what it needs (with its own progress); else prefetch now.
+                if (action != null) action() else ModelPrefetch.maybeStart(context)
+            },
+            onWifiOnly = {
+                dlAsk = null
+                ModelPrefetch.setConsent(context, DownloadPlan.Consent.WIFI_ONLY)
+                if (dlUnmetered) { if (action != null) action() else ModelPrefetch.maybeStart(context) }
+                else Toast.makeText(context, R.string.dl_consent_waiting_wifi, Toast.LENGTH_LONG).show()
+            },
+            onLater = { dlAsk = null; ModelPrefetch.laterThisRun = true },
+        )
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -858,7 +924,7 @@ private fun TranscribeScreen(
                 // Importing supersedes the open session/recording: a share arriving mid-recording
                 // must not silently kill a live capture — confirm first.
                 else if (vm.now.isRecording || (vm.now.running && !vm.now.watchingQueue)) importConfirm = luri
-                else vm.launchAudio(luri)
+                else withModels { vm.launchAudio(luri) }
             } else {
                 vm.setStatus(context.getString(R.string.empty_status))
                 vm.notify(context.getString(R.string.import_failed))
@@ -872,7 +938,7 @@ private fun TranscribeScreen(
         if (granted) vm.beginRecording()
         else vm.notify(context.getString(R.string.mic_permission_required))
     }
-    fun requestRecord() {
+    fun requestRecord() = withModels {
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         if (granted) vm.beginRecording() else recordPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -1208,7 +1274,8 @@ private fun TranscribeScreen(
                 onCancelSpeakerEdit = { vm.cancelSpeakerEdit() },
                 speakerIds = speakerIds,
                 onReassignLine = { target -> vm.reassignLine(idx, target) },
-                onMergeSpeaker = { target -> u.speaker?.let { vm.mergeSpeaker(it, target) } },
+                // A merge relabels every line of a speaker: confirmed first, then offered for Undo.
+                onMergeSpeaker = { target -> u.speaker?.let { mergeAsk = it to target } },
             )
         }
     }
@@ -1387,7 +1454,8 @@ private fun TranscribeScreen(
                 searchModelReady = searchModelReady,
                 initialQuery = devQuery,
                 typeQuery = devExtras?.getString("vox_type") ?: "",
-                onAsk = if (s.config.askEnabled) { q -> askQuestion = q.trim() } else null,
+                // Ask shows once its models are there (AskEngine.available).
+                onAsk = if (s.config.askEnabled && askModelReady) { q -> askQuestion = q.trim() } else null,
                 searchDownload = searchDownload,
                 onDownloadSearchModel = { downloadSearchModel() },
                 indexingIds = indexingIds,
@@ -1467,7 +1535,9 @@ private fun TranscribeScreen(
                 // retryable).
                 canReTranscribe = !s.running && s.audioUri != null,
                 onReTranscribe = { vm.reTranscribe() },
-                canReSummarize = s.transcriptReady && !s.running,
+                // Nothing was said: no AI notes to write (the reader never runs on a silent meeting).
+                canReSummarize = s.transcriptReady && !s.running &&
+                    remember(s.utterances) { studio.primeminutes.core.library.SpeechCheck.hasSpeech(s.utterances.map { it.text }) },
                 onReSummarize = { vm.reSummarizeFromMenu() },
                 canResume = !s.running && resumableEntry != null,
                 onResume = { resumableEntry?.let { vm.resumeEntry(it) } },
@@ -1675,7 +1745,7 @@ private fun TranscribeScreen(
         when (val st = importDl) {
             is studio.primeminutes.online.ImportDownloads.State.Ready -> {
                 studio.primeminutes.online.ImportDownloads.consume()
-                vm.launchAudio(st.uri, st.title)
+                withModels { vm.launchAudio(st.uri, st.title) }
             }
             is studio.primeminutes.online.ImportDownloads.State.Failed -> {
                 studio.primeminutes.online.ImportDownloads.consume()
@@ -1690,6 +1760,17 @@ private fun TranscribeScreen(
     }
     if (s.showPodcastSheet) {
         PodcastSheet(onDismiss = { vm.showPodcastSheet(false) })
+    }
+    mergeAsk?.let { (from, into) ->
+        val name = { sid: Int -> s.speakerNames[sid]?.name ?: context.getString(R.string.speaker_n, sid + 1) }
+        AlertDialog(
+            onDismissRequest = { mergeAsk = null },
+            text = { Text(stringResource(R.string.speaker_merge_confirm, name(from), name(into))) },
+            confirmButton = {
+                TextButton(onClick = { mergeAsk = null; vm.mergeSpeaker(from, into) }) { Text(stringResource(R.string.speaker_merge)) }
+            },
+            dismissButton = { TextButton(onClick = { mergeAsk = null }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
     askQuestion?.let { q ->
         if (!ModelManager(context).llmReady(LlmRegistry.byId(s.config.llmModelId))) {

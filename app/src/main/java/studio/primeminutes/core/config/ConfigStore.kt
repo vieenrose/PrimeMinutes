@@ -26,7 +26,9 @@ object ConfigStore {
             llmModelId = p.getString("llmModelId", d.llmModelId) ?: d.llmModelId,
             summaryScript = summaryScript,
             showActionItems = p.getBoolean("showActionItems", d.showActionItems),
-            askEnabled = p.getBoolean("askEnabled", d.askEnabled),
+            // A new key: "askEnabled" was saved false by every settings change while Ask was an
+            // off-by-default experiment, so it says nothing about what the user wants now.
+            askEnabled = p.getBoolean("askOn", d.askEnabled),
         )
     }
 
@@ -38,7 +40,7 @@ object ConfigStore {
             putString("llmModelId", c.llmModelId)
             putString("summaryScript", c.summaryScript)
             putBoolean("showActionItems", c.showActionItems)
-            putBoolean("askEnabled", c.askEnabled)
+            putBoolean("askOn", c.askEnabled)
             // Settings of retired engines (hotwords, VAD, speaker-count hint, precise diarization, ASR
             // hardware) — nothing reads them any more.
             RETIRED_KEYS.forEach(::remove)
@@ -48,6 +50,6 @@ object ConfigStore {
 
     private val RETIRED_KEYS = listOf(
         "asrContext", "vadThreshold", "numSpeakers", "preciseDiarization", "asrHardware",
-        "summaryStyle", "summaryPrompt",
+        "summaryStyle", "summaryPrompt", "askEnabled",
     )
 }

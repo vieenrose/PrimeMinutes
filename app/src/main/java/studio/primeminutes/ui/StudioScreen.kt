@@ -50,6 +50,8 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.QuestionAnswer
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
@@ -121,7 +124,20 @@ private enum class StatusFilter { ALL, NEW, DONE }
 
 /** A row's single derived state (computed once at the list call site) — one priority definition, so
  *  the color and glyph decoders can't silently drift out of order. Selection is an orthogonal overlay. */
-private enum class RowStatus { New, Queued, Processing, Done }
+/** [NoSpeech]: processed, but nothing was said — not "Done" (no check mark, no AI notes). */
+private enum class RowStatus { New, Queued, Processing, Done, NoSpeech }
+
+/** One priority definition for a row's status (color + glyph decode from it). */
+private fun rowStatus(e: SessionLibrary.Entry, processingId: String?, queuedIds: Set<String>): RowStatus = when {
+    e.id == processingId -> RowStatus.Processing
+    e.status == SessionLibrary.Status.DONE && e.noSpeech -> RowStatus.NoSpeech
+    e.status == SessionLibrary.Status.DONE -> RowStatus.Done
+    e.id in queuedIds -> RowStatus.Queued
+    else -> RowStatus.New
+}
+
+/** The Done filter lists the meetings with results: a silent recording is not one of them. */
+private fun isDone(e: SessionLibrary.Entry) = e.status == SessionLibrary.Status.DONE && !e.noSpeech
 
 /** Two shared, locale-bound formatters (composition is main-thread, so a single instance is safe)
  *  — avoids re-allocating a DateFormat per row/day-header composition. */
@@ -237,10 +253,11 @@ fun StudioScreen(
         StatusFilter.DONE -> SessionLibrary.Status.DONE
     }
     val searching = query.isNotBlank()
-    val shownHits = remember(hits, statusFilter) { hits.filter { want == null || it.entry.status == want } }
+    fun wanted(e: SessionLibrary.Entry) = when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
+    val shownHits = remember(hits, statusFilter) { hits.filter { wanted(it.entry) } }
     val shown = remember(entries, searching, shownHits, statusFilter) {
         if (searching) shownHits.map { it.entry }
-        else entries.filter { e -> want == null || e.status == want }
+        else entries.filter(::wanted)
     }
     // Group ONCE (LinkedHashMap preserves the newest-first order of the already-sorted list) instead
     // of allocating a Calendar per entry on every recomposition inside the LazyColumn lambda.
@@ -253,7 +270,7 @@ fun StudioScreen(
     val yesterday = remember(dayTick) {
         Calendar.getInstance().apply { timeInMillis = today; add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
     }
-    val doneCount = remember(entries) { entries.count { it.status == SessionLibrary.Status.DONE } }
+    val doneCount = remember(entries) { entries.count(::isDone) }
     val newCount = remember(entries) { entries.count { it.status == SessionLibrary.Status.RECORDED } }
     // The active filter's chip stops rendering once its count hits 0 (e.g. the last New session was
     // processed, or all Done were batch-deleted) — reset to ALL so we don't strand the list on an
@@ -321,7 +338,7 @@ fun StudioScreen(
                         inner()
                     },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        imeAction = if (onAsk != null && searchModelReady) androidx.compose.ui.text.input.ImeAction.Send
+                        imeAction = if (onAsk != null) androidx.compose.ui.text.input.ImeAction.Send
                                     else androidx.compose.ui.text.input.ImeAction.Search,
                     ),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(
@@ -334,19 +351,26 @@ fun StudioScreen(
                     },
                 )
                 if (indexingIds.isNotEmpty()) Chip(stringResource(R.string.studio_indexing), pal.Slate400)
-                if (onAsk != null && searchModelReady && query.isNotBlank()) {
+                if (onAsk != null) {
+                    // Ask, labelled (an unlabelled paper plane was missed): with a query it asks it, empty
+                    // it opens the Ask sheet on its own question field.
                     Spacer(Modifier.width(6.dp))
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.ask_cd), tint = pal.Sky,
-                        modifier = Modifier.size(20.dp).clip(RoundedCornerShape(50)).clickable { onAsk(query) },
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.Sky.copy(alpha = 0.14f))
+                            .clickable { onAsk(query) }
+                            .semantics(mergeDescendants = true) { role = Role.Button }
+                            .heightIn(min = 32.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Icon(Icons.Filled.QuestionAnswer, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.ask_title), color = pal.Sky, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
             if (searching && !searchModelReady) {
                 // Lexical only until the model is there: say how to get the semantic pass.
-                val mb = android.text.format.Formatter.formatShortFileSize(
-                    context, EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID).totalBytes,
-                )
+                val mb = studio.primeminutes.core.models.SizeFormat.bytes(EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID).totalBytes)
                 val dl = searchDownload
                 Text(
                     if (dl == null) stringResource(R.string.search_semantic_download, mb)
@@ -422,20 +446,19 @@ fun StudioScreen(
                 if (firstRun) {
                     // The first recording downloads the speech + summary models: say how much before
                     // it starts, so nobody burns a mobile plan without knowing.
-                    var pendingMb by remember { mutableStateOf(0L) }
-                    LaunchedEffect(Unit) {
-                        pendingMb = withContext(Dispatchers.IO) {
-                            val mm = studio.primeminutes.core.models.ModelManager(context)
-                            val llm = studio.primeminutes.core.models.LlmRegistry.byId(
-                                studio.primeminutes.core.config.ConfigStore.load(context).llmModelId)
-                            ((if (mm.asrReady()) 0L else mm.asrDownloadBytes()) +
-                                (if (mm.llmReady(llm)) 0L else llm.totalBytes)) / 1_000_000
-                        }
+                    var pendingBytes by remember { mutableStateOf(0L) }
+                    val prefetch by studio.primeminutes.core.models.ModelPrefetch.progress.collectAsState()
+                    LaunchedEffect(prefetch == null) {
+                        pendingBytes = withContext(Dispatchers.IO) { studio.primeminutes.core.models.ModelPrefetch.pending(context).total }
                     }
-                    if (pendingMb > 0) {
+                    val f = prefetch
+                    if (f != null) {
+                        Spacer(Modifier.height(12.dp))
+                        studio.primeminutes.ui.components.DownloadStatusBar(R.string.dl_prefetching, f)
+                    } else if (pendingBytes > 0) {
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            stringResource(R.string.first_run_download_notice, pendingMb.toInt()),
+                            stringResource(R.string.first_run_download_notice, studio.primeminutes.core.models.SizeFormat.bytes(pendingBytes)),
                             color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center,
                         )
@@ -459,12 +482,7 @@ fun StudioScreen(
             ) {
                 if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
                     val e = h.entry
-                    val status = when {
-                        e.id == processingId -> RowStatus.Processing
-                        e.status == SessionLibrary.Status.DONE -> RowStatus.Done
-                        e.id in queuedIds -> RowStatus.Queued
-                        else -> RowStatus.New
-                    }
+                    val status = rowStatus(e, processingId, queuedIds)
                     Column {
                         SessionRow(
                             entry = e, status = status,
@@ -476,7 +494,7 @@ fun StudioScreen(
                                     if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
                                 } else when (status) {
                                     RowStatus.Processing -> onWatchLive(e)
-                                    RowStatus.Done -> onOpen(e)
+                                    RowStatus.Done, RowStatus.NoSpeech -> onOpen(e)
                                     else -> actionsFor = e
                                 }
                             },
@@ -499,13 +517,7 @@ fun StudioScreen(
                         )
                     }
                     items(list, key = { it.id }, contentType = { "row" }) { e ->
-                        // One priority definition for the row's status (color + glyph decode from it).
-                        val status = when {
-                            e.id == processingId -> RowStatus.Processing
-                            e.status == SessionLibrary.Status.DONE -> RowStatus.Done
-                            e.id in queuedIds -> RowStatus.Queued
-                            else -> RowStatus.New
-                        }
+                        val status = rowStatus(e, processingId, queuedIds)
                         SessionRow(
                             entry = e, status = status,
                             // Feed live progress ONLY to the processing row — otherwise every tick
@@ -520,7 +532,7 @@ fun StudioScreen(
                                     if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
                                 } else when (status) {
                                     RowStatus.Processing -> onWatchLive(e)
-                                    RowStatus.Done -> onOpen(e)
+                                    RowStatus.Done, RowStatus.NoSpeech -> onOpen(e)
                                     else -> actionsFor = e
                                 }
                             },
@@ -738,7 +750,7 @@ private fun SessionRow(
     val statusColor = when (status) {
         RowStatus.Processing, RowStatus.Queued -> PrimeMinutesPalette.Warning
         RowStatus.Done -> PrimeMinutesPalette.Success
-        RowStatus.New -> pal.Slate400
+        RowStatus.New, RowStatus.NoSpeech -> pal.Slate400
     }
     // Screen-reader description: status is otherwise carried only by a glyph shape + color, invisible
     // to TalkBack. Announce "<title>, <status>"; selection is exposed as the semantic selected state.
@@ -747,6 +759,7 @@ private fun SessionRow(
         RowStatus.Queued -> R.string.cd_status_queued
         RowStatus.Processing -> R.string.cd_status_processing
         RowStatus.Done -> R.string.cd_status_done
+        RowStatus.NoSpeech -> R.string.status_no_speech
     })
     val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)}, $statusLabel"
     val isSelected = selected
@@ -774,6 +787,7 @@ private fun SessionRow(
                     Icon(
                         when (status) {
                             RowStatus.Done -> Icons.Filled.CheckCircle
+                            RowStatus.NoSpeech -> Icons.Filled.MicOff
                             RowStatus.Queued -> Icons.Filled.Schedule
                             else -> Icons.Filled.GraphicEq
                         },
@@ -792,6 +806,7 @@ private fun SessionRow(
                     append(" · ")
                     append("%d:%02d".format(entry.durationSec / 60, entry.durationSec % 60))
                     if (processing && processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
+                    if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }
                 }
                 Text(meta, color = pal.Slate400, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

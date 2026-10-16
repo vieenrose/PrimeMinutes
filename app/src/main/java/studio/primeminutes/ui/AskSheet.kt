@@ -95,10 +95,16 @@ fun AskSheet(
     val turns by AskEngine.turns.collectAsState()
     var followUp by remember { mutableStateOf("") }
 
-    LaunchedEffect(question) { AskEngine.reset(); AskEngine.ask(context, entries, question, lang) }
+    // An empty question (the Ask button with no query): the sheet opens on its own question field.
+    LaunchedEffect(question) { AskEngine.reset(); if (question.isNotBlank()) AskEngine.ask(context, entries, question, lang) }
+    val startedAt by AskEngine.startedAt.collectAsState()
+    var now by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
+    LaunchedEffect(phase.working) {
+        while (phase.working) { now = android.os.SystemClock.elapsedRealtime(); kotlinx.coroutines.delay(500) }
+    }
     DisposableEffect(Unit) { onDispose { AskEngine.release() } }
 
-    val busy = phase is AskEngine.Phase.Retrieving || phase is AskEngine.Phase.Loading || phase is AskEngine.Phase.Answering
+    val busy = phase.working
     fun send() {
         val q = followUp.trim(); if (q.isEmpty() || busy) return
         followUp = ""; AskEngine.ask(context, entries, q, lang)
@@ -150,10 +156,12 @@ fun AskSheet(
                         }
                     }
                 }
+                // The stage and the seconds since the question: a 20 s wait with a bare spinner looked hung.
+                val secs = AskEngine.elapsedSec(startedAt, now)
                 val status = when (val p = phase) {
-                    AskEngine.Phase.Retrieving -> stringResource(R.string.ask_retrieving)
-                    AskEngine.Phase.Loading -> stringResource(R.string.ask_loading)
-                    AskEngine.Phase.Answering -> if (turns.lastOrNull()?.answer.isNullOrBlank()) stringResource(R.string.ask_thinking) else null
+                    AskEngine.Phase.Retrieving -> stringResource(R.string.ask_stage_searching, secs)
+                    is AskEngine.Phase.Reading -> stringResource(R.string.ask_stage_reading, p.excerpts, secs)
+                    AskEngine.Phase.Answering -> stringResource(R.string.ask_stage_answering, secs)
                     AskEngine.Phase.Busy -> stringResource(R.string.ask_busy)
                     is AskEngine.Phase.Failed -> stringResource(R.string.ask_failed, p.error)
                     AskEngine.Phase.Idle -> null
@@ -181,7 +189,7 @@ fun AskSheet(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { send() }),
                     decorationBox = { inner ->
-                        if (followUp.isEmpty()) Text(stringResource(R.string.ask_followup_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
+                        if (followUp.isEmpty()) Text(stringResource(if (turns.isEmpty()) R.string.ask_open_hint else R.string.ask_followup_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
                         inner()
                     },
                     modifier = Modifier.weight(1f),

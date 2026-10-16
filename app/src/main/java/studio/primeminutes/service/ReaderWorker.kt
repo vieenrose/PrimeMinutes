@@ -336,7 +336,8 @@ internal class ReaderWorker(private val host: Host) {
             task.latest?.let(lane::feed)
             val fin = task.final.await()
             if (task.aborted || task.preempted) throw CancellationException("reading stopped")
-            if (fin.isEmpty()) return SummaryResult(null, null)
+            // No speech (silence, fillers, noise tags): no AI notes are written for it (SpeechCheck).
+            if (!studio.primeminutes.core.library.SpeechCheck.hasSpeech(fin.map { it.text })) return SummaryResult(null, null)
             return finishLane(lane, fin, task)
         } finally {
             lane.close()
@@ -349,6 +350,8 @@ internal class ReaderWorker(private val host: Host) {
         host.emitEvent(TranscriptEvent.Status(ctx.getString(R.string.svc_summarizing)))
         val res = lane.finish(final)
         if (task.aborted || task.preempted) throw CancellationException("reading stopped")
+        // Model guardrail: this reading's off-protocol counts, kept with the meeting (DEV diagnostics).
+        (task.entry ?: task.notesEntry)?.let { SessionLibrary.saveReaderGuard(it.dir, res.guard, TranscriptionConfig.Holder.config.llmModelId) }
         val conv: (String) -> String = { task.converter?.convert(it) ?: it }
         // The summary is prose written from the notes; the grouped minutes are the fallback.
         val prose = runCatching { lane.prose(res.journal) }

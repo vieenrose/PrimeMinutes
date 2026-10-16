@@ -73,6 +73,7 @@ import studio.primeminutes.core.config.ThemeMode
 import studio.primeminutes.core.config.TranscriptionConfig
 import kotlin.math.roundToInt
 import studio.primeminutes.core.models.LlmRegistry
+import studio.primeminutes.core.models.SizeFormat
 import studio.primeminutes.core.update.UpdateChecker
 import studio.primeminutes.core.update.UpdateInfo
 import studio.primeminutes.ui.theme.LocalThemeController
@@ -182,7 +183,9 @@ fun SettingsContent(
             style = MaterialTheme.typography.bodySmall,
             color = pal.Slate400,
         )
-        Spacer(Modifier.height(10.dp))
+        }
+
+        Section(stringResource(R.string.ask_title)) {
         SwitchRow(stringResource(R.string.settings_ask), config.askEnabled, enabled) {
             onChange(config.copy(askEnabled = it))
         }
@@ -300,8 +303,8 @@ private fun ReaderModelSelector(selected: String, enabled: Boolean, onSelect: (S
     Text(
         stringResource(
             R.string.reader_model_hint,
-            (LlmRegistry.byId(LlmRegistry.E2B_MOBILE_ID).totalBytes / 1_000_000).toInt(),
-            (LlmRegistry.byId(LlmRegistry.E4B_MOBILE_ID).totalBytes / 1_000_000).toInt(),
+            SizeFormat.bytes(LlmRegistry.byId(LlmRegistry.E2B_MOBILE_ID).totalBytes),
+            SizeFormat.bytes(LlmRegistry.byId(LlmRegistry.E4B_MOBILE_ID).totalBytes),
         ) + if (bigRam) "" else "\n" + stringResource(R.string.reader_model_e4b_ram),
         style = MaterialTheme.typography.bodySmall,
         color = pal.Slate400,
@@ -321,7 +324,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
     }
     if (!summaryReady) {
         // The one summary model is fetched on first use — say so where its size would be listed.
-        val mb = LlmRegistry.byId(llmId).totalBytes / 1_000_000
+        val mb = SizeFormat.bytes(LlmRegistry.byId(llmId).totalBytes)
         Text(
             stringResource(R.string.storage_model_pending, mb),
             style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
@@ -333,7 +336,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
         Text(stringResource(R.string.storage_none), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
         return
     }
-    val fmt = { b: Long -> android.text.format.Formatter.formatShortFileSize(context, b) }
+    val fmt = { b: Long -> SizeFormat.bytes(b) }
     Text(
         stringResource(R.string.storage_total, fmt(models.sumOf { it.bytes })),
         style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
@@ -388,7 +391,7 @@ private fun SearchModelPanel(enabled: Boolean, onChanged: () -> Unit) {
     }
     val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
     if (!ready) {
-        val mb = android.text.format.Formatter.formatShortFileSize(context, spec.totalBytes)
+        val mb = SizeFormat.bytes(spec.totalBytes)
         val dl = download
         androidx.compose.material3.TextButton(
             enabled = enabled && dl == null,

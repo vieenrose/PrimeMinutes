@@ -12,6 +12,22 @@ class ModelCardTest {
         LlmRegistry.ALL.forEach { assertEquals("gemma4-meeting-agent-zh", it.card.name) }
     }
 
+    /** Static acceptance check (docs/model-acceptance-checklist.md): every shipped model's card fits the
+     *  context its graph is loaded with, and its turns can end. A window opens only with room for two
+     *  windows, a reading turn and slack (MeetingReader.openWindow): a budget that cannot hold that
+     *  restarts before every window forever. */
+    @Test fun budgetsFitTheContextAndTurnsCanStop() {
+        LlmRegistry.ALL.forEach { spec ->
+            val c = spec.card
+            assert(c.budget.ctxBudget <= spec.maxCtx) { "${spec.id}: ctx budget ${c.budget.ctxBudget} > graph ${spec.maxCtx}" }
+            assert(2 * c.budget.windowTokens + c.reader.readMax + 600 <= c.budget.ctxBudget) { "${spec.id}: a window cannot fit" }
+            assert(c.budget.restartBudget + c.budget.windowTokens + c.reader.readMax <= c.budget.ctxBudget) { "${spec.id}: restart journal too big" }
+            assert(c.prose.maxTokens < spec.maxCtx && c.title.maxTokens < spec.maxCtx && c.ask.answerTokens < spec.maxCtx)
+            assert(c.template.stopIds.isNotEmpty()) { "${spec.id}: no stop id, a turn would run to its token cap" }
+            assert(c.reader.stop.isNotBlank())
+        }
+    }
+
     /** The values the reader, title, prose and Ask used before they moved to the card. */
     @Test fun shippedCardKeepsTheTrainedValues() {
         assertEquals(setOf(1, 50, 106), card.template.stopIds)

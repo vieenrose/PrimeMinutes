@@ -522,7 +522,7 @@ object SessionReducer {
                         ?: str(R.string.status_transcript_lines, merged.size),
                 )
                 // An empty transcript returns WITHOUT summarizing: no SummaryComplete will clear `running`.
-                if (merged.isEmpty()) s = s.copy(running = false, status = str(R.string.status_no_speech))
+                if (!studio.primeminutes.core.library.SpeechCheck.hasSpeech(merged.map { it.text })) s = s.copy(running = false, status = str(R.string.status_no_speech))
             }
             is TranscriptEvent.Title -> {
                 // FILL, never OVERWRITE: a title already on screen (podcast/YouTube name, the library
