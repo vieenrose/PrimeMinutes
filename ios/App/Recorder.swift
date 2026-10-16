@@ -70,8 +70,8 @@ final class Recorder {
                 if d > 0 { Thread.sleep(forTimeInterval: d) }
             }
             if self?.feeding == true { Task { @MainActor in
-                guard let m = BackgroundWork.model, m.recording else { return }
-                if more { m.nextTalk() } else { m.toggleRecord() }
+                guard let m = BackgroundWork.model, m.capture.recording else { return }
+                if more { m.capture.nextTalk() } else { m.capture.toggleRecord() }
             } }
         }
     }

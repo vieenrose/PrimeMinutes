@@ -276,7 +276,7 @@ struct AskSheet: View {
                 ToolbarItem(placement: .primaryAction) { Button { ask.reset() } label: { Image(systemName: "arrow.counterclockwise") }.accessibilityLabel(L("ask_reset")) }
             }
         }
-        .onAppear { if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.sessions, question: initial) } }
+        .onAppear { if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.library.sessions, question: initial) } }
         .task {
             // DEV (README animation): VOX_ASK_OPEN=<seconds> taps the source at that second once the answer is in.
             guard let sec = Dev.env["VOX_ASK_OPEN"].flatMap(Int.init) else { return }
@@ -297,7 +297,7 @@ struct AskSheet: View {
     }
     private func send() {
         let q = followup.trimmingCharacters(in: .whitespacesAndNewlines); guard !q.isEmpty else { return }
-        followup = ""; ask.ask(m.sessions, question: q)
+        followup = ""; ask.ask(m.library.sessions, question: q)
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
     static func linked(_ text: String, _ xs: [AskEngine.Excerpt]) -> AttributedString {

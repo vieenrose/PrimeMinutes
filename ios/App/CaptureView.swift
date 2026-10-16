@@ -12,23 +12,23 @@ struct CaptureView: View {
                 Text(L("status_recording")).font(.title3.weight(.bold)).foregroundStyle(.red)
                 Spacer()
             }.padding(.horizontal, 20).padding(.top, 16)
-            Text(Export.mmss(Double(m.elapsed))).font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
+            Text(Export.mmss(Double(m.capture.elapsed))).font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
                 .padding(.vertical, 12)
             HwStatusLine().padding(.bottom, 6)
             // The summarizing agent works alongside ASR + diarization: its status stays pinned on top (Android LivePanel).
-            AgentStrip(agent: m.agent).padding(.horizontal, 20).padding(.bottom, 6)
-                .environment(\.speakerRefs, { [known = Set(m.lines.map(\.speaker))] t in
+            AgentStrip(agent: m.screen.agent).padding(.horizontal, 20).padding(.bottom, 6)
+                .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
                     SpeakerRefs.resolve(t, label: { L("speaker_n", $0 + 1) }, known: known.isEmpty ? nil : known) })
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        if m.lines.isEmpty {
+                        if m.screen.lines.isEmpty {
                             VStack(spacing: 8) {
                                 Image(systemName: "mic.fill").font(.largeTitle).foregroundStyle(.secondary)
                                 Text(L("capture_live_waiting")).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity).padding(.top, 40)
                         }
-                        ForEach(m.lines) { l in
+                        ForEach(m.screen.lines) { l in
                             let c = Self.palette[max(0, l.speaker) % Self.palette.count]
                             HStack(alignment: .top, spacing: 10) {
                                 RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 3)
@@ -43,14 +43,14 @@ struct CaptureView: View {
                         }
                     }.padding(.horizontal, 20)
                 }
-                .onChange(of: m.lines.count) { _, _ in if let id = m.lines.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
+                .onChange(of: m.screen.lines.count) { _, _ in if let id = m.screen.lines.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
             }
-            Button { m.nextTalk() } label: {
+            Button { m.capture.nextTalk() } label: {
                 Label(L("capture_next_talk"), systemImage: "forward.end.fill").font(.headline).accessibilityLabel(L("cd_next_talk"))
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
             }.padding(.horizontal, 20)
-            Button { m.toggleRecord() } label: {
+            Button { m.capture.toggleRecord() } label: {
                 Label(L("capture_stop"), systemImage: "stop.fill").font(.headline)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(Color.red, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)
