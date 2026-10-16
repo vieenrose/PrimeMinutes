@@ -3,7 +3,8 @@
 import Foundation
 
 /// Upstream phone_live.py keeps 6 notes a window; the shipped card keeps more (gate 2026-10-16).
-let upstreamCard: ModelCard = { var c = ModelCard.default; c.reader.maxNotes = 6; return c }()
+/// Nor does it read a directive after the window.
+let upstreamCard: ModelCard = { var c = ModelCard.default; c.reader.maxNotes = 6; c.reader.directive = nil; c.reader.systemSuffix = nil; c.languages = [:]; return c }()
 
 final class FakeLlm: ReaderLlm {
     var seq = String.UnicodeScalarView()

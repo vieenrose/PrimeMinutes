@@ -22,6 +22,57 @@ enum ReaderProtocol {
         }
     }
 
+    /// How far (seconds) a cited time may be from a citable one to be moved onto it (`repairTimestamps`).
+    static let snapS = 30
+    /// A bracket holding only digits and separators: a timestamp tag, well-formed or not.
+    private static let tsTag = rx(#"(?<!\[)\[([0-9:：\s,，、;；\-–~～]*\d[0-9:：\s,，、;；\-–~～]*)\](?!\])"#)
+    private static let tsSep = rx(#"[\s,，、;；\-–~～]+"#)
+
+    /// The timestamp tags of model-written text checked against the times it may cite (`known`, as the notes
+    /// write them): a tag naming a known time stays; one within `snapS` seconds of a known time is moved onto
+    /// it; anything else is dropped. Covers `[5:6]`, lists and ranges (`[8:03, 11:04, 7]`, each item on its
+    /// own) and bare numbers (`[21]`, dropped). Other brackets are left alone. Android `ReaderProtocol.repairTimestamps`.
+    static func repairTimestamps(_ text: String, known: [String], snapS: Int = ReaderProtocol.snapS) -> String {
+        var bySec: [Int: String] = [:]
+        for k in known { if let t = parseTs(k), bySec[t] == nil { bySec[t] = k } }
+        let keys = bySec.keys.sorted()
+        let ns = text as NSString
+        var out = "", last = 0
+        for m in tsTag.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let inner = replace(tsSep, ns.substring(with: m.range(at: 1)).replacingOccurrences(of: "：", with: ":"), " ")
+            var tags: [String] = []
+            for item in inner.split(separator: " ").map(String.init) {
+                guard let spans = tsSpans(item) else { continue }
+                // The known time closest to any span (the earliest on a tie), if within snapS.
+                var best: String?, bestD = Int.max
+                for k in keys {
+                    let d = spans.map { r in r.contains(k) ? 0 : min(abs(k - r.lowerBound), abs(k - r.upperBound)) }.min()!
+                    if d < bestD { bestD = d; best = bySec[k] }
+                }
+                if let b = best, bestD <= snapS, !tags.contains(b) { tags.append(b) }
+            }
+            out += tags.map { "[\($0)]" }.joined(separator: " ")
+            last = m.range.location + m.range.length
+        }
+        return out + ns.substring(from: last)
+    }
+
+    /// The second ranges a cited item can mean: `m:ss`/`h:mm:ss` exactly; `m:s` m:0s, or a cut-off m:s0–m:s9
+    /// when that is a time. Nil for a bare number or nonsense.
+    private static func tsSpans(_ item: String) -> [ClosedRange<Int>]? {
+        let p = item.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard p.allSatisfy({ !$0.isEmpty && $0.count <= 3 && $0.unicodeScalars.allSatisfy { $0.value >= 48 && $0.value <= 57 } }) else { return nil }
+        let n = p.map { Int($0)! }
+        if p.count == 2 && p[1].count == 2 && n[1] < 60 { let t = n[0] * 60 + n[1]; return [t...t] }
+        if p.count == 2 && p[1].count == 1 {
+            let t = n[0] * 60 + n[1], c = n[0] * 60 + n[1] * 10
+            return n[1] <= 5 ? [t...t, c...(c + 9)] : [t...t]
+        }
+        if p.count == 3 && p[1].count == 2 && p[2].count == 2 && n[1] < 60 && n[2] < 60 { let t = n[0] * 3600 + n[1] * 60 + n[2]; return [t...t] }
+        return nil
+    }
+
     private static let lineRx = rx(#"^\[(\d+:\d{2}(?::\d{2})?)\]\s*(.*)$"#)
     private static let speakerRx = rx(#"^(?:S\d+|[^\s:]{1,20})$"#)
 
@@ -58,6 +109,35 @@ enum ReaderProtocol {
 
     /// realtime_agent.render.
     static func render(_ n: Note) -> String { "#\(n.id) [\(n.ts)] " + (n.tag.map { "(\($0)) " } ?? "") + n.text }
+}
+
+/// The language a meeting is held in, from its transcript's script (Android `MeetingLanguage`): Han/kana
+/// characters against Latin words, a word weighing one character, so a Chinese meeting with English terms
+/// stays `zh`. The model card says what changes for a language (`ModelCard.forLanguage`).
+struct MeetingLanguage {
+    private var cjk = 0, words = 0
+    static let minUnits = 20
+
+    static func isCjk(_ c: UInt32) -> Bool {
+        (0x3400...0x4DBF).contains(c) || (0x4E00...0x9FFF).contains(c) || (0xF900...0xFAFF).contains(c) || (0x20000...0x2FFFF).contains(c) ||
+            (0x3040...0x30FF).contains(c) || (0x31F0...0x31FF).contains(c) || (0xFF66...0xFF9D).contains(c)
+    }
+
+    /// Count one more piece of transcript.
+    mutating func add(_ text: String) {
+        var inWord = 0
+        for u in text.unicodeScalars {
+            let c = u.value
+            if Self.isCjk(c) { cjk += 1 }
+            if (65...90).contains(c) || (97...122).contains(c) { inWord += 1 } else { if inWord >= 2 { words += 1 }; inWord = 0 }
+        }
+        if inWord >= 2 { words += 1 }
+    }
+
+    /// `zh`, `en`, or nil while there is too little text to tell.
+    var code: String? { cjk + words < Self.minUnits ? nil : (words > cjk ? "en" : "zh") }
+
+    static func detect(_ texts: [String]) -> String? { var m = MeetingLanguage(); texts.forEach { m.add($0) }; return m.code }
 }
 
 /// One transcript line as the model reads it. `speaker` is "S1", "S2", … or nil.

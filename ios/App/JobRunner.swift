@@ -221,9 +221,11 @@ final class ReaderWorker: @unchecked Sendable {
             // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
             // cause on the status line (Android readFailed). The transcript is still archived.
             let journal = readError == nil && !silent ? reader.journal : []
-            let sum = ReaderSummarizer(llm: r.llm, card: Prefs.reader.card)
+            // Title, prose and the minutes in the meeting's language, as the reader heard it (the card's variant for it).
+            let langCard = Prefs.reader.card.forLanguage(reader.language)
+            let sum = ReaderSummarizer(llm: r.llm, card: langCard)
             // No notes at all (a short or off-topic recording): one plain line, not five empty sections (Android summary_no_notes).
-            let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? Prefs.reader.card.reader.minutes(journal)
+            let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? langCard.reader.minutes(journal)
             let (fl, fn, ft, fp) = (conv.utterances(final), conv.notes(journal), conv.text(t ?? ""), prose.map { conv.text($0) } ?? "")
             let summaryText = fp.isEmpty && !fl.isEmpty && readError == nil ? L("summary_no_notes") : fp
             let why = readError.map { String(String(describing: $0).split(separator: "\n").first ?? "").prefix(120) }

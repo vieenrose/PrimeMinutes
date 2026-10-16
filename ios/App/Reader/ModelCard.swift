@@ -11,9 +11,31 @@ struct ModelCard {
     let sampler: Sampler
     let budget: ReaderBudget
     var reader: ReaderCard
-    let title: OneShot
-    let prose: OneShot
+    var title: OneShot
+    var prose: OneShot
     let ask: AskCard
+    /// Per meeting language (`zh`, `en`, as `MeetingLanguage` detects it): what the card changes for a
+    /// meeting in that language. A language without an entry uses the card as it is.
+    var languages: [String: LanguageVariant] = [:]
+
+    /// Card fields a meeting language overrides; nil = keep the card's own (Android `ModelCard.LanguageVariant`).
+    struct LanguageVariant {
+        var directive: String?, systemSuffix: String?, sections: [(String, String)]?, sectionEmpty: String?
+        var title: OneShot?, prose: OneShot?
+    }
+
+    /// This card for a meeting in `language` (nil or a language the card does not list: unchanged).
+    func forLanguage(_ language: String?) -> ModelCard {
+        guard let language, let v = languages[language] else { return self }
+        var c = self
+        c.reader.directive = v.directive ?? reader.directive
+        c.reader.systemSuffix = v.systemSuffix ?? reader.systemSuffix
+        c.reader.sections = v.sections ?? reader.sections
+        c.reader.sectionEmpty = v.sectionEmpty ?? reader.sectionEmpty
+        c.title = v.title ?? title
+        c.prose = v.prose ?? prose
+        return c
+    }
 
     struct Sampler: Equatable { let topK: Int, topP: Float, temp: Float }
 
@@ -50,17 +72,25 @@ struct ModelCard {
             let act: String, note_act: String, note: String, compact_priority: [String], cap_priority: [[String]]
             let sections: [[String]], section_empty: String, proposal_tag: String, reclassify_tags: [String], action_tag: String
             let proposal_cue: String, decided: String, notes_chars: Int
+            let directive: String?, system_suffix: String?
             struct G: Decodable { let known_tags: [String]?, ignore_acts: [String]?, max_off_protocol_rate: Double?, min_lines: Int? }
             let guard_: G?
             enum CodingKeys: String, CodingKey {
                 case read_max, max_notes, segment_s, stop, primer, dup_lookback, dup_jaccard, journal_header, journal_empty, window_header, omitted
                 case act, note_act, note, compact_priority, cap_priority, sections, section_empty, proposal_tag, reclassify_tags, action_tag
-                case proposal_cue, decided, notes_chars, guard_ = "guard"
+                case proposal_cue, decided, notes_chars, directive, system_suffix, guard_ = "guard"
             }
         }
         struct O: Decodable { let prompt: String, max_tokens: Int, label: String? }
         struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String] }
+        /// A language's prompt keeps the base budget and label unless it gives its own.
+        struct LO: Decodable { let prompt: String, max_tokens: Int?, label: String? }
+        struct L: Decodable {
+            let directive: String?, system_suffix: String?, sections: [[String]]?, section_empty: String?
+            let title: LO?, prose: LO?
+        }
         let schema: Int, name: String, template: T, sampler: S, budget: B, reader: R, title: O, prose: O, ask: A
+        let languages: [String: L]?
     }
 
     static func parse(_ data: Data) throws -> ModelCard {
@@ -68,6 +98,9 @@ struct ModelCard {
         guard j.schema == schema else { throw ReaderError(description: "model card schema \(j.schema), expected \(schema)") }
         let t = j.template, r = j.reader
         func one(_ o: Raw.O) -> OneShot { OneShot(prompt: o.prompt, maxTokens: o.max_tokens, label: o.label.map(rx)) }
+        func over(_ o: Raw.LO?, _ base: Raw.O) -> OneShot? {
+            o.map { OneShot(prompt: $0.prompt, maxTokens: $0.max_tokens ?? base.max_tokens, label: ($0.label ?? base.label).map(rx)) }
+        }
         return ModelCard(
             name: j.name,
             template: ChatTemplate(bos: t.bos, bosId: t.bos_id, system: t.system, user: t.user, model: t.model, end: t.end, sep: t.sep, stopIds: Set(t.stop_ids)),
@@ -81,9 +114,14 @@ struct ModelCard {
                 sectionEmpty: r.section_empty, proposalTag: r.proposal_tag, reclassifyTags: r.reclassify_tags, actionTag: r.action_tag,
                 proposalCue: rx(r.proposal_cue), decided: rx(r.decided), notesChars: r.notes_chars,
                 guardrail: r.guard_.map { g in GuardCard(knownTags: Set((g.known_tags ?? []).map { $0.uppercased() }), ignoreActs: Set(g.ignore_acts ?? []),
-                                                     maxOffProtocolRate: g.max_off_protocol_rate ?? 0.2, minLines: g.min_lines ?? 10) } ?? GuardCard()),
+                                                     maxOffProtocolRate: g.max_off_protocol_rate ?? 0.2, minLines: g.min_lines ?? 10) } ?? GuardCard(),
+                directive: r.directive, systemSuffix: r.system_suffix),
             title: one(j.title), prose: one(j.prose),
-            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system))
+            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system),
+            languages: (j.languages ?? [:]).mapValues { v in
+                LanguageVariant(directive: v.directive, systemSuffix: v.system_suffix, sections: v.sections?.map { ($0[0], $0[1]) }, sectionEmpty: v.section_empty,
+                                title: over(v.title, j.title), prose: over(v.prose, j.prose))
+            })
     }
 }
 
@@ -105,7 +143,7 @@ struct ReaderCard {
     /// Which tags a compacted journal keeps first; which the per-window cap keeps first, by group.
     let compactPriority: [String], capPriority: [[String]]
     /// The minutes: (header, tag) in order, and the line under an empty section.
-    let sections: [(String, String)], sectionEmpty: String
+    var sections: [(String, String)], sectionEmpty: String
     /// A `reclassifyTags` note worded as a suggestion (`proposalCue`) with none of the `decided` words is a proposal.
     let proposalTag: String, reclassifyTags: [String], actionTag: String
     let proposalCue: NSRegularExpression, decided: NSRegularExpression
@@ -113,6 +151,11 @@ struct ReaderCard {
     let notesChars: Int
     /// What counts as off-protocol output, and how much of it is too much (ReaderGuard).
     var guardrail: GuardCard = GuardCard()
+    /// Appended verbatim after each window's transcript, just before the model's reading turn (nil = none,
+    /// upstream's protocol). A card sets it per meeting language (`ModelCard.forLanguage`).
+    var directive: String? = nil
+    /// Appended to the reader's system prompt (the one shipped with the weights), or nil.
+    var systemSuffix: String? = nil
 
     func windowHeader(_ k: Int) -> String { windowHeaderPattern.replacingOccurrences(of: "{k}", with: String(k)) }
     func omitted(_ n: Int) -> String { omittedPattern.replacingOccurrences(of: "{n}", with: String(n)) }

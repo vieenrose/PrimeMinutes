@@ -15,6 +15,11 @@ final class MeetingReader {
     private let budget: ReaderBudget
     private let pc: ReaderCard
     private let temp: Float
+    /// The whole card: its per-language directive, minutes sections and proposal guard (`forLanguage`).
+    private let card: ModelCard
+    private var lang = MeetingLanguage()
+    /// The meeting's language so far (`MeetingLanguage` code), nil while too little was said.
+    var language: String? { lang.code }
 
     private(set) var journal: [Note] = []
     /// Off-protocol output of this job so far (model guardrail).
@@ -34,7 +39,7 @@ final class MeetingReader {
          clock: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
          budget: ReaderBudget = .standard, card: ModelCard = .default) {
         self.llm = llm; self.systemPrompt = systemPrompt; self.events = events; self.clock = clock; self.budget = budget
-        self.pc = card.reader; self.temp = card.sampler.temp
+        self.pc = card.reader; self.temp = card.sampler.temp; self.card = card
         self.count = count ?? { [unowned llm] in llm.tokenize($0, special: false).count }
     }
 
@@ -84,6 +89,7 @@ final class MeetingReader {
         // The previous segment was not the window's last: it takes its newline and is prefilled now.
         if let c = closedSeg { try append(c + "\n", special: false, what: "segment"); closedSeg = nil }
         lines.append(line)
+        lang.add(line.text)
         windowLines += 1
         windowTok += t
         segLines.append(line.render())
@@ -98,7 +104,7 @@ final class MeetingReader {
     func finish() throws -> String {
         if windowLines > 0 { try closeWindow() }
         state(.summarizing, window: 0, ctx: llm.seqLength, notes: journal.count)
-        return pc.minutes(journal)
+        return card.forLanguage(language).reader.minutes(journal)
     }
 
     private func openWindow(_ first: Line) throws {
@@ -115,6 +121,8 @@ final class MeetingReader {
         closedSeg = nil
         segLines.removeAll()
         if !last.isEmpty { try append(last, special: false, what: "segment") }
+        // The card's word for this meeting's language, read with the window (decided on everything said so far).
+        if let d = card.forLanguage(language).reader.directive { try append(d, special: false, what: "directive") }
         state(.reading, window: k, ctx: llm.seqLength, notes: journal.count)
         let t0 = clock()
         _ = llm.append(pieces["p2"]!)
@@ -182,7 +190,8 @@ final class MeetingReader {
     }
 
     private func prefillFresh(_ journalText: String) throws {
-        let toks = pieces["p0"]! + llm.tokenize(systemPrompt, special: false) + pieces["p1"]! +
+        let suffix = card.forLanguage(language).reader.systemSuffix ?? ""
+        let toks = pieces["p0"]! + llm.tokenize(systemPrompt + suffix, special: false) + pieces["p1"]! +
             llm.tokenize(pc.journalHeader + journalText, special: false) + pieces["p2"]! +
             llm.tokenize(pc.primer, special: false) + pieces["p3"]!
         try timedAppend(toks, "prefix")

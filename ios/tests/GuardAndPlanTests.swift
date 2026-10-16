@@ -70,6 +70,56 @@ final class OneReply: ReaderLlm {
         let json = try! JSONEncoder().encode(ReaderGuard(lines: 3, notes: 1, nonNote: 2))
         check(try! JSONDecoder().decode(ReaderGuard.self, from: json), ReaderGuard(lines: 3, notes: 1, nonNote: 2), "guard round trip")
 
+        // Timestamp repair (Android TimestampRepairTest)
+        let known = ["3:41", "6:34", "8:03", "11:04", "1:02:15"]
+        func fix(_ s: String) -> String { ReaderProtocol.repairTimestamps(s, known: known) }
+        check(fix("a [3:41] b [1:02:15]"), "a [3:41] b [1:02:15]", "known tags stay")
+        check(fix("[6:40]"), "[6:34]", "near miss snaps"); check(fix("[10:50]"), "[11:04]", "near miss snaps 2")
+        check(fix("x [20:00] y"), "x  y", "far tag dropped")
+        check(fix("[6:3]"), "[6:34]", "cut-off seconds"); check(fix("[5:6]"), "", "5:6 dropped"); check(fix("[7:8]"), "", "7:8 dropped")
+        check(fix("[8:03, 11:04, 7]"), "[8:03] [11:04]", "list split"); check(fix("[21]"), "", "bare number")
+        check(fix("[3:41-6:34]"), "[3:41] [6:34]", "range"); check(fix("[8:03，8:05]"), "[8:03]", "same note once")
+        check(fix("[8：03]"), "[8:03]", "full-width colon"); check(fix("[1:02:20]"), "[1:02:15]", "hours snap"); check(fix("[1:62:15]"), "", "bad minutes")
+        check(fix("[S1] [note] [[2]] [a1]"), "[S1] [note] [[2]] [a1]", "other brackets")
+        check(ReaderProtocol.repairTimestamps("[5:03]", known: ["05:03"]), "[05:03]", "the notes' own spelling")
+
+        // Meeting language and the card's variant (Android MeetingLanguageTest)
+        check(MeetingLanguage.detect(["so we'll go with the yellow casing and the rubber push buttons then, and the logo goes on the inside of the case"]), "en", "english")
+        check(MeetingLanguage.detect(["那我們就決定尾牙定在十二月十九號，地點在台北"]), "zh", "chinese")
+        check(MeetingLanguage.detect(["這個 project 的 deadline 是下週五，UI 的部分要先給 PM 看過再說"]), "zh", "mixed stays chinese")
+        check(MeetingLanguage.detect(["OK", "好"]), nil, "too little")
+        check(MeetingLanguage.detect(["会议决定采用新的方案并由小王负责跟进，下周再确认"]), "zh", "simplified")
+        let base = ModelCard.default, en = base.forLanguage("en")
+        check(en.prose.prompt != base.prose.prompt && en.title.prompt != base.title.prompt, true, "english prompts")
+        check(en.reader.directive != nil && en.reader.systemSuffix != nil, true, "english directive and system suffix")
+        check(base.forLanguage("zh").reader.directive == nil && base.forLanguage("zh").reader.systemSuffix == nil, true, "chinese: upstream prompt")
+        check(en.prose.maxTokens, base.prose.maxTokens, "prose budget unchanged"); check(en.title.maxTokens, base.title.maxTokens, "title budget unchanged")
+        check(en.reader.sections.map(\.1), base.reader.sections.map(\.1), "same section tags")
+        check(base.forLanguage("fr").prose.prompt, base.prose.prompt, "unlisted language"); check(base.forLanguage(nil).reader.directive, base.reader.directive, "nil language")
+        final class Rec: ReaderLlm {
+            var seq: [Int] = [], turns: [String] = []
+            func tokenize(_ text: String, special: Bool) -> [Int] { text.unicodeScalars.map { Int($0.value) } }
+            func append(_ tokens: [Int]) -> Int { seq += tokens; return seq.count }
+            func generateContinue(maxTokens: Int, stop: String, temp: Float, onToken: (String) -> Void) -> String {
+                var v = String.UnicodeScalarView(); v.append(contentsOf: seq.compactMap { Unicode.Scalar(UInt32($0)) }); turns.append(String(v)); return "NEXT" + stop
+            }
+            var seqLength: Int { seq.count }
+            func reset() { seq = [] }
+        }
+        func readLang(_ text: String) -> (Rec, MeetingReader, String) {
+            let llm = Rec(), r = MeetingReader(llm: llm, systemPrompt: "sys", count: { $0.unicodeScalars.count }, budget: base.budget, card: base)
+            try! r.start(); for i in 0..<5 { try! r.offer(Line(startS: i * 10, speaker: "S1", text: text)) }
+            return (llm, r, try! r.finish())
+        }
+        let (enLlm, enR, enMin) = readLang("OK so we'll go with the yellow casing and the rubber push buttons, agreed")
+        check(enR.language, "en", "reader language en")
+        check(enLlm.turns.count == 1 && enLlm.turns[0].hasSuffix(en.reader.directive! + base.template.end + base.template.sep + base.template.model), true, "english directive before the turn")
+        check(enMin.contains(en.reader.sections[0].0), true, "english minutes headers")
+        let (zhLlm, zhR, _) = readLang("那我們就決定尾牙定在十二月十九號，地點在台北，大家同意")
+        check(zhR.language, "zh", "reader language zh")
+        check(zhLlm.turns[0].contains(en.reader.directive!), false, "no english directive for chinese")
+        if let d = base.forLanguage("zh").reader.directive { check(zhLlm.turns[0].contains(d), true, "chinese directive") }
+
         print(failures == 0 ? "guard+plan PASS" : "guard+plan: \(failures) failure(s)"); exit(failures == 0 ? 0 : 1)
     }
 }
