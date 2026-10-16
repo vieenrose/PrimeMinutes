@@ -77,4 +77,22 @@ class InFlightImportTest {
         assertEquals(5, InFlightImport.bankedSeconds(wav, 90))
         assertEquals(4, InFlightImport.bankedSeconds(wav, 4))
     }
+
+    @Test fun aStopMidDecodeKeepsTheSourceWithTheEntry() {
+        val src = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "shared_${System.nanoTime()}").apply { writeBytes(ByteArray(1000)) }
+        state.begin(growing(3), 600, src)
+        val e = state.save("stop")!!
+        assertEquals(1000L, SessionLibrary.importSource(e)!!.length())
+        assertTrue(!src.exists())
+        assertNull(state.source)
+    }
+
+    @Test fun aFullyDecodedImportKeepsNoSource() {
+        val src = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "shared_${System.nanoTime()}").apply { writeBytes(ByteArray(1000)) }
+        state.begin(growing(3), 3, src)
+        state.decoded = true
+        val e = state.save("pipeline")!!
+        assertNull(SessionLibrary.importSource(e))
+        assertTrue(src.exists())
+    }
 }

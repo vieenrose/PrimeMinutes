@@ -380,6 +380,42 @@ object SessionLibrary {
         }
     }
 
+    // --- import stopped mid-decode: its source stays with the entry ---
+    //
+    // A Stop during an import banks only the audio decoded so far into recording.wav. The source
+    // file (the app's import copy) is moved next to it, so a resume decodes the WHOLE file again and
+    // the meeting ends up covering all of it; without it, "Resume" only finished the decoded prefix.
+    const val IMPORT_SOURCE = "import_source"
+
+    /** The kept source of an import stopped mid-decode, or null (the entry's WAV is complete). */
+    fun importSource(entry: Entry): File? = File(entry.dir, IMPORT_SOURCE).takeIf { it.isFile && it.length() > 0 }
+
+    /** Move [src] (the import copy under filesDir/audio) into [entry] as its kept source. Never throws. */
+    fun keepImportSource(entry: Entry, src: File) {
+        runCatching {
+            val dest = File(entry.dir, IMPORT_SOURCE)
+            if (!src.renameTo(dest)) { src.copyTo(dest, overwrite = true); src.delete() }
+            Log.i(TAG, "kept the import source of ${entry.id} (${dest.length()} B)")
+        }.onFailure { Log.w(TAG, "could not keep the import source of ${entry.id}", it) }
+    }
+
+    /**
+     * A resumed import decoded its kept source to the end: [wav] (finalized, 16 kHz mono) replaces the
+     * entry's partial recording.wav, the duration follows it, and the source is no longer needed.
+     */
+    fun replaceImportAudio(entry: Entry, wav: File): Entry? = runCatching {
+        val dest = entry.wavFile
+        if (!wav.renameTo(dest)) { wav.copyTo(dest, overwrite = true); wav.delete() }
+        val sec = ((dest.length() - studio.primeminutes.core.audio.WavIo.HEADER).coerceAtLeast(0) / (studio.primeminutes.core.audio.WavIo.SAMPLE_RATE * 2L)).toInt()
+        val updated = synchronized(metaLock) {
+            val cur = readMeta(entry.dir) ?: entry
+            cur.copy(durationSec = sec).also { writeMeta(it) }
+        }
+        File(entry.dir, IMPORT_SOURCE).delete()
+        Log.i(TAG, "import ${entry.id} completed from its kept source: $sec s")
+        updated
+    }.onFailure { Log.w(TAG, "could not complete the audio of ${entry.id}", it) }.getOrNull()
+
     private fun writeMeta(entry: Entry) = synchronized(metaLock) {
         val o = JSONObject()
             .put("id", entry.id)

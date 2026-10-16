@@ -107,4 +107,64 @@ class ImportPipelineTest {
         assertTrue(host.of<TranscriptEvent.Complete>().isEmpty())
         assertFalse(wav.exists())
     }
+
+    /** An import copy (filesDir/audio/shared_*, no extension): decoded, never streamed as is. */
+    private fun importCopy(seconds: Double) =
+        testWav(File(File(ctx.filesDir, "audio"), "shared_${System.nanoTime()}"), seconds)
+
+    /**
+     * Stop during the DECODE of a 12 s import, then Resume: the entry first holds only the decoded
+     * prefix plus the kept source; the resume decodes the whole source and the meeting covers all of
+     * it, once (field bug: 192 s of a 460 s file kept, Resume finished only those 192 s).
+     */
+    @Test fun aStopMidDecodeResumesToTheEndOfTheSource() = runBlocking {
+        val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 5), durationSec = 12.0)
+        host.decodeDelayMs = 25
+        val p = ImportPipeline(host)
+        val src = importCopy(12.0)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(src).toString()) }
+        withTimeout(20_000) { while (p.inFlight.checkpoint == null || host.of<TranscriptEvent.UtteranceSnapshot>().size < 4) delay(10) }
+        assertFalse("still decoding", p.inFlight.decoded)
+        p.inFlight.bankOnStop { "model" }
+        run.cancelAndJoin()
+        val stopped = SessionLibrary.list(ctx).single()
+        assertTrue("only a prefix was decoded", stopped.durationSec in 1..10)
+        val source = SessionLibrary.importSource(stopped)
+        assertNotNull("the source stays with the entry", source)
+        assertFalse(src.exists())
+        val prefix = SessionLibrary.loadProgress(stopped)!!
+        assertFalse(prefix.asrComplete)
+
+        // Resume ("繼續處理"): the library row re-runs its recording.wav with resumeRequested.
+        val host2 = FakePipelineHost(ctx, scope, ScriptedEngine(), durationSec = 12.0)
+        val p2 = ImportPipeline(host2)
+        TranscriptionService.resumeRequested = true
+        val run2 = scope.async(RunGen(4)) { p2.run(Uri.fromFile(stopped.wavFile).toString()) }
+        val task = withTimeout(20_000) {
+            while (host2.reader.readTasks.firstOrNull()?.final?.isCompleted != true) delay(20)
+            host2.reader.readTasks.single()
+        }
+        assertEquals(listOf(Uri.fromFile(source).toString()), host2.decoded)
+        task.result.complete(ReaderWorker.SummaryResult("Title", "Summary"))
+        val (utts, _) = withTimeout(20_000) { run2.await() }!!
+        val done = SessionLibrary.list(ctx).single()
+        assertEquals("the whole file", 12, done.durationSec)
+        assertEquals(12.0, (done.wavFile.length() - 44) / 32_000.0, 0.01)
+        assertNull("the source is no longer needed", SessionLibrary.importSource(done))
+        assertTrue("lines reach the end of the file", utts.last().endSec > 11.0)
+        assertEquals("the saved prefix is kept as is", prefix.utterances, utts.take(prefix.utterances.size))
+        utts.zipWithNext().forEach { (a, b) -> assertTrue("no duplicate or overlapping line: $a / $b", b.startSec >= a.endSec - 1e-6) }
+    }
+
+    @Test fun aStopAfterTheDecodeKeepsNoSource() = runBlocking {
+        val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 30), durationSec = 4.0)
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(importCopy(4.0)).toString()) }
+        withTimeout(20_000) { while (!p.inFlight.decoded || p.inFlight.checkpoint == null) delay(10) }
+        p.inFlight.bankOnStop { "model" }
+        run.cancelAndJoin()
+        val e = SessionLibrary.list(ctx).single()
+        assertEquals(4, e.durationSec)
+        assertNull(SessionLibrary.importSource(e))
+    }
 }

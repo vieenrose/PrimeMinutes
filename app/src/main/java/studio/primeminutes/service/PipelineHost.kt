@@ -4,10 +4,12 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import studio.primeminutes.core.asr.LiveAsrEngine
+import studio.primeminutes.core.audio.AudioDecoder
 import studio.primeminutes.core.config.TranscriptionConfig
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.text.OpenCcConverter
+import java.io.File
 
 /** One tag for the whole abort path (service stop handler and pipelines), so a device run can be
  *  read with a single filter. */
@@ -44,4 +46,7 @@ internal interface PipelineHost {
     fun probeDurationSec(uri: Uri): Double
     /** Dismissible notification that a background queue item failed to process. */
     fun notifyItemFailed(title: String)
+    /** Stream-decode an imported source to a 16 kHz mono work WAV (normalized), block by block. */
+    fun decodeToWav16k(uri: Uri, dest: File, onChunk: (FloatArray, Int) -> Unit): Long =
+        AudioDecoder.decodeToWav16k(context, uri, dest, normalize = true, onChunk)
 }

@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * the stop handler and the pipeline's own finally both call [save]; whoever gets there first wins.
  */
 internal class InFlightImport(
+    /** Keep the import's source with the entry it was banked into ([SessionLibrary.keepImportSource]). */
+    private val keepSource: (SessionLibrary.Entry, File) -> Unit = SessionLibrary::keepImportSource,
     /** Move the finalized WAV into a new library entry ([SessionLibrary.promoteRecording]). */
     private val promote: (wav: File, durationSec: Int) -> SessionLibrary.Entry?,
 ) {
@@ -31,6 +33,10 @@ internal class InFlightImport(
     var wav: File? = null
     /** The source's probed length (0 = unknown). */
     var durationSec = 0
+    /** The import copy being decoded (filesDir/audio), or null when there is none to keep. */
+    var source: File? = null
+    /** The decoder reached the end of [source]: [wav] holds the whole file. */
+    @Volatile var decoded = false
     /** One-shot: the stop handler and the pipeline both try to save; whoever gets there first wins. */
     private val saved = AtomicBoolean(false)
 
@@ -44,9 +50,11 @@ internal class InFlightImport(
     @Volatile var checkpoint: Checkpoint? = null
 
     /** A foreground import that owns no library entry yet starts: publish its work WAV. */
-    fun begin(wav: File, durationSec: Int) {
+    fun begin(wav: File, durationSec: Int, source: File? = null) {
         this.wav = wav
         this.durationSec = durationSec
+        this.source = source
+        decoded = false
         saved.set(false)
     }
 
@@ -71,7 +79,14 @@ internal class InFlightImport(
             .onFailure { Log.w(STOP_TAG, "saveInFlightImport($reason) failed", it) }
             .getOrNull()
         Log.i(STOP_TAG, "saveInFlightImport($reason) -> ${entry?.id ?: "NULL"}")
-        if (entry != null) { this.wav = null; savedEntry = entry }
+        if (entry != null) {
+            this.wav = null; savedEntry = entry
+            // Stopped before the decoder reached the end: the entry holds only a prefix of the file.
+            // Its source goes with it, so "Resume" can decode the rest (instead of finishing the prefix).
+            val src = source
+            if (!decoded && src != null && src.isFile) keepSource(entry, src)
+        }
+        source = null
         return entry
     }
 

@@ -16,7 +16,6 @@ import studio.primeminutes.R
 import studio.primeminutes.core.asr.SeamEnrollment
 import studio.primeminutes.core.asr.SeamStitcher
 import studio.primeminutes.core.asr.SnapshotConverter
-import studio.primeminutes.core.audio.AudioDecoder
 import studio.primeminutes.core.audio.ImportRecovery
 import studio.primeminutes.core.audio.SilenceSkipper
 import studio.primeminutes.core.audio.WavIo
@@ -61,9 +60,6 @@ internal class ImportPipeline(private val host: PipelineHost) {
 
         host.emitEvent(TranscriptEvent.Status(ctx.getString(R.string.svc_transcribing)))
         host.emitEvent(TranscriptEvent.Progress(0f))   // restart the bar for the recognition phase
-        // Total audio length (a cheap metadata read) so the recognition phase can report REAL progress
-        // as each utterance's end time advances through the file. 0 when unknown → no ASR bar, still fine.
-        val totalDurationSec = host.probeDurationSec(uri)
         // Generated text (summary/title/actions) and the transcript both follow the Chinese-script
         // setting; the transcript keeps the conservative s2t — see [transcriptConverter].
         val converter = host.outputConverter(cfg)
@@ -86,6 +82,20 @@ internal class ImportPipeline(private val host: PipelineHost) {
         val existing = if (ownWav && srcFile!!.name == SessionLibrary.WAV_NAME)
             srcFile.parentFile?.let { SessionLibrary.byId(ctx, it.name) } else null
         var entry: SessionLibrary.Entry? = existing
+        // An import stopped mid-decode: its recording.wav is only the decoded prefix, and its source
+        // was kept next to it. Any run over the entry (Resume, re-transcribe, the queue) decodes that
+        // source again — the whole file — instead of streaming the prefix.
+        val keptSource = existing?.let(SessionLibrary::importSource)
+        val decodeUri = keptSource?.let(Uri::fromFile) ?: uri
+        val streamWav = ownWav && keptSource == null
+        if (keptSource != null) Log.i(STOP_TAG, "entry ${existing?.id}: decoding its kept import source")
+        // The import copy a Stop keeps with its entry (InFlightImport): only our own transient files.
+        val importCopy = srcFile?.takeIf { !ownWav && it.isFile && it.parentFile?.absolutePath == File(ctx.filesDir, "audio").absolutePath }
+        // The decoder reached the end of the source (the work WAV holds all of it).
+        val decodedAll = java.util.concurrent.atomic.AtomicBoolean(false)
+        // Total audio length (a cheap metadata read) so the recognition phase can report REAL progress
+        // as each utterance's end time advances through the file. 0 when unknown → no ASR bar, still fine.
+        val totalDurationSec = host.probeDurationSec(decodeUri)
 
         // Resume (UI "Resume" on a stopped library capture): keep the saved frozen transcript and
         // transcribe only the audio after it. Anything else that re-runs the entry supersedes the
@@ -112,9 +122,9 @@ internal class ImportPipeline(private val host: PipelineHost) {
 
         // Stream-decode the source to a 16 kHz mono work WAV while feeding the live VAD/ASR — never
         // the whole waveform in RAM. The WAV is the player + diarization source (16 kHz mono).
-        val wav = if (ownWav) srcFile!!
+        val wav = if (streamWav) srcFile!!
         else File(File(ctx.filesDir, "audio").apply { mkdirs() }, "decoded_${System.currentTimeMillis()}.wav")
-        val chunks = if (ownWav) {
+        val chunks = if (streamWav) {
             // Raw PCM16 read in recorder-sized blocks (the capture was already AGC'd/normalized).
             kotlinx.coroutines.flow.flow {
                 for ((s, e) in enroll.clips) { emitAll(wavChunks(wav, s, e)); emit(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
@@ -137,7 +147,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
             fun send(a: FloatArray) {
                 if (trySendBlocking(a).isClosed || !isActive) throw kotlinx.coroutines.CancellationException("import stopped")
             }
-            AudioDecoder.decodeToWav16k(ctx, uri, wav, normalize = true) { block, len ->
+            host.decodeToWav16k(decodeUri, wav) { block, len ->
                 if (!isActive) throw kotlinx.coroutines.CancellationException("import stopped")
                 ranges.forEachIndexed { k, (a, b) ->
                     val lo = maxOf(a, pos); val hi = minOf(b, pos + len)
@@ -153,6 +163,8 @@ internal class ImportPipeline(private val host: PipelineHost) {
                 val from = skip.toInt(); skip = 0
                 send(block.copyOfRange(from, len))
             }
+            decodedAll.set(true)
+            inFlight.decoded = true
         }.flowOn(Dispatchers.IO)
 
 
@@ -160,7 +172,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
         // Only for a foreground import that does not already own a library entry — a re-run of a
         // library capture is durable already, and the queue drain owns its own row.
         if (foreground && existing == null) {
-            inFlight.begin(wav, totalDurationSec.toInt())
+            inFlight.begin(wav, totalDurationSec.toInt(), importCopy)
         }
 
         val utterances = ArrayList<TranscriptEvent.Utterance>()
@@ -271,6 +283,14 @@ internal class ImportPipeline(private val host: PipelineHost) {
             // which three failed fixes could not tell apart.
             Log.i(STOP_TAG, "runPipeline finally ENTERED")
             promoteImport()
+            // An entry re-run from its kept source: the decoded WAV replaces the partial one once the
+            // decoder reached the end; a run stopped before that leaves the entry (and source) as is.
+            if (keptSource != null && existing != null) {
+                if (decodedAll.get()) SessionLibrary.replaceImportAudio(existing, wav)?.let { u ->
+                    entry = u
+                    withContext(NonCancellable) { host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(u.wavFile).toString())) }
+                } else runCatching { wav.delete() }
+            }
             // Stop (or a failure) before the end: keep what was transcribed so far so the user can
             // resume instead of redoing it. Only the frozen prefix is safe — the tail is re-attributed.
             // The queue's pass 1 (summarizeAfter=false) has its own sidecar and is left alone.

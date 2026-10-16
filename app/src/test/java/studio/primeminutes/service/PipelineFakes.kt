@@ -108,6 +108,25 @@ internal class FakePipelineHost(
     override fun probeDurationSec(uri: Uri) = durationSec
     override fun notifyItemFailed(title: String) { failedItems += title }
 
+    /** Pause per decoded block, so an import can be stopped mid-decode. */
+    @Volatile var decodeDelayMs = 0L
+    /** Sources handed to the decoder (the "MediaCodec" here reads a test WAV of any name). */
+    val decoded: MutableList<String> = Collections.synchronizedList(ArrayList())
+    override fun decodeToWav16k(uri: Uri, dest: File, onChunk: (FloatArray, Int) -> Unit): Long {
+        decoded += uri.toString()
+        var n = 0L
+        WavWriter(dest).use { w ->
+            kotlinx.coroutines.runBlocking {
+                wavChunks(File(uri.path!!)).collect { b ->
+                    if (decodeDelayMs > 0) Thread.sleep(decodeDelayMs)
+                    w.write(b); n += b.size
+                    onChunk(b, b.size)
+                }
+            }
+        }
+        return n
+    }
+
     inline fun <reified T : TranscriptEvent> of(): List<T> = synchronized(events) { events.filterIsInstance<T>() }
 
     companion object { const val FP = "fp" }
