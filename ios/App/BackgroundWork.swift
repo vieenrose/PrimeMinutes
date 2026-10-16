@@ -137,9 +137,13 @@ enum BackgroundWork {
             while (i.downloadFraction ?? 0) * 100 < p { try? await Task.sleep(nanoseconds: 100_000_000) }
             StatusLog.add("trace probe cancel download at \(Int((i.downloadFraction ?? 0) * 100)) %"); i.cancelDownload() } }
         // VOX_CLEARQ=s: Stop the running job and take every job off the queue (each stays in the library, unprocessed).
-        after("VOX_CLEARQ") { let r = Model.shared.runner; r.stopProcessing(); Task { @MainActor in
+        after("VOX_CLEARQ") { let r = Model.shared.runner; Task { @MainActor in
+            await r.syncQueue()
+            // The waiting jobs first (the drain would move on to them after the stop), then the running one.
+            for j in r.waiting where j.id != r.activeJob { r.unqueue(j) }
+            r.stopProcessing()
             while r.activeJob != nil { try? await Task.sleep(nanoseconds: 500_000_000) }
-            StatusLog.add("trace probe clear queue: \(r.waiting.count) jobs"); for j in r.waiting { r.unqueue(j) } } }
+            await r.syncQueue(); StatusLog.add("trace probe clear queue: \(r.waiting.count) left to remove"); for j in r.waiting { r.unqueue(j) } } }
         // VOX_RESUME=s: Resume every parked job.
         after("VOX_RESUME") { let r = Model.shared.runner; StatusLog.add("trace probe resume \(r.parked.count) parked"); for j in r.waiting where r.parked.contains(j.id) { r.resume(j) } }
     }
