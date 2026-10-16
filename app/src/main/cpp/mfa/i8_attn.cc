@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <mutex>
 #include <vector>
 
 #ifdef _OPENMP
@@ -121,6 +122,10 @@ LiteRtStatus Run(void* user_data, size_t num_inputs, const LiteRtTensorBuffer* i
     return kLiteRtStatusErrorInvalidArgument;
   }
   const Op* op = static_cast<const Op*>(user_data);
+  // The static scratch buffers below are shared: two graphs running at once (reader + a second
+  // engine, e.g. Ask) would race on them (host: SIGSEGV, or silently wrong attention).
+  static std::mutex run_mu;
+  std::lock_guard<std::mutex> lock(run_mu);
   size_t nb[7], ob;
   void* p[7];
   void* po;

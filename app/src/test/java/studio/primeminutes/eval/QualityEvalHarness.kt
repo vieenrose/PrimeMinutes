@@ -60,6 +60,8 @@ import java.nio.ByteOrder
  *  - ask:    the meetings seeded into a Robolectric library (session.m4a with the embedded session,
  *            indexed by LibraryIndexer with the app's embedder), then AskEngine.ask over the whole
  *            library, one fresh conversation per question.
+ *  - engines: two MfaEngines of the same model in one process, generating on two threads at once
+ *            (Ask next to a reading); each reply must equal the one the engine gives alone.
  */
 @RunWith(RobolectricTestRunner::class)
 class QualityEvalHarness {
@@ -74,6 +76,7 @@ class QualityEvalHarness {
             "asr" -> asr()
             "reader" -> reader()
             "ask" -> ask()
+            "engines" -> engines()
             else -> error("unknown mode $mode")
         }
     }
@@ -164,7 +167,7 @@ class QualityEvalHarness {
         val models = File(cfg.getString("models_dir"))
         val threads = cfg.optInt("threads", 4)
         val llms = cfg.getJSONArray("llm").let { a -> List(a.length()) { a.getString(it) } }
-        // One model at a time, as in the app: the fused-attention op is not safe with two engines in one process.
+        // One model at a time, as in the app (memory; two engines are safe since the attention op locks: mode "engines").
         for (id in llms) readAll(id, models, threads)
     }
 
@@ -284,5 +287,51 @@ class QualityEvalHarness {
         }
         AskEngine.release()
         delay(500)
+    }
+
+    // ------------------------------------------------------------------------------------ engines
+
+    /** Two engines, two threads, [rounds] times: no crash, and greedy replies identical to the ones
+     *  computed with one engine at a time. Prompts long enough for the prefill path of i8_attn. */
+    private fun engines() {
+        val spec = LlmRegistry.byId(cfg.getString("llm"))
+        val dir = File(File(cfg.getString("models_dir")), spec.dirName)
+        val threads = cfg.optInt("threads", 4)
+        val rounds = cfg.optInt("rounds", 3)
+        fun load() = MfaEngine.load(File(dir, spec.mainFile).parentFile!!.path, ctx = spec.maxCtx, threads = threads,
+            weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, stopIds = spec.template.stopIds)
+        val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
+        val a = load(); val b = load()
+        val log = StringBuilder()
+        try {
+            val base = "Meeting transcript. The team reviewed the budget, the hiring plan and the launch date. "
+            fun prompt(r: Int, who: String) =
+                intArrayOf(MfaEngine.BOS) + tok.encode("$who round $r. " + base.repeat(40) + " Summarize in one sentence:")
+            for (r in 0 until rounds) {
+                val pa = prompt(r, "A"); val pb = prompt(r, "B")
+                // Both passes start from the same cache state (a short unrelated prefix), so the prefill
+                // is chunked the same way and greedy replies must match exactly.
+                fun fresh() {
+                    a.generate(intArrayOf(MfaEngine.BOS) + tok.encode("reset a"), 0, 0f, 1, 1f, 0)
+                    b.generate(intArrayOf(MfaEngine.BOS) + tok.encode("reset b"), 0, 0f, 1, 1f, 0)
+                }
+                fresh()
+                val refA = a.generate(pa, 24, 0f, 1, 1f, 0)
+                val refB = b.generate(pb, 24, 0f, 1, 1f, 0)
+                fresh()
+                var gotA = IntArray(0); var gotB = IntArray(0)
+                val t0 = System.nanoTime()
+                val ta = Thread { gotA = a.generate(pa, 24, 0f, 1, 1f, 0) }
+                val tb = Thread { gotB = b.generate(pb, 24, 0f, 1, 1f, 0) }
+                ta.start(); tb.start(); ta.join(); tb.join()
+                val line = "round $r: prompt ${pa.size}/${pb.size} tok, concurrent ${"%.1f".format(java.util.Locale.ROOT, (System.nanoTime() - t0) / 1e9)} s, " +
+                    "A ${if (gotA.contentEquals(refA)) "same" else "DIFFERS"}, B ${if (gotB.contentEquals(refB)) "same" else "DIFFERS"}"
+                println(line); log.appendLine(line)
+                check(gotA.contentEquals(refA) && gotB.contentEquals(refB)) { line }
+            }
+        } finally {
+            File(out, "engines-${spec.id}.txt").writeText(log.toString())
+            a.close(); b.close(); tok.close()
+        }
     }
 }

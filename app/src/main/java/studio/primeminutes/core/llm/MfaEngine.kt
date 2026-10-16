@@ -11,7 +11,7 @@ import kotlin.concurrent.withLock
  * (voxsumdroid-integration.md §13.3).
  *
  * One instance per loaded model. Not thread-safe: call [generate] from one thread; [cancel] may be
- * called from any thread.
+ * called from any thread. Engines of one process compute one at a time ([MfaCompute]).
  */
 class MfaEngine private constructor(@Volatile private var handle: Long) : Closeable {
 
@@ -41,7 +41,7 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
         lock.readLock().withLock {
             check(handle != 0L) { "engine closed" }
             val st = DoubleArray(5)
-            val out = nativeGenerate(handle, ids, maxNew, temp, topK, topP, seed, onToken, st)
+            val out = MfaCompute.run { nativeGenerate(handle, ids, maxNew, temp, topK, topP, seed, onToken, st) }
             lastStats = Stats(st[0].toInt(), st[1].toInt(), st[2].toInt(), st[3], st[4])
             return out
         }
@@ -54,7 +54,7 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
      */
     fun agree(ids: IntArray, forced: IntArray): Int = lock.readLock().withLock {
         check(handle != 0L) { "engine closed" }
-        nativeAgree(handle, ids, forced)
+        MfaCompute.run { nativeAgree(handle, ids, forced) }
     }
 
     fun cancel() { lock.readLock().withLock { if (handle != 0L) nativeCancel(handle) } }
@@ -96,6 +96,21 @@ class MfaEngine private constructor(@Volatile private var handle: Long) : Closea
         @JvmStatic private external fun nativeFree(h: Long)
         @JvmStatic private external fun nativeContext(h: Long): Int
     }
+}
+
+/**
+ * Process-wide: one [MfaEngine] computes at a time. Two engines can be loaded together (the reader
+ * worker's and Ask's: Ask is refused while a job runs, but a job starting during Ask's prefill
+ * loads the reader next to it), and the native fused-attention op shares its scratch buffers
+ * (host: SIGSEGV or wrong replies with two engines on two threads, docs/quality-eval-2026-10.md).
+ * The op locks itself too; this lock also keeps two engines from splitting the CPU between them.
+ * Fair: a waiting engine runs next. Kept apart from [MfaEngine] so it is testable without the
+ * native library.
+ */
+internal object MfaCompute {
+    private val lock = java.util.concurrent.locks.ReentrantLock(true)
+
+    fun <T> run(block: () -> T): T = lock.withLock(block)
 }
 
 /** The Gemma-4 SentencePiece tokenizer (`Section1_SP_Tokenizer.spiece`). It parses the chat
