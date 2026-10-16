@@ -86,11 +86,16 @@ internal class FakePipelineHost(
     override val scope: CoroutineScope,
     val engine: LiveAsrEngine = ScriptedEngine(),
     private val durationSec: Double = 0.0,
+    /** A fresh engine per run (the queue runs one per item); defaults to the one [engine]. */
+    private val nextEngine: () -> LiveAsrEngine = { engine },
 ) : PipelineHost {
     override val reader = inertReader(context)
     val events: MutableList<TranscriptEvent> = Collections.synchronizedList(ArrayList())
     val foreground: MutableList<Boolean> = Collections.synchronizedList(ArrayList())
     var enginesCreated = 0
+    val failedItems: MutableList<String> = Collections.synchronizedList(ArrayList())
+    /** Called at the top of every pipeline run (its model check): throw here to fail that run. */
+    @Volatile var onEnsureModels: () -> Unit = {}
 
     override suspend fun emitEvent(e: TranscriptEvent) { events += e }
     override fun updateNotification(text: String) {}
@@ -98,9 +103,10 @@ internal class FakePipelineHost(
     override fun transcriptFingerprint(cfg: TranscriptionConfig) = FP
     override fun outputConverter(cfg: TranscriptionConfig): OpenCcConverter? = null
     override fun transcriptConverter(): OpenCcConverter? = null
-    override suspend fun ensureEngineModels(models: ModelManager) {}
-    override fun createEngine(models: ModelManager): LiveAsrEngine { enginesCreated++; return engine }
+    override suspend fun ensureEngineModels(models: ModelManager) = onEnsureModels()
+    override fun createEngine(models: ModelManager): LiveAsrEngine { enginesCreated++; return nextEngine() }
     override fun probeDurationSec(uri: Uri) = durationSec
+    override fun notifyItemFailed(title: String) { failedItems += title }
 
     inline fun <reified T : TranscriptEvent> of(): List<T> = synchronized(events) { events.filterIsInstance<T>() }
 

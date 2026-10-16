@@ -14,9 +14,10 @@ import studio.primeminutes.core.text.OpenCcConverter
 internal const val STOP_TAG = "primeminutes-stop"
 
 /**
- * What the import and recording pipelines ([ImportPipeline], [RecordingPipeline]) need from
- * [TranscriptionService], the Android lifecycle shell that runs them: its context and scope, the AI
- * notes worker, the event bus, the foreground notification, and the speech engine's models.
+ * What the import and recording pipelines ([ImportPipeline], [RecordingPipeline]) and the queue
+ * drain ([QueueRunner]) need from [TranscriptionService], the Android lifecycle shell that runs
+ * them: its context and scope, the AI notes worker, the event bus, the foreground and failure
+ * notifications, and the speech engine's models.
  * Shaped like [ReaderWorker.Host]; the service implements both.
  */
 internal interface PipelineHost {
@@ -41,4 +42,6 @@ internal interface PipelineHost {
     fun createEngine(models: ModelManager): LiveAsrEngine
     /** Total media duration in seconds; 0 if unknown. */
     fun probeDurationSec(uri: Uri): Double
+    /** Dismissible notification that a background queue item failed to process. */
+    fun notifyItemFailed(title: String)
 }

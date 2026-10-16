@@ -234,6 +234,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         override suspend fun ensureEngineModels(models: ModelManager) = this@TranscriptionService.ensureEngineModels(models)
         override fun createEngine(models: ModelManager) = this@TranscriptionService.createEngine(models)
         override fun probeDurationSec(uri: Uri) = this@TranscriptionService.probeDurationSec(uri)
+        override fun notifyItemFailed(title: String) = this@TranscriptionService.notifyItemFailed(title)
     }
 
     /** Live capture → transcript → hand-over to the reader; owns the graceful-stop flags. */
@@ -241,6 +242,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
 
     /** File import → transcript → notes; owns the in-flight import the stop handler banks. */
     private val importPipeline = ImportPipeline(pipelineHost)
+
+    /** The processing-queue drain: pass 1 through [importPipeline], pass 2 through the reader. */
+    private val queueRunner = QueueRunner(pipelineHost, importPipeline)
     override val context: Context get() = this
     override val scope: kotlinx.coroutines.CoroutineScope get() = lifecycleScope
     override fun threads(): Int = asrThreads()
@@ -533,12 +537,12 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // it unwinds normally.
             previousJob?.let { runCatching { it.join() } }
             // Re-assert this run's config after the join (a dying drain may have overwritten the
-            // shared Holder); a drain loads its own persisted config inside runQueue.
+            // shared Holder); a drain loads its own persisted config inside QueueRunner.run.
             if (!processQueue) TranscriptionConfig.Holder.config = cfgSnapshot
             runCatching {
                 when {
                     summarizeOnly -> reader.runSummarizeOnly(transcript.orEmpty(), summarizeWithTitle)
-                    processQueue -> runQueue()
+                    processQueue -> queueRunner.run()
                     recording -> recordingPipeline.run()
                     else -> importPipeline.run(uri)
                 }
@@ -557,7 +561,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // "Queued" forever). Never after a plain queue start — that IS the drain. Enqueued
             // means the user asked: ⏭ deferral enqueues nothing, so back-to-back recording days
             // stay processing-free until the user asks. A user-cancelled job (Stop) skips this
-            // naturally: runQueue aborts at its first suspension inside the cancelled coroutine.
+            // naturally: QueueRunner.run aborts at its first suspension inside the cancelled coroutine.
             //
             // BOTH end-of-job decisions below hop to the MAIN thread (NonCancellable: they must
             // also run for a superseded/cancelled job): onStartCommand runs on main, so checking
@@ -575,7 +579,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 r
             }
             if (resumeQueue) {
-                runCatching { withContext(RunGen(QUEUE_GEN)) { runQueue() } }
+                runCatching { withContext(RunGen(QUEUE_GEN)) { queueRunner.run() } }
             }
             // Only tear down if still the active job — a newer run may have superseded this one.
             withContext(NonCancellable + Dispatchers.Main) {
@@ -859,118 +863,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 .setAutoCancel(true)
                 .build(),
         )
-    }
-
-    /**
-     * Drain the [ProcessingQueue]: run the full pipeline over each queued library entry, embed the
-     * results ([SessionLibrary.attachResults]), and remove it. Serial by design (the models are the
-     * bottleneck). An item is removed only after it finished (or failed terminally), so a kill
-     * mid-item resumes it on the next drain; a cancellation (new run superseding this one) leaves
-     * the remainder queued for later.
-     */
-    private suspend fun runQueue() {
-        // The Holder contract is "the UI sets the config when it starts a run" — but a queue drain
-        // can start with no UI run ever having happened in this process (fresh process, auto-start
-        // after ⏹). Load the persisted settings so target language / script conversion / model
-        // choices apply to queue items exactly like foreground runs. (Regression: queue transcripts
-        // ignored the user's zh-Hant target and came out simplified with default-locale summaries.)
-        TranscriptionConfig.Holder.config = studio.primeminutes.core.config.ConfigStore.load(this)
-        // NOTE: queueDraining is main-owned — set in onStartCommand / the resume hop, cleared in
-        // the teardown hop — so the main-thread guard can never race a Default-thread write. (The
-        // old set-it-here had a window: a second ACTION_PROCESS_QUEUE arriving before this line ran
-        // passed the guard and superseded the first drain, redoing its in-flight item.)
-        try {
-        // Two-pass drain: pass 1 transcribes+diarizes EVERY queued item (ASR models only), pass 2
-        // loads the LLM ONCE and summarizes them all — one LLM load per drain instead of one per
-        // item (~10s each on Boox), still never co-residing the ASR models with the LLM. Between
-        // the passes each item's transcript is durable in a library sidecar, so a process kill
-        // resumes summarize-only. The outer loop catches items enqueued mid-drain.
-        val cfgAll = TranscriptionConfig.Holder.config
-        // Anything transcription-affecting invalidates a leftover sidecar from an older drain.
-        val fingerprint = transcriptFingerprint(cfgAll)
-        var lastLap: List<String>? = null
-        while (true) {
-            val ids = ProcessingQueue.ids(this)
-            if (ids.isEmpty()) break
-            // No item left the queue AND nothing new arrived since the last lap → every remaining
-            // item is stuck (e.g. sidecar write failing on a full disk). Break instead of spinning.
-            if (ids == lastLap) break
-            lastLap = ids
-
-            // --- Pass 1: ASR + diarization per item; transcript → sidecar; item stays queued. ---
-            for (id in ids) {
-                val entry = SessionLibrary.byId(this, id)
-                if (entry == null || entry.status == SessionLibrary.Status.DONE || !entry.wavFile.exists()) {
-                    ProcessingQueue.remove(this, id)   // stale/already-done → drop and move on
-                    continue
-                }
-                if (SessionLibrary.loadPendingTranscript(entry, fingerprint) != null) continue   // resume: ASR already done
-                RunRegistry.queueItem(id)
-                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
-                // Track decode temp files this item creates so they're reclaimed per-item (a long
-                // queue would otherwise stack one decoded WAV copy per entry in filesDir/audio).
-                val audioDir = File(filesDir, "audio")
-                val before = audioDir.listFiles()?.map { it.name }?.toSet() ?: emptySet()
-                try {
-                    val res = importPipeline.run(Uri.fromFile(entry.wavFile).toString(), summarizeAfter = false)
-                    if (res == null) {
-                        ProcessingQueue.remove(this, id)   // terminal (no source / corrupt model) — parity with the old drain
-                        continue
-                    }
-                    // The user may have DELETED this entry while it processed — don't resurrect it.
-                    if (SessionLibrary.byId(this, id) != null) {
-                        SessionLibrary.savePendingTranscript(entry, res.first, fingerprint)
-                    } else ProcessingQueue.remove(this, id)
-                } catch (ce: CancellationException) {
-                    throw ce   // superseded/stopped: keep the item queued for the next drain
-                } catch (t: Throwable) {
-                    // A terminally failed item must not wedge the queue — drop it and continue; its
-                    // capture stays safe (RECORDED) in the library for a manual retry. Surface it
-                    // via a NOTIFICATION (the user may be elsewhere), not an UNTAGGED Status.
-                    Log.w("TranscriptionService", "queue item $id failed terminally", t)
-                    notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt))
-                    ProcessingQueue.remove(this, id)
-                } finally {
-                    RunRegistry.queueItem(null)
-                    audioDir.listFiles()?.forEach { if (it.name !in before) runCatching { it.delete() } }
-                }
-            }
-
-            // --- Pass 2: the AI notes worker reads each item with a sidecar, in order, and saves +
-            // dequeues it. Awaited one by one; a superseding run cancels only this wait — the worker
-            // still finishes the item it is reading. ---
-            val toSummarize = ProcessingQueue.ids(this)
-            if (toSummarize.isEmpty()) continue
-            for (id in toSummarize) {
-                val entry = SessionLibrary.byId(this, id)
-                if (entry == null || entry.status == SessionLibrary.Status.DONE || !entry.wavFile.exists()) {
-                    ProcessingQueue.remove(this, id)
-                    continue
-                }
-                val utterances = SessionLibrary.loadPendingTranscript(entry, fingerprint)
-                    ?: continue   // no sidecar (its pass-1 was cut short): leave queued, next outer lap redoes ASR
-                RunRegistry.queueItem(id)
-                updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
-                try {
-                    val task = reader.ReadTask(QUEUE_GEN, outputConverter(cfgAll), withTitle = true, entry = entry)
-                    task.complete(utterances)
-                    runCatching { reader.awaitRead(reader.submitRead(task)) }
-                        .onFailure { if (it is CancellationException) throw it }
-                } finally {
-                    RunRegistry.queueItem(null)
-                }
-            }
-        }
-        } finally {
-            // Drain over (queue empty, last item failed terminally, or superseded): nudge the UI's
-            // QUEUE_GEN branch so it re-reads currentQueueItemId (null by now — the per-item finally
-            // ran first) and clears the Studio row's "Processing" chip. The success path's
-            // LibrarySaved already does this, but the failure and cancellation paths emit nothing
-            // else, leaving the row stuck "Processing" with no worker running. tryEmit because this
-            // must also fire from a CANCELLED coroutine (supersede); the flow has a 256 buffer.
-            // (queueDraining itself is cleared on MAIN in the teardown hop.)
-            events.tryEmit(QUEUE_GEN to TranscriptEvent.Progress(0f))
-        }
     }
 
     /** Download the engine's two GGUFs when missing (progress on the current run's bar). */
