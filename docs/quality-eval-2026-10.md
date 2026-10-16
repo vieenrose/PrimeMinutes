@@ -236,11 +236,15 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
 Also found while building the harness (engineering, not quality):
 - Two `MfaEngine`s in one process crash (SIGSEGV in `i8_attn` `Run` `_omp_fn.4`): the fused-attention op
   is not reentrant across engines. The app runs one engine at a time today, but a reader and Ask in
-  parallel would hit it.
+  parallel would hit it. *Fixed 2026-10-16:* the op locks its shared scratch (as the iOS copy already did)
+  and `MfaEngine` computes one engine at a time process-wide (`MfaCompute`); harness mode `engines`
+  (two E2B engines on two threads, 3 rounds) gave wrong replies before, identical replies after.
 - Native `printf` follows the process locale on glibc: with a decimal-comma locale the JNI segment
   encoding writes "0,000" and `parseSegments` throws `NumberFormatException` (the harness forces
   `LC_ALL=C.UTF-8`). Android's bionic always formats with "." so phones should be unaffected; it matters
-  for any desktop/host reuse of the engine (not verified on a device).
+  for any desktop/host reuse of the engine (not verified on a device). *Fixed 2026-10-16:* the segment
+  and stats encodings use integer formatting (`nemo/fixed_fmt.h`); the ASR mode under `fr_FR.UTF-8` now
+  passes (it threw on "7,240" before), and the Kotlin timestamps fed to the model / LRC use `Locale.ROOT`.
 
 ## 6. Not verified / caveats
 

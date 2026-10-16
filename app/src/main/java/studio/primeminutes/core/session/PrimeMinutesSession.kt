@@ -420,11 +420,12 @@ object PrimeMinutesSession {
     }
 
     /** LRC lyrics so music players show synced, karaoke-style transcript lines. */
-    private fun lrc(utts: List<TranscriptEvent.Utterance>): String =
+    internal fun lrc(utts: List<TranscriptEvent.Utterance>): String =
         utts.joinToString("\n") { u ->
             val m = (u.startSec / 60).toInt()
             val s = u.startSec - m * 60
-            "[%02d:%05.2f]%s".format(m, s, u.text.replace('\n', ' '))
+            // Locale.ROOT: players parse "[mm:ss.xx]" (a French default wrote "05,20")
+            "[%02d:%05.2f]%s".format(java.util.Locale.ROOT, m, s, u.text.replace('\n', ' '))
         }
 
     /** True when [f] is an MP4/M4A container ("ftyp" at offset 4), vs an OGG ("OggS" at 0). */

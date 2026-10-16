@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "engine.h"
+#include "fixed_fmt.h"
 
 namespace {
 
@@ -21,9 +22,9 @@ struct Handle {
 };
 
 std::string encode_segment(const nemo::Segment& s) {
-    char head[96];
-    std::snprintf(head, sizeof head, "%d\x1f%.3f\x1f%.3f\x1f", s.speaker, s.start_s, s.end_s);
-    return std::string(head) + s.text + "\x1e";
+    // Times in fixed text, never printf's %f: it follows the C locale ("0,000" broke parseSegments).
+    return std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) + "\x1f" +
+           s.text + "\x1e";
 }
 
 jstring to_jstring(JNIEnv* env, const std::string& s) {
@@ -149,15 +150,14 @@ Java_studio_primeminutes_core_asr_NemoNative_nativeStats(JNIEnv* env, jclass, jl
     auto* h = reinterpret_cast<Handle*>(ptr);
     std::lock_guard<std::mutex> lk(h->mu);
     const auto& st = h->engine->stats();
-    char buf[512];
-    std::snprintf(buf, sizeof buf,
-                  "{\"audio_s\":%.4f,\"wall_s\":%.4f,\"load_s\":%.4f,\"asr_s\":%.4f,\"diar_s\":%.4f,"
-                  "\"first_partial_s\":%.4f,\"piece_p95_ms\":%.2f,\"piece_max_ms\":%.2f,"
-                  "\"speakers\":%zu,\"turns\":%zu,\"peak_rss_mb\":%.1f}",
-                  st.audio_s, st.wall_s, st.load_s, st.asr_compute_s, st.diar_compute_s,
-                  st.first_partial_s, st.piece_p95_ms, st.piece_max_ms,
-                  st.speakers, st.turns, st.peak_rss_mb);
-    return to_jstring(env, buf);
+    using nemo::fixed;   // locale-independent (see fixed_fmt.h)
+    const std::string json = "{\"audio_s\":" + fixed(st.audio_s, 4) + ",\"wall_s\":" + fixed(st.wall_s, 4) +
+        ",\"load_s\":" + fixed(st.load_s, 4) + ",\"asr_s\":" + fixed(st.asr_compute_s, 4) +
+        ",\"diar_s\":" + fixed(st.diar_compute_s, 4) + ",\"first_partial_s\":" + fixed(st.first_partial_s, 4) +
+        ",\"piece_p95_ms\":" + fixed(st.piece_p95_ms, 2) + ",\"piece_max_ms\":" + fixed(st.piece_max_ms, 2) +
+        ",\"speakers\":" + std::to_string(st.speakers) + ",\"turns\":" + std::to_string(st.turns) +
+        ",\"peak_rss_mb\":" + fixed(st.peak_rss_mb, 1) + "}";
+    return to_jstring(env, json);
 }
 
 JNIEXPORT void JNICALL

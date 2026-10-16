@@ -5,7 +5,8 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 export PM_EVAL_MODE=$1 PM_EVAL_CFG=$(readlink -f "$2")
-# The JVM applies the user locale to native printf (a "0,5" decimal comma breaks the JNI segment encoding).
+# The JVM applies the user locale to native printf; the JNI encodings no longer use %f (nemo/fixed_fmt.h),
+# C.UTF-8 just keeps any other native text stable.
 export LC_ALL=C.UTF-8
 export LD_LIBRARY_PATH=$ROOT/tools/quality-eval/build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 cd "$ROOT"

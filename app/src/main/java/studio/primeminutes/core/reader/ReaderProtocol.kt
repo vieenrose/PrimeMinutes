@@ -13,7 +13,8 @@ object ReaderProtocol {
         val h = seconds / 3600
         val m = (seconds % 3600) / 60
         val s = seconds % 60
-        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+        // Locale.ROOT: the model reads and writes these (a default locale may use other digits)
+        return if (h > 0) "%d:%02d:%02d".format(java.util.Locale.ROOT, h, m, s) else "%d:%02d".format(java.util.Locale.ROOT, m, s)
     }
 
     /** Inverse of [formatTs]; null when not a timestamp. */

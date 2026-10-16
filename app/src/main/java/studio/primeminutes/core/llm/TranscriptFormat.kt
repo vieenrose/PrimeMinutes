@@ -38,7 +38,8 @@ object TranscriptFormat {
 
     private fun stamp(sec: Double): String {
         val s = sec.toInt().coerceAtLeast(0)
-        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60)
-        else "%d:%02d".format(s / 60, s % 60)
+        // Locale.ROOT: machine-read text (the model's prompt), ASCII digits whatever the default locale
+        return if (s >= 3600) "%d:%02d:%02d".format(java.util.Locale.ROOT, s / 3600, (s / 60) % 60, s % 60)
+        else "%d:%02d".format(java.util.Locale.ROOT, s / 60, s % 60)
     }
 }
