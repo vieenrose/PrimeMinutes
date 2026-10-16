@@ -153,6 +153,30 @@ object LibrarySearch {
             out.sortedByDescending { it.score }
         }
 
+    /**
+     * Keyword pass for Ask: BM25 ([Keywords]) over the indexed notes and chunks of every meeting,
+     * normalized like [lexical] (lower case, Simplified script). [maxPassages] best per meeting.
+     */
+    suspend fun keyword(
+        context: Context, entries: List<SessionLibrary.Entry>, query: String,
+        maxPassages: Int = MAX_PASSAGES, snippetChars: Int = 200,
+    ): List<Hit> = withContext(Dispatchers.IO) {
+        val units = ArrayList<Pair<SessionLibrary.Entry, Passage>>()
+        for (e in entries) {
+            val idx = index(e) ?: continue
+            val d = doc(context, e)
+            idx.vectors.filter { it.kind != SessionIndex.Kind.MEETING }.forEach { v -> units += e to passage(d, v, 0f, snippetChars) }
+        }
+        val scores = Keywords.bm25(norm(context, query), units.map { norm(context, it.second.snippet) })
+        units.indices.filter { scores[it] > 0f }
+            .groupBy { units[it].first.id }
+            .map { (_, ix) ->
+                val ps = ix.sortedByDescending { scores[it] }.take(maxPassages).map { units[it].second.copy(semanticOnly = false, score = scores[it]) }
+                Hit(units[ix.first()].first, ps.first().score, ps)
+            }
+            .sortedByDescending { it.score }
+    }
+
     private fun passage(d: Doc, v: SessionIndex.Vector, cos: Float, snippetChars: Int = 200): Passage = when (v.kind) {
         SessionIndex.Kind.MEETING -> Passage(v.kind, -1, -1, 0.0, null, d.title.ifBlank { d.summary.lineSequence().firstOrNull() ?: "" }, true, cos)
         SessionIndex.Kind.NOTE -> Passage(v.kind, v.a, v.a, noteTime(d, v.a), null, d.noteLines.getOrNull(v.a) ?: "", true, cos)

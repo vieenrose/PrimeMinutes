@@ -65,7 +65,7 @@ import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 
-/** `[[entryId@sec]]` as the model is asked to write it (and a tolerant `[[id@sec]`/`[id@sec]`). */
+/** `[[entryId@sec]]` as AskEngine publishes the model's `[[k]]` tags (and a tolerant `[[id@sec]`/`[id@sec]`). */
 private val CITE_RE = Regex("""\[{1,2}([A-Za-z0-9_\-]+)@(\d+)]{1,2}""")
 /** A tag still being written (streaming) or cut by the token cap: hidden rather than shown raw. */
 private val OPEN_TAG_RE = Regex("""\[\[[^\]\n]*$""")
@@ -132,7 +132,7 @@ fun AskSheet(
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
                     if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, t.excerpts, pal.Sky, onOpenAt),
+                        answerText(t.answer, t.pool, pal.Sky, onOpenAt),
                         style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
                     )
                     if (t.done && t.excerpts.isNotEmpty()) {
@@ -204,7 +204,7 @@ private fun answerText(
     for (m in CITE_RE.findAll(raw)) {
         append(raw.substring(last, m.range.first).trimEnd(' '))
         last = m.range.last + 1
-        // Checked against this answer's excerpts: a tag pointing anywhere else is dropped silently.
+        // Checked against the excerpts the model was shown in this conversation: a tag pointing anywhere else is dropped silently.
         val x = AskEngine.cite(m.groupValues[1], m.groupValues[2].toIntOrNull() ?: 0, excerpts) ?: continue
         val e = x.entry
         append('⁠')
