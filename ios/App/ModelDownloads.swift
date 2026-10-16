@@ -29,6 +29,8 @@ import Network
     @Published var prefetchProgress: Double?
     /// Bytes the running prefetch fetches in all (the card shows "so far / total").
     @Published private(set) var prefetchTotal: Int64 = 0
+    /// The prefetch is waiting to resume (suspended app, lost network): the card says Paused, with Resume.
+    @Published var prefetchPaused = false
     /// Cancel on the progress card: no automatic restart (network change) until the app restarts or the user
     /// agrees again; a recording or an import still fetches what it needs (Android ModelPrefetch.cancel).
     private var cancelledThisRun = false
@@ -96,16 +98,16 @@ import Network
         // for the notes model (two downloads of one file would race on its .part).
         let speech: Task<Bool, Never> = Task.detached { [store] in
             guard p.speechBytes > 0 else { return true }
-            do { try await store.download(.speech) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }; return true }
-            catch { StatusLog.add("prefetch stopped: \(error)"); return false }   // a lost network: the next run (or prefetch) resumes from the .part files
+            do { try await self.fetch(.speech, "prefetch speech", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }; return true }
+            catch { StatusLog.add("prefetch stopped: \(error)"); return false }   // Cancel or a permanent error: a run fetches what it needs itself
         }
         prefetchSpeech = speech
         prefetchTask = Task.detached { [store] in
             if await speech.value, p.readerBytes > 0 {
-                do { try await store.download(reader) { d, _ in Task { @MainActor in self.prefetchProgress = Double(p.speechBytes + d) / Double(max(1, p.total)) } }; StatusLog.add("prefetch done") }
+                do { try await self.fetch(reader, "prefetch reader", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(p.speechBytes + d) / Double(max(1, p.total)) } }; StatusLog.add("prefetch done") }
                 catch { StatusLog.add("prefetch stopped: \(error)") }
             }
-            await MainActor.run { self.prefetchProgress = nil; self.prefetchTask = nil; self.prefetchSpeech = nil }
+            await MainActor.run { self.prefetchProgress = nil; self.prefetchPaused = false; self.prefetchTask = nil; self.prefetchSpeech = nil }
         }
     }
     /// Cancel button on the progress card: stops both parts of the prefetch (the partial file stays for a resume).
@@ -114,7 +116,16 @@ import Network
         cancelledThisRun = true
         StatusLog.add("prefetch cancelled")
         prefetchSpeech?.cancel(); prefetchTask?.cancel()
+        DownloadResumer.shared.kick()   // a paused prefetch wakes up to see the cancel
     }
+    /// One model download that pauses through a suspension or a lost network and resumes from its `.part`
+    /// (DownloadResumer); throws only for a cancel or a permanent error.
+    nonisolated func fetch(_ m: ReaderModel, _ name: String, onPause: @escaping @MainActor (Bool) -> Void, progress: @escaping @Sendable (Int64, Int64) -> Void) async throws {
+        let store = self.store
+        try await DownloadResumer.shared.run(name, onPause: onPause) { try await store.download(m, progress: progress) }
+    }
+    /// Run downloads (a recording, an import, the notes model) say "Paused" in the status line while they wait.
+    func pausedStatus(_ on: Bool) { if on { screen.status = L("download_paused") } }
     /// Lets a run's own download start only once the prefetch left those files (speech: just its part).
     func awaitPrefetch(speechOnly: Bool) async {
         if speechOnly { _ = await prefetchSpeech?.value } else { await prefetchTask?.value }
@@ -125,7 +136,7 @@ import Network
         await awaitPrefetch(speechOnly: true)
         if await store.isComplete(.speech) { return true }
         do {
-            try await store.download(.speech) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
+            try await fetch(.speech, "speech", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
             return true
         } catch { screen.status = L("download_failed", "\(error)"); return false }
     }
@@ -134,19 +145,19 @@ import Network
     func downloadEmbed() {
         guard embedProgress == nil else { return }
         embedProgress = 0
-        Task.detached { [store] in
+        Task.detached {
             do {
-                try await store.download(.embed) { d, t in Task { @MainActor in self.embedProgress = Int(d * 100 / max(1, t)) } }
+                try await self.fetch(.embed, "search model", onPause: { _ in }) { d, t in Task { @MainActor in self.embedProgress = Int(d * 100 / max(1, t)) } }
                 await MainActor.run { StatusLog.add("search model downloaded"); self.embedProgress = nil; LibraryIndexer.shared.catchUp(self.library.sessions) }
             } catch { await MainActor.run { StatusLog.add("search model download failed: \(error)"); self.embedProgress = nil; self.screen.status = L("search_model_download_failed") + " (\(error))" } }
         }
     }
     func downloadReader() {
         screen.status = L("download_reader")
-        Task.detached { [store] in
+        Task.detached {
             await self.awaitPrefetch(speechOnly: false)
             do {
-                try await store.download(Prefs.reader) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
+                try await self.fetch(Prefs.reader, "reader", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
                 await MainActor.run { self.screen.status = L("reader_ready") }
             } catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }
         }

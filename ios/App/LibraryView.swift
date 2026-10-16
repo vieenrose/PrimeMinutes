@@ -17,6 +17,7 @@ struct LibraryView: View {
     @State private var sharing: URL?
     @AppStorage("seenSessions") private var seenRaw = ""
     @ObservedObject private var indexer = LibraryIndexer.shared
+    @ObservedObject private var resumer = DownloadResumer.shared
     @State private var hits: [LibrarySearch.Hit] = []
     @State private var searchTask: Task<Void, Never>?
     /// The query whose semantic half is still running: until it lands, no hit means "searching", not "no match".
@@ -233,6 +234,14 @@ struct LibraryView: View {
                 else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
             }
             if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, 16).padding(.top, 6) }
+            else if resumer.paused > 0 && !m.imports.downloadPaused {   // a run's own model download, waiting to resume
+                HStack {
+                    Image(systemName: "pause.circle").foregroundStyle(.orange)
+                    Text(L("download_paused")).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold))
+                }.padding(.horizontal, 16).padding(.top, 6)
+            }
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")).font(.caption).foregroundStyle(.secondary) }.padding(.horizontal, 16).padding(.top, 6)
             }
@@ -273,7 +282,15 @@ struct LibraryView: View {
                         Button(L("cancel")) { m.imports.cancelDownload() }.font(.subheadline)
                     }
                     if let f = m.imports.downloadFraction { ProgressView(value: f) } else { ProgressView().progressViewStyle(.linear) }
-                    Text(L("podcast_downloading", Int((m.imports.downloadFraction ?? 0) * 100))).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if m.imports.downloadPaused {
+                        HStack {
+                            Text(pausedText(m.imports.downloadBytes)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            Spacer()
+                            Button(L("download_resume")) { m.imports.resumeDownload() }.font(.caption.weight(.semibold))
+                        }
+                    } else {
+                        Text(L("podcast_downloading", Int((m.imports.downloadFraction ?? 0) * 100))).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 6)
             }
             if m.runner.activeJob != nil {
@@ -386,10 +403,11 @@ struct ModelDownloadCard: View {
                 HStack {
                     Text("\(SizeFormat.bytes(Int64(Double(downloads.prefetchTotal) * p))) / \(SizeFormat.bytes(downloads.prefetchTotal))").font(.subheadline.weight(.semibold))
                     Spacer()
+                    if downloads.prefetchPaused { Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.subheadline.weight(.semibold)).padding(.trailing, 8) }
                     Button(L("cancel")) { downloads.cancelPrefetch() }.font(.subheadline)
                 }
                 ProgressView(value: p)
-                Text(L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
+                Text(downloads.prefetchPaused ? L("download_paused") : L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
             }.padding(12).background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
         }
     }
@@ -401,4 +419,10 @@ struct ModelDownloadSection: View {
     var body: some View {
         if downloads.prefetchProgress != nil { Section { ModelDownloadCard(downloads: downloads) } }
     }
+}
+
+/// "Paused · 12 MB / 48 MB" (bytes unknown: just "Paused"), for an interrupted download that resumes by itself.
+func pausedText(_ b: (Int64, Int64)?) -> String {
+    guard let (got, total) = b, total > 0 else { return L("download_paused") }
+    return L("download_paused_bytes", SizeFormat.bytes(got), SizeFormat.bytes(total))
 }

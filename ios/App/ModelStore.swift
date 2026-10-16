@@ -1,5 +1,7 @@
 import Foundation
 import CryptoKit
+import Network
+import UIKit
 
 /// Reader model files on the device (port of Android LlmRegistry + ModelManager download path):
 /// Hugging Face, revision-pinned, size + sha256 checked, resumable via HTTP Range.
@@ -175,6 +177,7 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private let file: URL, resumeFrom: Int64, onProgress: (Int64) -> Void
     private var lastReport = Date.distantPast
+    private static let slow = Dev.env["VOX_DLSLOW"] != nil
     private init(file: URL, resumeFrom: Int64, onProgress: @escaping (Int64) -> Void) { self.file = file; self.resumeFrom = resumeFrom; self.onProgress = onProgress }
 
     static func fetch(_ req: URLRequest, to file: URL, resumeFrom: Int64, onProgress: @escaping (Int64) -> Void) async throws {
@@ -210,6 +213,7 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     }
     func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         do { try handle?.write(contentsOf: data) } catch { finish(error); dataTask.cancel(); return }
+        if Self.slow { usleep(useconds_t(min(data.count * 6, 900_000))) }   // DEV VOX_DLSLOW: a slow network, so a download outlasts the background grace
         got += Int64(data.count)
         if Date().timeIntervalSince(lastReport) > 0.5 { lastReport = Date(); onProgress(got) }
     }
@@ -226,4 +230,86 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         cont = nil; lock.unlock()
         c.resume(with: r)
     }
+}
+
+/// Downloads (podcast episodes, models) that survive iOS suspending the app. A transfer runs on a plain foreground
+/// session: with the screen locked or another app in front, iOS suspends the app (after the background grace asked
+/// for here) and the connection dies, which used to end as "download failed". Now a transient failure (network
+/// error, suspension, a server 5xx) PAUSES the download: it waits, keeps its `.part`, and resumes with a Range
+/// request as soon as the app is back in front and online (or the user taps Resume). Only the user's Cancel or a
+/// permanent error (404, too large, checksum, disk full) ends it.
+@MainActor final class DownloadResumer: ObservableObject {
+    static let shared = DownloadResumer()
+    /// Downloads waiting to resume.
+    @Published private(set) var paused = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private let monitor = NWPathMonitor()
+    private var online = true
+    private init() {
+        monitor.pathUpdateHandler = { path in
+            let up = path.status == .satisfied
+            Task { @MainActor in let r = DownloadResumer.shared, was = r.online; r.online = up; if up && !was { r.kick() } }
+        }
+        monitor.start(queue: DispatchQueue(label: "downloads.net"))
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in DownloadResumer.shared.kick() }
+        }
+    }
+    /// Every paused download tries again now (app back in front, network back, Resume, or a Cancel to observe).
+    func kick() { let w = waiters; waiters = []; w.forEach { $0.resume() } }
+
+    private func wait(after sec: Double) async {
+        paused += 1; defer { paused -= 1 }
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            waiters.append(c)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(sec * 1e9))
+                if UIApplication.shared.applicationState == .active && self.online { self.kick() }
+            }
+        }
+    }
+
+    /// Runs `attempt` until it succeeds, pausing on transient failures (`onPause(true)`, then `false` when it tries
+    /// again). Throws only for a cancel of the calling task or a permanent error.
+    func run(_ name: String, onPause: @escaping @MainActor (Bool) -> Void, _ attempt: @escaping @Sendable () async throws -> Void) async throws {
+        var n = 0
+        while true {
+            let grace = BackgroundGrace(name)
+            do { try await attempt(); grace.end(); onPause(false); return }
+            catch {
+                grace.end()
+                if Task.isCancelled { onPause(false); throw CancellationError() }
+                guard Self.transient(error) else { onPause(false); throw error }
+                n += 1
+                StatusLog.add("download \(name) paused (\(n)): \(error)")
+                onPause(true)
+                await wait(after: min(60, 2 * pow(2, Double(min(n, 5) - 1))))
+                if Task.isCancelled { onPause(false); throw CancellationError() }
+                StatusLog.add("download \(name) resumes")
+            }
+        }
+    }
+
+    /// A failure that waiting can fix: the network, a suspension, a busy server.
+    nonisolated static func transient(_ e: Error) -> Bool {
+        if e is CancellationError { return false }
+        if let s = e as? ModelStoreError { if case .badStatus(let c) = s { return c >= 500 || c == 408 || c == 429 }; return false }
+        let n = e as NSError
+        if n.domain == NSURLErrorDomain {
+            return ![NSURLErrorUnsupportedURL, NSURLErrorBadURL, NSURLErrorDataLengthExceedsMaximum, NSURLErrorFileDoesNotExist,
+                     NSURLErrorNoPermissionsToReadFile, NSURLErrorCannotCreateFile, NSURLErrorCannotWriteToFile].contains(n.code)
+        }
+        if n.domain == NSPOSIXErrorDomain { return n.code != Int(ENOSPC) }
+        return false
+    }
+}
+
+/// The few seconds iOS grants a backgrounded app to finish what it was doing: asked for around each transfer, so a
+/// short download completes and a long one gets its `.part` written up to the suspension.
+@MainActor final class BackgroundGrace {
+    private var id = UIBackgroundTaskIdentifier.invalid
+    init(_ name: String) {
+        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in MainActor.assumeIsolated { self?.end() } }   // called on the main thread
+    }
+    func end() { if id != .invalid { UIApplication.shared.endBackgroundTask(id); id = .invalid } }
 }

@@ -135,7 +135,7 @@ final class ReaderWorker: @unchecked Sendable {
             let rm = Prefs.reader
             if Dev.env["VOX_READER_DIR"] == nil { await self.downloads.awaitPrefetch(speechOnly: false) }
             if Dev.env["VOX_READER_DIR"] == nil, !(await self.downloads.store.isComplete(rm)) {   // like Android: the notes model downloads on first use
-                do { try await self.downloads.store.download(rm) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } } }
+                do { try await self.downloads.fetch(rm, "reader", onPause: { self.downloads.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } } }
                 catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }
             }
             let stored = await self.downloads.store.isComplete(rm) ? await self.downloads.store.dir(rm).path : nil

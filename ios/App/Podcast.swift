@@ -1,7 +1,7 @@
 import Foundation
 
 struct PodcastSeries: Identifiable, Hashable { var id: String { feedUrl }; let title, artist, feedUrl: String; let episodeCount: Int }
-struct Episode: Identifiable, Hashable { var id: String { audioUrl }; let title, audioUrl, published, duration: String }
+struct Episode: Identifiable, Hashable, Codable { var id: String { audioUrl }; let title, audioUrl, published, duration: String }
 
 /// Podcast input (port of Android `Podcast`): iTunes Search API (no key) → RSS episodes (XMLParser) → enclosure download.
 enum Podcast {
@@ -29,7 +29,7 @@ enum Podcast {
     }
 
     /// Streams the enclosure into the audio directory under `name` (resumable via a `.part` file), 500 MB max.
-    static func download(_ ep: Episode, name: String, progress: @escaping @Sendable (Double) -> Void, ua: String? = nil) async throws -> URL {
+    static func download(_ ep: Episode, name: String, progress: @escaping @Sendable (Int64, Int64) -> Void, ua: String? = nil) async throws -> URL {
         guard let u = URL(string: ep.audioUrl), ["http", "https"].contains(u.scheme) else { throw URLError(.unsupportedURL) }
         var head = request(u, ua); head.httpMethod = "HEAD"
         let total = ((try? await URLSession.shared.data(for: head).1) as? HTTPURLResponse)?.expectedContentLength ?? -1
@@ -39,7 +39,7 @@ enum Podcast {
         // orphan .part behind and starting over.
         let dest = JobQueue.audioDir.appendingPathComponent(name), part = JobQueue.audioDir.appendingPathComponent("podcast_\(stableHash(ep.audioUrl)).\(ext(ep.audioUrl)).part")
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
-        let report: @Sendable (Int64) -> Void = { got in if total > 0 { progress(Double(got) / Double(total)) } }
+        let report: @Sendable (Int64) -> Void = { got in progress(got, total) }
         do { try await Chunked.fetch(request(u, ua), to: part, resumeFrom: have, onProgress: report) }
         catch ModelStoreError.badStatus(416) {   // the kept .part is already whole (a kill before the move): start over
             try? FileManager.default.removeItem(at: part)

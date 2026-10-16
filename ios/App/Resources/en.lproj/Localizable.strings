@@ -371,3 +371,6 @@
 "ask_entry_cd" = "Ask a question about your meetings";
 "speaker_merged" = "Speakers merged";
 "speaker_line_moved" = "Line moved";
+"download_paused" = "Download paused · resumes automatically";
+"download_paused_bytes" = "Paused · %1$@ / %2$@ · resumes automatically";
+"download_resume" = "Resume";

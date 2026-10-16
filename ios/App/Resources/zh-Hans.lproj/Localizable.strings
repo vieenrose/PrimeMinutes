@@ -371,3 +371,6 @@
 "ask_entry_cd" = "针对你的会议提问";
 "speaker_merged" = "已合并说话人";
 "speaker_line_moved" = "已移动此行";
+"download_paused" = "下载已暂停 · 会自动继续";
+"download_paused_bytes" = "已暂停 · %1$@ / %2$@ · 会自动继续";
+"download_resume" = "继续";
