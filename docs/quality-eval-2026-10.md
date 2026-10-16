@@ -196,6 +196,69 @@ retrieved (33 questions), about 27 were answered correctly. Details in `work/ask
 - Latency (host, load ~15–30, E2B, app default threads): p50 14 s, p90 23 s, first token p50 11 s; English
   questions are slower (p50 19 s) than Chinese (10 s). Not a device figure.
 
+### Ask after fixes (2026-10-17)
+
+Change (Android `AskEngine` + iOS `AskSelect`, same parameters, `AskEngine.Retrieval`): **meeting routing**.
+The meetings are ranked by reciprocal-rank fusion of two meeting scores (mean cosine of the 3 best
+passages, sum of the 3 best BM25 scores); the top 2 give 16 candidates per list instead of 4 and their
+passages lead the ranking. Overlapping transcript passages of a meeting merge into one excerpt (anchored
+at its first line), a run of identical citations is collapsed, and the excerpt budget is 800 tokens
+(what the old 8 passages filled on the median) instead of 1500. Nothing model-specific: no prompt or
+card change.
+
+Measured with the same suite and scorer, E2B on the host, the two retrievals asked **back to back per
+question** (harness `variants`, order alternating) so the latencies share the machine load; judged by a
+blind Opus judge over both runs shuffled together.
+
+| Run (62 q) | Correct (keywords) % | Correct (judge) % | Partial (judge) % | Passage retrieved % | Answers citing % | Valid cites % | Right-source cites % (n) | Latency p50 / p90 s | First token p50 s | Prompt tokens p50 / mean / p90 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
+| before | 50.0 | 45.2 | 12.9 | 56.9 | 72.6 | 100.0 | 73.6 (53) | 8.1 / 11.6 | 5.9 | 814 / 816 / 1067 |
+| after | **62.9** | **56.5** | 12.9 | **65.5** | 82.3 | 100.0 | 68.8 (64) | 7.5 / 10.4 | 4.7 | 878 / 832 / 897 |
+
+By language (judge): zh 43.8 → 59.4 % (retrieved 56.7 → 73.3 %), en 46.7 → 53.3 % (retrieved 57.1 → 57.1 %);
+the 4 unanswerable questions are still declined. Paired deltas, after − before: total −1.0 s (median),
+first token −1.0 s, prompt +4 tokens (median, +17 mean). The before run reproduces the table above
+(keywords 50.0 vs 48.4 %, retrieved 56.9 % in both). Host timings, load ~8–20.
+
+What did not help (retrieval only, no generation: `run_harness.sh retrieve` with `variants`; excerpt
+tokens are those of the rendered excerpts, before the system prompt and question):
+
+| Retrieval | Passage retrieved % | Excerpt tokens p50 / p90 |
+|---|---:|---|
+| before (8 passages, ≤ 1500 tokens) | 56.9 | 690 / 949 |
+| + each hit widened by the next and previous chunk (≤ 1500) | 60.3 | 1306 / 1465 |
+| 4 hits widened twice, ≤ 800 | 41.4 | 750 / 783 |
+| budget 800 alone | 58.6 | 690 / 771 |
+| a note replaced by the transcript chunk at its time | 60.3 | 946 / 1197 |
+| chunks ≤ 75 s / 400 tokens (re-indexed) | 65.5 | 1018 / 1472 |
+| chunks ≤ 75 s, ≤ 800 tokens | 62.1 | 758 / 776 |
+| routing when one meeting holds 1.5–3× the fused score of the next | 56.9 (never triggers) | 690 / 949 |
+| **routing top-2 meetings, ≤ 800 (shipped)** | **65.5** | ~780 / 798 |
+| routing top-2, ≤ 900 + widening once | 69.0 | 886 / 898 |
+
+- Widening finds the fact that sits just after a hit (5 of the 25 misses), but at a fixed budget it costs
+  the other hits; the full run with routing + widening (≤ 900) was no more correct (61.3 % keywords) and
+  +0.6 s slower (+106 prompt tokens). It stays available (`Retrieval.widen`, default 0).
+- 60–90 s chunks help only because they hand over more text; at equal tokens they are no better, and
+  they would force a re-index of every library. Not shipped.
+- Most misses were ranking, not adjacency: before, only a third of the excerpts came from the asked
+  meeting; after routing about 60 %. The routed meeting is the right one for 49 of 58 questions; the
+  misses are mostly the three near-duplicate AMI remote-control meetings (English retrieval unchanged).
+- Duplicate citations: no adjacent repeats occurred in either run; the collapse is covered by unit tests.
+
+Devices (E2B, CPU):
+- Note10+ (test app, same APK, DEV extra `--ez vox_ask_legacy true` for the old retrieval), 3 questions
+  over the test library, two passes in alternating order:
+
+  | Question | Prompt tokens before → after | Prefill s before → after | Total s before → after | Answer |
+  |---|---|---|---|---|
+  | 搬家要準備哪些事？ | 1016 → 887 | 6.6, 6.9 → 5.8, 5.6 | 18.5, 19.3 → 31.3, 31.4 | after: all 6 excerpts from the move meeting, a longer list (245 vs 119 answer tokens: decode time) |
+  | 尾牙的頭獎是什麼？ | 910 → 875 | 6.3, 6.4 → 5.5, 5.7 | 9.0, 9.1 → 8.7, 9.0 | same right answer |
+  | 車輛管理有什麼決定？ | 862 → 891 | 5.5, 5.9 → 5.7, 5.7 | 10.0, 10.7 → 8.7, 8.9 | both right (after adds the remaining reserve) |
+- iPhone 14 Pro Max (DEV build, `VOX_ASK`): 車輛管理有什麼決定？ 823 prompt tokens, prefill 2.1 s, answer in
+  4.8 s, right (one bus to the station, contact by next Wednesday); 尾牙的頭獎是什麼？ 884 tokens, prefill
+  1.8 s, 2.8 s, right.
+
 ## 5. Top weaknesses and suggested fixes
 
 Ranked by user impact. Fixes are suggestions only; nothing was changed in the product.
@@ -215,6 +278,9 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
    *Fix:* expand each hit with its next (and previous) chunk until the budget is used; give more slots
    to the top meeting once one meeting clearly dominates the fused ranking (meeting routing by title +
    summary first); test chunk 60–90 s. Measure with this suite (`ask_suite_v1.json`) before/after.
+   *Done 2026-10-17* (section 4, "Ask after fixes"): meeting routing (top-2 meetings by passage evidence)
+   at an 800-token budget: judged 45 → 56 %, retrieved 57 → 66 %, same prompt size and latency. Widening
+   and 60–90 s chunks were measured and not kept. English near-duplicate meetings remain hard.
 3. **Speaker attribution: merges, over-split and instability.** cpCER is ~2× CER on far-field
    AISHELL-4 (34 % vs 18.5 %); L_R004S06C01 merges 7 speakers into 5 (cpCER 62 %); speaker count exact
    in 4/10 meetings. The same meeting gave 26 % vs 3 % confusion with slightly different input.
@@ -271,6 +337,8 @@ python3 -E -P tools/quality-eval/score_asr.py <corpora> <out> [turns] > asr_scor
 tools/quality-eval/run_harness.sh reader <cfg>  # -> <name>.reader.<model>.json
 python3 -E -P tools/quality-eval/score_notes.py tools/quality-eval/refs <reader out> > notes.json
 tools/quality-eval/run_harness.sh ask    <cfg>  # -> ask.<model>.json, library.json
+#   cfg "variants" {name: retrieval}: each question under each retrieval, back to back -> ask.<model>.<name>.json
+tools/quality-eval/run_harness.sh retrieve <cfg> # retrieval only per variant -> retrieve.<name>.json ("dump": all candidates)
 python3 -E -P tools/quality-eval/score_ask.py <suite> library.json ask.<model>.json [judge.json] > ask.json
 python3 -E -P tools/quality-eval/report_tables.py asr|notes|ask ...
 ```
