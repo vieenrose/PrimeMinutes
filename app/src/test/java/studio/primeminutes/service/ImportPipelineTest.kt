@@ -128,7 +128,8 @@ class ImportPipelineTest {
         p.inFlight.bankOnStop { "model" }
         run.cancelAndJoin()
         val stopped = SessionLibrary.list(ctx).single()
-        assertTrue("only a prefix was decoded", stopped.durationSec in 1..10)
+        assertTrue("only a prefix was decoded", InFlightImport.bankedSeconds(stopped.wavFile, 0) in 1..10)
+        assertEquals("the row lists the meeting's length, not the prefix", 12, stopped.durationSec)
         val source = SessionLibrary.importSource(stopped)
         assertNotNull("the source stays with the entry", source)
         assertFalse(src.exists())

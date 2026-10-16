@@ -390,14 +390,19 @@ object SessionLibrary {
     /** The kept source of an import stopped mid-decode, or null (the entry's WAV is complete). */
     fun importSource(entry: Entry): File? = File(entry.dir, IMPORT_SOURCE).takeIf { it.isFile && it.length() > 0 }
 
-    /** Move [src] (the import copy under filesDir/audio) into [entry] as its kept source. Never throws. */
-    fun keepImportSource(entry: Entry, src: File) {
+    /** Move [src] (the import copy under filesDir/audio) into [entry] as its kept source; false when it
+     *  could not be moved. Never throws. */
+    fun keepImportSource(entry: Entry, src: File): Boolean =
         runCatching {
             val dest = File(entry.dir, IMPORT_SOURCE)
             if (!src.renameTo(dest)) { src.copyTo(dest, overwrite = true); src.delete() }
             Log.i(TAG, "kept the import source of ${entry.id} (${dest.length()} B)")
-        }.onFailure { Log.w(TAG, "could not keep the import source of ${entry.id}", it) }
-    }
+        }.onFailure { Log.w(TAG, "could not keep the import source of ${entry.id}", it) }.isSuccess
+
+    /** Set [entry]'s listed length (meta durationSec); the updated entry, or null on failure. */
+    fun setDuration(entry: Entry, sec: Int): Entry? = runCatching {
+        synchronized(metaLock) { (readMeta(entry.dir) ?: entry).copy(durationSec = sec).also { writeMeta(it) } }
+    }.onFailure { Log.w(TAG, "could not set the duration of ${entry.id}", it) }.getOrNull()
 
     /**
      * A resumed import decoded its kept source to the end: [wav] (finalized, 16 kHz mono) replaces the

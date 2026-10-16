@@ -87,6 +87,24 @@ class InFlightImportTest {
         assertNull(state.source)
     }
 
+    /** Stopped mid-decode, the entry keeps the whole source for Resume: the library row shows the meeting's
+     *  length (7:38), not the decoded prefix (it read 5:35 on the Note10+ until the resumed run finished). */
+    @Test fun aStopMidDecodeShowsTheSourceLength() {
+        val src = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "shared_${System.nanoTime()}").apply { writeBytes(ByteArray(1000)) }
+        state.begin(growing(3), 458, src)
+        val e = state.save("stop")!!
+        assertEquals(458, e.durationSec)
+        assertEquals(458, SessionLibrary.byId(ctx, e.id)!!.durationSec)
+        assertEquals("the WAV still holds only the prefix", 3, InFlightImport.bankedSeconds(e.wavFile, 0))
+    }
+
+    @Test fun aSourceThatCannotBeKeptLeavesTheBankedLength() {
+        val failing = InFlightImport(keepSource = { _, _ -> false }) { wav, sec -> SessionLibrary.promoteRecording(ctx, wav, sec) }
+        val src = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "shared_${System.nanoTime()}").apply { writeBytes(ByteArray(1000)) }
+        failing.begin(growing(3), 458, src)
+        assertEquals(3, failing.save("stop")!!.durationSec)
+    }
+
     @Test fun aFullyDecodedImportKeepsNoSource() {
         val src = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "shared_${System.nanoTime()}").apply { writeBytes(ByteArray(1000)) }
         state.begin(growing(3), 3, src)

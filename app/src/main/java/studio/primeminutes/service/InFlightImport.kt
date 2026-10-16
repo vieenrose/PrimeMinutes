@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 internal class InFlightImport(
     /** Keep the import's source with the entry it was banked into ([SessionLibrary.keepImportSource]). */
-    private val keepSource: (SessionLibrary.Entry, File) -> Unit = SessionLibrary::keepImportSource,
+    private val keepSource: (SessionLibrary.Entry, File) -> Boolean = SessionLibrary::keepImportSource,
     /** Move the finalized WAV into a new library entry ([SessionLibrary.promoteRecording]). */
     private val promote: (wav: File, durationSec: Int) -> SessionLibrary.Entry?,
 ) {
@@ -83,8 +83,12 @@ internal class InFlightImport(
             this.wav = null; savedEntry = entry
             // Stopped before the decoder reached the end: the entry holds only a prefix of the file.
             // Its source goes with it, so "Resume" can decode the rest (instead of finishing the prefix).
+            // The row then shows the meeting's length (the source's), not the decoded prefix: Resume covers
+            // the whole file, and a 7:38 meeting listed as 5:35 read as lost audio.
             val src = source
-            if (!decoded && src != null && src.isFile) keepSource(entry, src)
+            if (!decoded && src != null && src.isFile && keepSource(entry, src) && durationSec > entry.durationSec) {
+                SessionLibrary.setDuration(entry, durationSec)?.let { savedEntry = it; source = null; return it }
+            }
         }
         source = null
         return entry
@@ -109,7 +113,8 @@ internal class InFlightImport(
         /**
          * Duration of what is actually on disk: a Stop mid-decode banks only the decoded part of the
          * import, so the entry must not claim the source's full length (the player and the row would
-         * show minutes of audio that is not there).
+         * show minutes of audio that is not there). An entry that keeps its import source for Resume
+         * lists the source's length instead ([save]).
          */
         fun bankedSeconds(wav: File, probed: Int): Int {
             val onDisk = ((wav.length() - WavIo.HEADER) / (WavIo.SAMPLE_RATE * 2L)).toInt()
