@@ -8,6 +8,9 @@ B=$ROOT/build-ios/$SDK-$ARCH; mkdir -p $B/nemo-obj
 MIN=$([ $SDK = iphonesimulator ] && echo -mios-simulator-version-min=17.0 || echo -miphoneos-version-min=17.0)
 # LiteRT bench path (backend != ggml): the C API headers are vendored with the iOS reader (mfa/third_party).
 LRT_INC=$ROOT/ios/native/mfa/third_party
+# The shipped speech engine is litert_host (Engine.swift), which needs the ggml-free host X-ASR (xasr_host.cc):
+# ggml-free is the default. NOGGML= (set, empty) builds the old ggml/CrispASR variant for VOX_NEMO_BACKEND=ggml.
+NOGGML=${NOGGML-1}
 # NOGGML=1: no ggml anywhere. X-ASR and Sortformer host parts (xasr_host/diar_host) replace CrispASR and audio.cpp.
 if [ -n "$NOGGML" ]; then SRCS="$E/xasr_host.cc $E/kaldi_fbank.cpp $E/diar_host.cc"; INC="-I$E/hostxasr -DNEMO_NO_GGML"; rm -f $B/nemo-obj/*.o
 else SRCS="$E/diar_crispasr.cpp $E/diar_host.cc"; INC="-I$N/crispasr/src -I$N/audiocpp/include -I$N/crispasr-ggml/include -I$N/crispasr-ggml/src -I$N/crispasr-ggml/src/ggml-cpu"; fi
