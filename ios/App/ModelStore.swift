@@ -170,6 +170,9 @@ actor ModelStore {
 /// Resumes with `Range` when `resumeFrom > 0` and the server answers 206; a 200 restarts the file.
 final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private var handle: FileHandle?, got: Int64 = 0, cont: CheckedContinuation<Void, Error>?
+    /// The outcome when the task ended before the continuation was handed over (cancelled before it started).
+    private var early: Result<Void, Error>?
+    private let lock = NSLock()
     private let file: URL, resumeFrom: Int64, onProgress: (Int64) -> Void
     private var lastReport = Date.distantPast
     private init(file: URL, resumeFrom: Int64, onProgress: @escaping (Int64) -> Void) { self.file = file; self.resumeFrom = resumeFrom; self.onProgress = onProgress }
@@ -178,15 +181,20 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         let d = Chunked(file: file, resumeFrom: resumeFrom, onProgress: onProgress)
         let session = URLSession(configuration: .default, delegate: d, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
+        var r = req
+        if resumeFrom > 0 { r.setValue("bytes=\(resumeFrom)-", forHTTPHeaderField: "Range") }
+        // Created before the cancellation handler: a task already cancelled (Cancel tapped during the podcast's HEAD
+        // request) runs onCancel at once, and a dataTask asked of the invalidated session then threw an Objective-C
+        // exception that aborted the app (iPhone 17e, 2026-10-16). Cancelled before resume(), it just completes with
+        // NSURLErrorCancelled.
+        let task = session.dataTask(with: r)
         // Cancelling the calling task stops the transfer; the partial file stays for a later resume.
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                d.cont = c
-                var r = req
-                if resumeFrom > 0 { r.setValue("bytes=\(resumeFrom)-", forHTTPHeaderField: "Range") }
-                session.dataTask(with: r).resume()
+                d.start(c)
+                task.resume()
             }
-        } onCancel: { session.invalidateAndCancel() }
+        } onCancel: { task.cancel(); session.invalidateAndCancel() }
     }
 
     func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive resp: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
@@ -206,9 +214,16 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         if Date().timeIntervalSince(lastReport) > 0.5 { lastReport = Date(); onProgress(got) }
     }
     func urlSession(_ s: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) { onProgress(got); finish(error) }
+    private func start(_ c: CheckedContinuation<Void, Error>) {
+        lock.lock()
+        if let r = early { early = nil; lock.unlock(); c.resume(with: r) } else { cont = c; lock.unlock() }
+    }
     private func finish(_ error: Error?) {
         try? handle?.close(); handle = nil
-        guard let c = cont else { return }; cont = nil
-        if let error { c.resume(throwing: error) } else { c.resume() }
+        let r: Result<Void, Error> = error.map { .failure($0) } ?? .success(())
+        lock.lock()
+        guard let c = cont else { if early == nil { early = r }; lock.unlock(); return }
+        cont = nil; lock.unlock()
+        c.resume(with: r)
     }
 }
