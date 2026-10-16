@@ -17,7 +17,6 @@ import kotlinx.coroutines.yield
 import studio.primeminutes.core.hw.HwInfo
 import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.session.PrimeMinutesSession
-import studio.primeminutes.service.TranscriptionService
 
 /**
  * Keeps every finished meeting's `index.bin` current. Two lanes, one worker coroutine:
@@ -102,7 +101,7 @@ object LibraryIndexer {
     }
 
     private fun busy(): Boolean = !ignoreBusy &&
-        (TranscriptionService.recordingJobActive || TranscriptionService.pipelineActive || TranscriptionService.readerActive)
+        studio.primeminutes.service.RunRegistry.busy
 
     private fun batteryOk(app: Context): Boolean {
         val i = app.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return true

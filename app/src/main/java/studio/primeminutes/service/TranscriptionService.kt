@@ -160,14 +160,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
          *  [runPipeline] continues from [ImportRecovery]'s saved progress, if it matches. One-shot. */
         @Volatile var importResumeRequested = false
 
-        // True while a live capture is in flight *in this process*. The Activity can be destroyed and
-        // recreated (low memory) while the foreground service keeps recording; the crash-recovery
-        // check reads this so it doesn't mistake a still-active recording's marker for an interrupted
-        // one. A real process kill takes the service (and this flag) down with it, so a fresh process
-        // reads false and recovery proceeds correctly.
-        @Volatile
-        var recordingActive = false
-            private set
+        // The run flags (live capture, pipeline job, reader, queue item, exports) live in
+        // [RunRegistry] now: one observable value the service publishes and the UI re-attaches from.
 
         // Mic-capture backpressure slack: how many recorder blocks (~128 ms each) may queue ahead of
         // the ASR decode before the mic loop is throttled. ~33 s absorbs slow segment decodes so live
@@ -211,40 +205,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // routes queue events to the Studio list's per-row progress instead of the open session.
         const val QUEUE_GEN = -2
 
-        /** Library entry id the queue drain is processing right now (null when idle) — the UI
-         *  attributes QUEUE_GEN-tagged Status/Progress events to this row. */
-        @Volatile
-        var currentQueueItemId: String? = null
-            private set
-
-        /** True while a queue drain loop is running (idle between items included). */
-        @Volatile
-        private var queueDraining = false
-
-        /** True while any pipeline job is active in this process — the UI's cold-start
-         *  queue-resume check reads it so an Activity recreation can't kick a drain into a
-         *  live foreground run (which would supersede/cancel it). */
-        @Volatile
-        var pipelineActive = false
-
-        /** Exports currently running in the service. The UI's "Exporting session…" overlay waits
-         *  for a TranscriptEvent.ExportDone that never arrives if the process is killed mid-export
-         *  (device sleep), so it reads this to tell "still working" from "nothing is running". */
-        @Volatile var exportsInFlight = 0
-            private set
-
-        /** True from onStartCommand(ACTION_RECORD) until that recording job's teardown — set and
-         *  cleared on MAIN (unlike [recordingActive], which the job sets later on Default), so
-         *  main-thread guards can't race the recording's startup: the queue-kick guard uses it to
-         *  never supersede a live capture, and the UI's crash-recovery check reads it so an
-         *  Activity recreation can't "recover" (move!) the WAV of a recording that just started. */
-        @Volatile
-        var recordingJobActive = false
-
-        /** True while the reader worker runs a task (the library indexer waits on it). */
-        @Volatile
-        var readerActive = false
-            internal set
     }
 
     /** A pending session export, handed to the service via [pendingExport] (utterances can be large,
@@ -393,7 +353,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         reader.abortAll()
         pipelineJob?.cancel()
         notifyPaused()
-        pipelineActive = false; recordingJobActive = false; queueDraining = false
+        RunRegistry.pipelineEnded()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf(lastStartId)
     }
@@ -550,7 +510,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // guard cannot race them.
         // Only while that run is really alive: a stopped run whose job never finished unwinding left
         // these flags up, and every later "Process now" was ignored — the row stayed "Queued".
-        if (processQueue && (queueDraining || recordingJobActive) && pipelineJob?.isActive == true) {
+        if (processQueue && (RunRegistry.queueDraining || RunRegistry.recordingJobActive) && pipelineJob?.isActive == true) {
             satisfyForegroundContract()
             return START_NOT_STICKY
         }
@@ -562,8 +522,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         if (recording) reader.readerYieldForRecording()
         // Main-owned run-type flags for the guard above (and the UI's recovery check): a new start
         // of ANY kind supersedes whatever ran before, so overwrite rather than accumulate.
-        recordingJobActive = recording
-        queueDraining = processQueue
+        RunRegistry.runStarting(recording = recording, queue = processQueue)
         // Snapshot the config on MAIN at start time: a drain re-loads the persisted config into the
         // shared Holder from its own thread, and without a per-run snapshot it could clobber the
         // config the UI just staged for this run. The job re-asserts the snapshot after the join.
@@ -632,7 +591,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             val resumeQueue = withContext(NonCancellable + Dispatchers.Main) {
                 val r = !processQueue && pipelineJob === job && ProcessingQueue.size(this@TranscriptionService) > 0
                 // The resumed drain must be guarded like a plain one — flag flips on MAIN.
-                if (r) queueDraining = true
+                if (r) RunRegistry.queueResumed()
                 r
             }
             if (resumeQueue) {
@@ -641,9 +600,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // Only tear down if still the active job — a newer run may have superseded this one.
             withContext(NonCancellable + Dispatchers.Main) {
                 if (pipelineJob === job) {
-                    pipelineActive = false
-                    recordingJobActive = false
-                    queueDraining = false
+                    RunRegistry.pipelineEnded()
                     // Leave the service (and its foreground notification) up for an in-flight
                     // export — the last export's own tail stops it. stopSelf(lastStartId): a stop
                     // must never bring the service down under a newer, already-accepted start.
@@ -655,7 +612,15 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 }
             }
         }
-        pipelineActive = true
+        RunRegistry.pipelineStarted(RunRegistry.Run(
+            kind = when {
+                recording -> RunRegistry.Kind.RECORDING
+                summarizeOnly -> RunRegistry.Kind.SUMMARIZE
+                processQueue -> RunRegistry.Kind.QUEUE
+                else -> RunRegistry.Kind.IMPORT
+            },
+            gen = runGen, audioUri = uri, startedAtMs = System.currentTimeMillis(),
+        ))
         pipelineJob = job
         // Now that the new job is the active one, supersede any in-flight run (e.g. Re-summarize
         // while the first summary is still streaming). Done after the reassignment so the old job's
@@ -691,7 +656,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     private val importSaved = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private var activeExports = 0
-        set(v) { field = v; exportsInFlight = v }
+        set(v) { field = v; RunRegistry.exports(v) }
 
     /**
      * Write the open session's edits back into its library entry (rebuild session.m4a + meta via
@@ -1329,7 +1294,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     continue
                 }
                 if (SessionLibrary.loadPendingTranscript(entry, fingerprint) != null) continue   // resume: ASR already done
-                currentQueueItemId = id
+                RunRegistry.queueItem(id)
                 updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
                 // Track decode temp files this item creates so they're reclaimed per-item (a long
                 // queue would otherwise stack one decoded WAV copy per entry in filesDir/audio).
@@ -1355,7 +1320,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     notifyItemFailed(entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt))
                     ProcessingQueue.remove(this, id)
                 } finally {
-                    currentQueueItemId = null
+                    RunRegistry.queueItem(null)
                     audioDir.listFiles()?.forEach { if (it.name !in before) runCatching { it.delete() } }
                 }
             }
@@ -1373,7 +1338,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 }
                 val utterances = SessionLibrary.loadPendingTranscript(entry, fingerprint)
                     ?: continue   // no sidecar (its pass-1 was cut short): leave queued, next outer lap redoes ASR
-                currentQueueItemId = id
+                RunRegistry.queueItem(id)
                 updateNotification(getString(R.string.svc_processing_queue, entry.title ?: SessionLibrary.defaultTitle(this, entry.createdAt), ProcessingQueue.size(this)))
                 try {
                     val task = reader.ReadTask(QUEUE_GEN, outputConverter(cfgAll), withTitle = true, entry = entry)
@@ -1381,7 +1346,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     runCatching { reader.awaitRead(reader.submitRead(task)) }
                         .onFailure { if (it is CancellationException) throw it }
                 } finally {
-                    currentQueueItemId = null
+                    RunRegistry.queueItem(null)
                 }
             }
         }
@@ -1438,7 +1403,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // below clears it on a clean stop AND on user cancellation (both run finally) — only a hard
         // process kill leaves the marker, which is exactly what signals "recover this recording".
         RecordingRecovery.markStarted(this, wav)
-        recordingActive = true
+        RunRegistry.micLive(true)
 
         // Set the live-capture status here (the engine no longer emits it), localized; this also
         // restores it after a model-download status was shown above.
@@ -1530,7 +1495,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // which must be finalized before the promote below moves the file. NonCancellable so
             // the join still runs when this very coroutine was cancelled.
             withContext(NonCancellable) { capture.cancelAndJoin() }
-            recordingActive = false
+            RunRegistry.micLive(false)
             RecordingRecovery.clear(this)
             // Auto-save the finalized capture into the app library immediately — this `finally`
             // runs on a clean stop AND on cancellation (ACTION_STOP), so a recording can no longer

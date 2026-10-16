@@ -150,10 +150,13 @@ internal class ReaderWorker(private val host: Host) {
 
     fun readerBusy(): Boolean = synchronized(readLock) { readTasks.isNotEmpty() }
 
+    /** Publish the held tasks' generations to [RunRegistry] (call under [readLock], after a change). */
+    private fun publishTasks() = RunRegistry.readerTasks(readTasks.map { it.gen })
+
     /** Queue [task] (a task for an entry already queued or being read is not read twice). */
     fun submitRead(task: ReadTask): ReadTask = synchronized(readLock) {
         val queued = task.entry?.id?.let { id -> readTasks.firstOrNull { it.entry?.id == id } }
-        if (queued == null) readTasks += task
+        if (queued == null) { readTasks += task; publishTasks() }
         // Whether the task is new or already listed, the loop must be running: a listed task whose
         // loop had ended was returned here and awaited forever ("Process now" did nothing, the row
         // stayed "Queued").
@@ -172,7 +175,7 @@ internal class ReaderWorker(private val host: Host) {
         task.final.complete(emptyList())
         // Decided under readLock, where the loop also claims its task: checked outside it, the loop
         // could take the task between the check and the removal and read an aborted meeting.
-        val current = synchronized(readLock) { (readCurrent === task).also { if (!it) readTasks.remove(task) } }
+        val current = synchronized(readLock) { (readCurrent === task).also { if (!it && readTasks.remove(task)) publishTasks() } }
         if (current) readModel?.cancel()
         task.result.completeExceptionally(CancellationException("reading aborted"))
     }
@@ -201,18 +204,18 @@ internal class ReaderWorker(private val host: Host) {
                 } ?: break
                 // Small devices never hold the reader beside a running speech engine: wait for the
                 // capture to end, and for a live task, for its transcript to be complete.
-                if (!liveReaderCapable() && (TranscriptionService.recordingActive || (task.text == null && !task.final.isCompleted))) {
+                if (!liveReaderCapable() && (RunRegistry.recordingActive || (task.text == null && !task.final.isCompleted))) {
                     // Wait for the capture to end; never hold the reader beside it on small devices.
                     readModel?.close(); readModel = null
                     delay(1000); continue
                 }
                 val claimed = synchronized(readLock) {
-                    if (task.aborted) { readTasks.remove(task); false } else { readCurrent = task; true }
+                    if (task.aborted) { readTasks.remove(task); publishTasks(); false } else { readCurrent = task; true }
                 }
                 if (!claimed) continue
-                TranscriptionService.readerActive = true
+                RunRegistry.readerReading(task.gen)
                 val res = runCatching { withContext(RunGen(task.gen)) { readOne(task) } }
-                readCurrent = null; TranscriptionService.readerActive = false
+                readCurrent = null; RunRegistry.readerReading(null)
                 if (task.preempted && !task.aborted) { task.preempted = false; continue }   // read again later
                 // Save BEFORE leaving the task list: while it is listed the worker counts as busy, so
                 // the service does not tear itself down (cancelling this scope) mid-save — that left a
@@ -229,7 +232,7 @@ internal class ReaderWorker(private val host: Host) {
                         { e -> task.result.completeExceptionally(e); runCatching { readFailed(task, e) } },
                     )
                 }
-                synchronized(readLock) { readTasks.remove(task) }
+                synchronized(readLock) { readTasks.remove(task); publishTasks() }
             }
         } finally {
             synchronized(readLock) {

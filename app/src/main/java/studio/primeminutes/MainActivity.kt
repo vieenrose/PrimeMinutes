@@ -348,7 +348,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         maybeRequestNotifications()
         // First launch (and after an update / on a new SoC): measure how many threads this phone scales to.
-        if (!TranscriptionService.pipelineActive) lifecycleScope.launch {
+        if (!studio.primeminutes.service.RunRegistry.pipelineActive) lifecycleScope.launch {
             runCatching { studio.primeminutes.core.hw.BackendBench.settleCrash(applicationContext, studio.primeminutes.core.hw.HwInfo.benchKey(applicationContext)) }
             runCatching { studio.primeminutes.core.hw.HwInfo.ensureBench(applicationContext) }
         }
@@ -363,7 +363,7 @@ class MainActivity : ComponentActivity() {
         val downloading = studio.primeminutes.online.ImportDownloads.state.value.let {
             it is studio.primeminutes.online.ImportDownloads.State.Running || it is studio.primeminutes.online.ImportDownloads.State.Ready
         }
-        if (!TranscriptionService.pipelineActive && TranscriptionService.exportsInFlight == 0 && !downloading) {
+        if (!studio.primeminutes.service.RunRegistry.pipelineActive && studio.primeminutes.service.RunRegistry.exportsInFlight == 0 && !downloading) {
             Thread {
                 ModelManager(applicationContext).sweepStalePartFiles()
                 studio.primeminutes.online.sweepStaleParts(java.io.File(filesDir, "audio"))
@@ -784,15 +784,15 @@ private fun TranscribeScreen(
         // recordingJobActive is set on MAIN in onStartCommand — before any recreation could run
         // this check — closing the window where recordingActive (set later, on the pipeline
         // thread) was still false and pending() would "recover" (move!) a live capture's WAV.
-        if (TranscriptionService.recordingActive || TranscriptionService.recordingJobActive) return@LaunchedEffect
+        if (studio.primeminutes.service.RunRegistry.recordingActive || studio.primeminutes.service.RunRegistry.recordingJobActive) return@LaunchedEffect
         val interrupted = withContext(Dispatchers.IO) {
             RecordingRecovery.pending(context)?.let { wav ->
                 SessionLibrary.promoteRecording(context, wav, RecordingRecovery.seconds(wav))?.wavFile ?: wav
             }
         }
         if (interrupted != null) { recoveredRec = interrupted; recentsVersion++ }
-        else if (!TranscriptionService.pipelineActive) recoveredImport = withContext(Dispatchers.IO) { ImportRecovery.pending(context) }
-        if (interrupted == null && recoveredImport == null && !TranscriptionService.pipelineActive) {
+        else if (!studio.primeminutes.service.RunRegistry.pipelineActive) recoveredImport = withContext(Dispatchers.IO) { ImportRecovery.pending(context) }
+        if (interrupted == null && recoveredImport == null && !studio.primeminutes.service.RunRegistry.pipelineActive) {
             interruptedEntry = withContext(Dispatchers.IO) {
                 val queued = ProcessingQueue.ids(context).toSet()
                 SessionLibrary.list(context)
@@ -812,7 +812,7 @@ private fun TranscribeScreen(
         // This runs even when a recording was recovered above: those are independent (the
         // recovery only offers the interrupted capture), and returning early left every queued
         // item stranded with no way to start it — the queue's ⋮ menu has no "start" action.
-        if (!TranscriptionService.pipelineActive &&
+        if (!studio.primeminutes.service.RunRegistry.pipelineActive &&
             withContext(Dispatchers.IO) { ProcessingQueue.size(context) } > 0
         ) onProcessQueue()
     }
@@ -1556,7 +1556,7 @@ private fun TranscribeScreen(
             // Queue-drain events drive the Studio list's per-row status chip/progress AND the live
             // buffers; they only touch the open session when the user is WATCHING that item.
             if (gen == TranscriptionService.QUEUE_GEN) {
-                val qid = TranscriptionService.currentQueueItemId
+                val qid = studio.primeminutes.service.RunRegistry.currentQueueItemId
                 if (qid != null && qid != queueItemId) {
                     // A new item started — reset the live buffers to it. If the user was watching
                     // the PREVIOUS item, stop forwarding: item B's transcript must not stream into
@@ -2734,7 +2734,7 @@ private fun TranscribeScreen(
     if (exporting) {
         LaunchedEffect(Unit) {
             delay(2_000)   // let the service actually start and bump the counter
-            while (exporting && TranscriptionService.exportsInFlight > 0) delay(1_000)
+            while (exporting && studio.primeminutes.service.RunRegistry.exportsInFlight > 0) delay(1_000)
             if (exporting) {
                 exporting = false
                 snackbarHostState.showSnackbar(

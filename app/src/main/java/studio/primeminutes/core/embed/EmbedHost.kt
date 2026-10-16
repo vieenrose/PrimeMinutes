@@ -13,7 +13,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import studio.primeminutes.core.models.ModelManager
-import studio.primeminutes.service.TranscriptionService
 
 /**
  * The one loaded [Embedder] of the process, shared by the indexer and the search box. Loads on
@@ -46,7 +45,7 @@ object EmbedHost {
 
     /** False while a live recording runs on a device with less than [SMALL_DEVICE_RAM]. */
     fun mayLoad(context: Context): Boolean {
-        if (!TranscriptionService.recordingJobActive) return true
+        if (!studio.primeminutes.service.RunRegistry.recordingJobActive) return true
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val mi = ActivityManager.MemoryInfo().also(am::getMemoryInfo)
         return mi.totalMem >= SMALL_DEVICE_RAM

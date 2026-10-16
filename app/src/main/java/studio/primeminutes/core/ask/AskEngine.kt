@@ -24,7 +24,6 @@ import studio.primeminutes.core.llm.SpTokenizer
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.reader.ReaderProtocol
-import studio.primeminutes.service.TranscriptionService
 import studio.primeminutes.BuildConfig
 import java.io.File
 
@@ -126,8 +125,7 @@ object AskEngine {
         EmbedHost.ready(context) && ModelManager(context).llmReady(LlmRegistry.byId(
             studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId))
 
-    fun busy(): Boolean =
-        TranscriptionService.recordingJobActive || TranscriptionService.pipelineActive || TranscriptionService.readerActive
+    fun busy(): Boolean = studio.primeminutes.service.RunRegistry.busy
 
     /**
      * Asks [question] over [entries]. A follow-up question keeps the conversation (the model's KV
