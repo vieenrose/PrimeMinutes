@@ -35,7 +35,7 @@ enum BackgroundWork {
     static let continuedPrefix = "tw.com.pesi.primeminutes.process"
     /// Registered under the exact id, just before its submission: a handler registered under the wildcard is not
     /// found for a submitted id (NSInternalInconsistencyException); continued tasks may register after launch.
-    @available(iOS 26, *) private static func registerContinued(_ id: String) -> Bool {
+    @available(iOS 26, *) private static func registerContinued(_ id: String, drain: Int) -> Bool {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
             // Handed to the main actor below and not touched here after that (BGTask is not Sendable).
             guard let continued = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
@@ -46,7 +46,7 @@ enum BackgroundWork {
             task.expirationHandler = { StatusLog.add("trace continued task expired"); Task { @MainActor in Model.shared.runner.yieldToSystem() } }
             Task { @MainActor in
                 let m = Model.shared
-                while m.runner.isDraining {
+                while m.runner.isDraining && m.runner.drainCount == drain {
                     task.progress.completedUnitCount = Int64(min(max(m.runner.jobProgress, 0), 1) * 1000)
                     task.updateTitle(L("bg_task_title"), subtitle: m.screen.status)
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -57,11 +57,11 @@ enum BackgroundWork {
             }
         }
     }
-    @MainActor static func continueInBackground() {
+    @MainActor static func continueInBackground(drain: Int) {
         guard #available(iOS 26, *), Dev.env["VOX_NOCONTINUED"] == nil else { return }
         guard UIApplication.shared.applicationState != .background else { StatusLog.add("trace continued task: app in background, not submitted"); return }
         let id = "\(continuedPrefix).\(UUID().uuidString)"
-        guard registerContinued(id) else { StatusLog.add("trace continued task: handler not registered"); return }
+        guard registerContinued(id, drain: drain) else { StatusLog.add("trace continued task: handler not registered"); return }
         let r = BGContinuedProcessingTaskRequest(identifier: id, title: L("bg_task_title"), subtitle: L("status_starting"))
         r.strategy = .fail   // now or not at all: a queued request could start after the run is over
         do { try BGTaskScheduler.shared.submit(r) } catch { StatusLog.add("trace continued task not submitted: \(error)") }

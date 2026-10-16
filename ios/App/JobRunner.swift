@@ -259,12 +259,15 @@ final class ReaderWorker: @unchecked Sendable {
     }
     /// The queue is being worked through (the background task lasts as long).
     var isDraining: Bool { draining }
+    /// Counts drains: a continued-processing task follows the drain it was asked for, not a later one (it polls once a
+    /// second, and a drain started within that second kept the old task alive next to the new one's).
+    private(set) var drainCount = 0
     /// The running job's progress, 0…1: transcription up to 0.8, then the reading.
     @Published var jobProgress = 0.0
     /// Processes every queued job in order (also at launch: recordings cut short by a kill are picked up here).
     func drain() {
         guard !draining, liveJob == nil else { return }
-        draining = true
+        draining = true; drainCount += 1
         UIApplication.shared.isIdleTimerDisabled = true   // iOS suspends a locked app: stay awake while the queue works (Android: wake lock)
         if Dev.env["VOX_SHOTS"] == nil { Notifier.requestPermission() }   // screenshots: no permission prompt over the UI
         drainTask = Task {
@@ -273,7 +276,7 @@ final class ReaderWorker: @unchecked Sendable {
                 WavWriter.repair(url)
                 guard let secs = AudioDecode.duration(url), secs > 0 else { parked.insert(job.id); failed[job.id] = L("import_failed"); screen.status = L("import_failed"); await syncQueue(); continue }   // undecodable: shown with its error and Remove, not dropped silently
                 let left = await queue.count; pending = left; activeJob = job.id; jobProgress = 0; await syncQueue()
-                if !continuedSubmitted { continuedSubmitted = true; BackgroundWork.continueInBackground() }
+                if !continuedSubmitted { continuedSubmitted = true; BackgroundWork.continueInBackground(drain: drainCount) }
                 if left > 1 { screen.status = L("queue_n", left) }
                 let skipper = SilenceSkipper()
                 let partial = Checkpoint.loadPartial(job.id)   // left by a Stop, or saved every minute (a kill): continue after its seam
