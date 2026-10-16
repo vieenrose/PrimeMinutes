@@ -76,6 +76,7 @@ enum Checkpoint {
     static func save(_ us: [Utterance], _ id: UUID) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if let d = try? JSONEncoder().encode(us) { try? d.write(to: url(id), options: .atomic) }
+        try? FileManager.default.removeItem(at: partialUrl(id))   // the complete transcript supersedes the per-minute partial
     }
     static func load(_ id: UUID) -> [Utterance]? { (try? Data(contentsOf: url(id))).flatMap { try? JSONDecoder().decode([Utterance].self, from: $0) } }
     static func remove(_ id: UUID) { try? FileManager.default.removeItem(at: url(id)); try? FileManager.default.removeItem(at: partialUrl(id)) }

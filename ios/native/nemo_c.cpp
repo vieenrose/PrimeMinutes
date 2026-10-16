@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "engine.h"
+#include "fixed_fmt.h"
 
 struct nemo_handle {
     std::unique_ptr<nemo::Engine> engine;
@@ -17,9 +18,9 @@ struct nemo_handle {
 
 namespace {
 std::string encode_segment(const nemo::Segment& s) {
-    char head[96];
-    std::snprintf(head, sizeof head, "%d\x1f%.3f\x1f%.3f\x1f", s.speaker, s.start_s, s.end_s);
-    return std::string(head) + s.text + "\x1e";
+    // Times in fixed text, never printf's %f: it follows the C locale (a "0,500" breaks the Swift parser).
+    return std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) + "\x1f" +
+           s.text + "\x1e";
 }
 char* dup(const std::string& s) {
     char* p = static_cast<char*>(std::malloc(s.size() + 1));

@@ -124,6 +124,8 @@ final class ReaderWorker: @unchecked Sendable {
     /// Transcribe + read a source of 16 kHz mono chunks (a file, the bundled sample). `feed` pushes chunks until done or false.
     func process(seconds: Double, job: Job? = nil, skipper: SilenceSkipper? = nil, resume: Checkpoint.Partial? = nil, offset: Double = 0, enroll: SeamEnrollment? = nil, live: Bool = false, feed: @escaping @Sendable (([Float]) -> Bool) throws -> Void) async {
         screen.status = L("loading_models"); screen.clear(); StopFlag.on = false
+        // A job starting mid-answer cancels Ask: the pipeline wins (Android AskEngine). Its engine stays loaded but idle.
+        if AskEngine.shared.phase.working { AskEngine.shared.cancel() }
         await Task.detached {
             let cached = resume != nil ? nil : job.flatMap { Checkpoint.load($0.id) }   // transcript done by an earlier attempt: only the reader is left
             let speechReady = cached != nil ? true : await self.downloads.downloadSpeech()
@@ -279,7 +281,11 @@ final class ReaderWorker: @unchecked Sendable {
                 if !continuedSubmitted { continuedSubmitted = true; BackgroundWork.continueInBackground(drain: drainCount) }
                 if left > 1 { screen.status = L("queue_n", left) }
                 let skipper = SilenceSkipper()
-                let partial = Checkpoint.loadPartial(job.id)   // left by a Stop, or saved every minute (a kill): continue after its seam
+                // A complete transcript (ASR had ended, killed while reading) means the reader alone (process() restores it);
+                // else a partial left by a Stop, or saved every minute (a kill): continue after its seam.
+                let plan = ResumePlan.decide(full: Checkpoint.load(job.id), partial: Checkpoint.loadPartial(job.id))
+                if case .readerOnly = plan { StatusLog.add("trace resume: transcript complete, reader only") }
+                let partial = plan.partial
                 let from = partial.map { max(0, $0.seam - SeamStitcher.preroll) } ?? 0
                 let enroll = partial.map { SeamEnrollment.plan($0.lines, offset: from) } ?? .none(from)
                 if !enroll.clips.isEmpty { StatusLog.add("trace resume enrollment: \(enroll.clips.count) clips, \(Int(enroll.length)) s") }

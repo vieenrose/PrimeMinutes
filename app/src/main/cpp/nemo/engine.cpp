@@ -2,6 +2,7 @@
 // (CrispASR's xasr stream, audio.cpp's Nemotron-3 diar stream) and are attributed in PROVENANCE.md.
 #include "engine.h"
 #include "wav.h"
+#include "fixed_fmt.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -573,9 +574,9 @@ void Engine::attribute(const std::function<void(const Segment&)>& on_segment, bo
                 const auto& sp = use->spans();
                 std::fprintf(f, "[\n");
                 for (size_t i = 0; i < cps.size() && i < sp.size(); i++)
-                    std::fprintf(f, "%s  {\"c\": \"%s\", \"t\": %.3f}\n", i ? ",\n" : "",
+                    std::fprintf(f, "%s  {\"c\": \"%s\", \"t\": %s}\n", i ? ",\n" : "",
                                  use->text().substr(cps[i].first, cps[i].second).c_str(),
-                                 double(sp[i].start) / 16000.0);
+                                 fixed(double(sp[i].start) / 16000.0, 3).c_str());
                 std::fprintf(f, "]\n");
                 std::fclose(f);
             }

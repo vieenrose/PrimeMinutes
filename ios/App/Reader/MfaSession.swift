@@ -61,7 +61,7 @@ final class MfaEngine {
     func agree(_ ids: [Int], forced: [Int]) throws -> Int {
         guard let h else { throw ReaderError(description: "engine closed") }
         var err = [CChar](repeating: 0, count: 512)
-        let r = mfa_agree(h, ids.map { Int32($0) }, Int32(ids.count), forced.map { Int32($0) }, Int32(forced.count), &err, 512)
+        let r = MfaCompute.run { mfa_agree(h, ids.map { Int32($0) }, Int32(ids.count), forced.map { Int32($0) }, Int32(forced.count), &err, 512) }
         if r < 0 { throw ReaderError(description: String(cString: err)) }
         return Int(r)
     }
@@ -77,14 +77,14 @@ final class MfaEngine {
         var out: UnsafeMutablePointer<Int32>?
         var stats = [Double](repeating: 0, count: 5)
         typealias CB = (Int) -> Bool
-        let n: Int32 = withoutActuallyEscaping(onToken) { cb in
+        let n: Int32 = MfaCompute.run { withoutActuallyEscaping(onToken) { cb in
             var box = cb
             return withUnsafeMutablePointer(to: &box) { ptr in
                 mfa_generate(h, a, Int32(a.count), Int32(maxNew), temp, Int32(topK), topP, seed,
                              { id, user in user!.assumingMemoryBound(to: CB.self).pointee(Int(id)) ? 1 : 0 },
                              UnsafeMutableRawPointer(ptr), &out, &stats, &err, 512)
             }
-        }
+        } }
         guard n >= 0 else { throw ReaderError(description: String(cString: err)) }
         lastStats = stats
         if stats[3] + stats[4] > 5 {   // prefilled, reused, generated, prefill_s, decode_s: compute-bound or paging?

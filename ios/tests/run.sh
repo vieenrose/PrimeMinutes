@@ -7,3 +7,4 @@ VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/reader-tests $D/golden
 swiftc -parse-as-library -O $D/../App/Keywords.swift $D/KeywordsTests.swift -o $O/keywords-tests && $O/keywords-tests
 swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $R/DownloadPlan.swift $D/GuardAndPlanTests.swift -o $O/guard-tests
 VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/guard-tests
+swiftc -parse-as-library -O $R/MfaCompute.swift $R/ResumePlan.swift $D/EngineAndResumeTests.swift -o $O/engine-tests && $O/engine-tests
