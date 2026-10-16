@@ -19,53 +19,23 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import studio.primeminutes.core.asr.SeamEnrollment
-import studio.primeminutes.core.asr.SeamStitcher
-import studio.primeminutes.core.asr.AsrEngine
 import studio.primeminutes.core.asr.LiveAsrEngine
 import studio.primeminutes.core.asr.NemoStreamEngine
-import studio.primeminutes.core.asr.SnapshotConverter
 import studio.primeminutes.core.audio.AudioDecoder
-import studio.primeminutes.core.audio.AudioRecorder
-import studio.primeminutes.core.audio.SilenceSkipper
-import studio.primeminutes.core.audio.RecordingRecovery
-import studio.primeminutes.core.audio.patchWavHeader
 import studio.primeminutes.core.audio.ImportRecovery
-import studio.primeminutes.core.audio.WavIo
-import studio.primeminutes.core.audio.WavNormalizer
 import studio.primeminutes.core.config.SummaryScript
 import studio.primeminutes.core.config.TranscriptionConfig
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.library.ProcessingQueue
 import studio.primeminutes.core.library.SessionLibrary
-import studio.primeminutes.core.reader.AgentEvent
-import studio.primeminutes.core.reader.mapText
-import studio.primeminutes.core.reader.AgentState
-import studio.primeminutes.core.reader.ReaderProtocol
-import studio.primeminutes.core.reader.ReaderLane
-import studio.primeminutes.core.reader.ReaderCheckpoint
-import studio.primeminutes.core.models.LlmRegistry
-import studio.primeminutes.core.models.LlmSpec
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.session.PrimeMinutesSession
 import studio.primeminutes.core.text.ChineseScript
@@ -151,12 +121,12 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // [studio.primeminutes.online.ImportDownloads.pending]; state is published through its StateFlow.
         const val ACTION_IMPORT_DOWNLOAD = "studio.primeminutes.IMPORT_DOWNLOAD"
 
-        /** Set by the UI's "Resume" just before it re-runs a library capture: the next [runPipeline]
+        /** Set by the UI's "Resume" just before it re-runs a library capture: the next [ImportPipeline.run]
          *  continues from the entry's saved progress instead of transcribing from zero. One-shot. */
         @Volatile var resumeRequested = false
 
         /** Set by "finish the interrupted import" just before it re-runs the import copy: the next
-         *  [runPipeline] continues from [ImportRecovery]'s saved progress, if it matches. One-shot. */
+         *  [ImportPipeline.run] continues from [ImportRecovery]'s saved progress, if it matches. One-shot. */
         @Volatile var importResumeRequested = false
 
         // The run flags (live capture, pipeline job, reader, queue item, exports) live in
@@ -268,6 +238,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
 
     /** Live capture → transcript → hand-over to the reader; owns the graceful-stop flags. */
     private val recordingPipeline = RecordingPipeline(pipelineHost)
+
+    /** File import → transcript → notes; owns the in-flight import the stop handler banks. */
+    private val importPipeline = ImportPipeline(pipelineHost)
     override val context: Context get() = this
     override val scope: kotlinx.coroutines.CoroutineScope get() = lifecycleScope
     override fun threads(): Int = asrThreads()
@@ -456,16 +429,10 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 val job = pipelineJob
                 Log.i(STOP_TAG, "ACTION_STOP received, job=${job != null} active=${job?.isActive}")
                 // SAVE BEFORE CANCELLING. The pipeline coroutine cannot be counted on to unwind —
-                // see inFlightWav — so the audio is banked here, synchronously, while the service
+                // see InFlightImport — so the audio is banked here, synchronously, while the service
                 // is still alive. The decoded WAV is already on disk and its writer is flushed by
                 // AudioDecoder's `use`, so what is saved is every second transcribed so far.
-                saveInFlightImport("stop")?.let { e ->
-                    inFlightCheckpoint?.let { c ->
-                        SessionLibrary.saveProgress(e, c.progress)
-                        c.notes()?.let { SessionLibrary.saveNotes(e, reader.readerModelId(), it) }
-                    }
-                }
-                inFlightCheckpoint = null
+                importPipeline.inFlight.bankOnStop(reader::readerModelId)
                 lifecycleScope.launch {
                     val t0 = System.currentTimeMillis()
                     val drained = runCatching { withTimeout(STOP_DRAIN_MS) { job?.cancelAndJoin() } }
@@ -573,7 +540,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     summarizeOnly -> reader.runSummarizeOnly(transcript.orEmpty(), summarizeWithTitle)
                     processQueue -> runQueue()
                     recording -> recordingPipeline.run()
-                    else -> runPipeline(uri)
+                    else -> importPipeline.run(uri)
                 }
             }
                 .onFailure { e ->
@@ -653,75 +620,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     // main teardown hop). Exports run OUTSIDE pipelineJob, so both teardowns must consult BOTH: a
     // pipeline finishing must not stopSelf under a live export, and one export must not stop the
     // service under another.
-    /**
-     * The decoded work WAV of the import currently in flight, or null.
-     *
-     * Exists because the pipeline coroutine CANNOT be relied on to save it. Measured on a Boox:
-     * ACTION_STOP's cancelAndJoin times out after the full 15 s and the job ends
-     * jobActive=false jobCompleted=false — cancelled but stuck mid-unwind inside a native ASR call
-     * that never observes cancellation. Its `finally` therefore never runs, which is why three
-     * successive fixes that lived in that finally all did nothing. The stop handler owns the save
-     * instead: it runs on the main thread and always completes.
-     */
-    private var inFlightWav: java.io.File? = null
-    private var inFlightDurationSec = 0
-    /** One-shot: the stop handler and the pipeline both try to save; whoever gets there first wins. */
-    private val importSaved = java.util.concurrent.atomic.AtomicBoolean(false)
-
     private var activeExports = 0
         set(v) { field = v; RunRegistry.exports(v) }
-
-    /**
-     * Write the open session's edits back into its library entry (rebuild session.m4a + meta via
-     * [SessionLibrary.attachResults]). Counted in [activeExports] and shaped like [runExport]: an
-     * out-of-pipeline IO job under the shared foreground, so quitting the app can't truncate the
-     * session file mid-write. Emits [TranscriptEvent.LibrarySaved] so the Studio list refreshes.
-     */
-    /**
-     * Save the in-flight import's decoded audio into the library, at most once.
-     *
-     * Non-suspending on purpose — [SessionLibrary.promoteRecording] is a file rename — so the stop
-     * handler can call it inline and be sure it completed before the service dies.
-     */
-    /** The entry the stop handler / pipeline just banked the in-flight import into (see [saveInFlightImport]). */
-    @Volatile private var savedImportEntry: SessionLibrary.Entry? = null
-
-    /**
-     * The in-flight import's resume checkpoint (frozen prefix + reader notes), refreshed on every ASR
-     * snapshot. The pipeline's own `finally` never runs on Stop (native ASR does not observe
-     * cancellation, see [inFlightWav]), so the stop handler banks this next to the audio instead.
-     */
-    private class ImportCheckpoint(val progress: SessionLibrary.Progress, val notes: () -> studio.primeminutes.core.reader.ReaderCheckpoint?)
-    @Volatile private var inFlightCheckpoint: ImportCheckpoint? = null
-
-    /**
-     * Duration of what is actually on disk: a Stop mid-decode banks only the decoded part of the
-     * import, so the entry must not claim the source's full length (the player and the row would
-     * show minutes of audio that is not there).
-     */
-    private fun bankedSeconds(wav: java.io.File, probed: Int): Int {
-        val onDisk = ((wav.length() - WavIo.HEADER) / (WavIo.SAMPLE_RATE * 2L)).toInt()
-        return if (probed > 0) minOf(probed, onDisk) else onDisk
-    }
-
-    private fun saveInFlightImport(reason: String): SessionLibrary.Entry? {
-        val wav = inFlightWav ?: return null
-        val min = WavIo.HEADER + WavIo.SAMPLE_RATE * 2L
-        if (!wav.exists() || wav.length() <= min) {
-            Log.i(STOP_TAG, "saveInFlightImport($reason): nothing to save, len=${if (wav.exists()) wav.length() else -1}")
-            return null
-        }
-        if (!importSaved.compareAndSet(false, true)) return null   // the other side already saved it
-        // The decoder was still streaming into this file, so its header is the placeholder: finalize it
-        // for what is on disk, or the entry is not a canonical WAV and the session .m4a cannot be built.
-        runCatching { patchWavHeader(wav, (wav.length() - WavIo.HEADER) / 2) }
-        val entry = runCatching { SessionLibrary.promoteRecording(this, wav, bankedSeconds(wav, inFlightDurationSec)) }
-            .onFailure { Log.w(STOP_TAG, "saveInFlightImport($reason) failed", it) }
-            .getOrNull()
-        Log.i(STOP_TAG, "saveInFlightImport($reason) -> ${entry?.id ?: "NULL"}")
-        if (entry != null) { inFlightWav = null; savedImportEntry = entry }
-        return entry
-    }
 
     private fun runImportDownload() {
         val req = studio.primeminutes.online.ImportDownloads.pending.also { studio.primeminutes.online.ImportDownloads.pending = null }
@@ -770,6 +670,12 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         }
     }
 
+    /**
+     * Write the open session's edits back into its library entry (rebuild session.m4a + meta via
+     * [SessionLibrary.attachResults]). Counted in [activeExports] and shaped like [runExport]: an
+     * out-of-pipeline IO job under the shared foreground, so quitting the app can't truncate the
+     * session file mid-write. Emits [TranscriptEvent.LibrarySaved] so the Studio list refreshes.
+     */
     private fun runPersist(req: PersistRequest?) {
         if (req == null) {
             satisfyForegroundContract()
@@ -956,314 +862,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     }
 
     /**
-     * Decode (MediaCodec) -> ASR (Phase 1) -> summarization (Phase 2). The ASR models are
-     * released before the LLM loads — never both resident on small devices. Phase 3
-     * inserts diarization between ASR and the Complete event.
-     */
-    private suspend fun runPipeline(
-        audioUri: String?,
-        // false = the batch drain's pass 1: stop after ASR + diarization (Complete emitted, no LLM
-        // touched) — the drain summarizes every item later under ONE engine load.
-        summarizeAfter: Boolean = true,
-    ): Pair<List<TranscriptEvent.Utterance>, ReaderWorker.SummaryResult>? {
-        val uri = audioUri?.let(Uri::parse)
-            ?: run { emitEvent(TranscriptEvent.Failed(getString(R.string.err_no_audio_source))); return null }
-        val cfg = TranscriptionConfig.Holder.config
-
-        val models = ModelManager(this)
-        ensureEngineModels(models)
-
-        emitEvent(TranscriptEvent.Status(getString(R.string.svc_transcribing)))
-        emitEvent(TranscriptEvent.Progress(0f))   // restart the bar for the recognition phase
-        // Total audio length (a cheap metadata read) so the recognition phase can report REAL progress
-        // as each utterance's end time advances through the file. 0 when unknown → no ASR bar, still fine.
-        val totalDurationSec = probeDurationSec(uri)
-        // Generated text (summary/title/actions) and the transcript both follow the Chinese-script
-        // setting; the transcript keeps the conservative s2t — see [transcriptConverter].
-        val converter = outputConverter(cfg)
-        val txtConverter = transcriptConverter()
-        val snapConv = SnapshotConverter(txtConverter?.let { c -> c::convert })
-
-        // Our own 16 kHz work WAVs (library captures, prior decode outputs) are streamed directly —
-        // the same policy as the player source; routing them through the MediaCodec decode path is both
-        // wasteful (a byte-identical copy) and unreliable for WAV input on some devices (observed:
-        // zero decoded samples → empty transcript when the queue re-processed a library capture).
-        val srcFile = if (uri.scheme == "file") uri.path?.let(::File) else null
-        val ownWav = srcFile != null && srcFile.exists() && srcFile.extension == "wav" &&
-            (srcFile.parentFile?.name == "audio" || srcFile.name == SessionLibrary.WAV_NAME)
-
-        // --- ASR phase: collect utterances while streaming them to the UI. ---
-        // Whether this run owns a library entry, decided BEFORE any long phase so the finally below
-        // can save the audio no matter where the run stops. A re-run of a library capture already
-        // has one (its audio never left) and the queue drain owns its own — both skip the promote.
-        val foreground = (kotlin.coroutines.coroutineContext[RunGen]?.gen ?: UNTAGGED) != QUEUE_GEN
-        val existing = if (ownWav && srcFile!!.name == SessionLibrary.WAV_NAME)
-            srcFile.parentFile?.let { SessionLibrary.byId(this, it.name) } else null
-        var entry: SessionLibrary.Entry? = existing
-
-        // Resume (UI "Resume" on a stopped library capture): keep the saved frozen transcript and
-        // transcribe only the audio after it. Anything else that re-runs the entry supersedes the
-        // checkpoint (a fresh run starts from zero, as before).
-        val wantResume = resumeRequested; resumeRequested = false
-        val wantImportResume = importResumeRequested; importResumeRequested = false
-        // The import copy a kill can interrupt (ImportRecovery's marker names it): its progress is saved
-        // as it is transcribed, so "finish the interrupted import" continues after it.
-        val recoverableCopy = srcFile?.takeIf { foreground && existing == null && ImportRecovery.keptPath(this) == it.absolutePath }
-        val resume = (if (wantResume && existing != null && ownWav) SessionLibrary.loadProgress(existing)
-            else if (wantImportResume && recoverableCopy != null) ImportRecovery.loadProgress(this, recoverableCopy)
-            else null)?.takeIf { it.fingerprint == transcriptFingerprint(cfg) && !it.asrComplete && it.utterances.isNotEmpty() }
-        if (resume != null && existing == null) Log.i(STOP_TAG, "import resume at ${resume.asrDoneSec.toInt()} s, ${resume.utterances.size} utterances kept")
-        if (existing != null && resume == null) SessionLibrary.clearProgress(existing)
-        val prior = resume?.utterances ?: emptyList()
-        val seamSec = resume?.asrDoneSec ?: 0.0
-        // Resume a little BEFORE the seam: the overlap lets SeamStitcher match the restarted diarizer's
-        // speaker ids to the saved ones.
-        val offsetSec = if (resume != null) (seamSec - SeamStitcher.PREROLL_SEC).coerceAtLeast(0.0) else 0.0
-        // …and, before that, a few seconds of every saved speaker: a speaker silent in the preroll came
-        // back as a new one (SeamEnrollment).
-        val enroll = if (resume != null) SeamEnrollment.plan(prior, offsetSec) else SeamEnrollment.NONE
-        if (enroll.clips.isNotEmpty()) Log.i(STOP_TAG, "resume enrollment: ${enroll.clips.size} clips, ${"%.1f".format(enroll.lengthSec)} s")
-
-        // Stream-decode the source to a 16 kHz mono work WAV while feeding the live VAD/ASR — never
-        // the whole waveform in RAM. The WAV is the player + diarization source (16 kHz mono).
-        val wav = if (ownWav) srcFile!!
-        else File(File(filesDir, "audio").apply { mkdirs() }, "decoded_${System.currentTimeMillis()}.wav")
-        val chunks = if (ownWav) {
-            // Raw PCM16 read in recorder-sized blocks (the capture was already AGC'd/normalized).
-            kotlinx.coroutines.flow.flow {
-                for ((s, e) in enroll.clips) { emitAll(wavChunks(wav, s, e)); emit(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
-                emitAll(wavChunks(wav, offsetSec))
-            }
-        } else channelFlow {
-            // normalize: quiet far-field imports get an automatic constant gain before the live
-            // VAD/ASR sees them — and the work WAV (player + diarization source) carries the same
-            // gain, so every downstream consumer hears identical audio.
-            // A resumed import decodes the whole file (the work WAV must hold all of it) but feeds the
-            // ASR only from offsetSec, like wavChunks does for a library capture.
-            var skip = (offsetSec * WavIo.SAMPLE_RATE).toLong()
-            // The enrollment clips lie in the skipped audio: kept aside (≤ 60 s) and sent first.
-            val ranges = enroll.clips.map { (s, e) -> (s * WavIo.SAMPLE_RATE).toLong() to (e * WavIo.SAMPLE_RATE).toLong() }
-            val clipAudio = ranges.map { (a, b) -> FloatArray((b - a).toInt()) }
-            var pos = 0L
-            var clipsSent = false
-            // Stop cancels this producer, but trySendBlocking only reports "closed" and the decoder would
-            // run on to EOF (CPU with no foreground service, the promoted WAV still growing): end it here.
-            fun send(a: FloatArray) {
-                if (trySendBlocking(a).isClosed || !isActive) throw kotlinx.coroutines.CancellationException("import stopped")
-            }
-            AudioDecoder.decodeToWav16k(this@TranscriptionService, uri, wav, normalize = true) { block, len ->
-                if (!isActive) throw kotlinx.coroutines.CancellationException("import stopped")
-                ranges.forEachIndexed { k, (a, b) ->
-                    val lo = maxOf(a, pos); val hi = minOf(b, pos + len)
-                    if (lo < hi) System.arraycopy(block, (lo - pos).toInt(), clipAudio[k], (lo - a).toInt(), (hi - lo).toInt())
-                }
-                pos += len
-                if (skip >= len) { skip -= len; return@decodeToWav16k }
-                // First block reaching the preroll: the clips go in front of it, once.
-                if (!clipsSent) {
-                    clipsSent = true
-                    clipAudio.forEach { send(it); send(FloatArray((SeamEnrollment.GAP_SEC * WavIo.SAMPLE_RATE).toInt())) }
-                }
-                val from = skip.toInt(); skip = 0
-                send(block.copyOfRange(from, len))
-            }
-        }.flowOn(Dispatchers.IO)
-
-
-        // Publish the work WAV so ACTION_STOP can bank it even when this coroutine never unwinds.
-        // Only for a foreground import that does not already own a library entry — a re-run of a
-        // library capture is durable already, and the queue drain owns its own row.
-        if (foreground && existing == null) {
-            inFlightWav = wav
-            inFlightDurationSec = totalDurationSec.toInt()
-            importSaved.set(false)
-        }
-
-        val utterances = ArrayList<TranscriptEvent.Utterance>()
-        var diarized: Pair<List<TranscriptEvent.Utterance>, Int>? = null
-        // Resume checkpoint inputs: how many leading utterances are frozen, and whether ASR ran to the end.
-        var frozenCount = 0
-        var progressSavedSec = resume?.asrDoneSec ?: 0.0   // ImportRecovery progress written up to here
-        var asrFinished = false
-        savedImportEntry = null
-        inFlightCheckpoint = null
-
-        /**
-         * Save the decoded audio into the library as a RECORDED entry.
-         *
-         * Runs from the finally below, so it fires on SUCCESS, on failure, and — the case this
-         * exists for — on CANCELLATION. Aborting an import used to lose everything: the promote sat
-         * after ASR and diarization, so stopping during either left the decoded WAV in filesDir with
-         * no library row, and going Home dropped the whole session (reported from the field:
-         * podcast → download → abort during transcription → audio and partial transcript both gone).
-         * The recording pipeline has always promoted its capture from a finally for exactly this
-         * reason; imports now match it.
-         *
-         * Plain file rename underneath, so it is safe to call on a cancelled coroutine.
-         */
-        suspend fun promoteImport() = withContext(NonCancellable) {
-            // NonCancellable is REQUIRED, and the first version of this got it wrong. This function
-            // is suspend (it emits an event) and runs from a finally on a coroutine that has usually
-            // just been CANCELLED — the state a user's Stop puts it in, i.e. exactly the case the
-            // promote exists for. Without this wrapper the first suspension point throws
-            // CancellationException and the save never happens. The earlier comment here argued the
-            // wrapper was unnecessary "because promoteRecording is a rename, not a suspending call";
-            // that stopped being true the moment this wrapper itself became suspend.
-            val len = if (wav.exists()) wav.length() else -1L
-            Log.i("primeminutes-promote", "promoteImport foreground=$foreground existing=${existing?.id} " +
-                "entry=${entry?.id} wavExists=${wav.exists()} wavLen=$len min=${WavIo.HEADER + WavIo.SAMPLE_RATE * 2L}")
-            if (!foreground || existing != null || entry != null) return@withContext
-            // Shared one-shot with the stop handler: on a normal finish this saves, and after an
-            // abort it is already done and returns null (harmlessly) — whoever gets there first.
-            entry = saveInFlightImport("pipeline")
-            // The decoded WAV just moved into the entry — repoint the player (playhead carried).
-            entry?.let { emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(it.wavFile).toString())) }
-        }
-
-        // Live mode: the reader loads now and reads the transcript while it is being recognized.
-        val live = if (summarizeAfter) reader.startLiveReader().also { t ->
-            // Resumed capture: the reader continues from its saved notes over the transcript so far.
-            if (resume != null) { t.notesEntry = existing; t.seedUtts = prior }
-        } else null
-        try {
-        val engine = try {
-            createEngine(models)
-        } catch (t: Throwable) {
-            // The model files are present but the engine couldn't load them — an incomplete or
-            // corrupt download. Remove them so a retry re-downloads a clean copy, and surface a
-            // clear, retryable message instead of a raw native error in the transcript.
-            runCatching { models.deleteAsr() }
-            emitEvent(TranscriptEvent.Failed(getString(R.string.svc_asr_model_corrupt)))
-            return null
-        }
-        engine.use {
-            // One streaming pass transcribes AND diarizes: every snapshot carries speaker tags.
-            // Long silences are shortened before the engine (it would spend real time on them) and
-            // the timestamps mapped back onto the original audio.
-            val skipper = SilenceSkipper()
-            engine.transcribeLive(skipper.apply(chunks))
-                .flowOn(Dispatchers.Default)
-                .collect { e ->
-                    when (e) {
-                        is TranscriptEvent.UtteranceSnapshot -> {
-                            val snap0 = snapConv.apply(e.copy(utterances = e.utterances.map {
-                                val (s0, e0) = enroll.toOriginal(skipper.toOriginal(it.startSec), skipper.toOriginal(it.endSec))
-                                it.copy(startSec = s0, endSec = e0)
-                            }))
-                            // Resumed run: the saved frozen prefix stays in front of the new audio's utterances.
-                            val snap = if (prior.isEmpty()) snap0
-                                else SeamStitcher.stitch(prior, seamSec, snap0.utterances, snap0.stable)
-                                    .let { (all, stable) -> snap0.copy(utterances = all, stable = stable) }
-                            utterances.clear(); utterances += snap.utterances
-                            frozenCount = snap.stable
-                            if (summarizeAfter && foreground && frozenCount > 0) {
-                                val keep = utterances.take(frozenCount)
-                                val progress = SessionLibrary.Progress(transcriptFingerprint(cfg), keep, keep.last().endSec, false, "")
-                                inFlightCheckpoint = ImportCheckpoint(progress) { live?.latestCp }
-                                // Once a minute of audio, on disk too: a kill does not run the stop handler.
-                                if (recoverableCopy != null && progress.asrDoneSec - progressSavedSec >= 60) {
-                                    ImportRecovery.saveProgress(this@TranscriptionService, recoverableCopy, progress)
-                                    progressSavedSec = progress.asrDoneSec
-                                }
-                            }
-                            emitEvent(snap)
-                            reader.feedLive(live, snap)
-                            // Recognition progress: how far the transcript reaches through the audio.
-                            val end = utterances.lastOrNull()?.endSec ?: 0.0
-                            if (totalDurationSec > 0) {
-                                emitEvent(TranscriptEvent.Progress((end / totalDurationSec).toFloat().coerceIn(0f, 1f)))
-                            }
-                        }
-                        else -> emitEvent(e)
-                    }
-                }
-            engine.speakerCount?.let { diarized = utterances.toList() to it }
-            asrFinished = true
-        } // ASR native resources freed here, before the LLM is loaded.
-        } finally {
-            // Whatever happened — finished, failed, or aborted — the audio is on disk and belongs
-            // in the library. promoteImport runs under NonCancellable; see it for why that matters.
-            // This log distinguishes "the finally never ran" from "it ran and returned early",
-            // which three failed fixes could not tell apart.
-            Log.i(STOP_TAG, "runPipeline finally ENTERED")
-            promoteImport()
-            // Stop (or a failure) before the end: keep what was transcribed so far so the user can
-            // resume instead of redoing it. Only the frozen prefix is safe — the tail is re-attributed.
-            // The queue's pass 1 (summarizeAfter=false) has its own sidecar and is left alone.
-            if (summarizeAfter && foreground) {
-                (entry ?: existing ?: savedImportEntry)?.let { e ->
-                    val keep = if (asrFinished) utterances.toList() else utterances.take(frozenCount)
-                    if (keep.isNotEmpty()) {
-                        SessionLibrary.saveProgress(e, SessionLibrary.Progress(
-                            transcriptFingerprint(cfg), keep, keep.last().endSec, asrFinished, ""))
-                        live?.latestCp?.let { SessionLibrary.saveNotes(e, reader.readerModelId(), it) }
-                    }
-                }
-            }
-            // The audio is in the library now (or there was none to save): the shared copy is no
-            // longer the only one, so a later launch has nothing to recover.
-            if (foreground) ImportRecovery.clear(this@TranscriptionService)
-            Log.i(STOP_TAG, "runPipeline finally DONE entry=${entry?.id ?: "null"}")
-        }
-
-        // The decoded 16 kHz WAV is the player source now (per the streaming design), unless the
-        // promote above already moved it into a library entry and repointed the player.
-        if (entry == null) emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(wav).toString()))
-        if (!summarizeAfter && utterances.isNotEmpty()) {
-            val tagged = diarized?.first ?: utterances
-            emitEvent(TranscriptEvent.Complete(tagged, diarized?.second))
-            return tagged to ReaderWorker.SummaryResult(null, null)
-        }
-        // The import was already promoted by the ASR phase's finally (see promoteImport). Nothing
-        // to do here beyond keeping `entry` for attachResults below.
-
-        val result = if (utterances.isEmpty()) {
-            // No speech detected — a legitimate (empty) SUCCESS, not an error. An empty result (not
-            // null) so the queue marks the entry DONE with an audio-only session, instead of leaving
-            // it RECORDED and re-transcribing it on every 'Process all'. Real errors (no source /
-            // corrupt model) return null above and stay retryable. A foreground run (import, recovered
-            // capture) falls through to the attach below for the same reason: it used to return here,
-            // and a silent recovered recording stayed "new" with a "Process pending (1)" that redid it.
-            emitEvent(TranscriptEvent.Complete(emptyList(), speakerCount = null))
-            reader.closeLive(live)
-            emptyList<TranscriptEvent.Utterance>() to ReaderWorker.SummaryResult(null, null)
-        } else finishPipeline(utterances, diarized, models, converter, live)
-
-        // Embed the finished results into the entry (RECORDED → full self-describing session.m4a).
-        // Non-fatal on failure: the session view still has the results, and the RECORDED entry above
-        // is already a durable, re-runnable fallback.
-        val libEntry = entry
-        Log.i(STOP_TAG, "runPipeline attach: foreground=$foreground entry=${libEntry?.id} utts=${result.first.size} summary=${result.second.summary != null}")
-        if (foreground && libEntry != null) {
-            // NonCancellable: a new import supersedes this job (previousJob.cancel()) and used to land
-            // during this ~40 s write, leaving the finished meeting RECORDED. The new job joins this one
-            // before starting, so finishing the save only delays it.
-            withContext(NonCancellable) { runCatching {
-                // The session view may have flushed its own edits (speaker names, corrected lines)
-                // into the entry while the summary was written: keep them rather than embed the
-                // pipeline's unnamed, unedited transcript over them.
-                val flushed = SessionLibrary.byId(this@TranscriptionService, libEntry.id)
-                    ?.takeIf { it.status == SessionLibrary.Status.DONE && it.sessionFile.exists() }
-                    ?.let { e -> PrimeMinutesSession.peek(e.sessionFile) }
-                val utts = flushed?.utterances?.takeIf { it.size == result.first.size } ?: result.first
-                val updated = SessionLibrary.attachResults(
-                    this@TranscriptionService, libEntry, utts, flushed?.speakerNames ?: emptyMap(), result.second.summary, result.second.actions,
-                    result.second.title, result.second.notes, cfg.asrModelId, cfg.asrBackend, cfg.llmModelId,
-                )
-                Log.i(STOP_TAG, "runPipeline attach -> ${updated?.id ?: "NULL (buildSession failed)"}")
-                if (updated != null) {
-                    emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
-                    // Semantic index, like the other two save paths; without it a meeting imported
-                    // while the app was open stayed unindexed until the next start's catch-up.
-                    studio.primeminutes.core.embed.LibraryIndexer.request(this@TranscriptionService, updated.id)
-                }
-            }.onFailure { android.util.Log.w("primeminutes-library", "could not auto-save import", it) } }
-            inFlightWav = null   // fully attached; nothing left for a later stop to bank
-        }
-        return result
-    }
-
-    /**
      * Drain the [ProcessingQueue]: run the full pipeline over each queued library entry, embed the
      * results ([SessionLibrary.attachResults]), and remove it. Serial by design (the models are the
      * bottleneck). An item is removed only after it finished (or failed terminally), so a kill
@@ -1314,7 +912,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 val audioDir = File(filesDir, "audio")
                 val before = audioDir.listFiles()?.map { it.name }?.toSet() ?: emptySet()
                 try {
-                    val res = runPipeline(Uri.fromFile(entry.wavFile).toString(), summarizeAfter = false)
+                    val res = importPipeline.run(Uri.fromFile(entry.wavFile).toString(), summarizeAfter = false)
                     if (res == null) {
                         ProcessingQueue.remove(this, id)   // terminal (no source / corrupt model) — parity with the old drain
                         continue
@@ -1402,33 +1000,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
         return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
             backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
-    }
-
-    /** Final Complete (with speakers when diarization ran during the ASR phase) + summarization —
-     *  shared by the file and recording paths. */
-    private suspend fun finishPipeline(
-        utterances: List<TranscriptEvent.Utterance>,
-        diarized: Pair<List<TranscriptEvent.Utterance>, Int>?,
-        models: ModelManager,
-        converter: OpenCcConverter?,
-        /** The live reading task, when it ran alongside ASR; otherwise the transcript is read now. */
-        live: ReaderWorker.ReadTask?,
-    ): Pair<List<TranscriptEvent.Utterance>, ReaderWorker.SummaryResult> {
-        val tagged = diarized?.first ?: utterances
-        emitEvent(TranscriptEvent.Complete(tagged, diarized?.second))
-        val task = live ?: reader.submitRead(reader.ReadTask(currentGen(), converter, withTitle = true))
-        task.complete(tagged)
-        if (reader.liveReader === task) reader.liveReader = null
-        val result = try {
-            reader.awaitRead(task)
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (t: Throwable) {
-            // The summary is an enhancement: a reader failure (download, OOM) keeps the transcript.
-            Log.w("primeminutes-reader", "summarization failed", t)
-            ReaderWorker.SummaryResult(null, null)
-        }
-        return tagged to result
     }
 
     // ---- AI notes worker: ReaderWorker (one reader for every meeting, in order) ----------------

@@ -50,7 +50,12 @@ internal fun inertReader(ctx: Context) = ReaderWorker(object : ReaderWorker.Host
 })
 
 /** One utterance per [perSec] seconds of fed audio; the last one stays provisional until the end. */
-internal class ScriptedEngine(private val speakers: Int = 2, private val perSec: Double = 0.5) : LiveAsrEngine {
+internal class ScriptedEngine(
+    private val speakers: Int = 2,
+    private val perSec: Double = 0.5,
+    /** Pause per fed block, so a file run lasts long enough to be stopped mid-ASR. */
+    private val blockDelayMs: Long = 0,
+) : LiveAsrEngine {
     override var speakerCount: Int? = null
     @Volatile var closed = false
     @Volatile var fedSamples = 0L
@@ -62,6 +67,7 @@ internal class ScriptedEngine(private val speakers: Int = 2, private val perSec:
     override fun transcribeLive(chunks: Flow<FloatArray>): Flow<TranscriptEvent> = flow {
         var last = 0
         chunks.collect { c ->
+            if (blockDelayMs > 0) kotlinx.coroutines.delay(blockDelayMs)
             fedSamples += c.size
             val u = utts(fedSamples / 16_000.0)
             if (u.size > last) { last = u.size; emit(TranscriptEvent.UtteranceSnapshot(u, stable = u.size - 1)) }
