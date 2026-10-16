@@ -51,6 +51,8 @@ object SessionIndex {
     /** Chunk budget: ~40 s or ≤ [CHUNK_TOKENS] tokens, one-utterance overlap. */
     const val CHUNK_TOKENS = 200
     const val CHUNK_SECONDS = 40.0
+    /** Eval harness only: another chunk size (tokens, seconds) for a retrieval experiment; null = the constants. */
+    @Volatile internal var chunkOverride: Pair<Int, Double>? = null
     /** The summary is split so each part stays under the 512 bucket (with the prompt prefix). */
     private const val MEETING_TOKENS = 440
 
@@ -89,13 +91,14 @@ object SessionIndex {
         }
         // Chunks: sliding window over the utterances.
         val us = s.utterances
+        val (maxTokens, maxSeconds) = chunkOverride ?: (CHUNK_TOKENS to CHUNK_SECONDS)
         var i = 0
         while (i < us.size) {
             var j = i; var n = 0; val sb = StringBuilder()
             while (j < us.size) {
                 val line = chunkLine(us[j], s.speakerNames)
                 val t = tokens(line)
-                val tooLong = n > 0 && (n + t > CHUNK_TOKENS || us[j].endSec - us[i].startSec > CHUNK_SECONDS)
+                val tooLong = n > 0 && (n + t > maxTokens || us[j].endSec - us[i].startSec > maxSeconds)
                 if (tooLong) break
                 if (sb.isNotEmpty()) sb.append('\n'); sb.append(line); n += t; j++
             }

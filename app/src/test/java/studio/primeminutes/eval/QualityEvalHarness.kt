@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -25,7 +26,11 @@ import studio.primeminutes.core.audio.GainNormalizer
 import studio.primeminutes.core.audio.Mp4Tags
 import studio.primeminutes.core.audio.SilenceSkipper
 import studio.primeminutes.core.config.TranscriptionConfig
+import studio.primeminutes.core.embed.EmbedHost
+import studio.primeminutes.core.embed.Embedder
 import studio.primeminutes.core.embed.LibraryIndexer
+import studio.primeminutes.core.embed.LibrarySearch
+import studio.primeminutes.core.embed.SessionIndex
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.llm.MfaEngine
@@ -61,6 +66,7 @@ import java.nio.ByteOrder
  *  - ask:    the meetings seeded into a Robolectric library (session.m4a with the embedded session,
  *            indexed by LibraryIndexer with the app's embedder), then AskEngine.ask over the whole
  *            library, one fresh conversation per question.
+ *  - retrieve: as ask, but only AskEngine's retrieval, once per cfg "variants" entry (tuning, no generation).
  *  - engines: two MfaEngines of the same model in one process, generating on two threads at once
  *            (Ask next to a reading); each reply must equal the one the engine gives alone.
  */
@@ -77,6 +83,7 @@ class QualityEvalHarness {
             "asr" -> asr()
             "reader" -> reader()
             "ask" -> ask()
+            "retrieve" -> retrieveOnly()
             "engines" -> engines()
             else -> error("unknown mode $mode")
         }
@@ -234,8 +241,90 @@ class QualityEvalHarness {
 
     // ---------------------------------------------------------------------------------------- ask
 
-    private fun ask() = runBlocking {
+    /** cfg "retrieval" ({maxExcerpts, budgetTokens, perMeeting, seeds, widen, routeMeetings, routeDepth, rrfK}) over the app's defaults. */
+    private fun retrievalOf(o: JSONObject?): AskEngine.Retrieval {
+        val d = AskEngine.Retrieval()
+        if (o == null) return d
+        return AskEngine.Retrieval(
+            maxExcerpts = o.optInt("maxExcerpts", d.maxExcerpts), budgetTokens = o.optInt("budgetTokens", d.budgetTokens),
+            perMeeting = o.optInt("perMeeting", d.perMeeting), seeds = o.optInt("seeds", d.seeds), widen = o.optInt("widen", d.widen),
+            routeMeetings = o.optInt("routeMeetings", d.routeMeetings), routeDepth = o.optInt("routeDepth", d.routeDepth),
+            rrfK = o.optDouble("rrfK", d.rrfK.toDouble()).toFloat(),
+        )
+    }
+
+    private fun excerptJson(x: AskEngine.Excerpt, ids: Map<String, String>) =
+        JSONObject().put("k", x.k).put("entry", x.entry.id).put("meeting", ids.entries.first { it.value == x.entry.id }.key)
+            .put("sec", x.sec).put("at", x.at).put("a", x.a).put("b", x.b).put("text", x.text)
+
+    /**
+     * retrieve: the library seeded as for ask, then only AskEngine's retrieval for each question, once per
+     * cfg "variants" entry ({name: retrieval}); writes retrieve.<name>.json with the excerpts and the
+     * tokens of the rendered excerpts (no generation: seconds per variant, for tuning).
+     */
+    private fun retrieveOnly() = runBlocking {
         val ctx: Context = ApplicationProvider.getApplicationContext()
+        // cfg "chunk": [tokens, seconds] indexes the library with another chunk size.
+        cfg.optJSONArray("chunk")?.let { c -> SessionIndex.chunkOverride = c.getInt(0) to c.getDouble(1) }
+        val ids = seedLibrary(ctx)
+        val entries = ids.values.map { SessionLibrary.byId(ctx, it)!! }
+        val qs = cfg.getJSONArray("questions").let { a -> List(a.length()) { a.getJSONObject(it) } }
+        val spec = LlmRegistry.byId(cfg.getString("llm"))
+        val tok = SpTokenizer.load(ModelManager(ctx).llmTokenizer(spec).path)
+        if (cfg.optBoolean("dump")) dumpCandidates(ctx, ids, entries, qs, tok)
+        val variants = cfg.optJSONObject("variants") ?: JSONObject()
+        for (name in variants.keys()) {
+            AskEngine.retrieval = retrievalOf(variants.getJSONObject(name))
+            val results = JSONArray()
+            for (q in qs) {
+                val xs = AskEngine.retrieve(ctx, entries, q.getString("q"))
+                results.put(JSONObject().put("id", q.getString("id")).put("q", q.getString("q")).put("ui", q.getString("ui"))
+                    .put("answer", "").put("answer_hans", "").put("phase", "retrieve").put("total_sec", 0.0).put("first_token_sec", -1.0)
+                    .put("excerpt_tokens", tok.encode(AskEngine.render(xs, q.getString("ui"))).size)
+                    .put("excerpts", JSONArray().apply { xs.forEach { put(excerptJson(it, ids)) } }))
+            }
+            File(out, "retrieve.$name.json").writeText(results.toString(1))
+        }
+        tok.close()
+        AskEngine.release()
+        delay(500)
+    }
+
+    /**
+     * cfg "dump": every candidate the two retrieval lists give per question (40 per meeting, whole text), the
+     * meetings' utterances (with their token counts), chunk ranges and notes: dump.json, to try selection
+     * policies offline.
+     */
+    private suspend fun dumpCandidates(ctx: Context, ids: Map<String, String>, entries: List<SessionLibrary.Entry>, qs: List<JSONObject>, tok: SpTokenizer) {
+        val name = ids.entries.associate { it.value to it.key }
+        val meetings = JSONObject()
+        for (e in entries) {
+            val s = PrimeMinutesSession.peek(e.sessionFile)!!
+            meetings.put(name.getValue(e.id), JSONObject()
+                .put("title", e.title)
+                .put("utts", JSONArray().apply { s.utterances.forEach { u -> put(JSONObject().put("t", u.startSec).put("text", u.text).put("tok", tok.encode(u.text).size)) } })
+                .put("chunks", JSONArray().apply { LibrarySearch.chunkRanges(e).forEach { put(JSONArray().put(it.first).put(it.last)) } })
+                .put("notes", JSONArray().apply { (s.notes?.lines() ?: emptyList()).forEach { put(SessionIndex.noteText(it)) } }))
+        }
+        fun hits(hs: List<LibrarySearch.Hit>) = JSONArray().apply {
+            hs.forEach { h -> h.passages.forEach { p ->
+                put(JSONObject().put("m", name.getValue(h.entry.id)).put("kind", p.kind.name).put("a", p.uttIndex).put("b", p.uttEnd)
+                    .put("t", p.timeSec).put("score", p.score.toDouble()).put("text", p.snippet).put("tok", tok.encode(p.snippet).size))
+            } }
+        }
+        val out2 = JSONArray()
+        LibrarySearch.refresh(ctx, entries)
+        for (q in qs) {
+            val qv = EmbedHost.use(ctx, 2) { it.embed(Embedder.Prompts.query(q.getString("q"))) }!!
+            out2.put(JSONObject().put("id", q.getString("id"))
+                .put("dense", hits(LibrarySearch.dense(ctx, entries, qv, maxPassages = 40, snippetChars = 100000)))
+                .put("keyword", hits(LibrarySearch.keyword(ctx, entries, q.getString("q"), maxPassages = 40, snippetChars = 100000))))
+        }
+        File(out, "dump.json").writeText(JSONObject().put("meetings", meetings).put("questions", out2).toString())
+    }
+
+    /** One library entry per meeting, its session.m4a carrying the transcript and the reading, indexed. */
+    private suspend fun seedLibrary(ctx: Context): Map<String, String> {
         // The models where ModelManager looks for them (filesDir/models), without copying gigabytes.
         val modelsLink = File(ctx.filesDir, "models")
         modelsLink.deleteRecursively()
@@ -244,8 +333,6 @@ class QualityEvalHarness {
         TranscriptionConfig.Holder.config = TranscriptionConfig.Holder.config.copy(llmModelId = llm)
         check(ModelManager(ctx).llmReady(LlmRegistry.byId(llm))) { "reader model not in place" }
         SessionLibrary.root(ctx).deleteRecursively()
-
-        // Seed: one library entry per meeting, its session.m4a carrying the transcript and the reading.
         val encode = PrimeMinutesSession::class.java.getDeclaredMethod("encodeSession", List::class.java, Map::class.java,
             String::class.java, String::class.java, String::class.java, String::class.java, String::class.java, String::class.java, String::class.java)
             .apply { isAccessible = true }
@@ -266,43 +353,63 @@ class QualityEvalHarness {
             ids[name] = e.id
         }
         File(out, "library.json").writeText(JSONObject(ids as Map<*, *>).toString(1))
+        return ids
+    }
+
+    /**
+     * ask: cfg "retrieval" sets AskEngine.retrieval; or cfg "variants" ({name: retrieval}) asks every question
+     * under each variant back to back (the order alternating per question), so latencies are paired under
+     * the same machine load; one ask.<model>[.<variant>].json per variant.
+     */
+    private fun ask() = runBlocking {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val llm = cfg.getString("llm")
+        val vs = cfg.optJSONObject("variants")
+        val variants: List<Pair<String?, AskEngine.Retrieval>> =
+            vs?.keys()?.asSequence()?.map { it to retrievalOf(vs.getJSONObject(it)) }?.toList()
+                ?: listOf(null to retrievalOf(cfg.optJSONObject("retrieval")))
+        val ids = seedLibrary(ctx)
         val entries = ids.values.map { SessionLibrary.byId(ctx, it)!! }
 
         val qs = cfg.getJSONArray("questions").let { a -> List(a.length()) { a.getJSONObject(it) } }
-        val results = JSONArray()
-        val dest = File(out, "ask.$llm.json")
-        for (q in qs) {
-            AskEngine.reset()
-            delay(300)
-            var tFirst = 0L
-            val t0 = System.nanoTime()
-            val watch = launch(Dispatchers.Default) {
-                AskEngine.turns.collect { ts -> if (tFirst == 0L && ts.lastOrNull()?.answer?.isNotBlank() == true) tFirst = System.nanoTime() }
+        val results = variants.associate { it.first to JSONArray() }
+        qs.forEachIndexed { qi, q ->
+            for ((name, r) in if (qi % 2 == 0) variants else variants.reversed()) {
+                AskEngine.retrieval = r
+                results.getValue(name).put(askOne(ctx, entries, ids, q))
+                File(out, "ask.$llm${name?.let { ".$it" } ?: ""}.json").writeText(results.getValue(name).toString(1))
             }
-            AskEngine.ask(ctx, entries, q.getString("q"), q.getString("ui"))
-            delay(200)
-            while (true) {
-                val t = AskEngine.turns.value.lastOrNull()
-                val p = AskEngine.phase.value
-                if (t != null && t.done && (p is AskEngine.Phase.Idle || p is AskEngine.Phase.Failed || p is AskEngine.Phase.Busy)) break
-                if ((System.nanoTime() - t0) / 1e9 > 600) break
-                delay(100)
-            }
-            watch.cancel()
-            val turn = AskEngine.turns.value.lastOrNull()
-            val ex = JSONArray()
-            turn?.excerpts?.forEach { x ->
-                ex.put(JSONObject().put("k", x.k).put("entry", x.entry.id).put("meeting", ids.entries.first { it.value == x.entry.id }.key)
-                    .put("sec", x.sec).put("at", x.at).put("text", x.text))
-            }
-            results.put(JSONObject().put("id", q.getString("id")).put("q", q.getString("q")).put("ui", q.getString("ui"))
-                .put("answer", turn?.answer ?: "").put("answer_hans", hans.convert(turn?.answer ?: "")).put("phase", AskEngine.phase.value.toString())
-                .put("total_sec", (System.nanoTime() - t0) / 1e9).put("first_token_sec", if (tFirst == 0L) -1.0 else (tFirst - t0) / 1e9)
-                .put("excerpts", ex))
-            dest.writeText(results.toString(1))
         }
         AskEngine.release()
         delay(500)
+    }
+
+    private suspend fun askOne(ctx: Context, entries: List<SessionLibrary.Entry>, ids: Map<String, String>, q: JSONObject): JSONObject = coroutineScope {
+        AskEngine.reset()
+        delay(300)
+        var tFirst = 0L
+        val t0 = System.nanoTime()
+        val watch = launch(Dispatchers.Default) {
+            AskEngine.turns.collect { ts -> if (tFirst == 0L && ts.lastOrNull()?.answer?.isNotBlank() == true) tFirst = System.nanoTime() }
+        }
+        AskEngine.ask(ctx, entries, q.getString("q"), q.getString("ui"))
+        delay(200)
+        while (true) {
+            val t = AskEngine.turns.value.lastOrNull()
+            val p = AskEngine.phase.value
+            if (t != null && t.done && (p is AskEngine.Phase.Idle || p is AskEngine.Phase.Failed || p is AskEngine.Phase.Busy)) break
+            if ((System.nanoTime() - t0) / 1e9 > 600) break
+            delay(100)
+        }
+        watch.cancel()
+        val turn = AskEngine.turns.value.lastOrNull()
+        val ex = JSONArray()
+        turn?.excerpts?.forEach { x -> ex.put(excerptJson(x, ids)) }
+        JSONObject().put("id", q.getString("id")).put("q", q.getString("q")).put("ui", q.getString("ui"))
+            .put("answer", turn?.answer ?: "").put("answer_hans", hans.convert(turn?.answer ?: "")).put("phase", AskEngine.phase.value.toString())
+            .put("total_sec", (System.nanoTime() - t0) / 1e9).put("first_token_sec", if (tFirst == 0L) -1.0 else (tFirst - t0) / 1e9)
+            .put("prompt_tokens", AskEngine.lastPromptTokens)
+            .put("excerpts", ex)
     }
 
     // ------------------------------------------------------------------------------------ engines
