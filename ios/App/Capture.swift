@@ -86,9 +86,11 @@ import AVFoundation
             wav.finish()
             Task { @MainActor in self?.recordingJob = nil }   // the audio is complete: Next talk may start the next one
         }
-        // Models failed to load while this talk is still being recorded: stop the mic, the audio stays queued. After
-        // Next talk the mic belongs to the next recording (recordingJob changed), which must keep going.
-        if recording, recordingJob == job.id { toggleRecord() }
+        // The run ended while this talk is still being recorded (models failed to load, or Stop processing): stop the
+        // mic, the audio stays queued. After Next talk the mic belongs to the next recording (another Recorder), which
+        // must keep going. Not `recordingJob == job.id`: the feed clears it as it returns, so after a Stop the check
+        // failed and the mic ran on for good (recording shown, nothing saved past the stop, the live screen frozen).
+        if recording, recorder === r { toggleRecord() }
         await runner.settleLive(job.id)
         // After Next talk, recordingJob is the next recording: clearing it would let the queue take that talk while
         // it is still being recorded (processed from its first seconds, the rest of the audio lost).
