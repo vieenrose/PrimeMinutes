@@ -129,6 +129,17 @@ enum BackgroundWork {
         }
         // VOX_RECSTOP=s: tap Stop on the recording.
         after("VOX_RECSTOP") { if Model.shared.capture.recording { Model.shared.capture.toggleRecord() } else { StatusLog.add("trace probe recstop: not recording") } }
+        // VOX_DLCANCEL=s: Cancel the import download (VOX_CANCEL's fixed 4 s often lands before the first byte).
+        after("VOX_DLCANCEL") { let i = Model.shared.imports; StatusLog.add("trace probe cancel download \(i.downloading ?? "-") at \(Int((i.downloadFraction ?? 0) * 100)) %"); i.cancelDownload() }
+        // VOX_DLCANCEL_PCT=p: Cancel the import download once it has passed p percent.
+        if let p = env["VOX_DLCANCEL_PCT"].flatMap(Double.init) { Task { @MainActor in
+            let i = Model.shared.imports
+            while (i.downloadFraction ?? 0) * 100 < p { try? await Task.sleep(nanoseconds: 100_000_000) }
+            StatusLog.add("trace probe cancel download at \(Int((i.downloadFraction ?? 0) * 100)) %"); i.cancelDownload() } }
+        // VOX_CLEARQ=s: Stop the running job and take every job off the queue (each stays in the library, unprocessed).
+        after("VOX_CLEARQ") { let r = Model.shared.runner; r.stopProcessing(); Task { @MainActor in
+            while r.activeJob != nil { try? await Task.sleep(nanoseconds: 500_000_000) }
+            StatusLog.add("trace probe clear queue: \(r.waiting.count) jobs"); for j in r.waiting { r.unqueue(j) } } }
         // VOX_RESUME=s: Resume every parked job.
         after("VOX_RESUME") { let r = Model.shared.runner; StatusLog.add("trace probe resume \(r.parked.count) parked"); for j in r.waiting where r.parked.contains(j.id) { r.resume(j) } }
     }
