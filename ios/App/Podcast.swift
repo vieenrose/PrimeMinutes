@@ -34,9 +34,17 @@ enum Podcast {
         var head = request(u, ua); head.httpMethod = "HEAD"
         let total = ((try? await URLSession.shared.data(for: head).1) as? HTTPURLResponse)?.expectedContentLength ?? -1
         if total > maxBytes { throw URLError(.dataLengthExceedsMaximum) }
-        let dest = JobQueue.audioDir.appendingPathComponent(name), part = dest.appendingPathExtension("part")
+        // The partial file is named after the episode, not the job (a fresh UUID per tap): a cancelled or failed
+        // download resumes when the same episode is picked again (Android podcast_<hash>), instead of leaving an
+        // orphan .part behind and starting over.
+        let dest = JobQueue.audioDir.appendingPathComponent(name), part = JobQueue.audioDir.appendingPathComponent("podcast_\(stableHash(ep.audioUrl)).\(ext(ep.audioUrl)).part")
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
-        try await Chunked.fetch(request(u, ua), to: part, resumeFrom: have) { got in if total > 0 { progress(Double(got) / Double(total)) } }
+        let report: @Sendable (Int64) -> Void = { got in if total > 0 { progress(Double(got) / Double(total)) } }
+        do { try await Chunked.fetch(request(u, ua), to: part, resumeFrom: have, onProgress: report) }
+        catch ModelStoreError.badStatus(416) {   // the kept .part is already whole (a kill before the move): start over
+            try? FileManager.default.removeItem(at: part)
+            try await Chunked.fetch(request(u, ua), to: part, resumeFrom: 0, onProgress: report)
+        }
         let size = (try FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
         if size > maxBytes { try? FileManager.default.removeItem(at: part); throw URLError(.dataLengthExceedsMaximum) }
         try? FileManager.default.removeItem(at: dest)
@@ -44,6 +52,12 @@ enum Podcast {
         return dest
     }
 
+    /// FNV-1a 64 of the URL in hex: stable across launches (Swift's hashValue is seeded per process).
+    static func stableHash(_ s: String) -> String {
+        var h: UInt64 = 0xcbf29ce484222325
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x100000001b3 }
+        return String(h, radix: 16)
+    }
     static func ext(_ url: String) -> String {
         let e = (url.split(separator: "?").first.map(String.init) ?? url).split(separator: ".").last.map { String($0.filter { $0.isLetter || $0.isNumber }.prefix(4)) } ?? ""
         return e.isEmpty ? "mp3" : e
