@@ -399,6 +399,25 @@ enum LibrarySearch {
         }
         return hits.sorted { $0.score > $1.score }
     }
+    /// Keyword pass for Ask (Android LibrarySearch.keyword): BM25 (Keywords) over the indexed notes and chunks of
+    /// every meeting, normalized like `lexical`; `maxPassages` best per meeting.
+    static func keyword(_ sessions: [Session], query: String, maxPassages: Int = maxPassages, snippetChars: Int = 200) -> [Hit] {
+        var units: [(Session, Passage)] = []
+        for s in sessions {
+            guard let x = index(s.id) else { continue }
+            for v in x.vectors where v.kind != .meeting { if let p = passage(s, v, 0, snippetChars) { units.append((s, p)) } }
+        }
+        let scores = Keywords.bm25(norm(query), units.map { norm($0.1.snippet) })
+        var per: [UUID: [Int]] = [:]
+        for i in units.indices where scores[i] > 0 { per[units[i].0.id, default: []].append(i) }
+        return per.values.map { ix -> Hit in
+            let ps = ix.sorted { scores[$0] > scores[$1] }.prefix(maxPassages).map { i -> Passage in
+                let p = units[i].1
+                return Passage(kind: p.kind, uttIndex: p.uttIndex, uttEnd: p.uttEnd, timeSec: p.timeSec, speaker: p.speaker, snippet: p.snippet, semanticOnly: false, score: scores[i]) }
+            return Hit(session: units[ix[0]].0, score: ps[0].score, passages: Array(ps))
+        }.sorted { $0.score > $1.score }
+    }
+
     private static func passage(_ s: Session, _ v: SessionIndex.Vector, _ cos: Float, _ chars: Int) -> Passage? {
         switch v.kind {
         case .meeting:

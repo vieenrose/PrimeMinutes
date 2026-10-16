@@ -2,17 +2,69 @@ import SwiftUI
 import Combine
 
 /// Ask (RAG, experimental — Android AskEngine): a question over the library, answered by the reader model
-/// from the passages the semantic index ranks highest; the passages carry `[[id@sec]]` tags the model
-/// cites and the sheet turns into "title · m:ss" links.
+/// from the passages ranked highest by meaning (the semantic index) and by keywords (BM25), fused by
+/// reciprocal rank. Each passage carries a short tag `[[k]]`, numbered across the conversation, that the
+/// model cites; the answer is published with the tags expanded to `[[id@sec]]`, which the sheet turns
+/// into "title · m:ss" links.
 @MainActor final class AskEngine: ObservableObject {
     static let shared = AskEngine()
-    static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05
+    static let maxPassages = 8, passageTokens = 1500, noteBonus: Float = 0.05, rrfK: Float = 60
 
     enum Phase: Equatable { case idle, busy, retrieving, loading, answering, failed(String) }
     /// `sec` is the citation tag's whole second; `at` the passage's exact start, where a tap opens it
     /// (115 for a line starting at 115.4 s opened the line before).
-    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var id: String { session.id.uuidString + "@\(sec)" } }
-    struct Turn: Identifiable { let id = UUID(); let question: String; var answer: String; let excerpts: [Excerpt]; var done: Bool }
+    /// `k` is the short tag the model sees (`[[k]]`), unique across the conversation.
+    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var k = 0; var id: String { session.id.uuidString + "@\(sec)" } }
+    /// `pool`: every excerpt of the conversation so far, this turn's included — what a citation may point to.
+    struct Turn: Identifiable { let id = UUID(); let question: String; var answer: String; let excerpts: [Excerpt]; var done: Bool; var pool: [Excerpt] = [] }
+
+    /// The model's `[[k]]` tags rewritten `[[id@sec]]`; a number no excerpt carries is left for the sheet to drop.
+    nonisolated static func expandTags(_ answer: String, _ pool: [Excerpt]) -> String {
+        let rx = try! NSRegularExpression(pattern: #"\[{1,2}(\d{1,3})\]{1,2}"#)
+        let ns = answer as NSString
+        var out = "", last = 0
+        for m in rx.matches(in: answer, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let k = Int(ns.substring(with: m.range(at: 1))) ?? -1
+            if let x = pool.first(where: { $0.k == k }) { out += "[[\(x.session.id.uuidString)@\(x.sec)]]" } else { out += ns.substring(with: m.range) }
+            last = m.range.location + m.range.length
+        }
+        return out + ns.substring(from: last)
+    }
+
+    /// A follow-up continues the conversation only if its prompt and a whole answer still fit the cache.
+    nonisolated static func followUpFits(seqLength: Int, promptTokens: Int, answerTokens: Int, context: Int) -> Bool {
+        seqLength + promptTokens + answerTokens < context
+    }
+
+    /// Reciprocal-rank fusion of the dense and keyword passages (meeting summaries left out), one score per
+    /// passage: 1/(k+rank) in each list it appears in. A note outranks a chunk at equal cosine in the dense
+    /// list (noteBonus); the keyword list keeps the BM25 order.
+    nonisolated static func fuse(_ dense: [LibrarySearch.Hit], _ keyword: [LibrarySearch.Hit]) -> [Excerpt] {
+        struct Key: Hashable { let id: UUID, kind: UInt8, a: Int }
+        var score: [Key: Float] = [:], first: [Key: Excerpt] = [:], order: [Key] = []
+        func add(_ hits: [LibrarySearch.Hit], bonus: Bool) {
+            let ps = hits.flatMap { h in h.passages.filter { $0.kind != .meeting }.map { (h.session, $0) } }
+            let ranked = ps.enumerated().sorted { a, b in
+                let sa = a.element.1.score + (bonus && a.element.1.kind == .note ? noteBonus : 0)
+                let sb = b.element.1.score + (bonus && b.element.1.kind == .note ? noteBonus : 0)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }.map(\.element)
+            for (rank, (s, p)) in ranked.enumerated() {
+                let key = Key(id: s.id, kind: p.kind.rawValue, a: p.uttIndex)
+                score[key, default: 0] += 1 / (rrfK + Float(rank + 1))
+                if first[key] == nil { first[key] = Excerpt(session: s, sec: Int(p.timeSec), text: p.snippet, score: 0, at: p.timeSec); order.append(key) }
+            }
+        }
+        add(dense, bonus: true); add(keyword, bonus: false)
+        return order.enumerated().sorted { a, b in
+            let sa = score[a.element]!, sb = score[b.element]!
+            return sa != sb ? sa > sb : a.offset < b.offset
+        }.map { e in
+            let x = first[e.element]!
+            return Excerpt(session: x.session, sec: x.sec, text: x.text, score: score[e.element]!, at: x.at)
+        }
+    }
 
     @Published private(set) var phase = Phase.idle
     @Published private(set) var turns: [Turn] = []
@@ -24,6 +76,7 @@ import Combine
 
     private let holder = AskHolder()
     private var task: Task<Void, Never>?
+    private var nextK = 1
 
     func ask(_ sessions: [Session], question: String) {
         task?.cancel()
@@ -33,9 +86,11 @@ import Combine
         let first = turns.isEmpty
         task = Task { [holder] in
             phase = .retrieving
-            let excerpts = await Task.detached(priority: .userInitiated) { holder.retrieve(sessions, question) }.value
+            var excerpts = await Task.detached(priority: .userInitiated) { holder.retrieve(sessions, question) }.value
             if Task.isCancelled { return }
-            turns.append(Turn(question: question, answer: "", excerpts: excerpts, done: false))
+            for i in excerpts.indices { excerpts[i].k = nextK; nextK += 1 }
+            let pool = turns.flatMap(\.excerpts) + excerpts
+            turns.append(Turn(question: question, answer: "", excerpts: excerpts, done: false, pool: pool))
             phase = .loading
             let isBusy = busy
             let result: Result<String, Error> = await Task.detached(priority: .userInitiated) {
@@ -47,8 +102,13 @@ import Combine
                     var prompt = first ? t.p0 + Self.system(lang, card) + t.p1 : t.p3
                     prompt += Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                     let tPrompt = Date()
-                    if s.append(s.tokenize(prompt, special: true)) < 0 {
-                        s.reset()   // the conversation outgrew the cache: start over with this question only
+                    let toks = s.tokenize(prompt, special: true)
+                    // A follow-up that would leave no room for a whole answer, or that the cache refuses, starts a
+                    // fresh conversation with this question only (the answer was cut short before).
+                    if !first && !Self.followUpFits(seqLength: s.seqLength, promptTokens: toks.count, answerTokens: card.ask.answerTokens, context: s.context)
+                        || s.append(toks) < 0 {
+                        StatusLog.add("ask: prompt does not fit the conversation (\(s.seqLength) + \(toks.count) + \(card.ask.answerTokens)): fresh conversation")
+                        s.reset()
                         let fresh = t.p0 + Self.system(lang, card) + t.p1 + Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
@@ -58,11 +118,11 @@ import Combine
                     _ = s.generateContinue(maxTokens: card.ask.answerTokens, stop: "", temp: card.sampler.temp) { piece in
                         if Task.isCancelled { s.cancel() }
                         sb += piece
-                        let now = sb
+                        let now = Self.expandTags(sb, pool)
                         DispatchQueue.main.async { AskEngine.shared.publish(now, done: false) }
                     }
                     let st = s.lastStats; StatusLog.add(String(format: "ask answered in %.1f s: prefilled %d (reused %d) in %.1f s, generated %d in %.1f s; seq %d / ctx %d", Date().timeIntervalSince(tPrompt), Int(pre[0]), Int(pre[1]), pre[3], Int(st[2]), st[4], s.seqLength, s.context))
-                    return .success(sb.trimmingCharacters(in: .whitespacesAndNewlines))
+                    return .success(Self.expandTags(sb.trimmingCharacters(in: .whitespacesAndNewlines), pool))
                 } catch { return .failure(error) }
             }.value
             switch result {
@@ -79,8 +139,8 @@ import Combine
     /// Stops the answer in progress (the model stays loaded for a follow-up).
     func cancel() { holder.cancel(); task?.cancel(); task = nil; if !turns.isEmpty { turns[turns.count - 1].done = true }; if phase != .busy { phase = .idle } }
     /// Forgets the conversation and frees the reader model (the sheet closed).
-    func release() { cancel(); turns = []; phase = .idle; let h = holder; Task.detached { h.close() } }
-    func reset() { cancel(); turns = []; phase = .idle; holder.reset() }
+    func release() { cancel(); turns = []; nextK = 1; phase = .idle; let h = holder; Task.detached { h.close() } }
+    func reset() { cancel(); turns = []; nextK = 1; phase = .idle; holder.reset() }
 
     /// The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts).
     nonisolated static func render(_ xs: [Excerpt], _ lang: AppLanguage, _ card: ModelCard) -> String {
@@ -88,7 +148,7 @@ import Combine
         let zh = lang == .zhHant || lang == .zhHans
         return xs.map { x in
             let t = x.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return "[[\(x.session.id.uuidString)@\(x.sec)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
+            return "[[\(x.k)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
         }.joined()
     }
     /// The answer follows the interface language, whatever the question's: the card's system prompt.
@@ -134,18 +194,16 @@ final class AskHolder: @unchecked Sendable {
     private func count(_ text: String) -> Int { text.count / 3 }
     #endif
 
-    /// Dense retrieval: top passages across the library, notes first at equal score, ≤ passageTokens.
+    /// Hybrid retrieval (AskEngine.fuse): dense (when the embedder is there) and keyword passages, ≤ passageTokens.
     func retrieve(_ sessions: [Session], _ question: String) -> [AskEngine.Excerpt] {
-        guard let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil else { return [] }
-        let hits = LibrarySearch.dense(sessions, qv: qv, maxPassages: 4, snippetChars: 1200)
-        let all = hits.flatMap { h in h.passages.filter { $0.kind != .meeting }.map { p in
-            AskEngine.Excerpt(session: h.session, sec: Int(p.timeSec), text: p.snippet, score: p.score + (p.kind == .note ? AskEngine.noteBonus : 0), at: p.timeSec) } }
-            .sorted { $0.score > $1.score }
+        let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil
+        let dense = qv.map { LibrarySearch.dense(sessions, qv: $0, maxPassages: 4, snippetChars: 1200) } ?? []
+        let all = AskEngine.fuse(dense, LibrarySearch.keyword(sessions, query: question, maxPassages: 4, snippetChars: 1200))
         var out: [AskEngine.Excerpt] = [], tokens = 0
         for x in all {
             if out.count >= AskEngine.maxPassages { break }
-            // A note and its transcript chunk can carry the same words: one excerpt is enough.
-            if out.contains(where: { $0.session.id == x.session.id && $0.text == x.text }) { continue }
+            // A note and its transcript chunk, or a meeting imported twice, can carry the same words: one excerpt is enough.
+            if out.contains(where: { $0.text == x.text }) { continue }
             let n = count(x.text) + 24
             if tokens + n > AskEngine.passageTokens { continue }
             tokens += n; out.append(x)
@@ -173,9 +231,9 @@ struct AskSheet: View {
                             Text(t.question).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
                             VStack(alignment: .leading, spacing: 8) {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
-                                    Text(Self.linked(t.answer, t.excerpts)).font(.body).textSelection(.enabled)
+                                    Text(Self.linked(t.answer, t.pool)).font(.body).textSelection(.enabled)
                                         .environment(\.openURL, OpenURLAction { u in
-                                            if u.scheme == "voxask", let s = t.excerpts.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.excerpts.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
+                                            if u.scheme == "voxask", let s = t.pool.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.pool.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
                                             return .systemAction })
                                 }
                                 if !t.excerpts.isEmpty && t.done {
@@ -254,7 +312,7 @@ struct AskSheet: View {
         for mt in rx.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             out += AttributedString(ns.substring(with: NSRange(location: last, length: mt.range.location - last)))
             let id = ns.substring(with: mt.range(at: 1)).uppercased(), sec = Int(ns.substring(with: mt.range(at: 2))) ?? 0
-            // Checked against this answer's excerpts (Android AskEngine.cite): the exact tag, else the nearest excerpt
+            // Checked against the excerpts of this conversation (Android AskEngine.cite): the exact tag, else the nearest excerpt
             // of that meeting (a made-up second), else dropped.
             let same = xs.filter { $0.session.id.uuidString == id }
             if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
