@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -210,6 +211,8 @@ fun StudioScreen(
     /** A download item was tapped: its screen (download state, Resume / Retry / Delete). */
     onOpenDownload: (SessionLibrary.Entry) -> Unit = {},
     onRetryDownload: (SessionLibrary.Entry) -> Unit = {},
+    /** The people of the directory with the meetings they are linked in: the "meetings with X" filter. */
+    people: List<Pair<studio.primeminutes.core.people.Person, Set<String>>> = emptyList(),
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -248,6 +251,10 @@ fun StudioScreen(
     }
     var query by remember { mutableStateOf(initialQuery) }
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
+    /** The person whose meetings the list is narrowed to (null: everyone). */
+    var personFilter by remember { mutableStateOf<String?>(null) }
+    val personIds = people.firstOrNull { it.first.id == personFilter }?.second
+    LaunchedEffect(people) { if (personFilter != null && people.none { it.first.id == personFilter }) personFilter = null }
 
     // Multi-select for batch delete. A Set (not a List) so membership/removal is O(1) per row — after
     // Select-all that matters. Value is Unit; keys are entry ids.
@@ -291,9 +298,10 @@ fun StudioScreen(
         StatusFilter.DONE -> SessionLibrary.Status.DONE
     }
     val searching = query.isNotBlank()
-    fun wanted(e: SessionLibrary.Entry) = when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
-    val shownHits = remember(hits, statusFilter) { hits.filter { wanted(it.entry) } }
-    val shown = remember(entries, searching, shownHits, statusFilter) {
+    fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) &&
+        when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
+    val shownHits = remember(hits, statusFilter, personIds) { hits.filter { wanted(it.entry) } }
+    val shown = remember(entries, searching, shownHits, statusFilter, personIds) {
         if (searching) shownHits.map { it.entry }
         else entries.filter(::wanted)
     }
@@ -451,6 +459,20 @@ fun StudioScreen(
                 }
             }
 
+            // "Meetings with X": one chip per person of the directory, the most present first.
+            if (people.isNotEmpty()) {
+                androidx.compose.foundation.lazy.LazyRow(
+                    Modifier.fillMaxWidth().padding(top = 8.dp).testTag("people-filter"),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Gutter),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item { FilterChip(stringResource(R.string.people_filter_all), personFilter == null) { personFilter = null } }
+                    items(people, key = { it.first.id }) { (p, ids) ->
+                        FilterChip("${p.name} · ${ids.size}", personFilter == p.id) { personFilter = if (personFilter == p.id) null else p.id }
+                    }
+                }
+            }
+
             // While recording, the big bottom button already says so (and returns to the booth).
             if (foregroundRun && !isRecording && entries.none { it.id == foregroundId }) {
                 Banner(
@@ -466,7 +488,7 @@ fun StudioScreen(
                 Modifier.weight(1f).fillMaxWidth().padding(32.dp),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val firstRun = query.isBlank() && statusFilter == StatusFilter.ALL
+                val firstRun = query.isBlank() && statusFilter == StatusFilter.ALL && personFilter == null
                 if (firstRun) {
                     // First run: a clear invitation, not a faint glyph in a void. Record is the big
                     // button below; importing a file is the other way in, so it gets a button here.

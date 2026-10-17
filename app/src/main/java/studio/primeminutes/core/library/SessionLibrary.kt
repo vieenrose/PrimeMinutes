@@ -171,6 +171,8 @@ object SessionLibrary {
                 coverEnabled = true, fileName = SESSION_NAME, format = PrimeMinutesSession.Format.M4A,
             )
         } ?: return null
+        // The meeting's named speakers and their people (the sidecar the directory reads).
+        studio.primeminutes.core.people.PeopleStore.saveNames(entry.dir, speakerNames)
         clearProgress(entry)   // the run is complete: nothing left to resume
         // A user-given name (set at capture time or via rename) outranks the LLM title — batch
         // processing must never rename "Talk 3 — Dr. Smith" to whatever the model invents. Re-read
@@ -375,6 +377,8 @@ object SessionLibrary {
                 RecentSessions.remove(context, Uri.fromFile(File(dir, WAV_NAME)).toString())
                 RecentSessions.remove(context, Uri.fromFile(File(dir, SESSION_NAME)).toString())
                 dir.deleteRecursively()
+                // Its people links went with it; its voice samples go too (docs/design/speaker-tags.md §2.6).
+                studio.primeminutes.core.people.PeopleStore.onMeetingDeleted(context, dir.name)
             } else file.delete()
         }.onFailure { Log.w(TAG, "could not discard $file", it) }
     }

@@ -1,0 +1,303 @@
+package studio.primeminutes.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import studio.primeminutes.R
+import studio.primeminutes.core.library.SessionLibrary
+import studio.primeminutes.core.people.PeopleStore
+import studio.primeminutes.core.people.Person
+import studio.primeminutes.core.people.PersonNames
+import studio.primeminutes.core.people.SpeakerLink
+import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import java.text.DateFormat
+import java.util.Date
+
+/** One meeting a person is linked in. */
+private data class PersonMeeting(val entry: SessionLibrary.Entry, val speakers: Set<Int>)
+
+/**
+ * The People screen (docs/design/speaker-tags.md §2.2): every person of the directory with their
+ * meetings; a person page renames everywhere, merges, splits one meeting off, deletes, and lists the
+ * meetings (a tap opens the meeting at the person's first line). [voiceHeader] / [voiceOfPerson]:
+ * the Phase 2 voice controls (opt-in switch, "forget voice").
+ */
+@Composable
+fun PeopleScreen(
+    onClose: () -> Unit,
+    onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit,
+    voiceHeader: @Composable () -> Unit = {},
+    voiceOfPerson: @Composable (Person) -> Unit = {},
+) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        PeopleContent(onClose, onOpenMeeting, voiceHeader, voiceOfPerson)
+    }
+}
+
+@Composable
+private fun PeopleContent(
+    onClose: () -> Unit,
+    onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit,
+    voiceHeader: @Composable () -> Unit,
+    voiceOfPerson: @Composable (Person) -> Unit,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val doc by PeopleStore.doc.collectAsState()
+    val version by PeopleStore.version.collectAsState()
+    // Person → meetings (newest first), re-read whenever a link or the directory changes.
+    val meetings by produceState(emptyMap<String, List<PersonMeeting>>(), version) {
+        value = withContext(Dispatchers.IO) {
+            val entries = SessionLibrary.list(context).associateBy { it.id }
+            val out = HashMap<String, MutableList<PersonMeeting>>()
+            for ((id, links) in PeopleStore.allLinks(context)) {
+                val e = entries[id] ?: continue
+                links.entries.groupBy { it.value.person }.forEach { (p, ls) ->
+                    if (p != null) out.getOrPut(p) { ArrayList() } += PersonMeeting(e, ls.map { it.key }.toSet())
+                }
+            }
+            out.mapValues { (_, v) -> v.sortedByDescending { it.entry.createdAt } }
+        }
+    }
+    var openId by remember { mutableStateOf<String?>(null) }
+    val open = doc.byId(openId)
+    BackHandler { if (open != null) openId = null else onClose() }
+
+    Column(Modifier.fillMaxSize().background(pal.Slate900).statusBarsPadding().navigationBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { if (open != null) openId = null else onClose() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_people_back), tint = pal.Slate200)
+            }
+            Text(open?.name ?: stringResource(R.string.people_title), style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        }
+        if (open == null) {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("people-list")) {
+                if (doc.migrationFound > 0) item {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(pal.PanelSurface, RoundedCornerShape(12.dp)).padding(12.dp)) {
+                        Text(stringResource(R.string.people_migration_card, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissMigrationCard(context) } }, modifier = Modifier.align(Alignment.End)) {
+                            Text(stringResource(R.string.people_migration_ok))
+                        }
+                    }
+                }
+                item { voiceHeader() }
+                if (doc.people.isEmpty()) item {
+                    Text(stringResource(R.string.people_none), color = pal.Slate400, modifier = Modifier.padding(vertical = 24.dp))
+                }
+                val homonyms = doc.people.groupBy { PersonNames.normalize(it.name) }.values.filter { it.size > 1 }.flatten().map { it.id }.toSet()
+                val sorted = doc.people.sortedWith(compareByDescending<Person> { meetings[it.id]?.size ?: 0 }.thenBy { PersonNames.normalize(it.name) })
+                items(sorted, key = { it.id }) { p ->
+                    val ms = meetings[p.id].orEmpty()
+                    val sub = buildList {
+                        if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it)) }
+                        add(meetingCount(ms.size))
+                    }.joinToString(" · ")
+                    Row(Modifier.fillMaxWidth().clickable { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Person, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(22.dp))
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(p.name, color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Text(sub, color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    HorizontalDivider(color = pal.Hairline)
+                }
+            }
+        } else PersonPage(open, meetings[open.id].orEmpty(), doc.people, onOpenMeeting, onGone = { openId = null }, voiceOfPerson)
+    }
+}
+
+@Composable
+private fun meetingCount(n: Int): String =
+    if (n == 0) stringResource(R.string.people_no_meetings) else pluralStringResource(R.plurals.people_meetings, n, n)
+
+private fun entryTitle(context: android.content.Context, e: SessionLibrary.Entry) = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
+
+@Composable
+private fun PersonPage(
+    p: Person, meetings: List<PersonMeeting>, people: List<Person>,
+    onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit, onGone: () -> Unit,
+    voiceOfPerson: @Composable (Person) -> Unit,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var renaming by remember { mutableStateOf(false) }
+    var noting by remember { mutableStateOf(false) }
+    var merging by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var splitting by remember { mutableStateOf<PersonMeeting?>(null) }
+    val dateFmt = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
+
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("person-page")) {
+        p.note?.let { item { Text(it, color = pal.Slate400, modifier = Modifier.padding(bottom = 8.dp)) } }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                OutlinedButton(onClick = { renaming = true }) { Text(stringResource(R.string.people_rename)) }
+                OutlinedButton(onClick = { noting = true }) { Text(stringResource(R.string.people_note_short)) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                if (people.size > 1) OutlinedButton(onClick = { merging = true }) { Text(stringResource(R.string.people_merge_into)) }
+                OutlinedButton(onClick = { deleting = true }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
+            }
+        }
+        item { voiceOfPerson(p) }
+        item { SectionLabel(stringResource(R.string.people_meetings_of, p.name)) }
+        if (meetings.isEmpty()) item { Text(stringResource(R.string.people_no_meetings), color = pal.Slate400, modifier = Modifier.padding(vertical = 8.dp)) }
+        items(meetings, key = { it.entry.id }) { m ->
+            var menu by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth().clickable {
+                    scope.launch {
+                        val t = withContext(Dispatchers.IO) {
+                            studio.primeminutes.core.session.PrimeMinutesSession.peek(m.entry.sessionFile)
+                                ?.utterances?.firstOrNull { it.speaker in m.speakers }?.startSec ?: 0.0
+                        }
+                        onOpenMeeting(m.entry, t)
+                    }
+                }.heightIn(min = 56.dp).padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(entryTitle(context, m.entry), color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(dateFmt.format(Date(m.entry.createdAt)), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                }
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate400) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.people_split, p.name)) }, onClick = { menu = false; splitting = m })
+                    }
+                }
+            }
+            HorizontalDivider(color = pal.Hairline)
+        }
+        item { Spacer(Modifier.padding(bottom = 24.dp)) }
+    }
+
+    if (renaming) NameDialog(stringResource(R.string.people_rename), p.name, onDone = { n ->
+        renaming = false
+        if (n != null && n.isNotBlank() && n != p.name) scope.launch(Dispatchers.IO) { PeopleStore.renameEverywhere(context, p.id, n) }
+    })
+    if (noting) NameDialog(stringResource(R.string.people_note), p.note ?: "", allowBlank = true, onDone = { n ->
+        noting = false
+        if (n != null) scope.launch(Dispatchers.IO) { PeopleStore.setNote(context, p.id, n) }
+    })
+    splitting?.let { m ->
+        NameDialog(stringResource(R.string.people_split_title), "", onDone = { n ->
+            splitting = null
+            if (!n.isNullOrBlank()) scope.launch(Dispatchers.IO) { PeopleStore.split(context, m.entry.id, p.id, n) }
+        })
+    }
+    if (merging) AlertDialog(
+        onDismissRequest = { merging = false },
+        title = { Text(stringResource(R.string.people_merge_pick, p.name)) },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                items(people.filter { it.id != p.id }.sortedBy { PersonNames.normalize(it.name) }, key = { it.id }) { o ->
+                    Text(o.name + (o.note?.let { " · $it" } ?: ""), color = pal.Slate200,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            merging = false
+                            scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
+                            onGone()
+                        }.padding(vertical = 12.dp))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = { merging = false }) { Text(stringResource(R.string.cancel)) } },
+    )
+    if (deleting) {
+        var clear by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { deleting = false },
+            title = { Text(stringResource(R.string.people_delete_title, p.name)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.people_delete_text))
+                    if (meetings.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { clear = !clear }) {
+                        Checkbox(checked = clear, onCheckedChange = { clear = it })
+                        Text(stringResource(R.string.people_delete_clear, meetings.size))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = false
+                    val c = clear
+                    scope.launch(Dispatchers.IO) { PeopleStore.delete(context, p.id, c) }
+                    onGone()
+                }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
+            },
+            dismissButton = { TextButton(onClick = { deleting = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+/** A one-field dialog; [onDone] gets the text, or null when cancelled. */
+@Composable
+internal fun NameDialog(title: String, initial: String, allowBlank: Boolean = false, onDone: (String?) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = { onDone(null) },
+        title = { Text(title) },
+        text = { OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(), modifier = Modifier.testTag("name-dialog-field")) },
+        confirmButton = { TextButton(enabled = allowBlank || text.isNotBlank(), onClick = { onDone(text.trim()) }) { Text(stringResource(R.string.people_save)) } },
+        dismissButton = { TextButton(onClick = { onDone(null) }) { Text(stringResource(R.string.cancel)) } },
+    )
+}

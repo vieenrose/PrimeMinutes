@@ -76,7 +76,9 @@ object LibrarySearch {
     }
 
     private suspend fun doc(context: Context, e: SessionLibrary.Entry): Doc {
-        val mod = e.sessionFile.takeIf { it.exists() }?.lastModified() ?: 0L
+        val fileMod = e.sessionFile.takeIf { it.exists() }?.lastModified() ?: 0L
+        // The names come from the speaker sidecar and the people directory too: a change there is a new doc.
+        val mod = if (fileMod == 0L) 0L else fileMod * 31 + studio.primeminutes.core.people.PeopleStore.version.value
         synchronized(docs) { docs[e.id]?.takeIf { it.modified == mod }?.let { return it } }
         val loaded = if (mod != 0L) PrimeMinutesSession.peek(e.sessionFile) else null
         val d = Doc(

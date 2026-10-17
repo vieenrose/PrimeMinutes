@@ -46,6 +46,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.ui.platform.testTag
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -96,6 +98,7 @@ fun SettingsContent(
     enabled: Boolean = true,
     onChange: (TranscriptionConfig) -> Unit,
     onUpdateFound: (UpdateInfo) -> Unit = {},
+    onOpenPeople: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -150,6 +153,22 @@ fun SettingsContent(
             color = pal.Slate400,
             modifier = Modifier.padding(top = 2.dp),
         )
+        }
+
+        // The people directory (names shared by all meetings; voice recognition lives there too).
+        if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
+            val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = 8.dp)
+                    .testTag("settings-people"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.people_settings_open, people.people.size), color = pal.Slate200, style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.people_settings_desc), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                }
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
+            }
         }
 
         Section(stringResource(R.string.settings_reader_model)) {

@@ -65,6 +65,7 @@ object SessionAutosave {
             for ((id, n) in snapshot.speakerNames) {
                 val o = JSONObject()
                 o.put("name", n.name); o.put("confidence", n.confidence); o.put("reason", n.reason)
+                n.person?.let { o.put("person", it) }
                 names.put(id.toString(), o)
             }
             root.put("speakerNames", names)
@@ -101,6 +102,7 @@ object SessionAutosave {
                     name = o.getString("name"),
                     confidence = o.optString("confidence", "user"),
                     reason = o.optString("reason", "User edited"),
+                    person = o.optString("person", "").ifEmpty { null },
                 )
             }
             fun opt(key: String): String? = if (root.has(key)) root.getString(key) else null

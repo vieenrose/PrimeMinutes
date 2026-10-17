@@ -151,13 +151,20 @@ object AskEngine {
      * score per passage: 1/(k+rank) in each list it appears in. A note outranks a chunk at equal
      * cosine in the dense list ([NOTE_BONUS]); the keyword list keeps the BM25 order.
      */
-    fun fuse(dense: List<LibrarySearch.Hit>, keyword: List<LibrarySearch.Hit>, k: Float = RRF_K): List<Excerpt> {
+    fun fuse(
+        dense: List<LibrarySearch.Hit>, keyword: List<LibrarySearch.Hit>, k: Float = RRF_K,
+        /** A transcript passage of a person the question names (entry id, speaker id): the note bonus too. */
+        speaks: (String, Int?) -> Boolean = { _, _ -> false },
+    ): List<Excerpt> {
         data class Key(val id: String, val kind: SessionIndex.Kind, val a: Int)
         val score = LinkedHashMap<Key, Float>()
         val first = HashMap<Key, Excerpt>()
         fun add(hits: List<LibrarySearch.Hit>, bonus: Boolean) {
             hits.flatMap { h -> h.passages.filter { it.kind != SessionIndex.Kind.MEETING }.map { h.entry to it } }
-                .sortedByDescending { (_, p) -> p.score + if (bonus && p.kind == SessionIndex.Kind.NOTE) NOTE_BONUS else 0f }
+                .sortedByDescending { (e, p) ->
+                    p.score + (if (bonus && p.kind == SessionIndex.Kind.NOTE) NOTE_BONUS else 0f) +
+                        (if (bonus && p.kind == SessionIndex.Kind.CHUNK && speaks(e.id, p.speakerId)) NOTE_BONUS else 0f)
+                }
                 .forEachIndexed { rank, (e, p) ->
                     val key = Key(e.id, p.kind, p.uttIndex)
                     score[key] = (score[key] ?: 0f) + 1f / (k + rank + 1)
@@ -397,10 +404,18 @@ object AskEngine {
         val qv = EmbedHost.use(app, 2) { it.embed(Embedder.Prompts.query(question)) }
         val dense = if (qv != null) LibrarySearch.dense(app, entries, qv, maxPassages = depth, snippetChars = 1200) else emptyList()
         val keyword = LibrarySearch.keyword(app, entries, question, maxPassages = depth, snippetChars = 1200)
-        val routed = routeMeetings(dense, keyword, p.routeMeetings)
+        // "What did Mark say": the meetings Mark is linked in are routed first, and his lines get the
+        // note bonus (retrieval only: the excerpts already carry "Mark:", the prompt is unchanged).
+        val named = studio.primeminutes.core.people.PeopleRouting.mentioned(
+            question, studio.primeminutes.core.people.PeopleStore.doc.value, studio.primeminutes.core.people.PeopleStore.fold(app))
+        val personMeetings = studio.primeminutes.core.people.PeopleRouting.meetingsOf(
+            if (named.isEmpty()) emptyMap() else studio.primeminutes.core.people.PeopleStore.allLinks(app), named)
+        val routed = personMeetings.keys.takeIf { it.isNotEmpty() }?.let { ids ->
+            routeMeetings(dense.filter { it.entry.id in ids }, keyword.filter { it.entry.id in ids }, maxOf(p.routeMeetings, 1)).ifEmpty { null }
+        } ?: routeMeetings(dense, keyword, p.routeMeetings)
         // The other meetings keep perMeeting candidates per list (the passages are in score order).
         fun trim(hs: List<LibrarySearch.Hit>) = hs.map { h -> if (h.entry.id in routed) h else h.copy(passages = h.passages.take(p.perMeeting)) }
-        val fused = fuse(trim(dense), trim(keyword), p.rrfK)
+        val fused = fuse(trim(dense), trim(keyword), p.rrfK) { id, sid -> sid != null && personMeetings[id]?.contains(sid) == true }
         val ranked = fused.filter { it.entry.id in routed } + fused.filter { it.entry.id !in routed }
         val t = mutex.withLock { tok ?: tokenizer(app) }
         val src = object : Transcripts {
@@ -409,7 +424,7 @@ object AskEngine {
                 Excerpt(e, x.timeSec.toInt(), x.snippet, 0f, x.timeSec, a = x.uttIndex, b = x.uttEnd)
             }
         }
-        if (routed.isNotEmpty()) Log.d(TAG, "routed to ${routed.joinToString()}")
+        if (routed.isNotEmpty()) Log.d(TAG, "routed to ${routed.joinToString()}" + if (named.isNotEmpty()) " (people ${named.size})" else "")
         return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
     }
 

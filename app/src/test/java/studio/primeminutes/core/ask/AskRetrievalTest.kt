@@ -55,6 +55,15 @@ class AskRetrievalTest {
         assertEquals(listOf(31, 30), AskEngine.fuse(dense, emptyList()).map { it.sec })
     }
 
+    @Test fun aNamedPersonsLinesGetTheNoteBonus() {
+        // "What did Mark say": chunk 30 s is speaker 1 (Mark) of meeting a, slightly below chunk 20 s.
+        val dense = listOf(LibrarySearch.Hit(a, 0.8f, listOf(
+            LibrarySearch.Passage(SessionIndex.Kind.CHUNK, 2, 2, 20.0, null, "x", false, 0.80f, speakerId = 0),
+            LibrarySearch.Passage(SessionIndex.Kind.CHUNK, 3, 3, 30.0, "Mark", "y", false, 0.78f, speakerId = 1))))
+        assertEquals(listOf(20, 30), AskEngine.fuse(dense, emptyList()).map { it.sec })
+        assertEquals(listOf(30, 20), AskEngine.fuse(dense, emptyList()) { id, sid -> id == a.id && sid == 1 }.map { it.sec })
+    }
+
     @Test fun shortTagsExpandAcrossTheConversation() {
         val pool = listOf(AskEngine.Excerpt(a, 120, "x", 0f, k = 1), AskEngine.Excerpt(b, 45, "y", 0f, k = 9))
         assertEquals("頭獎是手機[[${a.id}@120]]，禮券[[${b.id}@45]] [[7]]", AskEngine.expandTags("頭獎是手機[[1]]，禮券[9] [[7]]", pool))

@@ -66,6 +66,8 @@ data class SessionState(
     /** Leading utterances of the live transcript that won't change until the final snapshot. */
     val liveStable: Int = 0,
     val speakerNames: Map<Int, SpeakerName> = emptyMap(),
+    /** A re-run's previous transcript and names: carried over by time overlap when the new one lands. */
+    val carry: SpeakerCarry? = null,
     /** What a re-summarize replaced, put back if it is stopped before a new summary arrives. */
     val resummaryUndo: ResummaryUndo? = null,
     // --- Inline editing: which row / speaker / card is open. ---
@@ -121,3 +123,6 @@ data class SessionState(
     val showYouTubeSheet: Boolean = false,
     val showExportSheet: Boolean = false,
 )
+
+/** The transcript and names a re-run replaces (see [studio.primeminutes.core.people.SpeakerCarryOver]). */
+data class SpeakerCarry(val utterances: List<TranscriptEvent.Utterance>, val names: Map<Int, SpeakerName>)

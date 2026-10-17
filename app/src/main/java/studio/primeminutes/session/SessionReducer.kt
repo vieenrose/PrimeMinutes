@@ -107,7 +107,7 @@ object SessionReducer {
         emit(SessionEffect.PausePlayer)
         s = s.copy(
             utterances = emptyList(), speakerNames = emptyMap(), editingIndex = -1, editingSpeakerId = null,
-            liveStable = 0,
+            liveStable = 0, carry = null,
             sessionModels = null,   // a new run is made with the current settings
             editingTitle = false, editingSummary = false, editingActions = false,
             // Every non-recording run through here SUPERSEDES the service job, so a backgrounded
@@ -134,8 +134,12 @@ object SessionReducer {
      * [sourceTitle] — the name the audio arrived with (podcast episode, YouTube video) — is pinned
      * like a user edit so the summarizer's guess never replaces it.
      */
-    fun launchAudio(state: SessionState, env: SessionEnv, uri: Uri, sourceTitle: String? = null): Next =
-        tx(state, env) { launch(uri, sourceTitle) }
+    fun launchAudio(state: SessionState, env: SessionEnv, uri: Uri, sourceTitle: String? = null, carry: SpeakerCarry? = null): Next =
+        tx(state, env) {
+            launch(uri, sourceTitle)
+            // AFTER clear(): a re-run keeps its speaker names where the new speakers match the old ones.
+            if (carry != null && carry.names.isNotEmpty()) s = s.copy(carry = carry)
+        }
 
     private fun Tx.launch(uri: Uri, sourceTitle: String?) {
         emit(SessionEffect.ApplyConfig(s.config))   // apply settings to this run
@@ -454,6 +458,17 @@ object SessionReducer {
         sessionDirty = true, editingSpeakerId = null,
     )
 
+    /** Link [speaker] to a person of the directory, named [name] (null [person]: a plain name; blank name: cleared). */
+    fun linkSpeaker(s: SessionState, speaker: Int, person: String?, name: String): SessionState = s.copy(
+        speakerNames = if (name.isBlank()) s.speakerNames - speaker
+            else s.speakerNames + (speaker to SpeakerName(name.trim(), confidence = "user", person = person)),
+        sessionDirty = true, editingSpeakerId = null, editSeq = s.editSeq + 1,
+    )
+
+    /** The directory renamed, merged or deleted people of this meeting: its names as the sidecar now has them. */
+    fun namesRelinked(s: SessionState, names: Map<Int, SpeakerName>): SessionState =
+        if (names == s.speakerNames) s else s.copy(speakerNames = names, sessionDirty = true)
+
     /** Speaker corrections are pure relabels (ids kept, so labels stay put). */
     fun applySpeakerEdit(s: SessionState, result: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>): SessionState =
         s.copy(
@@ -594,6 +609,19 @@ object SessionReducer {
                 // and re-index utterances, so an index map would reapply edits to shifted lines.
                 val edited = s.utterances.associate { it.startSec to it.text }
                 val merged = e.utterances.map { inc -> edited[inc.startSec]?.let { inc.copy(text = it) } ?: inc }
+                // A re-run: the previous names follow the speakers that cover the same speech.
+                s.carry?.let { c ->
+                    if (s.speakerNames.isEmpty() && merged.isNotEmpty()) {
+                        val names = studio.primeminutes.core.people.SpeakerCarryOver.carry(
+                            c.utterances.map { studio.primeminutes.core.people.SpeakerCarryOver.Turn(it.startSec, it.endSec, it.speaker) }, c.names,
+                            merged.map { studio.primeminutes.core.people.SpeakerCarryOver.Turn(it.startSec, it.endSec, it.speaker) })
+                        if (names.isNotEmpty()) {
+                            s = s.copy(speakerNames = names, sessionDirty = s.sessionDirty || s.libraryDir != null)
+                            emit(SessionEffect.Notify(str(R.string.people_names_kept, names.size)))
+                        }
+                    }
+                    s = s.copy(carry = null)
+                }
                 s = s.copy(
                     utterances = merged, editingIndex = -1, editingSpeakerId = null,
                     transcriptReady = true,   // final transcript exists → Re-run becomes available

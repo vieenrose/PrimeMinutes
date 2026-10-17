@@ -571,6 +571,10 @@ private fun TranscribeScreen(
     var askQuestion by remember { mutableStateOf<String?>(null) }
     // A speaker merge (from, into) waiting for its confirmation.
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // The People screen (the directory of named speakers), over whatever screen opened it.
+    var peopleOpen by remember { mutableStateOf(false) }
+    // Names given before the directory existed become its people (once, in the background).
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { studio.primeminutes.core.people.PeopleStore.migrateIfNeeded(context) } } }
     // DEV (debug builds only): `am start … --es vox_query "…" --es vox_ask "…"` pre-fills the Studio
     // search or opens Ask with a question, so screenshots and device checks need no CJK typing;
     // `--es vox_type "…"` types the query in, one character at a time (README animations).
@@ -1313,7 +1317,8 @@ private fun TranscribeScreen(
                 highlight = if (s.searchActive) s.searchQuery else "",
                 isEditing = s.editingIndex == idx,
                 speakerNames = s.speakerNames,
-                editingSpeakerId = s.editingSpeakerId?.takeIf { s.editingSpeakerLine == idx },
+                // The name is given in the people picker (a sheet), not inline any more.
+                editingSpeakerId = null,
                 onSeek = { sec -> resumeOrRecover((sec * 1000).toInt()) },
                 onBeginEdit = { vm.beginLineEdit(idx) },
                 onSaveText = { newText -> vm.saveLineText(idx, newText) },
@@ -1491,6 +1496,16 @@ private fun TranscribeScreen(
             val shownEntries = remember(studioEntries, titleConv) {
                 titleConv?.let { c -> studioEntries.map { e -> e.copy(title = e.title?.let(c::convert)) } } ?: studioEntries
             }
+            val peopleVersion by studio.primeminutes.core.people.PeopleStore.version.collectAsState()
+            val peopleDoc by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
+            val studioPeople by produceState(emptyList<Pair<studio.primeminutes.core.people.Person, Set<String>>>(), peopleVersion, peopleDoc, studioEntries) {
+                value = withContext(Dispatchers.IO) {
+                    val ids = studioEntries.map { it.id }.toSet()
+                    val by = studio.primeminutes.core.people.PeopleStore.meetingsByPerson(studio.primeminutes.core.people.PeopleStore.allLinks(context))
+                    peopleDoc.people.mapNotNull { p -> by[p.id]?.filter { it in ids }?.toSet()?.takeIf { it.isNotEmpty() }?.let { p to it } }
+                        .sortedWith(compareByDescending<Pair<studio.primeminutes.core.people.Person, Set<String>>> { it.second.size }.thenBy { it.first.name })
+                }
+            }
             StudioScreen(
                 entries = shownEntries,
                 queuedIds = studioQueuedIds,
@@ -1554,6 +1569,7 @@ private fun TranscribeScreen(
                 onImport = { vm.showAddSourceSheet(true) },
                 onSettings = { vm.showConfigSheet(true) },
                 updateBanner = updateBannerSlot,
+                people = studioPeople,
             )
         }
         Screen.Capture -> CaptureScreen(
@@ -1810,6 +1826,15 @@ private fun TranscribeScreen(
             onDismiss = { vm.showConfigSheet(false) },
             // Manual "Check for updates" found a newer release → surface the banner, close settings.
             onUpdateFound = { info -> updateInfo = info; updateDismissed = false; vm.showConfigSheet(false) },
+            onOpenPeople = { vm.showConfigSheet(false); peopleOpen = true },
+        )
+    }
+    if (peopleOpen) {
+        studio.primeminutes.ui.PeopleScreen(
+            onClose = { peopleOpen = false },
+            onOpenMeeting = { e, t -> peopleOpen = false; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
+            voiceHeader = { studio.primeminutes.ui.VoiceSettingsCard() },
+            voiceOfPerson = { p -> studio.primeminutes.ui.PersonVoiceRow(p) },
         )
     }
     // Podcast/YouTube items: their row and their screen show the download (no floating card any more).
@@ -1841,6 +1866,24 @@ private fun TranscribeScreen(
                 TextButton(onClick = { mergeAsk = null; vm.mergeSpeaker(from, into) }) { Text(stringResource(R.string.speaker_merge)) }
             },
             dismissButton = { TextButton(onClick = { mergeAsk = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1).
+    s.editingSpeakerId?.let { sid ->
+        val pickerSpeakers = speakerIds.map { studio.primeminutes.ui.PickerSpeaker(it, speakerLabel(it), s.speakerNames[it]?.person) }
+        val me = pickerSpeakers.firstOrNull { it.id == sid } ?: studio.primeminutes.ui.PickerSpeaker(sid, speakerLabel(sid), s.speakerNames[sid]?.person)
+        val voice = studio.primeminutes.ui.rememberVoiceSuggestions(s.libraryDir, sid, s.speakerNames, s.utterances)
+        studio.primeminutes.ui.SpeakerNameFlow(
+            speaker = me, speakers = pickerSpeakers,
+            suggestions = voice.first, voiceNote = voice.second,
+            onPlaySample = if (s.audioUri != null) ({
+                studio.primeminutes.core.people.CleanSpeech.sampleStart(s.utterances, sid)?.let { t -> seekAndPlay((t * 1000).toInt()) }
+            }) else null,
+            onLink = { p -> vm.linkPerson(sid, p.id) },
+            onNew = { n -> vm.linkNewPerson(sid, n) },
+            onClear = { vm.clearSpeakerName(sid) },
+            onMerge = { into -> vm.cancelSpeakerEdit(); vm.mergeSpeaker(sid, into) },
+            onDismiss = { vm.cancelSpeakerEdit() },
         )
     }
     askQuestion?.let { q ->

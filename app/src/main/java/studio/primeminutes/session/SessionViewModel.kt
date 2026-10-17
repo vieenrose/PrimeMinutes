@@ -105,6 +105,12 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     var ui: SessionUi? = null
 
     init {
+        studio.primeminutes.core.people.PeopleStore.init(app)
+        viewModelScope.launch { studio.primeminutes.core.people.PeopleStore.changed.collect { relinkFromStore(it) } }
+        viewModelScope.launch {
+            studio.primeminutes.core.people.PeopleStore.doc.map { d -> d.people.associate { it.id to it.name } }
+                .distinctUntilChanged().collect { relinkFromStore(null) }
+        }
         viewModelScope.launch {
             // Subscribe, then catch up on what the service already did (see RunRegistry.attach):
             // events up to the snapshot come from its replay, the ones after from the bus.
@@ -225,14 +231,84 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     // ---------------------------------------------------------------------------------------------
 
     private fun apply(next: Next) {
+        val before = _state.value
         _state.value = next.state
+        syncSpeakerLinks(before, next.state)
         next.effects.forEach(::run)
     }
 
-    private fun update(f: (SessionState) -> SessionState) { _state.value = f(_state.value) }
+    private fun update(f: (SessionState) -> SessionState) {
+        val before = _state.value
+        _state.value = f(before)
+        syncSpeakerLinks(before, _state.value)
+    }
+
+    /**
+     * A library meeting's names changed by hand (rename, link, merge, move): its speaker sidecar follows
+     * at once, so the People screen, the library filter and Ask see it before the session file is rebuilt.
+     * Not while a run of it goes on (the run saves its own result) nor when another session was opened.
+     */
+    private fun syncSpeakerLinks(a: SessionState, b: SessionState) {
+        if (a.speakerNames == b.speakerNames || b.sessionGen != a.sessionGen || b.running || b.isRecording) return
+        val dir = b.libraryDir ?: return
+        if (b.utterances.isEmpty()) return
+        val names = b.speakerNames
+        viewModelScope.launch(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.saveNames(dir, names) }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // People (docs/design/speaker-tags.md): the rename sheet's choices
+    // ---------------------------------------------------------------------------------------------
+
+    /** [speaker] is [personId] of the directory (an undoable relabel, like a merge). */
+    fun linkPerson(speaker: Int, personId: String) {
+        val p = studio.primeminutes.core.people.PeopleStore.doc.value.byId(personId) ?: return
+        linkUndoable(speaker, p.id, p.name)
+        viewModelScope.launch(Dispatchers.IO) {
+            studio.primeminutes.core.people.PeopleStore.touch(ctx, p.id)
+            studio.primeminutes.core.people.VoiceLinks.confirmed(ctx, now.libraryDir?.name, speaker, p.id)
+        }
+    }
+
+    /** [speaker] is someone new, named [name]: a new person of the directory. */
+    fun linkNewPerson(speaker: Int, name: String) {
+        val n = name.trim().ifBlank { return }
+        viewModelScope.launch {
+            val p = withContext(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.create(ctx, n) }
+            linkUndoable(speaker, p.id, p.name)
+            withContext(Dispatchers.IO) { studio.primeminutes.core.people.VoiceLinks.confirmed(ctx, now.libraryDir?.name, speaker, p.id) }
+        }
+    }
+
+    /** Back to "Speaker n": the person stays in the directory. */
+    fun clearSpeakerName(speaker: Int) {
+        val was = now.speakerNames[speaker]?.person
+        linkUndoable(speaker, null, "")
+        if (was != null) viewModelScope.launch(Dispatchers.IO) { studio.primeminutes.core.people.VoiceLinks.unlinked(ctx, now.libraryDir?.name, speaker, was) }
+    }
+
+    private fun linkUndoable(speaker: Int, person: String?, name: String) {
+        val before = now.utterances to now.speakerNames
+        update { SessionReducer.linkSpeaker(it, speaker, person, name) }
+        run(SessionEffect.OfferSpeakerUndo(R.string.people_linked, now.sessionGen, before, now.utterances))
+    }
+
+    /** A directory edit rewrote this meeting's sidecar, or renamed a person shown here. */
+    private fun relinkFromStore(ids: Set<String>?) {
+        val s = now
+        val dir = s.libraryDir ?: return
+        if (s.running || s.isRecording || s.utterances.isEmpty()) return
+        viewModelScope.launch {
+            val names = withContext(Dispatchers.IO) {
+                if (ids != null && dir.name in ids) studio.primeminutes.core.people.PeopleStore.readLinks(dir)?.let(studio.primeminutes.core.people.PeopleStore::resolve)
+                else studio.primeminutes.core.people.PeopleStore.resolve(studio.primeminutes.core.people.PeopleStore.linksOf(s.speakerNames))
+            } ?: return@launch
+            if (now.sessionGen == s.sessionGen) update { SessionReducer.namesRelinked(it, names) }
+        }
+    }
 
     fun persistEdits() = apply(SessionReducer.persistEdits(now, env))
-    fun launchAudio(uri: Uri, sourceTitle: String? = null) = apply(SessionReducer.launchAudio(now, env, uri, sourceTitle))
+    fun launchAudio(uri: Uri, sourceTitle: String? = null, carry: SpeakerCarry? = null) = apply(SessionReducer.launchAudio(now, env, uri, sourceTitle, carry))
     fun beginRecording() = apply(SessionReducer.beginRecording(now, env))
     fun nextTalk() = apply(SessionReducer.nextTalk(now, env))
     fun stop() = apply(SessionReducer.stop(now, env))
@@ -378,6 +454,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         // the entry: pinned, it would win over the title of the run that now finds speech.
         val dir = now.libraryDir; val src = now.audioUri ?: return
         val keepTitle = studio.primeminutes.core.library.SpeechCheck.keptTitle(now.title)
+        val carry = SpeakerCarry(now.utterances, now.speakerNames).takeIf { it.names.isNotEmpty() }
         viewModelScope.launch {
             // A manual re-run starts over: a stale checkpoint must not be picked up as progress.
             dir?.let { d -> withContext(Dispatchers.IO) { SessionLibrary.byId(ctx, d.name)?.let(SessionLibrary::clearProgress) } }
@@ -390,7 +467,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                     wav.takeIf { it.exists() && it.length() > 44 }
                 }
             }
-            launchAudio(target?.let { Uri.fromFile(it) } ?: src, keepTitle)
+            launchAudio(target?.let { Uri.fromFile(it) } ?: src, keepTitle, carry)
         }
     }
 

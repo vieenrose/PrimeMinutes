@@ -274,7 +274,10 @@ object PrimeMinutesSession {
         // the open flow. parseManifest's strict getInt/getJSONObject calls are inside this guard.
         return@withContext runCatching {
             val json = JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8))
-            parseManifest(json, audio, coverJpeg)
+            val m = parseManifest(json, audio, coverJpeg)
+            // A library meeting: its speaker sidecar and the people directory name its speakers.
+            val src0 = src.takeIf { it.scheme == "file" }?.path?.let(::File)
+            if (src0 != null) m.copy(speakerNames = studio.primeminutes.core.people.PeopleStore.overlay(src0, m.speakerNames)) else m
         }.getOrElse {
             android.util.Log.w("primeminutes-session", "unreadable embedded session, opening as plain audio", it)
             Loaded(audio, emptyList(), emptyMap(), null, null, null, null, null, null, recovered = false, coverJpeg = coverJpeg)
@@ -298,7 +301,8 @@ object PrimeMinutesSession {
         runCatching {
             val blob = if (isMp4(file)) Mp4Tags.readSessionBlob(file) else null
             if (blob == null || blob.length > MAX_BLOB_CHARS) return@runCatching null
-            parseManifest(JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8)), file)
+            val m = parseManifest(JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8)), file)
+            m.copy(speakerNames = studio.primeminutes.core.people.PeopleStore.overlay(file, m.speakerNames))
         }.getOrNull()
     }
 
@@ -367,6 +371,7 @@ object PrimeMinutesSession {
         speakerNames.forEach { (id, n) ->
             names.put(id.toString(), JSONObject().apply {
                 put("name", n.name); put("confidence", n.confidence); put("reason", n.reason)
+                n.person?.let { put("person", it) }
             })
         }
         root.put("speaker_names", names)
@@ -399,6 +404,7 @@ object PrimeMinutesSession {
                     name = o.optString("name", ""),
                     confidence = o.optString("confidence", "user"),
                     reason = o.optString("reason", ""),
+                    person = o.optString("person", "").ifEmpty { null },
                 )
             }
         }

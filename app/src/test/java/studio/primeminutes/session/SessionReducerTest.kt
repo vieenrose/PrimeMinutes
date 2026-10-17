@@ -338,4 +338,25 @@ class SessionReducerTest {
         assertTrue(n.state.summaryStale)
         n.effects.one<SessionEffect.SaveConfig>()
     }
+
+    @Test fun aReRunCarriesNamesByTimeOverlap() {
+        val old = listOf(utt(0, speaker = 0), utt(1, speaker = 1), utt(2, speaker = 0))
+        val names = mapOf(0 to SpeakerName("Mark", person = "p1"), 1 to SpeakerName("Lin"))
+        val n = SessionReducer.launchAudio(s0.copy(utterances = old, speakerNames = names), env, entryUri("e1"), carry = SpeakerCarry(old, names))
+        assertTrue(n.state.speakerNames.isEmpty())
+        // The new run numbers the speakers the other way round.
+        val fresh = listOf(utt(0, speaker = 1), utt(1, speaker = 0), utt(2, speaker = 1))
+        val done = SessionReducer.onEvent(n.state, env, n.state.sessionGen, TranscriptEvent.Complete(fresh, 2), null)
+        assertEquals("Mark", done.state.speakerNames[1]?.name); assertEquals("p1", done.state.speakerNames[1]?.person)
+        assertEquals("Lin", done.state.speakerNames[0]?.name)
+        assertNull(done.state.carry)
+        assertTrue(done.state.sessionDirty)
+        assertTrue(done.effects.any { it is SessionEffect.Notify })
+    }
+
+    @Test fun linkingASpeakerKeepsThePerson() {
+        val s = SessionReducer.linkSpeaker(s0.copy(utterances = listOf(utt(0))), 0, "p9", " Mark ")
+        assertEquals(SpeakerName("Mark", person = "p9"), s.speakerNames[0]); assertTrue(s.sessionDirty)
+        assertTrue(SessionReducer.linkSpeaker(s, 0, null, "").speakerNames.isEmpty())
+    }
 }

@@ -42,6 +42,7 @@ fun ConfigSheet(
     onChange: (TranscriptionConfig) -> Unit,
     onDismiss: () -> Unit,
     onUpdateFound: (studio.primeminutes.core.update.UpdateInfo) -> Unit = {},
+    onOpenPeople: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -75,7 +76,7 @@ fun ConfigSheet(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-            SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound)
+            SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound, onOpenPeople)
         }
     }
 }

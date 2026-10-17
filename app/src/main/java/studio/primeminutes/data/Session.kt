@@ -27,6 +27,8 @@ data class SpeakerName(
     val name: String,
     val confidence: String = "user",
     val reason: String = "User edited",
+    /** The person of the people directory this speaker is linked to (docs/design/speaker-tags.md). */
+    val person: String? = null,
 )
 
 typealias SpeakerNames = Map<Int, SpeakerName>

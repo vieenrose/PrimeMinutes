@@ -62,7 +62,8 @@ object LibraryIndexer {
         val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
         return SessionLibrary.list(context.applicationContext).filter { e ->
             e.status == SessionLibrary.Status.DONE && e.sessionFile.exists() &&
-                !indexFresh(e.dir, maxOf(e.sessionFile.lastModified(), java.io.File(e.dir, "meta.json").lastModified()), spec.id)
+                !indexFresh(e.dir, maxOf(e.sessionFile.lastModified(), java.io.File(e.dir, "meta.json").lastModified(),
+                    java.io.File(e.dir, studio.primeminutes.core.people.PeopleStore.LINKS).lastModified()), spec.id)
         }.map { it.id }
     }
 

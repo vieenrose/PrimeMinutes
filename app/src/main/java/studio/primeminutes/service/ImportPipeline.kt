@@ -370,9 +370,21 @@ internal class ImportPipeline(private val host: PipelineHost) {
                 val flushed = SessionLibrary.byId(ctx, libEntry.id)
                     ?.takeIf { it.status == SessionLibrary.Status.DONE && it.sessionFile.exists() }
                     ?.let { e -> PrimeMinutesSession.peek(e.sessionFile) }
-                val utts = flushed?.utterances?.takeIf { it.size == result.first.size } ?: result.first
+                // The same transcript (the view's edits): its names as they are. A re-run's new transcript:
+                // the previous run's names follow the speakers by time overlap (speaker ids change).
+                val same = flushed != null && flushed.utterances.size == result.first.size &&
+                    flushed.utterances.zip(result.first).all { (a, b) -> kotlin.math.abs(a.startSec - b.startSec) < 0.05 }
+                val utts = if (same) flushed!!.utterances else result.first
+                val names = when {
+                    flushed == null -> emptyMap()
+                    same -> flushed.speakerNames
+                    else -> studio.primeminutes.core.people.SpeakerCarryOver.carry(
+                        flushed.utterances.map { studio.primeminutes.core.people.SpeakerCarryOver.Turn(it.startSec, it.endSec, it.speaker) },
+                        flushed.speakerNames,
+                        result.first.map { studio.primeminutes.core.people.SpeakerCarryOver.Turn(it.startSec, it.endSec, it.speaker) })
+                }
                 val updated = SessionLibrary.attachResults(
-                    ctx, libEntry, utts, flushed?.speakerNames ?: emptyMap(), result.second.summary, result.second.actions,
+                    ctx, libEntry, utts, names, result.second.summary, result.second.actions,
                     result.second.title, result.second.notes, cfg.asrModelId, cfg.asrBackend, cfg.llmModelId,
                 )
                 Log.i(STOP_TAG, "runPipeline attach -> ${updated?.id ?: "NULL (buildSession failed)"}")
