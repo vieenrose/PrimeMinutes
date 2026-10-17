@@ -69,6 +69,12 @@ import Foundation
         near(cut[1].start, 105 + Double(TokenTimes.tokenize(s1).count) * 0.2, "second starts at its first token")
         near(cut[0].end, cut[1].start, "contiguous"); check(cut[1].tokenTimes?.count, TokenTimes.tokenize(s2).count, "piece times")
 
+        // the strip shows the text's spacing: "two," + "right?" across the seam is not glued
+        let sm = BoundaryEdits.seam(u(0, 0, 2, "we need two,"), u(1, 2, 4, "right? Yes."))
+        check(BoundaryEdits.displayTokens(sm.tokens).joined(), "we need two, right? Yes.", "display spacing")
+        check(BoundaryEdits.displayTokens(sm.tokens).count, sm.tokens.count, "display keeps tokens")
+        check(BoundaryEdits.displayTokens(BoundaryEdits.seam(u(0, 0, 1, "好的"), u(1, 1, 2, "可以")).tokens).joined(), "好的可以", "display Han")
+
         print(failures == 0 ? "boundary edits: PASS" : "boundary edits: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

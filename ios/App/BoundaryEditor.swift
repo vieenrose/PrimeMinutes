@@ -164,12 +164,18 @@ struct BoundaryEditorSheet: View {
         }
     }
 
+    private var shown: [String] { BoundaryEdits.displayTokens(tokens) }
+    private static var spaceWidth: CGFloat { (" " as NSString).size(withAttributes: [.font: UIFont.preferredFont(forTextStyle: .body)]).width }
+
     private var strip: some View {
         TokenFlow {
             if lo > 0 { Text("… ").foregroundStyle(.secondary) }
             ForEach(lo..<hi, id: \.self) { i in
-                Text(tokens[i])
+                // A token's trailing space as an explicit gap: Text drops trailing whitespace from its width,
+                // which glued English words together ("two,right?"). Same spacing as the text (displayTokens).
+                Text(String(shown[i].reversed().drop(while: { $0 == " " }).reversed()))
                     .font(.body)
+                    .padding(.trailing, shown[i].hasSuffix(" ") ? Self.spaceWidth : 0)
                     .padding(.vertical, 3)
                     .background((i < split ? colorA : cB).opacity(0.22))
                     .overlay(alignment: .leading) {

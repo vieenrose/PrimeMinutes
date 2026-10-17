@@ -91,16 +91,31 @@ enum BoundaryEdits {
         return Seam(tokens: ta + tb, starts: tokenStarts(a, ta) + tokenStarts(b, tb), split: ta.count, end: b.end)
     }
 
+    /// True when `t` following text that ends in `l` needs a space: two Latin words meeting across the seam.
+    private static func needsSpace(_ l: Unicode.Scalar, _ t: String) -> Bool {
+        guard let f = t.unicodeScalars.first else { return false }
+        return !CharacterSet.whitespacesAndNewlines.contains(l) && !TokenTimes.isHan(l) && !TokenTimes.isHan(f)
+            && CharacterSet.alphanumerics.contains(f) && l != "-"
+    }
+
     /// Concatenate tokens, adding the space two Latin words need when they meet across the seam.
     static func join(_ toks: ArraySlice<String>) -> String {
         var s = ""
         for t in toks {
-            if let l = s.unicodeScalars.last, let f = t.unicodeScalars.first,
-               !CharacterSet.whitespacesAndNewlines.contains(l), !TokenTimes.isHan(l), !TokenTimes.isHan(f),
-               CharacterSet.alphanumerics.contains(f), l != "-" { s += " " }
+            if let l = s.unicodeScalars.last, needsSpace(l, t) { s += " " }
             s += t
         }
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The tokens as the boundary strip shows them: where `join` would add a space between two of them (A's "two,"
+    /// meeting B's "right?" at the seam), the space ends the first, as a token's own trailing space does. The strip
+    /// then reads like the text the move produces, not "two,right?". Android BoundaryEdits.displayTokens.
+    static func displayTokens(_ toks: [String]) -> [String] {
+        toks.indices.map { i in
+            if i + 1 < toks.count, let l = toks[i].unicodeScalars.last, needsSpace(l, toks[i + 1]) { return toks[i] + " " }
+            return toks[i]
+        }
     }
 
     private static func withTimes(_ u: Utterance, _ starts: ArraySlice<Double>) -> Utterance {
