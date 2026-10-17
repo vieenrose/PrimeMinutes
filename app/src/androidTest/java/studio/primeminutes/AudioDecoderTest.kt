@@ -105,13 +105,13 @@ class AudioDecoderTest {
         val app = InstrumentationRegistry.getInstrumentation().targetContext
         val audio = runCatching { YouTube.resolve(InstrumentationRegistry.getInstrumentation().targetContext, "https://www.youtube.com/watch?v=jNQXAC9IVRw") }
             .getOrElse { Log.i(TAG, "resolve unavailable: ${it.message?.take(120)}"); return@runBlocking }
-        val uri = runCatching { YouTube.download(app, audio) {} }
-            .getOrElse { Log.i(TAG, "download unavailable: ${it.message?.take(120)}"); return@runBlocking }
-        val f = File(uri.path!!)
+        val dir = File(app.cacheDir, "yt-decode-test").apply { mkdirs() }
+        val f = runCatching { YouTube.downloadInto(audio, dir) { _, _ -> } }
+            .getOrElse { Log.i(TAG, "download unavailable: ${it.message?.take(120)}"); dir.deleteRecursively(); return@runBlocking }
         try {
             assertDecodedDurationMatchesContainer(f, "youtube .${audio.ext}")
         } finally {
-            f.delete()
+            dir.deleteRecursively()
         }
     }
 
