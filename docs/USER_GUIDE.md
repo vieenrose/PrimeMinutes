@@ -214,6 +214,22 @@ flowchart TD
 
 <img src="guide/35-merge-confirm.png" width="270" alt="合併語者確認"> <img src="guide/36-merge-undo.png" width="270" alt="已合併語者，復原"> <img src="guide/13-transcript-search.png" width="270" alt="搜尋逐字稿">
 
+### 7b. 在這場會議內搜尋與提問
+
+<img src="screenshots/meeting-search-zh.png" width="270" alt="搜尋這場會議：AI 筆記與逐字稿的結果清單"> <img src="screenshots/meeting-ask-zh.png" width="270" alt="問這場會議：只根據這場會議的段落作答">
+
+搜尋列下方列出這場會議符合的 **AI 筆記** 與 **逐字稿** 句子（各依時間排序，標示 **≈** 的是依語意找到的）；點一筆就捲到那句並把播放位置停在那裡。**✦**（搜尋列、結果清單最後一列、⋮ 選單的「問這場會議」）只拿這場會議的段落作答，不會被其他相似的會議搶走出處；出處只顯示時間。設計與預設值：[docs/design/in-session-search-ask.md](design/in-session-search-ask.md)。英文介面：[搜尋](screenshots/meeting-search-en.png)、[提問](screenshots/meeting-ask-en.png)（AMI 公開會議）。
+
+| 節點 | 如何到達 | 預期結果 | 驗證 |
+|---|---|---|---|
+| 結果清單 | 頂端放大鏡 → 輸入 | AI 筆記・N、逐字稿・N 兩組，各附時間；可用清單鈕收合／展開；最多 50 筆 | ✅ 手動（Note 10+、模擬器、iPhone 14 Pro Max） |
+| 點結果 | 結果清單 | 清單收合，逐字稿捲到該句，播放位置停在該時間（不自動播放） | ⬜ 未逐項確認 |
+| ≈ 依語意 | 搜尋列的 ≈ | 加入依語意找到的筆記與句子（標 ≈）；會議尚未建立索引時不顯示 ≈ | ✅ 手動（Note 10+） |
+| 問這場會議 | ✦ 或 ⋮ → 問這場會議 | 「正在搜尋這場會議…」→ 答案，出處為這場會議的時間；點出處回到逐字稿該處 | ✅ 手動（Note 10+、模擬器、iPhone 14 Pro Max） |
+| 尚未建立索引 | 沒有搜尋模型，或索引尚未完成 | 仍可提問（只用關鍵字找段落），同時在背景建立索引 | ✅ 手動（模擬器） |
+| 先前的問題 | 再次開啟問這場會議 | 這場會議先前的問答列在「先前的問題」下（最多 20 則）；↻ 清除 | ✅ 手動（Note 10+） |
+| 處理中的會議 | 正在轉寫或閱讀的會議 | 可搜尋已出現的句子與筆記（只用關鍵字）；提問等工作完成後才回答 | ⬜ 未實機確認 |
+
 ### 7a. 調整說話者分界（Adjust a speaker boundary）
 
 <img src="guide/43-boundary-editor.png" width="270" alt="調整說話者分界"> <img src="screenshots/boundary.gif" width="270" alt="移動分界並試聽"> <img src="guide/45-split-line.png" width="270" alt="從這裡分開">

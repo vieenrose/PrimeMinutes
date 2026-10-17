@@ -127,24 +127,27 @@ fun AskSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f, fill = false)) {
-                    Text(
-                        stringResource(if (scope != null) R.string.ask_meeting_title else R.string.ask_title),
-                        style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
-                    )
+                // Title and chip on one line, the meeting's name under them (in-meeting); the actions keep the right.
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(if (scope != null) R.string.ask_meeting_title else R.string.ask_title),
+                            style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold, color = pal.WarningText,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.WarningText.copy(alpha = 0.13f))
+                                .padding(horizontal = 9.dp, vertical = 4.dp),
+                        )
+                    }
                     if (scope != null) Text(
                         scope.title ?: scope.id, style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold, color = pal.WarningText,
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.WarningText.copy(alpha = 0.13f))
-                        .padding(horizontal = 9.dp, vertical = 4.dp),
-                )
-                Spacer(Modifier.weight(1f))
                 if (busy) IconButton(onClick = { AskEngine.cancel() }) {
                     Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.ask_cancel), tint = pal.Slate400)
                 }
@@ -183,8 +186,11 @@ fun AskSheet(
                         )
                         t.excerpts.distinctBy { it.entry.id to it.sec / 60 }.forEach { x ->
                             Text(
-                                if (scope != null) ReaderProtocol.formatTs(x.sec) else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
+                                // In-meeting: the time and the passage's first words (the meeting is known; a saved turn has no text).
+                                if (scope != null) ReaderProtocol.formatTs(x.sec) + x.text.trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
+                                else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
+                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(vertical = 2.dp)
                                     .clickable { onOpenAt(x.entry, x.at) },
                             )
