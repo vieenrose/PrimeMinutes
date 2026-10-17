@@ -185,6 +185,33 @@ class ModelManager(context: Context) {
         studio.primeminutes.core.embed.EmbedHost.provisioned.value++
     }
 
+    // --- Speaker voice model (People, opt-in): same contract as the embedder. ---
+
+    fun speakerDir(card: studio.primeminutes.core.people.SpeakerCard): File = File(modelsDir, card.dirName)
+
+    fun speakerReady(card: studio.primeminutes.core.people.SpeakerCard): Boolean =
+        card.files.all { (rel, meta) -> File(speakerDir(card), rel).length() == meta.first } &&
+            runCatching { File(speakerDir(card), REVISION_MARKER).readText().trim() }.getOrNull() == card.revision
+
+    suspend fun ensureSpeaker(card: studio.primeminutes.core.people.SpeakerCard, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        if (speakerReady(card)) { onProgress(1f); return@withContext }
+        val dir = speakerDir(card).apply { mkdirs() }
+        val marked = beginSet(dir, card.revision, card.files.keys)
+        var done = 0L
+        card.files.forEach { (rel, meta) ->
+            val (bytes, sha) = meta
+            val dest = File(dir, rel).apply { parentFile?.mkdirs() }
+            if (dest.length() != bytes || !marked) {
+                if (dest.exists()) dest.delete()
+                download("${card.revision}/$rel", dest, sha) { frac -> onProgress((done + (frac * bytes).toLong()).toFloat() / card.totalBytes) }
+            }
+            done += bytes
+            onProgress(done.toFloat() / card.totalBytes)
+        }
+        endSet(dir, card.revision)
+        check(speakerReady(card)) { "${card.displayName} files missing after provisioning" }
+    }
+
     // --- Storage manager: enumerate + delete downloaded models (each re-downloads on next use). ---
 
     enum class ModelKind { ASR, LLM, EMBED, OTHER }

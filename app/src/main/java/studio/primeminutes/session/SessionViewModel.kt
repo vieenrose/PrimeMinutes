@@ -106,6 +106,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
 
     init {
         studio.primeminutes.core.people.PeopleStore.init(app)
+        studio.primeminutes.core.people.VoiceStore.init(app)
+        studio.primeminutes.core.people.VoiceStore.catchUp(app)
         viewModelScope.launch { studio.primeminutes.core.people.PeopleStore.changed.collect { relinkFromStore(it) } }
         viewModelScope.launch {
             studio.primeminutes.core.people.PeopleStore.doc.map { d -> d.people.associate { it.id to it.name } }

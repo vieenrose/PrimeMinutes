@@ -1,0 +1,18 @@
+{
+  "id": "campplus-zh-en-400f-fp32",
+  "displayName": "CAM++ zh-en (3D-Speaker)",
+  "licence": "Apache-2.0",
+  "source": "modelscope.cn/models/iic/speech_campplus_sv_zh_en_16k-common_advanced (3D-Speaker, arXiv:2303.00332), exported to LiteRT by tools/speaker-id-eval/export_litert.py",
+  "dirName": "speaker-campplus-zh-en",
+  "revision": "https://huggingface.co/Luigi/primeminutes-speaker-litert/resolve/main",
+  "files": {
+    "campplus_zh_en_400f.tflite": { "size": 28800672, "sha256": "fe33cb21d09b8c5d21d28634c12eea18661a5088fb2a8bbed3818c4876da8b75" }
+  },
+  "graph": "campplus_zh_en_400f.tflite",
+  "dim": 192,
+  "frontend": { "mels": 80, "meanNorm": true, "int16Scale": false, "windowFrames": 400 },
+  "minCleanSec": 10,
+  "capSec": 60,
+  "thresholds": { "low": 0.50, "high": 0.70, "margin": 0.05, "outlier": 0.30 },
+  "calibration": "AMI far-field, app diarizer segmentation, 16 meetings: EER 0.32 %, top-1 100 %, same-person p5 0.66, different-person max 0.57; AISHELL-4 different-person max 0.67 (tools/speaker-id-eval/eval_windows.py)"
+}

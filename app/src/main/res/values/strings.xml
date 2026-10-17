@@ -511,4 +511,52 @@
     <string name="cd_people_back">Back</string>
     <string name="people_note_short">Note</string>
     <string name="people_settings_open">People (%d)</string>
+    <string name="voice_title">Recognise voices</string>
+    <string name="voice_off_desc">Off. Names are only what you type.</string>
+    <string name="voice_on_desc">On. The rename sheet suggests people whose voice matches. Only on this phone.</string>
+    <string name="voice_downloading">Downloading the voice model…</string>
+    <string name="voice_download_failed">The voice model could not be downloaded. Try again when online.</string>
+    <string name="voice_explain_title">Recognise voices?</string>
+    <string name="voice_explain_text">When you name a speaker, Prime Minutes can remember what that person sounds like, and suggest their name in your next meetings.\n\n• Everything stays on this phone. Voices are never uploaded, and they are left out of exports and backups.\n• A voice is a list of numbers computed from up to 60 s of the person\'s speech in your meetings, not a recording.\n• Suggestions are only suggestions: a name is never set without your tap.\n• You can forget one person\'s voice, or delete all voice data, at any time. Deleting a meeting deletes the voice samples it gave.\n• Ask people before you name them: in some places a voice print is personal data that needs their consent.\n\nThe voice model is downloaded once (%d MB).</string>
+    <string name="voice_enable">Turn on</string>
+    <string name="voice_delete_all">Delete all voice data</string>
+    <string name="voice_delete_all_text">Every person\'s voice and every meeting\'s voice data are deleted, and recognition is turned off. Names stay.</string>
+    <string name="voice_me">This is me…</string>
+    <string name="voice_me_again">Record my voice again</string>
+    <string name="voice_me_name">Me</string>
+    <string name="voice_me_text">Read the text below aloud, in a quiet place, for about 20 seconds. Only a voice vector is kept, not the recording.</string>
+    <string name="voice_me_permission">Prime Minutes needs the microphone permission. Start a recording once to grant it, then come back.</string>
+    <string name="voice_me_script">Today we will review where the project stands, what was decided last week, and who takes the next steps. I will start with the schedule, then the budget, and we will finish with questions. 今天我們會檢視專案進度、上週的決定，以及下一步由誰負責。</string>
+    <string name="voice_me_start">Start</string>
+    <string name="voice_me_recording">Listening… keep reading.</string>
+    <string name="voice_me_computing">Learning your voice…</string>
+    <string name="voice_me_done">Done. Your voice will be suggested as \"Me\" (you can rename it).</string>
+    <string name="voice_me_failed">That did not work. Check the microphone and try again.</string>
+    <string name="voice_note_short">Not enough clear speech from this speaker to compare voices.</string>
+    <string name="voice_note_working">Comparing voices…</string>
+    <string name="voice_note_none_yet">No voice learned yet: names you give teach the app.</string>
+    <string name="voice_note_no_match">No known voice matches.</string>
+    <string name="voice_person_title">Voice</string>
+    <string name="voice_person_none">Not learned yet</string>
+    <string name="voice_forget">Forget voice</string>
+    <string name="voice_forget_text">Forget what %s sounds like? Names in meetings stay, and the app stops learning this voice until you turn it back on.</string>
+    <string name="voice_forget_yes">Forget</string>
+    <string name="voice_outlier_title">Doesn\'t sound like %s</string>
+    <string name="voice_outlier_text">This voice does not match %s in your other meetings. The name is kept; learn this voice as theirs too?</string>
+    <string name="voice_outlier_learn">Learn anyway</string>
+    <string name="voice_outlier_keep">Name only</string>
+    <string name="people_voice_likely">Voice: likely</string>
+    <string name="people_voice_possible">Voice: possible</string>
+    <plurals name="voice_known">
+        <item quantity="one">%d person with a learned voice</item>
+        <item quantity="other">%d people with a learned voice</item>
+    </plurals>
+    <plurals name="voice_person_learned">
+        <item quantity="one">Learned from %1$d meeting (%2$d s)</item>
+        <item quantity="other">Learned from %1$d meetings (%2$d s)</item>
+    </plurals>
+    <plurals name="voice_person_pending">
+        <item quantity="one">%d meeting waits: its voice did not match</item>
+        <item quantity="other">%d meetings wait: their voice did not match</item>
+    </plurals>
 </resources>

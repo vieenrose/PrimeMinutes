@@ -113,7 +113,9 @@ fun PersonPickerSheet(
     }
     val labelOf = remember(speakers) { speakers.associate { it.id to it.label } }
     val exclude = setOfNotNull(current?.person)
-    val sec = remember(doc, usage, inMeeting, query, fold) { PeoplePicker.sections(doc, usage, inMeeting, query, fold, exclude) }
+    // A person suggested by voice is listed once, in the voice section (while not searching).
+    val voiceIds = if (query.isBlank()) suggestions.map { it.person }.filter { it !in inMeeting }.toSet() else emptySet()
+    val sec = remember(doc, usage, inMeeting, query, fold, voiceIds) { PeoplePicker.sections(doc, usage, inMeeting, query, fold, exclude + voiceIds) }
     val homonyms = remember(doc, fold) { PeoplePicker.homonyms(doc, fold) }
     fun hint(p: Person): String? = when {
         p.note != null -> p.note

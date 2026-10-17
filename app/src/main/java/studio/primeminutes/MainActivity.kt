@@ -1829,6 +1829,7 @@ private fun TranscribeScreen(
             onOpenPeople = { vm.showConfigSheet(false); peopleOpen = true },
         )
     }
+    studio.primeminutes.ui.VoiceOutlierPrompt()
     if (peopleOpen) {
         studio.primeminutes.ui.PeopleScreen(
             onClose = { peopleOpen = false },

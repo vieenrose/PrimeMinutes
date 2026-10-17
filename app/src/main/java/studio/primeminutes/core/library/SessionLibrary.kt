@@ -173,6 +173,7 @@ object SessionLibrary {
         } ?: return null
         // The meeting's named speakers and their people (the sidecar the directory reads).
         studio.primeminutes.core.people.PeopleStore.saveNames(entry.dir, speakerNames)
+        studio.primeminutes.core.people.VoiceStore.request(context, entry.id)   // voice vectors (only when recognition is on)
         clearProgress(entry)   // the run is complete: nothing left to resume
         // A user-given name (set at capture time or via rename) outranks the LLM title — batch
         // processing must never rename "Talk 3 — Dr. Smith" to whatever the model invents. Re-read

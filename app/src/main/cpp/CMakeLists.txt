@@ -116,7 +116,9 @@ add_library(primeminutes-nemo SHARED
     nemo/litert_graph.cc
     nemo/diar_litert.cc
     nemo/diar_pre_encode.cc
-    nemo/xasr_litert.cc)
+    nemo/xasr_litert.cc
+    nemo/speaker_embed.cc
+    nemo/speaker_jni.cpp)
 target_compile_features(primeminutes-nemo PRIVATE cxx_std_17)
 target_compile_definitions(primeminutes-nemo PRIVATE NEMO_HAVE_TOKEN_TIMES NEMO_WITH_LITERT NEMO_LITERT_ENV_API)
 target_compile_options(primeminutes-nemo PRIVATE -O2 -w)
@@ -127,7 +129,7 @@ if(NEMO_NO_GGML)
     target_include_directories(primeminutes-nemo PRIVATE nemo/hostxasr)
     set(NEMO_NATIVE_LIBS "")
 else()
-    target_sources(primeminutes-nemo PRIVATE nemo/diar_crispasr.cpp)
+    target_sources(primeminutes-nemo PRIVATE nemo/diar_crispasr.cpp)   # core_kaldi::compute_fbank comes from CrispASR here
     add_dependencies(primeminutes-nemo crispasr_ext audiocpp_ext)
     target_include_directories(primeminutes-nemo PRIVATE
         ${NATIVE_DIR}/crispasr/src
