@@ -116,7 +116,14 @@ enum ReaderProtocol {
 /// stays `zh`. The model card says what changes for a language (`ModelCard.forLanguage`).
 struct MeetingLanguage {
     private var cjk = 0, words = 0
+    /// Fewer characters + words than this: too little to tell. A question is short (`questionUnits`).
+    private let need: Int
+    init(minUnits: Int = MeetingLanguage.minUnits) { need = minUnits }
     static let minUnits = 20
+    /// A question: three English words or a few Chinese characters say its language.
+    static let questionUnits = 4
+    /// A few sentences: what `settled` waits for.
+    static let settledUnits = 60
 
     static func isCjk(_ c: UInt32) -> Bool {
         (0x3400...0x4DBF).contains(c) || (0x4E00...0x9FFF).contains(c) || (0xF900...0xFAFF).contains(c) || (0x20000...0x2FFFF).contains(c) ||
@@ -134,10 +141,18 @@ struct MeetingLanguage {
         if inWord >= 2 { words += 1 }
     }
 
-    /// `zh`, `en`, or nil while there is too little text to tell.
-    var code: String? { cjk + words < Self.minUnits ? nil : (words > cjk ? "en" : "zh") }
+    /// Characters + words counted so far.
+    var units: Int { cjk + words }
+    /// `code` once `settledUnits` were heard: enough to commit something read once per meeting (the
+    /// reader's system prompt), or nil before.
+    var settled: String? { units >= Self.settledUnits ? code : nil }
 
-    static func detect(_ texts: [String]) -> String? { var m = MeetingLanguage(); texts.forEach { m.add($0) }; return m.code }
+    /// `zh`, `en`, or nil while there is too little text to tell.
+    var code: String? { cjk + words < need ? nil : (words > cjk ? "en" : "zh") }
+
+    static func detect(_ texts: [String], minUnits: Int = MeetingLanguage.minUnits) -> String? {
+        var m = MeetingLanguage(minUnits: minUnits); texts.forEach { m.add($0) }; return m.code
+    }
 }
 
 /// One transcript line as the model reads it. `speaker` is "S1", "S2", … or nil.

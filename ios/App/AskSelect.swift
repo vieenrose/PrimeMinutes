@@ -120,3 +120,26 @@ enum AskSelect {
         return out + ns.substring(from: last)
     }
 }
+
+/// Ask answers in the language of the question, not the interface's (Android AskEngine.answerLanguage /
+/// asked). Keys are the model card's answer-language keys (`zh-Hans`, `zh-Hant`, `en`).
+enum AskLanguage {
+    /// The key the answer is written in: the question's language (`MeetingLanguage` on the question); a
+    /// question too short or too mixed to tell, or Chinese on a Chinese interface, follows the interface.
+    static func answerKey(_ question: String, ui: String) -> String {
+        switch MeetingLanguage.detect([question], minUnits: MeetingLanguage.questionUnits) {
+        case "en": return "en"
+        case "zh": return ui.hasPrefix("zh") ? ui : "zh-Hant"
+        default: return ui
+        }
+    }
+
+    /// The question as the model reads it in a conversation whose system prompt is `system`'s (the first
+    /// question's language): followed by the card's word for the answer's language (`ask.answer_in`) when
+    /// that differs, so the conversation's cached prefix stays as it is.
+    static func asked(_ question: String, ui: String, system: String, answerIn: [String: String]) -> String {
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        let want = answerKey(q, ui: ui)
+        return want == system ? q : q + (answerIn[want] ?? "")
+    }
+}

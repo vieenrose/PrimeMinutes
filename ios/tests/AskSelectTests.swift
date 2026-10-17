@@ -61,6 +61,22 @@ import Foundation
             check(AskSelect.dedupeTags("A \(x). B \(x).") == "A \(x). B \(x).", "dedupe 3")
             check(AskSelect.dedupeTags("A \(x)\(x)") == "A \(x)", "dedupe 4")
         }
+        do {   // the answer follows the question's language (Android AskLanguageTest)
+            check(AskLanguage.answerKey("What did the team decide about the battery?", ui: "zh-Hant") == "en", "en question, zh ui")
+            check(AskLanguage.answerKey("搬家要準備哪些事？", ui: "zh-Hant") == "zh-Hant", "zh question, zh ui")
+            check(AskLanguage.answerKey("搬家要准备哪些事？", ui: "zh-Hans") == "zh-Hans", "the interface's script")
+            check(AskLanguage.answerKey("尾牙的頭獎是什麼？", ui: "en") == "zh-Hant", "zh question, en ui")
+            check(AskLanguage.answerKey("OK?", ui: "zh-Hant") == "zh-Hant", "too short: ui")
+            check(AskLanguage.answerKey("好嗎", ui: "en") == "en", "too short zh: ui")
+            check(AskLanguage.answerKey("這個 project 的 deadline 是哪天？", ui: "zh-Hant") == "zh-Hant", "mixed stays zh")
+            let ai = ["en": "<EN>", "zh-Hant": "<HANT>", "zh-Hans": "<HANS>"], q = "What did the team decide about the battery?"
+            // A first question sets the system prompt's language: no directive.
+            check(AskLanguage.asked("  \(q) ", ui: "zh-Hant", system: AskLanguage.answerKey(q, ui: "zh-Hant"), answerIn: ai) == q, "first question: as typed")
+            // A follow-up in another language than the conversation's system prompt: the card's word.
+            check(AskLanguage.asked(q, ui: "zh-Hant", system: "zh-Hant", answerIn: ai) == q + "<EN>", "directive for english")
+            check(AskLanguage.asked("尾牙的頭獎是什麼？", ui: "en", system: "en", answerIn: ai) == "尾牙的頭獎是什麼？<HANT>", "directive for chinese")
+            check(AskLanguage.asked(q, ui: "zh-Hant", system: "zh-Hant", answerIn: [:]) == q, "no directive in the card")
+        }
         print(failures == 0 ? "ask-select: PASS" : "ask-select: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

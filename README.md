@@ -61,7 +61,7 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 
 **匯入**：首頁 **＋** 可加入「檔案」App 裡的音訊、Podcast，或開啟 Prime Minutes 場次 `.m4a`；也可從其他 App 分享音訊過來。選好 Podcast 單集後，這一集立刻出現在首頁並標示下載進度，下載完成後自動排入處理；點按排隊、處理中或下載中的一列可即時查看（處理中可同時播放音訊）。
 
-**提問**：點首頁搜尋框右側的「提問」（或先在搜尋框輸入問題再點），AI 筆記模型只根據找到的段落作答，每個論點附上出處，點出處即可核對；可以接著追問。需要搜尋模型與 AI 筆記模型。
+**提問**：點首頁搜尋框右側的「提問」（或先在搜尋框輸入問題再點），AI 筆記模型只根據找到的段落作答，每個論點附上出處，點出處即可核對；可以接著追問。回答使用提問的語言（用英文問就用英文答，介面語言不變）。需要搜尋模型與 AI 筆記模型。
 
 **設定**：語言（English、繁體中文、简体中文）、外觀（自動、淺色、深色、電子紙）、文字大小、語者標註延遲（5–30 秒）、AI 筆記模型（E2B，或 RAM 足夠的 iPhone 可選 E4B）、硬體狀態列、推論（執行緒數）、向會議提問（預設開啟）、顯示待辦事項、模型與儲存空間管理、關於。
 
@@ -88,7 +88,7 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 ## 運作方式
 
 - **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp)：語音辨識（X-ASR）與語者分離（Nemotron-3）在同一條時間軸上的串流引擎，以 C 介面接到 Swift。
-- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」把分數最高的段落交給 AI 筆記模型作答。
+- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」先找出段落最相關的兩場會議，把分數最高的段落（同一場重疊的段落合併）交給 AI 筆記模型作答。
 - **AI 筆記與摘要**：Gemma-4-E2B 會議模型（行動版）在 LiteRT 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)，`CLiteRTLM.xcframework`）。閱讀協定（`MeetingReader`、`ReaderSummarizer`）以 Swift 重寫。
 
 ## 從原始碼建置

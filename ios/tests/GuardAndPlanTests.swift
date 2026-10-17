@@ -93,6 +93,7 @@ final class OneReply: ReaderLlm {
         check(en.prose.prompt != base.prose.prompt && en.title.prompt != base.title.prompt, true, "english prompts")
         check(en.reader.directive != nil && en.reader.systemSuffix != nil, true, "english directive and system suffix")
         check(base.forLanguage("zh").reader.directive == nil && base.forLanguage("zh").reader.systemSuffix == nil, true, "chinese: upstream prompt")
+        check(Set(base.ask.answerIn.keys).isSuperset(of: base.ask.system.keys), true, "ask answer_in for every system language")
         check(en.prose.maxTokens, base.prose.maxTokens, "prose budget unchanged"); check(en.title.maxTokens, base.title.maxTokens, "title budget unchanged")
         check(en.reader.sections.map(\.1), base.reader.sections.map(\.1), "same section tags")
         check(base.forLanguage("fr").prose.prompt, base.prose.prompt, "unlisted language"); check(base.forLanguage(nil).reader.directive, base.reader.directive, "nil language")
@@ -119,6 +120,38 @@ final class OneReply: ReaderLlm {
         check(zhR.language, "zh", "reader language zh")
         check(zhLlm.turns[0].contains(en.reader.directive!), false, "no english directive for chinese")
         if let d = base.forLanguage("zh").reader.directive { check(zhLlm.turns[0].contains(d), true, "chinese directive") }
+        // The system prompt waits for the language: an English meeting's FIRST window reads the card's
+        // agreement rule (Android MeetingLanguageTest.firstWindowReadsTheLanguagesSystemPrompt).
+        let tp = base.template
+        check(enLlm.turns[0].hasPrefix(tp.p0 + "sys" + en.reader.systemSuffix! + tp.p1), true, "english first window has the system suffix")
+        if let h = enLlm.turns[0].range(of: base.reader.windowHeader(1)), let pr = enLlm.turns[0].range(of: base.reader.primer), let l0 = enLlm.turns[0].range(of: "[0:00] S1:") {
+            check(h.lowerBound > pr.lowerBound && l0.lowerBound > h.lowerBound, true, "held lines follow the prefix in order")
+        } else { check(false, true, "held lines present") }
+        // A Chinese meeting's conversation is exactly the card's own (as an upfront prefill fed it).
+        func turns(_ card: ModelCard, _ n: Int) -> [String] {
+            let llm = Rec(), r = MeetingReader(llm: llm, systemPrompt: "sys", count: { $0.unicodeScalars.count }, budget: base.budget, card: card)
+            try! r.start(); for i in 0..<n { try! r.offer(Line(startS: i * 10, speaker: "S1", text: "那我們就決定尾牙定在十二月十九號，地點在台北，大家同意，第\(i)點")) }
+            _ = try! r.finish(); return llm.turns
+        }
+        var plain = base; plain.languages = [:]
+        check(turns(base, 40), turns(plain, 40), "chinese conversation unchanged by the wait")
+        check(turns(base, 40)[0].hasPrefix(tp.p0 + "sys" + tp.p1), true, "chinese prefix without suffix")
+        // The minutes' proposal guard reads the meeting's language (Android proposalGuardFollowsTheLanguage).
+        func note(_ t: String, _ tag: String = "DECISION") -> Note { Note(id: 1, window: 1, ts: "1:00", tag: tag, text: t) }
+        let enR2 = en.reader, zhR2 = base.forLanguage("zh").reader
+        for t in ["Maybe use rubber push buttons.", "We could use a kinetic battery.", "Should we go for a curved case?",
+                  "Let's think about a titanium case.", "S2 proposed a yellow casing.", "Marketing suggested a voice recognizer.",
+                  "Not sure about the scroll wheel.", "Use a solar cell?"] {
+            check(enR2.reclassify(note(t)).tag, "PROPOSAL", "en cue: \(t)")
+            check(enR2.reclassify(note(t, "ACTION")).tag, "PROPOSAL", "en cue action: \(t)")
+            check(zhR2.reclassify(note(t)).tag, "DECISION", "zh cues do not read english: \(t)")
+        }
+        for t in ["Use rubber push buttons and a yellow casing.", "The team agreed on S2's suggestion of a kinetic battery.",
+                  "Decided: maybe later, the logo goes inside.", "Ed will email the specs by Friday."] {
+            check(enR2.reclassify(note(t)).tag, "DECISION", "en decided: \(t)")
+        }
+        check(zhR2.reclassify(note("建議採用黃色外殼")).tag, "PROPOSAL", "zh cue")
+        check(zhR2.reclassify(note("決定採用黃色外殼")).tag, "DECISION", "zh decided")
 
         print(failures == 0 ? "guard+plan PASS" : "guard+plan: \(failures) failure(s)"); exit(failures == 0 ? 0 : 1)
     }

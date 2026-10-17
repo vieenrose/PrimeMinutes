@@ -21,6 +21,8 @@ struct ModelCard {
     /// Card fields a meeting language overrides; nil = keep the card's own (Android `ModelCard.LanguageVariant`).
     struct LanguageVariant {
         var directive: String?, systemSuffix: String?, sections: [(String, String)]?, sectionEmpty: String?
+        /// The proposal guard's words in this language (`ReaderCard.proposalCue`, `decided`).
+        var proposalCue: NSRegularExpression? = nil, decided: NSRegularExpression? = nil
         var title: OneShot?, prose: OneShot?
     }
 
@@ -32,6 +34,8 @@ struct ModelCard {
         c.reader.systemSuffix = v.systemSuffix ?? reader.systemSuffix
         c.reader.sections = v.sections ?? reader.sections
         c.reader.sectionEmpty = v.sectionEmpty ?? reader.sectionEmpty
+        c.reader.proposalCue = v.proposalCue ?? reader.proposalCue
+        c.reader.decided = v.decided ?? reader.decided
         c.title = v.title ?? title
         c.prose = v.prose ?? prose
         return c
@@ -47,7 +51,9 @@ struct ModelCard {
     }
 
     /// Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`).
-    struct AskCard { let answerTokens: Int, noExcerpts: String, system: [String: String] }
+    /// `answerIn`: per answer language, read after a question asked in another language than the system
+    /// prompt's (the system prompt stays the interface language's: the conversation's cached prefix).
+    struct AskCard { let answerTokens: Int, noExcerpts: String, system: [String: String]; var answerIn: [String: String] = [:] }
 
     static let schema = 1
 
@@ -82,11 +88,12 @@ struct ModelCard {
             }
         }
         struct O: Decodable { let prompt: String, max_tokens: Int, label: String? }
-        struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String] }
+        struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String], answer_in: [String: String]? }
         /// A language's prompt keeps the base budget and label unless it gives its own.
         struct LO: Decodable { let prompt: String, max_tokens: Int?, label: String? }
         struct L: Decodable {
             let directive: String?, system_suffix: String?, sections: [[String]]?, section_empty: String?
+            let proposal_cue: String?, decided: String?
             let title: LO?, prose: LO?
         }
         let schema: Int, name: String, template: T, sampler: S, budget: B, reader: R, title: O, prose: O, ask: A
@@ -117,9 +124,10 @@ struct ModelCard {
                                                      maxOffProtocolRate: g.max_off_protocol_rate ?? 0.2, minLines: g.min_lines ?? 10) } ?? GuardCard(),
                 directive: r.directive, systemSuffix: r.system_suffix),
             title: one(j.title), prose: one(j.prose),
-            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system),
+            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system, answerIn: j.ask.answer_in ?? [:]),
             languages: (j.languages ?? [:]).mapValues { v in
                 LanguageVariant(directive: v.directive, systemSuffix: v.system_suffix, sections: v.sections?.map { ($0[0], $0[1]) }, sectionEmpty: v.section_empty,
+                                proposalCue: v.proposal_cue.map(rx), decided: v.decided.map(rx),
                                 title: over(v.title, j.title), prose: over(v.prose, j.prose))
             })
     }
@@ -146,7 +154,7 @@ struct ReaderCard {
     var sections: [(String, String)], sectionEmpty: String
     /// A `reclassifyTags` note worded as a suggestion (`proposalCue`) with none of the `decided` words is a proposal.
     let proposalTag: String, reclassifyTags: [String], actionTag: String
-    let proposalCue: NSRegularExpression, decided: NSRegularExpression
+    var proposalCue: NSRegularExpression, decided: NSRegularExpression
     /// Title and prose read the journal compacted to this many characters (0 = all of it).
     let notesChars: Int
     /// What counts as off-protocol output, and how much of it is too much (ReaderGuard).

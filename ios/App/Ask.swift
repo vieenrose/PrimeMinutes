@@ -96,6 +96,8 @@ import Combine
     private let holder = AskHolder()
     private var task: Task<Void, Never>?
     private var nextK = 1
+    /// The card key of the conversation's system prompt: the first question's language (`AskLanguage`).
+    var convKey: String?
 
     func ask(_ sessions: [Session], question: String) {
         task?.cancel()
@@ -103,6 +105,11 @@ import Combine
         let lang = AppLanguage.current.resolved
         let card = Prefs.reader.card
         let first = turns.isEmpty
+        // The answer follows the question; the system prompt is the first question's language, and a follow-up
+        // in another language gets the card's word for its own (the conversation's prefix stays as it is).
+        let ui = Self.key(lang), want = AskLanguage.answerKey(question, ui: ui)
+        if first || convKey == nil { convKey = want }
+        let sys = convKey ?? want
         task = Task { [holder] in
             startedAt = Date(); phase = .retrieving
             var excerpts = await Task.detached(priority: .userInitiated) { holder.retrieve(sessions, question) }.value
@@ -117,8 +124,10 @@ import Combine
                     let s = try holder.open()
                     s.resume()
                     let t = s.template
-                    var prompt = first ? t.p0 + Self.system(lang, card) + t.p1 : t.p3
-                    prompt += Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
+                    let asked = AskLanguage.asked(question, ui: ui, system: sys, answerIn: card.ask.answerIn)
+                    let zh = want.hasPrefix("zh")
+                    var prompt = first ? t.p0 + (card.ask.system[sys] ?? Self.system(lang, card)) + t.p1 : t.p3
+                    prompt += Self.render(excerpts, zh, card) + "\n\n" + asked + t.p2
                     let tPrompt = Date()
                     let toks = s.tokenize(prompt, special: true)
                     // A follow-up that would leave no room for a whole answer, or that the cache refuses, starts a
@@ -127,7 +136,9 @@ import Combine
                         || s.append(toks) < 0 {
                         StatusLog.add("ask: prompt does not fit the conversation (\(s.seqLength) + \(toks.count) + \(card.ask.answerTokens)): fresh conversation")
                         s.reset()
-                        let fresh = t.p0 + Self.system(lang, card) + t.p1 + Self.render(excerpts, lang, card) + "\n\n" + question.trimmingCharacters(in: .whitespacesAndNewlines) + t.p2
+                        let fresh = t.p0 + (card.ask.system[want] ?? Self.system(lang, card)) + t.p1 + Self.render(excerpts, zh, card) + "\n\n" +
+                            AskLanguage.asked(question, ui: ui, system: want, answerIn: card.ask.answerIn) + t.p2
+                        DispatchQueue.main.async { AskEngine.shared.convKey = want }
                         if s.append(s.tokenize(fresh, special: true)) < 0 { throw ReaderError(description: "prompt does not fit") }
                     }
                     let pre = s.lastStats   // the prompt's prefill (append runs its own generate call)
@@ -162,22 +173,21 @@ import Combine
     /// Stops the answer in progress (the model stays loaded for a follow-up).
     func cancel() { holder.cancel(); task?.cancel(); task = nil; if !turns.isEmpty { turns[turns.count - 1].done = true }; if phase != .busy { phase = .idle } }
     /// Forgets the conversation and frees the reader model (the sheet closed).
-    func release() { cancel(); turns = []; nextK = 1; phase = .idle; let h = holder; Task.detached { h.close() } }
-    func reset() { cancel(); turns = []; nextK = 1; phase = .idle; holder.reset() }
+    func release() { cancel(); turns = []; nextK = 1; convKey = nil; phase = .idle; let h = holder; Task.detached { h.close() } }
+    func reset() { cancel(); turns = []; nextK = 1; convKey = nil; phase = .idle; holder.reset() }
 
-    /// The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts).
-    nonisolated static func render(_ xs: [Excerpt], _ lang: AppLanguage, _ card: ModelCard) -> String {
+    /// The excerpts as the reader sees them. For an answer outside Chinese, amounts are written in digits (ChineseAmounts).
+    nonisolated static func render(_ xs: [Excerpt], _ zh: Bool, _ card: ModelCard) -> String {
         if xs.isEmpty { return card.ask.noExcerpts + "\n" }
-        let zh = lang == .zhHant || lang == .zhHans
         return xs.map { x in
             let t = x.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return "[[\(x.k)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
         }.joined()
     }
-    /// The answer follows the interface language, whatever the question's: the card's system prompt.
-    nonisolated static func system(_ lang: AppLanguage, _ card: ModelCard) -> String {
-        card.ask.system[lang == .zhHans ? "zh-Hans" : lang == .zhHant ? "zh-Hant" : "en"]!
-    }
+    /// The card's system prompt for an interface language (the fallback when the card lacks a key).
+    nonisolated static func system(_ lang: AppLanguage, _ card: ModelCard) -> String { card.ask.system[key(lang)]! }
+    /// The card's answer-language key of an interface language.
+    nonisolated static func key(_ lang: AppLanguage) -> String { lang == .zhHans ? "zh-Hans" : lang == .zhHant ? "zh-Hant" : "en" }
 }
 
 /// The reader model and tokenizer Ask keeps while the sheet is open (background threads only).

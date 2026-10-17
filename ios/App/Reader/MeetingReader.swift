@@ -33,6 +33,9 @@ final class MeetingReader {
     private var restarts = 0
     private var started = false
     private var pieces: [String: [Int]] = [:]
+    /// The journal of the fresh prefix while that prefix waits for the meeting's language, else nil.
+    private var pendingPrefix: String?
+    private var held: [(text: String, what: String)] = []   // fed while the prefix waits, in order
 
     init(llm: ReaderLlm, systemPrompt: String, count: ((String) -> Int)? = nil,
          events: @escaping (AgentEvent) -> Void = { _ in },
@@ -47,12 +50,17 @@ final class MeetingReader {
         events(.state(s, window: window, ctxTokens: ctx, notes: notes, windowMax: budget.windowTokens, ctxMax: budget.ctxBudget))
     }
 
-    /// Prefill the fresh prefix (system + empty journal).
+    /// Get ready to read. The fresh prefix (system + empty journal) is prefilled once the meeting's
+    /// language is settled (`MeetingLanguage.settled`, a few sentences in) or the first window closes,
+    /// whichever comes first: the card may extend the system prompt for a language (`systemSuffix`), and
+    /// the system prompt is read once, before every window. What the first lines feed meanwhile is held
+    /// and prefilled right after it, in the same pieces, so the conversation's tokens (and a Chinese
+    /// meeting's output) are those of an upfront prefill (Android `MeetingReader.start`).
     func start() throws {
         let t = llm.template
         for (key, text) in [("p0", t.p0), ("p1", t.p1), ("p2", t.p2), ("p3", t.p3)] { pieces[key] = llm.tokenize(text, special: true) }
         state(.starting)
-        try prefillFresh(pc.journalEmpty)
+        pendingPrefix = pc.journalEmpty
         started = true
         state(.listening, ctx: llm.seqLength)
     }
@@ -90,6 +98,7 @@ final class MeetingReader {
         if let c = closedSeg { try append(c + "\n", special: false, what: "segment"); closedSeg = nil }
         lines.append(line)
         lang.add(line.text)
+        try settle(force: false)
         windowLines += 1
         windowTok += t
         segLines.append(line.render())
@@ -108,7 +117,9 @@ final class MeetingReader {
     }
 
     private func openWindow(_ first: Line) throws {
-        if llm.seqLength + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget { try restart() }
+        // A prefix still waiting counts as prefilled (it is, before this window is read).
+        let seq = pendingPrefix.map { prefixTokens($0).count } ?? llm.seqLength
+        if seq + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget { try restart() }
         k += 1
         windowTok = 0
         segEnd = first.startS + pc.segmentS
@@ -117,6 +128,7 @@ final class MeetingReader {
     }
 
     private func closeWindow() throws {
+        try settle(force: true)
         let last = closedSeg ?? segLines.joined(separator: "\n")
         closedSeg = nil
         segLines.removeAll()
@@ -184,20 +196,38 @@ final class MeetingReader {
         let before = llm.seqLength
         state(.restarting, window: k, ctx: before, notes: journal.count)
         llm.reset()
-        try prefillFresh(pc.compact(journal, count: count, budget: budget.restartBudget))
+        let compacted = pc.compact(journal, count: count, budget: budget.restartBudget)
+        // Before the prefix went in (the first window of a small context): it keeps waiting, now with
+        // this journal; nothing was held, a window opens only after the previous one was read.
+        if pendingPrefix != nil { pendingPrefix = compacted } else { try prefillFresh(compacted) }
         restarts += 1
         events(.restart(count: restarts, ctxBefore: before, ctxAfter: llm.seqLength))
     }
 
-    private func prefillFresh(_ journalText: String) throws {
-        let suffix = card.forLanguage(language).reader.systemSuffix ?? ""
-        let toks = pieces["p0"]! + llm.tokenize(systemPrompt + suffix, special: false) + pieces["p1"]! +
-            llm.tokenize(pc.journalHeader + journalText, special: false) + pieces["p2"]! +
-            llm.tokenize(pc.primer, special: false) + pieces["p3"]!
-        try timedAppend(toks, "prefix")
+    /// Prefill the waiting prefix, then what was held behind it — once the language is settled, or now
+    /// (`force`: a window is about to be read).
+    private func settle(force: Bool) throws {
+        guard let j = pendingPrefix, force || lang.settled != nil else { return }
+        pendingPrefix = nil
+        try prefillFresh(j)
+        let h = held; held = []
+        for x in h { try append(x.text, special: false, what: x.what) }
     }
 
-    private func append(_ text: String, special: Bool, what: String) throws { try timedAppend(llm.tokenize(text, special: special), what) }
+    private func prefillFresh(_ journalText: String) throws { try timedAppend(prefixTokens(journalText), "prefix") }
+
+    /// System (+ the language's suffix) and journal, the primed turn included.
+    private func prefixTokens(_ journalText: String) -> [Int] {
+        let suffix = card.forLanguage(language).reader.systemSuffix ?? ""
+        return pieces["p0"]! + llm.tokenize(systemPrompt + suffix, special: false) + pieces["p1"]! +
+            llm.tokenize(pc.journalHeader + journalText, special: false) + pieces["p2"]! +
+            llm.tokenize(pc.primer, special: false) + pieces["p3"]!
+    }
+
+    private func append(_ text: String, special: Bool, what: String) throws {
+        if pendingPrefix != nil { held.append((text, what)); return }
+        try timedAppend(llm.tokenize(text, special: special), what)
+    }
 
     private func timedAppend(_ toks: [Int], _ what: String) throws {
         let t0 = clock()
