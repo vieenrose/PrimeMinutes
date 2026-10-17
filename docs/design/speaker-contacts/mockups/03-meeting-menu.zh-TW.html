@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}
+:root{--ground:#F2F4F1;--card:#FFFFFF;--accent:#2F6BFF;--accent2:#1E4FD6;--ink:#17263F;--muted:#5A6982;--hair:rgba(23,38,63,.10);
+--tint:rgba(47,107,255,.12);--warn:#9A5B00;--ok:#2E9E63;--track:#DFE4DD}
+html,body{margin:0;padding:0}
+body{width:412px;height:915px;overflow:hidden;background:var(--ground);color:var(--ink);
+font-family:Roboto,'Noto Sans CJK TC','Noto Sans TC',sans-serif;font-size:15px;position:relative}
+.status{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;color:var(--ink)}
+.top{height:56px;display:flex;align-items:center;gap:6px;padding:0 6px}
+.top .t{flex:1;font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.pad{padding:0 16px}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:14px;margin:8px 16px}
+.label{font-size:12.5px;font-weight:700;color:var(--muted);margin:14px 0 4px;letter-spacing:.2px}
+.row{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 0}
+.row .main{flex:1;min-width:0}
+.row .n{font-size:15.5px;font-weight:500}
+.row .s{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr{height:1px;background:var(--hair)}
+.btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border:1px solid #9AA7B8;border-radius:20px;padding:8px 16px;font-size:14px;font-weight:500;color:var(--accent);background:transparent}
+.btn.fill{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.warn{color:var(--warn)}
+.tb{color:var(--accent);font-weight:600;font-size:14px;padding:8px 10px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--hair);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:600;color:var(--muted);background:#fff}
+.chip.on{background:var(--tint);border-color:transparent;color:var(--accent2)}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+.pill.ok{background:rgba(46,158,99,.12);color:#1F7A4A}
+.pill.blue{background:var(--tint);color:var(--accent2)}
+.pill.grey{background:#ECEFEA;color:var(--muted)}
+.avatar{width:36px;height:36px;border-radius:18px;background:#E6ECFF;color:var(--accent2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.scrim{position:absolute;inset:0;background:rgba(15,20,30,.38)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:28px 28px 0 0;padding:10px 16px 22px}
+.handle{width:36px;height:4px;border-radius:2px;background:#9AA7B8;margin:4px auto 12px}
+.field{display:flex;align-items:center;gap:8px;border:1px solid #9AA7B8;border-radius:10px;padding:0 12px;height:48px;font-size:15px;color:var(--muted);background:#fff}
+.field.focus{border:2px solid var(--accent);color:var(--ink)}
+.cb{width:20px;height:20px;border-radius:4px;border:2px solid #5A6982;flex:none;display:flex;align-items:center;justify-content:center}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.cb.on::after{content:'';width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.5}
+.menu{position:absolute;right:8px;top:84px;width:236px;background:#fff;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.22);padding:8px 0}
+.mi{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;font-size:15px}
+.mi svg{color:var(--muted)}
+.mi.new{background:var(--tint)}
+.badge{font-size:10.5px;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:1px 5px;margin-left:auto}
+.cap{position:absolute;left:0;right:0;bottom:-1px}
+.tabs{display:flex;margin:8px 16px;background:#fff;border:1px solid var(--hair);border-radius:14px;padding:4px}
+.tabs div{flex:1;text-align:center;padding:9px;border-radius:10px;font-weight:700;color:var(--muted)}
+.tabs .on{background:#E6ECFF;color:var(--accent2)}
+p.body{margin:0;line-height:1.75;font-size:15px}
+sup{font-size:9px;color:var(--muted)}
+.seg{display:flex;border:1px solid #9AA7B8;border-radius:20px;overflow:hidden;font-size:13px;font-weight:600}
+.seg div{flex:1;text-align:center;padding:7px 4px;color:var(--ink);border-right:1px solid #9AA7B8}
+.seg div:last-child{border-right:none}
+.seg .on{background:#E6ECFF;color:var(--accent2)}
+</style></head><body>
+<div class="status"><span>18:24</span><span style="display:flex;gap:6px;align-items:center">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M2 22h20V2z"/></svg>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg></span></div>
+
+<div class="top"><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div><div class="t">新辦公室搬遷規劃與預算決議會議</div><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></div><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></div></div>
+<div class="tabs"><div class="on">摘要</div><div>逐字稿</div></div>
+<div class="card"><div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:5px;background:#2E9E63"></span><div style="flex:1"><div style="font-weight:700;font-size:17px">AI 筆記</div><div class="note">17 則筆記</div></div><span class="pill ok" style="font-size:13px;padding:4px 10px">完成</span></div></div>
+<div class="card"><p class="body">本次會議主要討論了新辦公室的搬遷事宜，新辦公室預計於二月二十號交屋，預計三月七號搬家，並於三月十號正式上班<sup>0:00</sup>。在搬家公司報價範圍為八萬二、十一萬及十四萬五三種選項中，會議決定採用中間的十一萬報價<sup>0:35</sup>。為確保搬遷流程順利，林雅婷需請法務審閱合約<sup>1:12</sup>…</p>
+<div class="note" style="margin-top:8px">AI 摘要，可能有誤，請對照逐字稿確認。</div></div>
+<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-weight:700;font-size:16px;color:#5A6982">4 位語者</div>
+<div style="flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,#D64545 0 44%,#E8730C 44% 78%,#1E6FD9 78% 96%,#0F9D8A 96%)"></div>
+<span class="chip on" style="font-size:12.5px"><svg width="16" height="16" viewBox="0 0 24 24" fill="#1E4FD6" style="flex:none"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>寄給與會者</span></div>
+<div class="scrim" style="background:rgba(15,20,30,.10)"></div>
+<div class="menu">
+<div class="mi"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>重新轉錄</div>
+<div class="mi"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm2-6h8v2H8v-2zm0-3h8v2H8v-2zm0 6h5v2H8v-2z"/></svg>重新摘要</div>
+<div class="hr" style="margin:6px 0"></div>
+<div class="mi new"><svg width="24" height="24" viewBox="0 0 24 24" fill="#2F6BFF" style="flex:none"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg><span style="color:#1E4FD6;font-weight:600">寄給與會者…</span><span class="badge">新</span></div>
+<div class="mi"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6a2 2 0 0 1-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3a2 2 0 0 1 2 2z"/></svg>匯出與分享…</div>
+<div class="hr" style="margin:6px 0"></div>
+<div class="mi"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>設定</div>
+</div>
+</body></html>

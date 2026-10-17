@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}
+:root{--ground:#F2F4F1;--card:#FFFFFF;--accent:#2F6BFF;--accent2:#1E4FD6;--ink:#17263F;--muted:#5A6982;--hair:rgba(23,38,63,.10);
+--tint:rgba(47,107,255,.12);--warn:#9A5B00;--ok:#2E9E63;--track:#DFE4DD}
+html,body{margin:0;padding:0}
+body{width:412px;height:915px;overflow:hidden;background:var(--ground);color:var(--ink);
+font-family:Roboto,'Noto Sans CJK TC','Noto Sans TC',sans-serif;font-size:15px;position:relative}
+.status{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;color:var(--ink)}
+.top{height:56px;display:flex;align-items:center;gap:6px;padding:0 6px}
+.top .t{flex:1;font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.pad{padding:0 16px}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:14px;margin:8px 16px}
+.label{font-size:12.5px;font-weight:700;color:var(--muted);margin:14px 0 4px;letter-spacing:.2px}
+.row{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 0}
+.row .main{flex:1;min-width:0}
+.row .n{font-size:15.5px;font-weight:500}
+.row .s{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr{height:1px;background:var(--hair)}
+.btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border:1px solid #9AA7B8;border-radius:20px;padding:8px 16px;font-size:14px;font-weight:500;color:var(--accent);background:transparent}
+.btn.fill{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.warn{color:var(--warn)}
+.tb{color:var(--accent);font-weight:600;font-size:14px;padding:8px 10px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--hair);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:600;color:var(--muted);background:#fff}
+.chip.on{background:var(--tint);border-color:transparent;color:var(--accent2)}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+.pill.ok{background:rgba(46,158,99,.12);color:#1F7A4A}
+.pill.blue{background:var(--tint);color:var(--accent2)}
+.pill.grey{background:#ECEFEA;color:var(--muted)}
+.avatar{width:36px;height:36px;border-radius:18px;background:#E6ECFF;color:var(--accent2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.scrim{position:absolute;inset:0;background:rgba(15,20,30,.38)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:28px 28px 0 0;padding:10px 16px 22px}
+.handle{width:36px;height:4px;border-radius:2px;background:#9AA7B8;margin:4px auto 12px}
+.field{display:flex;align-items:center;gap:8px;border:1px solid #9AA7B8;border-radius:10px;padding:0 12px;height:48px;font-size:15px;color:var(--muted);background:#fff}
+.field.focus{border:2px solid var(--accent);color:var(--ink)}
+.cb{width:20px;height:20px;border-radius:4px;border:2px solid #5A6982;flex:none;display:flex;align-items:center;justify-content:center}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.cb.on::after{content:'';width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.5}
+.menu{position:absolute;right:8px;top:84px;width:236px;background:#fff;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.22);padding:8px 0}
+.mi{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;font-size:15px}
+.mi svg{color:var(--muted)}
+.mi.new{background:var(--tint)}
+.badge{font-size:10.5px;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:1px 5px;margin-left:auto}
+.cap{position:absolute;left:0;right:0;bottom:-1px}
+.tabs{display:flex;margin:8px 16px;background:#fff;border:1px solid var(--hair);border-radius:14px;padding:4px}
+.tabs div{flex:1;text-align:center;padding:9px;border-radius:10px;font-weight:700;color:var(--muted)}
+.tabs .on{background:#E6ECFF;color:var(--accent2)}
+p.body{margin:0;line-height:1.75;font-size:15px}
+sup{font-size:9px;color:var(--muted)}
+.seg{display:flex;border:1px solid #9AA7B8;border-radius:20px;overflow:hidden;font-size:13px;font-weight:600}
+.seg div{flex:1;text-align:center;padding:7px 4px;color:var(--ink);border-right:1px solid #9AA7B8}
+.seg div:last-child{border-right:none}
+.seg .on{background:#E6ECFF;color:var(--accent2)}
+</style></head><body>
+<div class="status"><span>18:24</span><span style="display:flex;gap:6px;align-items:center">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M2 22h20V2z"/></svg>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="#17263F"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg></span></div>
+
+<div class="top"><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div><div class="t">新辦公室搬遷規劃與預算決議會議</div><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></div><div class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></div></div>
+<div class="tabs"><div>摘要</div><div class="on">逐字稿</div></div>
+<div class="scrim"></div>
+<div class="sheet" style="top:150px"><div class="handle"></div><div style="display:flex;align-items:center"><div style="flex:1;font-size:19px;font-weight:700">語者 3 是誰？</div>
+<div class="ib" style="color:var(--accent)"><svg width="24" height="24" viewBox="0 0 24 24" fill="#2F6BFF" style="flex:none"><path d="M8 5v14l11-7z"/></svg></div></div><div class="note" style="margin:-4px 0 8px">已允許讀取聯絡人：輸入時一併列出符合的聯絡人</div><div class="field focus"><svg width="24" height="24" viewBox="0 0 24 24" fill="#5A6982" style="flex:none"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><span style="flex:1;color:#17263F">王建</span><svg width="24" height="24" viewBox="0 0 24 24" fill="#5A6982" style="flex:none"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div><div style="margin-top:8px">
+<div class="label">名錄中符合</div>
+<div class="note" style="padding:6px 0 4px">沒有符合的人</div>
+<div class="label" style="display:flex;align-items:center;gap:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="#5A6982" style="flex:none"><path d="M20 0H4v2h16V0zM4 24h16v-2H4v2zM20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 2.75c1.24 0 2.25 1.01 2.25 2.25s-1.01 2.25-2.25 2.25S9.75 10.24 9.75 9 10.76 6.75 12 6.75zM17 17H7v-1.5c0-1.67 3.33-2.5 5-2.5s5 .83 5 2.5V17z"/></svg>聯絡人</div>
+<div class="row"><div class="avatar">王</div><div class="main"><div class="n">王建宏</div><div class="s">chienhung.wang@example.com · 資訊部</div></div></div>
+<div class="row"><div class="avatar">王</div><div class="main"><div class="n">王建民</div><div class="s">沒有電子郵件 · 業務部</div></div></div>
+<div class="row" style="color:var(--accent);font-weight:600;gap:8px"><svg width="24" height="24" viewBox="0 0 24 24" fill="#2F6BFF" style="flex:none"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>新增「王建」為新的人</div>
+<div class="hr"></div>
+<div class="note" style="padding:10px 0 0">聯絡人只在這支手機上比對，不會上傳。可在「設定 › 說話者名錄」關閉。</div></div></div>
+</body></html>

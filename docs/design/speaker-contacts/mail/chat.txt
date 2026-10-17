@@ -1,0 +1,16 @@
+{{chat_intro}}
+{{#sections}}
+
+{{heading}}
+{{#groups}}
+{{#owner}}
+{{owner}}
+{{/owner}}
+{{#items}}
+{{bullet}}{{text}}{{#ts}} [{{ts}}]{{/ts}}
+{{/items}}
+{{/groups}}
+{{#more}}
+{{more}}
+{{/more}}
+{{/sections}}
