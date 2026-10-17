@@ -5,4 +5,8 @@
     <cache-path name="shared" path="shared/" />
     <!-- Share-audio copies (title-named), separate from the export flow's shared/ dir. -->
     <cache-path name="share_audio" path="share_audio/" />
+    <!-- Export sheet "Share" of a document / subtitle format (it had no path here: the share failed). -->
+    <cache-path name="share_export" path="share_export/" />
+    <!-- "Email participants" attachments (PDF / TXT / .m4a), cleared on each mail. -->
+    <cache-path name="share_mail" path="share_mail/" />
 </paths>

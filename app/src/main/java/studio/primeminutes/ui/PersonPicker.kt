@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactPage
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import studio.primeminutes.R
 import studio.primeminutes.core.people.PeoplePicker
@@ -70,6 +72,8 @@ sealed interface PersonPick {
     data class New(val name: String) : PersonPick
     /** Back to the default "Speaker n" label. */
     data object Clear : PersonPick
+    /** A contact from the system picker (docs/design/speaker-contacts.md §2.2), [chosen] the tapped address. */
+    data class FromContact(val contact: studio.primeminutes.core.people.PickedContact, val chosen: String) : PersonPick
 }
 
 /**
@@ -97,6 +101,8 @@ fun PersonPickerSheet(
     voiceNote: String? = null,
     onPlaySample: (() -> Unit)? = null,
     allowClear: Boolean = current?.person != null || (current != null && current.label != defaultLabel(current.id)),
+    /** Offer "Choose from contacts…" (the system picker, no permission). */
+    allowContacts: Boolean = false,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -128,6 +134,7 @@ fun PersonPickerSheet(
         val same = doc.people.filter { PersonNames.same(it.name, n, fold) && it.id != current?.person }
         if (same.isEmpty()) onPick(PersonPick.New(n)) else sameAsk = n to same
     }
+    val pickContact = rememberContactPicker { c, chosen -> onPick(PersonPick.FromContact(c, chosen)) }
     val suggested = suggestions.mapNotNull { s -> doc.byId(s.person)?.let { it to s } }.filter { it.first.id !in exclude && it.first.id !in inMeeting }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
@@ -153,6 +160,17 @@ fun PersonPickerSheet(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("people-search"),
             )
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
+                if (allowContacts && query.isBlank()) item {
+                    Row(Modifier.fillMaxWidth().clickable { pickContact() }.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("people-contacts"),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(stringResource(R.string.contact_choose), color = pal.Sky, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.contact_choose_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 if (query.isBlank() && (suggested.isNotEmpty() || voiceNote != null)) {
                     item { SectionLabel(stringResource(R.string.people_section_voice)) }
                     items(suggested, key = { "v" + it.first.id }) { (p, s) ->
@@ -262,11 +280,26 @@ fun SpeakerNameFlow(
     onPlaySample: (() -> Unit)? = null,
 ) {
     var mergeAsk by remember { mutableStateOf<Pair<Person, PickerSpeaker>?>(null) }
-    if (mergeAsk == null) PersonPickerSheet(
+    // From contacts: confirm the name, then (same name in the directory?) the same person or a new one.
+    var contactName by remember { mutableStateOf<PersonPick.FromContact?>(null) }
+    var contactSame by remember { mutableStateOf<Triple<PersonPick.FromContact, String, Person>?>(null) }
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun linkFromContact(pick: PersonPick.FromContact, existing: Person?, name: String) {
+        scope.launch {
+            val p = withContext(Dispatchers.IO) {
+                if (existing != null) { PeopleStore.linkContact(context, existing.id, pick.contact, pick.chosen); PeopleStore.doc.value.byId(existing.id) ?: existing }
+                else PeopleStore.createFromContact(context, name, pick.contact, pick.chosen)
+            }
+            val other = speakers.firstOrNull { it.id != speaker.id && it.person == p.id }
+            if (other != null) mergeAsk = p to other else onLink(p)
+        }
+    }
+    if (mergeAsk == null && contactName == null && contactSame == null) PersonPickerSheet(
         title = stringResource(R.string.people_who_is, speaker.label),
         current = speaker, speakers = speakers,
         suggestions = suggestions, voiceNote = voiceNote, onPlaySample = onPlaySample,
-        onDismiss = onDismiss,
+        onDismiss = onDismiss, allowContacts = true,
         onPick = { pick ->
             when (pick) {
                 is PersonPick.Existing -> {
@@ -275,9 +308,27 @@ fun SpeakerNameFlow(
                 }
                 is PersonPick.New -> onNew(pick.name)
                 PersonPick.Clear -> onClear()
+                is PersonPick.FromContact -> contactName = pick
             }
         },
     )
+    contactName?.let { pick ->
+        NameDialog(stringResource(R.string.contact_name_title), pick.contact.name ?: pick.chosen.substringBefore('@'), onDone = { n ->
+            contactName = null
+            if (n.isNullOrBlank()) { onDismiss(); return@NameDialog }
+            val fold: (String) -> String = { it }
+            val same = PeopleStore.doc.value.people.firstOrNull { PersonNames.same(it.name, n, fold) && it.id != speaker.person }
+            if (same != null) contactSame = Triple(pick, n, same) else linkFromContact(pick, null, n)
+        })
+    }
+    contactSame?.let { (pick, name, same) ->
+        AlertDialog(
+            onDismissRequest = { contactSame = null; onDismiss() },
+            text = { Text(stringResource(R.string.people_same_title_bare, same.name)) },
+            confirmButton = { TextButton(onClick = { contactSame = null; linkFromContact(pick, same, name) }) { Text(stringResource(R.string.people_same_yes)) } },
+            dismissButton = { TextButton(onClick = { contactSame = null; linkFromContact(pick, null, name) }) { Text(stringResource(R.string.people_same_no, name)) } },
+        )
+    }
     mergeAsk?.let { (p, other) ->
         AlertDialog(
             onDismissRequest = { mergeAsk = null; onDismiss() },

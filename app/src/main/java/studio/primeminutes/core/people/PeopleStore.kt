@@ -188,9 +188,47 @@ object PeopleStore {
     }
 
     fun delete(context: Context, id: String, clearNames: Boolean) {
+        val gone = doc.value.byId(id)
         mutate(context) { PeopleOps.delete(it, id) }
         rewriteMeetings(context) { LinkOps.delete(it, id, clearNames) }
         VoiceHooks.onDeletePerson(context, id)
+        // "Delete Mark" removes Mark's address everywhere in the app: the share history too.
+        val keys = gone?.emails?.map { EmailRules.key(it.address) }?.toSet().orEmpty()
+        SessionLibrary.root(context).listFiles()?.forEach { d ->
+            val f = File(d, studio.primeminutes.core.share.ShareHistory.FILE)
+            if (!f.isFile) return@forEach
+            val h = studio.primeminutes.core.share.ShareHistory.decode(runCatching { f.readText() }.getOrNull())
+            val nh = studio.primeminutes.core.share.ShareHistory.scrub(h, id, keys)
+            if (nh != h) runCatching { f.writeTextAtomic(studio.primeminutes.core.share.ShareHistory.encode(nh)) }
+        }
+    }
+
+    // --- contact side (docs/design/speaker-contacts.md) -------------------------------------------
+
+    fun addEmail(context: Context, id: String, address: String, default: Boolean = false) {
+        mutate(context) { PeopleOps.addEmail(it, id, address, default = default) }
+    }
+
+    fun removeEmail(context: Context, id: String, address: String) { mutate(context) { PeopleOps.removeEmail(it, id, address) } }
+
+    fun makeDefaultEmail(context: Context, id: String, address: String) { mutate(context) { PeopleOps.makeDefault(it, id, address) } }
+
+    fun linkContact(context: Context, id: String, c: PickedContact, chosen: String?) {
+        mutate(context) { PeopleOps.linkContact(it, id, c, now(), chosen) }
+    }
+
+    fun unlinkContact(context: Context, id: String, removeEmails: Boolean) { mutate(context) { PeopleOps.unlinkContact(it, id, removeEmails) } }
+
+    /** A new person from a picked contact: [name] (the contact's, possibly edited), its addresses and link. */
+    fun createFromContact(context: Context, name: String, c: PickedContact, chosen: String?): Person {
+        val p = create(context, name)
+        linkContact(context, p.id, c, chosen)
+        return doc.value.byId(p.id) ?: p
+    }
+
+    /** Marks [id] as the phone's owner (one Me at most). */
+    fun setMe(context: Context, id: String) {
+        mutate(context) { d -> d.copy(people = d.people.map { it.copy(me = it.id == id) }) }
     }
 
     /** "This meeting's [personId] is someone else": its speakers there go to a new person [newName]. */

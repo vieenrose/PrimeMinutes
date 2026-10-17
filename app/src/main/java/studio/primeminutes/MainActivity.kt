@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -67,6 +68,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -573,6 +575,8 @@ private fun TranscribeScreen(
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // The People screen (the directory of named speakers), over whatever screen opened it.
     var peopleOpen by remember { mutableStateOf(false) }
+    // "Email participants" sheet (docs/design/speaker-contacts.md §4).
+    var mailOpen by remember { mutableStateOf(false) }
     // Names given before the directory existed become its people (once, in the background).
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { studio.primeminutes.core.people.PeopleStore.migrateIfNeeded(context) } } }
     // Speaker-boundary editor: the seam (index of the line that starts the new speaker) or the line to split.
@@ -1473,6 +1477,15 @@ private fun TranscribeScreen(
                 SpeakerStatsPanel(stats = stats, label = { sid ->
                     s.speakerNames[sid]?.name ?: stringResource(R.string.speaker_n, sid + 1)
                 })
+                // The one-tap path, once a person of this meeting has an address (§4.1).
+                val peopleDoc by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
+                if (!s.running && s.speakerNames.values.any { n -> peopleDoc.byId(n.person)?.emails?.isNotEmpty() == true }) {
+                    TextButton(onClick = { mailOpen = true }, modifier = Modifier.testTag("speakers-email")) {
+                        Icon(Icons.Filled.Email, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.mail_chip))
+                    }
+                }
             }
             if (s.title == null && s.summary == null && stats.perSpeaker.isEmpty()) {
                 Text(
@@ -1705,6 +1718,7 @@ private fun TranscribeScreen(
                 onSettings = { vm.showConfigSheet(true) },
                 // No pre-decode here; the picker callback hands the build+write to the service.
                 onOpenExport = { vm.showExportSheet(true) },
+                onEmailParticipants = { mailOpen = true },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -2005,6 +2019,19 @@ private fun TranscribeScreen(
             onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
             onDismiss = { askQuestion = null },
         )
+    }
+    if (mailOpen && s.utterances.isNotEmpty()) studio.primeminutes.ui.EmailParticipantsFlow(
+        s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,
+        exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras,
+        refs = { refs(it) }, notify = { vm.notify(it) },
+        onNameSpeaker = { sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) },
+        onDismiss = { mailOpen = false },
+    )
+    // DEV: `--ez vox_mail true` opens the participants sheet on the open meeting (device checks, screenshots).
+    var devMailAsked by remember { mutableStateOf(false) }
+    if (devExtras?.getBoolean("vox_mail") == true && !devMailAsked) LaunchedEffect(s.utterances.size) {
+        if (s.utterances.isEmpty()) return@LaunchedEffect
+        delay(3_000); devMailAsked = true; mailOpen = true
     }
     if (s.showExportSheet) {
         ExportSheet(

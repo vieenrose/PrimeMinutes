@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -47,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -87,6 +89,8 @@ fun SessionTopBar(
     canExport: Boolean,
     onOpenExport: () -> Unit,
     onSettings: () -> Unit,
+    /** "Email participants…" (docs/design/speaker-contacts.md §4.1), shown with the exports. */
+    onEmailParticipants: () -> Unit = {},
     /** Tap on the title: edit it (null → not editable, e.g. no title yet). */
     onTitleClick: (() -> Unit)? = null,
     /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
@@ -154,7 +158,7 @@ fun SessionTopBar(
             OverflowMenu(
                 canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
                 canResume, onResume,
-                canExport, onOpenExport, onSettings,
+                canExport, onOpenExport, onSettings, onEmailParticipants,
             )
         }
         // A healthy idle status ("Loaded session — N lines") is two-second information, not
@@ -203,6 +207,7 @@ private fun OverflowMenu(
     canExport: Boolean,
     onOpenExport: () -> Unit,
     onSettings: () -> Unit,
+    onEmailParticipants: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     var open by remember { mutableStateOf(false) }
@@ -225,6 +230,9 @@ private fun OverflowMenu(
             // groups them by what you get. A dropdown this long also meant several slow full-page
             // repaints on e-ink.
             if (canExport) {
+                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Email, null, Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.mail_menu_entry)) }, onClick = pick(onEmailParticipants),
+                    modifier = Modifier.testTag("menu-email-participants"))
                 DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.IosShare, null, Modifier.size(18.dp)) },
                     text = { Text(stringResource(R.string.export_menu_entry)) }, onClick = pick(onOpenExport))
                 HorizontalDivider()

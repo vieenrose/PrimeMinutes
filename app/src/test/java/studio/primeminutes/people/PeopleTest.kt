@@ -149,7 +149,7 @@ class PeopleTest {
         val o = org.json.JSONObject(PeopleCodec.encode(again)).getJSONArray("people").getJSONObject(0)
         assertEquals("Marc", o.getString("name"))
         assertEquals("lk-1", o.getString("contact"))
-        assertEquals("m@x.org", o.getJSONArray("emails").getString(0))
+        assertEquals("m@x.org", o.getJSONArray("emails").getJSONObject(0).getString("address"))
         assertNull(PeopleCodec.decode("""{"people":[{"id":"b","name":"Ada"}]}""").people[0].extra)
     }
 }

@@ -199,6 +199,13 @@ private fun PersonPage(
                 OutlinedButton(onClick = { deleting = true }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
             }
         }
+        item {
+            PersonContactCards(p, onMergeInto = { o ->
+                scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
+                onGone()
+            })
+            Spacer(Modifier.padding(top = 8.dp))
+        }
         item { voiceOfPerson(p) }
         item { SectionLabel(stringResource(R.string.people_meetings_of, p.name)) }
         if (meetings.isEmpty()) item { Text(stringResource(R.string.people_no_meetings), color = pal.Slate400, modifier = Modifier.padding(vertical = 8.dp)) }

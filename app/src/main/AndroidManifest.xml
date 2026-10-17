@@ -31,6 +31,16 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!-- "Email participants": is there an e-mail app to hand the mail to (Android 11+ package
+         visibility)? Not a sensitive declaration; no contacts permission is used (the system
+         picker hands over only the contact the user taps). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/backup_rules"
