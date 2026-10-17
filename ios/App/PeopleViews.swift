@@ -211,7 +211,7 @@ struct PeopleScreen: View {
             if doc.migrationFound > 0 {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(L("people_migration_card", doc.migrationFound)).font(.subheadline)
+                        Text(doc.migrationFound == 1 ? L("people_migration_card_one") : L("people_migration_card", doc.migrationFound)).font(.subheadline)
                         HStack { Spacer(); Button(L("people_migration_ok")) { store.dismissMigrationCard() }.bold() }
                     }
                 }
@@ -284,7 +284,7 @@ private struct PersonPage: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(s.title).lineLimit(2).foregroundStyle(Color.primary)
-                                Text(s.date.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary)
+                                Text(s.date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(AppLanguage.current.locale))).font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                         Menu {

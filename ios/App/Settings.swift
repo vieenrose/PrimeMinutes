@@ -21,6 +21,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         if l.hasPrefix("zh") { return (l.contains("Hans") || l.hasSuffix("-CN") || l.hasSuffix("-SG")) ? .zhHans : .zhHant }
         return .en
     }
+    /// Locale for dates shown in the interface language (Android: dates follow the UI language).
+    var locale: Locale { switch resolved { case .en: return Locale(identifier: "en_US"); case .zhHans: return Locale(identifier: "zh_Hans_CN"); default: return Locale(identifier: "zh_Hant_TW") } }
     /// Script of generated Chinese text: Simplified for a Simplified UI, Traditional otherwise.
     var script: ChineseScript { resolved == .zhHans ? .simplified : .traditional }
     var bundle: Bundle {

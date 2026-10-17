@@ -46,13 +46,13 @@
 "podcast_search" = "搜索播客";
 "podcast_downloading" = "下载单集 %d %%";
 "back" = "返回";
-"speaker_n" = "说话者 %d";
+"speaker_n" = "说话人 %d";
 "rename" = "重命名";
 "export" = "导出";
 "play" = "播放";
 "pause" = "暂停";
 "follow" = "跟随播放";
-"speaker_rename" = "重命名说话者";
+"speaker_rename" = "重命名说话人";
 "speaker_name" = "名称";
 "title" = "标题";
 "cancel" = "取消";
@@ -411,6 +411,7 @@
 "people_settings_desc" = "你为说话人取的名字，所有会议共用";
 "people_none" = "还没有任何人。在转写文本中点说话人名称即可命名。";
 "people_migration_card" = "在你的会议中找到 %d 个名字，已集中到这里。相同的名字已合为一人：请检查，若其实是两个人，可以分开。";
+"people_migration_card_one" = "在你的会议中找到 1 个名字，已集中到这里。请检查，若其实是两个人，可以分开。";
 "people_migration_ok" = "知道了";
 "people_rename" = "全部改名";
 "people_merge_into" = "合并至…";
