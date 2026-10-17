@@ -48,7 +48,7 @@ class PeopleTest {
         assertEquals("mark chen", PersonNames.normalize("  ＭＡＲＫ   Chen "))
         assertTrue(PersonNames.same("陳經理", "陈经理", fold))
         assertTrue(PersonNames.isDefaultLabel("Speaker 2")); assertTrue(PersonNames.isDefaultLabel("語者 12"))
-        assertTrue(PersonNames.isDefaultLabel("说话人3")); assertFalse(PersonNames.isDefaultLabel("Speaker Mark"))
+        assertTrue(PersonNames.isDefaultLabel("说话人3")); assertTrue(PersonNames.isDefaultLabel("说话者 4")); assertTrue(PersonNames.isDefaultLabel("說話者 1")); assertFalse(PersonNames.isDefaultLabel("Speaker Mark"))
         assertFalse(PersonNames.isPersonName("  "))
     }
 

@@ -119,7 +119,7 @@ object PeopleCodec {
 object PersonNames {
     private val SPACES = Regex("\\s+")
     /** The default labels in the three UI languages: never a person's name. */
-    private val DEFAULT = Regex("^(speaker|語者|语者|說話人|说话人)\\s*\\d+$")
+    private val DEFAULT = Regex("^(speaker|語者|语者|說話人|说话人|說話者|说话者)\\s*\\d+$")
 
     fun normalize(s: String, fold: (String) -> String = { it }): String =
         fold(Normalizer.normalize(s, Normalizer.Form.NFKC)).lowercase(Locale.ROOT).trim().replace(SPACES, " ")
