@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scores the e-mail prompt variants written by EmailEvalHarness (tools/email-eval/run.sh).
 
-  score.py <out dir> prep [model] [--control]   # automatic metrics -> auto.json; blind judge batches
+  score.py <out dir> prep [model] [--control] [--variant=V]   # automatic metrics -> auto.json; blind judge batches
                                                 # -> judge/<model|all>/in_*.json + key.json (only outputs of
                                                 # models matching <model>, so a finished model can be judged
                                                 # while the next one runs; --control adds the template items)
@@ -65,14 +65,16 @@ def auto(d):
             'prefill_sec': d['prefill_sec'], 'decode_sec': d['decode_sec'], 'empty': not text.strip()}
 
 
-def prep(out, model=None, control=False):
+def prep(out, model=None, control=False, variant=None):
     rows = load(out)
     metrics = [auto(d) for d in rows]
     json.dump(metrics, open(os.path.join(out, 'auto.json'), 'w'), ensure_ascii=False, indent=1)
-    rnd = random.Random('7' + (model or ''))
+    rnd = random.Random('7' + (model or '') + (variant or ''))
     items, key = [], {}
     for d in rows:
         if model and model not in d['model']:
+            continue
+        if variant and d['variant'] != variant:
             continue
         if not (d['cleaned'] or '').strip():
             continue
@@ -88,7 +90,7 @@ def prep(out, model=None, control=False):
         key[i] = {'meeting': it['name'], 'variant': 'template', 'model': 'deterministic'}
         items.append({'id': i, 'lang': it['lang'], 'notes': r['notes'], 'text': r['minutes_raw']})
     rnd.shuffle(items)
-    jd = os.path.join(out, 'judge', model or 'all')
+    jd = os.path.join(out, 'judge', (model or 'all') + ('-' + variant if variant else ''))
     os.makedirs(jd, exist_ok=True)
     json.dump(key, open(os.path.join(jd, 'key.json'), 'w'), indent=1)
     n = int(os.environ.get('BATCH', '12'))
@@ -143,6 +145,7 @@ def table(out):
 if __name__ == '__main__':
     a = [x for x in sys.argv[3:] if not x.startswith('--')]
     if sys.argv[2] == 'prep':
-        prep(sys.argv[1], a[0] if a else None, '--control' in sys.argv)
+        v = [x.split('=', 1)[1] for x in sys.argv[3:] if x.startswith('--variant=')]
+        prep(sys.argv[1], a[0] if a else None, '--control' in sys.argv, v[0] if v else None)
     else:
         table(sys.argv[1])

@@ -44,7 +44,7 @@ Files of this design:
    "machine-generated, check the recording" note, and a footer. Plain text always; HTML where the
    mail app takes it (iOS Mail). Language = the meeting's language. Templates and fixed text live in
    shared resource files, the renderer is pure code with golden tests on both platforms (§5).
-5. **LLM-written e-mail: measured, see §6.** <<EVAL_SUMMARY>>
+5. **LLM-written e-mail: measured, see §6.** Six prompt variants x 2 models (E2B, E4B) x 12 meetings (zh + en), blind-judged statement by statement against the notes. The deterministic template is 0 % contradicted (378 statements); the shipped prose is 5-6 %; letting the model write the mail (free, sections) is 20-28 % on E4B, almost all proposal->decision flips; a short "typed" lead reaches 2-4 %. **Recommendation: the mail is the deterministic template + the existing prose summary; no model-written mail text in v1.** A typed lead is an optional later Phase D, off by default.
 6. **Privacy**: addresses and contact links live only in `people.json` on the phone, already
    excluded from backups. They never go into exports, the `.m4a` session file, search, Ask or any
    prompt. Deleting a person deletes their addresses everywhere in the app (§7).
@@ -523,7 +523,59 @@ the PDF. Sample: [`is1009c.en.mailto.txt`](speaker-contacts/samples/out/is1009c.
 
 ## 6. Can the reader model write the e-mail? (measured)
 
-<<EVAL_SECTION>>
+Method: `tools/email-eval/` (prompts.json, run.sh, score.py; harness
+`app/src/test/.../eval/EmailEvalHarness.kt`), host run of the shipped mobile models on CPU (LiteRT mfa),
+12 meetings (AMI ES2004b/d, IS1009c, TS3003c in English; 6 Chinese corpus meetings + `move` + `weiya`).
+Each model was given the same reader notes the app has (typed DECISION / ACTION / PROPOSAL / OPEN). Variants:
+
+- **free**: "write the e-mail to the participants";
+- **sections**: the model fills the four headed sections of the template;
+- **hybrid**: the model writes only a 2-4 sentence lead, the template does the rest;
+- **typed**: hybrid, with each note's type shown and "only a DECISION may be called decided";
+- **prose**: the existing summary prose (what the app already ships), for reference;
+- **template**: the deterministic minutes (control; measures judge noise).
+
+A blind judge (Opus; ids random, model and variant hidden, items shuffled) labelled every statement as
+supported / contradicted / unsupported against the notes only. Full table:
+`tools/email-eval/results/table.md`.
+
+| model | variant | statements | contradicted | type flips | markdown | truncated | host s (median) |
+|---|---|---|---|---|---|---|---|
+| - | template | 378 | 0 (0 %) | 0 | - | - | - |
+| E2B | typed | 55 | 2 (4 %) | 2 | 0 | 3 | 75 |
+| E2B | hybrid | 43 | 7 (16 %) | 7 | 0 | 0 | 29 |
+| E2B | prose | 174 | 8 (5 %) | 6 | 0 | 8 | 113 |
+| E2B | sections | 235 | 52 (22 %) | 52 | 0 | 5 | 103 |
+| E2B | free | 202 | 6 (3 %) | 6 | 11 | 7 | 111 |
+| E4B | typed | 42 | 1 (2 %) | 1 | 0 | 0 | 135 |
+| E4B | hybrid | 35 | 11 (31 %) | 10 | 0 | 0 | 48 |
+| E4B | prose | 163 | 9 (6 %) | 9 | 0 | 8 | 208 |
+| E4B | sections | 210 | 42 (20 %) | 41 | 0 | 5 | 170 |
+| E4B | free | 194 | 55 (28 %) | 53 | 10 | 4 | 284 |
+
+Findings:
+
+1. **The dominant error is a type flip**, not an invented fact: a PROPOSAL written as "會議決定了…" /
+   "the meeting decided". Mail is the worst place for it: recipients read it as a commitment. Wrong
+   owners, figures and invented names are rare (<= 2 per variant).
+2. **Free and sections are unusable**: 20-28 % contradicted on E4B, markdown in 10-11/12 free outputs,
+   sections broke the format in 2-4/12, and they hit the token cap. E2B "free" scored low (3 %) only
+   because it mostly copied notes; it still emitted markdown and was truncated 7/12.
+3. **Hybrid without types is worse than prose** (16 % / 31 %): a short lead compresses everything
+   into "the meeting decided ...".
+4. **Typed fixes most of it** (4 % E2B, 2 % E4B, on few statements: 42-55), i.e. at the level of the
+   shipped prose, but it costs a second generation (median 75 s E2B / 135 s E4B on a loaded host, more
+   on a phone) right when the user taps "Send", and 4-6 outputs had a bad timestamp tag (stripped by the
+   cleaner, but a sign of drift). The sample is too small to claim it is *better* than prose.
+5. The template, which only regroups typed notes, is exact by construction (0/378, also the judge-noise
+   bound).
+
+**Decision proposed**: the mail = deterministic template (decisions, actions with owners, open issues,
+from the typed notes) + the summary prose the reader already produced (same text the user saw and could
+edit in the app), with the "machine-generated" note. No generation at send time. A `typed` lead stays a
+Phase D candidate, behind an option off by default, only if a larger run (>= 30 meetings, on device)
+confirms <= prose error and a latency budget is met. Sample rendering of such a lead (E4B, `move`):
+`docs/design/speaker-contacts/samples/out/move.zh-TW.hybrid.*`.
 
 ## 7. Data model, storage, privacy
 
@@ -664,7 +716,7 @@ enough.
    naming from contacts turns out to be frequent.
 2. **Default mail content**: summary + minutes (recommended), or minutes only? **Recommendation:
    summary + minutes**, with "Decisions and actions only" one tap away.
-3. **Model-written text in the mail**: <<EVAL_QUESTION>>
+3. **Model-written text in the mail**: Should the mail contain any text written by the model at send time? **Recommendation: no** for v1: template + existing prose (already shown in the app and editable). Measured in §6: model-written mail flips proposals into decisions in 20-31 % of statements (free/sections/hybrid); only the `typed` lead (2-4 %) is acceptable, and it adds a 1-2 min generation at send. Revisit as Phase D after a larger on-device run, and again when the new summarizer the user is fine-tuning ships.
 4. **Recipients pre-checked by default** (the meeting's linked people with an address, Me excluded)?
    **Recommendation: yes on both platforms**, with the documented App Store fallback (unchecked on
    iOS) if review objects.
