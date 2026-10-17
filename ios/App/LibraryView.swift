@@ -297,7 +297,6 @@ struct LibraryView: View {
                 }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 6)
             }
             if m.runner.activeJob != nil {
-                HwStatusLine()
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
                     .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)
             } else {
@@ -390,6 +389,8 @@ struct LiveJobView: View {
                 if active { ProgressView().controlSize(.small) } else { Image(systemName: "clock").foregroundStyle(.orange) }
                 Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(2)
                 Spacer(minLength: 0)
+                // The engines' load while this job runs (Android: the same place, the status row of the meeting screen).
+                if active { HwStatusLine() }
             }
             if active { ProgressView(value: m.runner.jobProgress) }
         }

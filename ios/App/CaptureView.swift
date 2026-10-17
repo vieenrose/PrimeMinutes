@@ -11,10 +11,11 @@ struct CaptureView: View {
                 Circle().fill(Color.red).frame(width: 10, height: 10)
                 Text(L("status_recording")).font(.title3.weight(.bold)).foregroundStyle(.red)
                 Spacer()
+                // The engines' load, on the header row (trailing, page gutter) rather than floating under the timer.
+                HwStatusLine()
             }.padding(.horizontal, 20).padding(.top, 16)
             Text(Export.mmss(Double(m.capture.elapsed))).font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
                 .padding(.vertical, 12)
-            HwStatusLine().padding(.bottom, 6)
             // The summarizing agent works alongside ASR + diarization: its status stays pinned on top (Android LivePanel).
             AgentStrip(agent: m.screen.agent).padding(.horizontal, 20).padding(.bottom, 6)
                 .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
