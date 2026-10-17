@@ -13,12 +13,17 @@ class ModelCardTest {
         assertEquals("gemma4-meeting-agent-zh-v2", LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card.name)
     }
 
-    /** mobile-v2 reads with its trained note cap (8 per window); everything else is mobile-v1's card. */
-    @Test fun mobileV2CardIsTheV1CardWithEightNotes() {
+    /** mobile-v2 reads with its trained note cap (8 per window) and writes its prose summary with a
+     *  1600-token budget (the whole meeting, not its first 70 %); everything else is mobile-v1's card. */
+    @Test fun mobileV2CardIsTheV1CardWithEightNotesAndALongerSummary() {
         val v2 = LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card
         assertEquals(8, v2.reader.maxNotes)
         assertEquals(12, card.reader.maxNotes)
-        assertEquals(card.copy(name = v2.name, reader = card.reader.copy(maxNotes = 8)).toString(), v2.toString())
+        assertEquals(1600, v2.prose.maxTokens)
+        assertEquals(1600, v2.forLanguage("en").prose.maxTokens)
+        val expected = card.copy(name = v2.name, reader = card.reader.copy(maxNotes = 8), prose = card.prose.copy(maxTokens = 1600),
+            languages = card.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(maxTokens = 1600)) })
+        assertEquals(expected.toString(), v2.toString())
     }
 
     /** Static acceptance check (docs/model-acceptance-checklist.md): every shipped model's card fits the

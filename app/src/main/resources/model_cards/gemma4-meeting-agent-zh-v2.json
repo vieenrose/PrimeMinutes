@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "name": "gemma4-meeting-agent-zh-v2",
- "about": "The mobile-v2 weights' card: the mobile-v1 card (gemma4-meeting-agent-zh) with at most 8 notes per window, the number mobile-v2 was trained and evaluated with (integration note 05b0d33b §10). Everything the app must know to drive the Gemma-4 meeting-agent fine-tune: chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
+ "about": "The mobile-v2 weights' card: the mobile-v1 card (gemma4-meeting-agent-zh) with at most 8 notes per window, the number mobile-v2 was trained and evaluated with (integration note 05b0d33b §10), and a prose budget of 1600 tokens: mobile-v2 writes denser summaries, and 600 tokens stopped them at about 70 % of a 40-minute meeting (docs/model-eval-mobile-v2.md §5). Everything the app must know to drive the Gemma-4 meeting-agent fine-tune: chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
  "template": {
   "bos": "<bos>",
   "bos_id": 2,
@@ -113,7 +113,7 @@
  },
  "prose": {
   "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。",
-  "max_tokens": 600
+  "max_tokens": 1600
  },
  "ask": {
   "answer_tokens": 320,
