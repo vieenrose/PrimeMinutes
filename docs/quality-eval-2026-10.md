@@ -259,6 +259,46 @@ Devices (E2B, CPU):
   4.8 s, right (one bus to the station, contact by next Wednesday); 尾牙的頭獎是什麼？ 884 tokens, prefill
   1.8 s, 2.8 s, right.
 
+### Ask held-out check (2026-10-17)
+
+The routing parameters (top-2 meetings, 16 candidates, 800 tokens) were tuned on `ask_suite_v1.json`. A
+second suite, `ask_suite_heldout_v1.json` (28 questions over the same 10-meeting library: 12 zh, 12 en,
+4 unanswerable; every answer span at least 60 s away from the v1 spans), was written afterwards and run
+once, the two retrievals back to back per question (E2B host), judged blind with both runs shuffled together.
+
+| Held-out (28 q) | Correct (judge) | Correct (keywords) % | Passage retrieved % | zh judge | en judge | unanswerable |
+|---|---:|---:|---:|---|---|---|
+| before (8 passages, <= 1500 tokens) | **18 / 28** | 67.9 | 70.8 | 6 / 12 | 8 / 12 | 4 / 4 |
+| routing (shipped) | 13 / 28 | 53.6 | 58.3 | 5 / 12 (+3 partial) | 4 / 12 | 4 / 4 |
+
+By keywords zh still gains (57 -> 64 %, retrieved 58 -> 75 %); English loses (79 -> 43 %, retrieved 83 -> 42 %):
+in 3 of 12 English questions the router picked one of the near-duplicate AMI remote-control meetings
+and the right one got no slot. The routed run was better on 2 questions, worse on 7.
+
+**The v1 gain does not generalise.** Split by meeting, the v1 gain is uneven too (judged, half A of the
+meetings 44.8 -> 62.1 %, half B 37.9 -> 44.8 %). Over both suites (82 answerable questions, judged) the two
+retrievals tie: before 38, routing 40; zh favours routing (18 -> 22 of 42), English favours the old
+retrieval (20 -> 18 of 40). Retrieval-only variants on both suites (1 or 3 routed meetings, 8 or 24
+candidates, budgets 700–1000, keeping 1–4 passages of the other meetings) found none that wins on both.
+Routing stays (a tie overall, better for Chinese, same prompt size); the known failure is a library of
+near-duplicate meetings in English. Latencies of this run are not usable (host load 25–30).
+
+### Ask answer language (2026-10-17)
+
+Ask answers in the language of the question, not the display language. `MeetingLanguage` on the
+question (4 units minimum; too short or mixed falls back to the display language) picks the card's
+`ask.system[key]` for the first question of a conversation; a follow-up in another language keeps the
+conversation's system prompt (the KV prefix is reused) and gets the card's `ask.answer_in[key]` appended
+to the question (it also names the refusal phrase in that language). Unit tests on both platforms.
+
+Host (E2B, 14 questions incl. 4 follow-ups in the other language, Chinese display): 14 / 14 answers in the
+language of the question; 8 of the 10 first answers identical to those under the matching display
+language (same prompt tokens; the other 2 differ by sampling). A first design (display-language system +
+directive) answered 4 of 62 refusals in the display language and was dropped.
+Devices (zh-TW display): Note10+ — "What is the grand prize at the year-end party?" -> English (a refusal:
+the router sent it to the English meeting), 尾牙的頭獎是什麼？ -> Chinese, right; iPhone 14 Pro Max — the
+same two questions and "When is the office move?" -> English, Chinese, English, 2–4 s each.
+
 ## 5. Top weaknesses and suggested fixes
 
 Ranked by user impact. Fixes are suggestions only; nothing was changed in the product.
@@ -281,6 +321,8 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
    *Done 2026-10-17* (section 4, "Ask after fixes"): meeting routing (top-2 meetings by passage evidence)
    at an 800-token budget: judged 45 → 56 %, retrieved 57 → 66 %, same prompt size and latency. Widening
    and 60–90 s chunks were measured and not kept. English near-duplicate meetings remain hard.
+   *Held-out check:* the gain does not hold on a second suite (judged 18 -> 13 of 28; over both suites a
+   tie, 38 vs 40 of 82): routing helps Chinese and hurts English near-duplicate meetings (section 4).
 3. **Speaker attribution: merges, over-split and instability.** cpCER is ~2× CER on far-field
    AISHELL-4 (34 % vs 18.5 %); L_R004S06C01 merges 7 speakers into 5 (cpCER 62 %); speaker count exact
    in 4/10 meetings. The same meeting gave 26 % vs 3 % confusion with slightly different input.
@@ -300,7 +342,8 @@ Ranked by user impact. Fixes are suggestions only; nothing was changed in the pr
    snap invalid ones); in the card's prompt, add a cue for agreement markers ("OK, let's go with",
    "就這樣定了") → DECISION; gate on the mean over ≥ 4 meetings (this set's refs can serve).
    *Fixed 2026-10-17 (in part):* timestamp tags are repaired; the agreement cue is applied to English
-   meetings only (it lowered Chinese coverage); see §8.
+   meetings only (it lowered Chinese coverage), from the first window; the minutes proposal guard
+   takes English cues from the card; see §8.
 
 Also found while building the harness (engineering, not quality):
 - Two `MfaEngine`s in one process crash (SIGSEGV in `i8_attn` `Run` `_omp_fn.4`): the fused-attention op
@@ -339,6 +382,8 @@ python3 -E -P tools/quality-eval/score_notes.py tools/quality-eval/refs <reader 
 tools/quality-eval/run_harness.sh ask    <cfg>  # -> ask.<model>.json, library.json
 #   cfg "variants" {name: retrieval}: each question under each retrieval, back to back -> ask.<model>.<name>.json
 tools/quality-eval/run_harness.sh retrieve <cfg> # retrieval only per variant -> retrieve.<name>.json ("dump": all candidates)
+#   suites: app/src/androidTest/assets/ask_suite/ask_suite_v1.json, ask_suite_heldout_v1.json;
+#   a question's "after": a first question asked in the same conversation (the scored one is a follow-up)
 python3 -E -P tools/quality-eval/score_ask.py <suite> library.json ask.<model>.json [judge.json] > ask.json
 python3 -E -P tools/quality-eval/report_tables.py asr|notes|ask ...
 ```
@@ -394,7 +439,34 @@ Devices (E2B, 2026-10-17):
 - iPhone 14 Pro Max: the same clip gives an English title, 11 English notes and summary; a Chinese
   meeting (move) stays Chinese.
 
-Still open: the first transcript window is read before the language is known for the agreement rule
-(the system prompt is fixed at the first prefill; the language directive applies from the first window).
-English minutes keep the Chinese proposal-guard cues (`proposal_cue`), so an English DECISION note is never
-demoted in the minutes. Only one run per variant.
+Follow-up (2026-10-17, second round):
+- **First window.** The reader now waits for the language before its first prefill: the prefix
+  (system prompt + language rule) is prefilled once `MeetingLanguage` has 60 units, or when the first
+  window closes, whichever comes first; the lines fed meanwhile are held and prefilled afterwards in the
+  same pieces, so the token stream and its chunking are unchanged. English meetings now read the agreement
+  rule from the first window. Chinese meetings are byte-identical to the previous build (title, summary,
+  minutes, notes, actions, raw prose) on L_R003S02C02, M_R003S05C01 and S_R004S01C01; AISHELL-4 keyword
+  coverage / decisions 0.70 / 0.80, unchanged.
+- **Proposal guard per language.** The card's `languages.<code>` may declare `proposal_cue` and `decided`;
+  `languages.en` gives English tentative phrasings ("maybe", "should we", "how about", "not sure", a
+  question mark...) and agreement words ("agreed", "decided", "will go with"...). Unit tests on both
+  platforms. On the 4 AMI meetings the model's English DECISION/ACTION notes carried no tentative cue, so
+  the guard demoted nothing in either run: it is a safeguard, not a measured gain.
+
+Judged before/after (same blind protocol, before = the shipped card of §8, E2B host, 4 AMI meetings,
+69 key points, 35 decisions/actions):
+
+| AMI, E2B | covered / partial / missing | decisions+actions covered | DECISION notes agreed / proposed / wrong | ACTION notes task / wrong | contradictions | malformed tags |
+|---|---|---|---|---|---|---|
+| before | 28 / 30 / 11 | 8 | 10 / 2 / 1 | 3 / 1 | 10 | 0 |
+| after | 30 / 25 / 14 | 10 | 11 / 2 / 2 | 5 / 0 | 8 | 0 |
+
+Keyword coverage / decisions moved 0.84 / 0.83 -> 0.78 / 0.74 on the same meetings: the keyword and the
+judged directions disagree, and both are within one run's noise (it matches the "all-language rule" row
+above, which moved the same way). Read it as "no regression, small judged gain on decisions/actions".
+
+Devices: Note10+ (test app) — the English clip (IS1009c 24:00–30:00) gives an English title, 14 English
+notes, clean tags, no non-note lines; iPhone 14 Pro Max — the same clip gives an English title and 11 English
+notes, one DECISION in the first window (2:03). Test meetings deleted afterwards.
+
+Still open: one run per variant; E4B not rerun with the first-window change.

@@ -388,19 +388,25 @@ class QualityEvalHarness {
         AskEngine.reset()
         delay(300)
         var tFirst = 0L
-        val t0 = System.nanoTime()
+        var t0 = System.nanoTime()
         val watch = launch(Dispatchers.Default) {
             AskEngine.turns.collect { ts -> if (tFirst == 0L && ts.lastOrNull()?.answer?.isNotBlank() == true) tFirst = System.nanoTime() }
         }
-        AskEngine.ask(ctx, entries, q.getString("q"), q.getString("ui"))
-        delay(200)
-        while (true) {
-            val t = AskEngine.turns.value.lastOrNull()
-            val p = AskEngine.phase.value
-            if (t != null && t.done && (p is AskEngine.Phase.Idle || p is AskEngine.Phase.Failed || p is AskEngine.Phase.Busy)) break
-            if ((System.nanoTime() - t0) / 1e9 > 600) break
-            delay(100)
+        suspend fun askAndWait(text: String) {
+            val t1 = System.nanoTime()
+            AskEngine.ask(ctx, entries, text, q.getString("ui"))
+            delay(200)
+            while (true) {
+                val t = AskEngine.turns.value.lastOrNull()
+                val p = AskEngine.phase.value
+                if (t != null && t.done && (p is AskEngine.Phase.Idle || p is AskEngine.Phase.Failed || p is AskEngine.Phase.Busy)) break
+                if ((System.nanoTime() - t1) / 1e9 > 600) break
+                delay(100)
+            }
         }
+        // "after": a question asked first in the same conversation (the scored one is then a follow-up).
+        q.optString("after").takeIf { it.isNotEmpty() }?.let { askAndWait(it); tFirst = 0L; t0 = System.nanoTime() }
+        askAndWait(q.getString("q"))
         watch.cancel()
         val turn = AskEngine.turns.value.lastOrNull()
         val ex = JSONArray()

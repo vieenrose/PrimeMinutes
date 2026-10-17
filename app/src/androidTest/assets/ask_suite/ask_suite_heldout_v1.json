@@ -1,0 +1,508 @@
+{
+ "version": 1,
+ "created": "2026-10-17",
+ "name": "ask_suite_heldout_v1",
+ "corpora": "the 10 meetings of ask_suite_v1 (same library)",
+ "method": "held-out: written by Claude (Opus) from the gold transcripts after the Ask retrieval parameters were tuned on ask_suite_v1; each answer span at least 60 s away from every ask_suite_v1 span of its meeting, facts not asked there; same format and rules as ask_suite_v1 (tools/quality-eval/SPEC.md)",
+ "questions": [
+  {
+   "id": "L_R003S02C02-h1",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警年終會議上，事故科說主要路段尖峰時段發生的事故大約佔總事故的多少比例？",
+   "answer": "百分之四十多，大部分是小刮小蹭引起的纠纷",
+   "span": [
+    563,
+    592
+   ],
+   "all": [
+    [
+     "四十",
+     "40"
+    ]
+   ]
+  },
+  {
+   "id": "L_R003S02C02-h2",
+   "meeting": "L_R003S02C02",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "交警會議裡有人提到別的城市怎麼處罰闖紅燈的人？",
+   "answer": "让闯红灯的人去路口指挥交通一个小时",
+   "span": [
+    1667,
+    1688
+   ],
+   "all": [
+    [
+     "指挥"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-h1",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "在安全知識討論的食品安全部分，為什麼說露天經營的食品不能買？",
+   "answer": "露天经营的食品一般没有防蝇防尘措施",
+   "span": [
+    612,
+    632
+   ],
+   "all": [
+    [
+     "防蝇",
+     "防尘",
+     "苍蝇",
+     "灰尘"
+    ]
+   ]
+  },
+  {
+   "id": "L_R004S06C01-h2",
+   "meeting": "L_R004S06C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "安全知識討論會講消防知識時，火災分成幾類？D類火災指的是什麼？",
+   "answer": "分四类，D类是金属火灾（如铝镁合金）",
+   "span": [
+    1230,
+    1271
+   ],
+   "all": [
+    [
+     "金属"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-h1",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場經理的部門會議裡，男裝部說從模特兒身上換下來的快過時舊款怎麼處理？",
+   "answer": "挂到架子上打上特价签，搞个活动",
+   "span": [
+    956,
+    975
+   ],
+   "all": [
+    [
+     "特价"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S02C01-h2",
+   "meeting": "M_R003S02C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場會議中家電部說，顧客對介紹的產品滿意之後可以提供什麼服務？",
+   "answer": "提供上门安装",
+   "span": [
+    1727,
+    1748
+   ],
+   "all": [
+    [
+     "安装"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-h1",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "美容院開業會議裡，針對男女一起來的情侶套餐，首次來店給什麼折扣？",
+   "answer": "情侣套餐首次来打五折",
+   "span": [
+    680,
+    710
+   ],
+   "all": [
+    [
+     "五折",
+     "5折",
+     "半价"
+    ]
+   ]
+  },
+  {
+   "id": "M_R003S05C01-h2",
+   "meeting": "M_R003S05C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "美容院會議後段討論賣理療儀時，舉例說做一次收多少錢、買一台儀器要多少錢？",
+   "answer": "做一次收二百块，仪器两千块",
+   "span": [
+    1864,
+    1886
+   ],
+   "all": [
+    [
+     "二百",
+     "200",
+     "两百"
+    ],
+    [
+     "两千",
+     "2000",
+     "二千"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-h1",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠年關安全會議上，負責消防的部門說消防工作的主要方針是什麼？",
+   "answer": "预防为主，防消结合",
+   "span": [
+    695,
+    735
+   ],
+   "all": [
+    [
+     "预防"
+    ]
+   ]
+  },
+  {
+   "id": "S_R003S03C01-h2",
+   "meeting": "S_R003S03C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "工廠安全會議中，主管要求年關期間保安巡邏要怎麼加強？",
+   "answer": "晚上增加一次或两次巡逻班次",
+   "span": [
+    1343,
+    1375
+   ],
+   "all": [
+    [
+     "晚上",
+     "夜间",
+     "夜里"
+    ],
+    [
+     "巡逻"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-h1",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場樓層主管的季度早會上，男裝部說這個月銷量不高的原因是什麼？",
+   "answer": "疫情影响，大家在家，线上直播比实体店更火爆",
+   "span": [
+    506,
+    545
+   ],
+   "all": [
+    [
+     "疫情",
+     "直播",
+     "线上"
+    ]
+   ]
+  },
+  {
+   "id": "S_R004S01C01-h2",
+   "meeting": "S_R004S01C01",
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "商場季度會議中提出的轉盤抽獎活動，消費滿五百可以抽幾次獎？",
+   "answer": "五次（满三百抽三次）",
+   "span": [
+    1460,
+    1488
+   ],
+   "all": [
+    [
+     "五次",
+     "5次"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-h1",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the second remote control design meeting, what kind of design did the project manager recall the team discussing last time to keep the remote small and uncluttered?",
+   "answer": "A flip-open design, with a reduced size and an electronic panel for extra features like programming.",
+   "span": [
+    92,
+    159
+   ],
+   "all": [
+    [
+     "flip"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-h2",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control functional design meeting, what games console example was given to argue that controllers may need different sizes for different countries?",
+   "answer": "The Xbox needed two controller sizes because people in Japan have smaller hands and would not buy the big one.",
+   "span": [
+    1385,
+    1423
+   ],
+   "all": [
+    [
+     "japan"
+    ],
+    [
+     "hand",
+     "small",
+     "size"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004b-h3",
+   "meeting": "ES2004b",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control functional design meeting, how long is the code from the TV guide that the project manager suggested typing in to record a programme?",
+   "answer": "A five or six digit number printed after the programme in the TV guide.",
+   "span": [
+    1665,
+    1700
+   ],
+   "all": [
+    [
+     "five",
+     "six",
+     "5",
+     "6"
+    ],
+    [
+     "digit",
+     "guide",
+     "number"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-h1",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the final remote control prototype presentation, what standard colour did the designer suggest for the remote underneath the rubber casing?",
+   "answer": "Something fairly neutral, like white or light blue.",
+   "span": [
+    141,
+    178
+   ],
+   "all": [
+    [
+     "white",
+     "blue",
+     "neutral"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-h2",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control prototype finance discussion, why does the remote have a slightly flattened bottom?",
+   "answer": "So it can sit on a surface and does not roll over.",
+   "span": [
+    1190,
+    1216
+   ],
+   "all": [
+    [
+     "roll",
+     "sit",
+     "stand"
+    ]
+   ]
+  },
+  {
+   "id": "ES2004d-h3",
+   "meeting": "ES2004d",
+   "lang": "en",
+   "ui": "en",
+   "q": "At the end of the final remote control project meeting, roughly what profit did the project manager say the product looked set to make?",
+   "answer": "About fifty percent profit, with costs below budget.",
+   "span": [
+    2064,
+    2106
+   ],
+   "all": [
+    [
+     "fifty",
+     "50"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-h1",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, which feature did the project manager recall the interface designer proposing so small children can't watch unsuitable channels?",
+   "answer": "A channel lock.",
+   "span": [
+    214,
+    247
+   ],
+   "all": [
+    [
+     "lock"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-h2",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control design meeting, what example of a remote that can't be lost did the interface designer show?",
+   "answer": "A jumbo, over-sized universal remote that is impossible to misplace.",
+   "span": [
+    646,
+    672
+   ],
+   "all": [
+    [
+     "big",
+     "jumbo",
+     "oversize",
+     "over-sized",
+     "huge"
+    ]
+   ]
+  },
+  {
+   "id": "IS1009c-h3",
+   "meeting": "IS1009c",
+   "lang": "en",
+   "ui": "en",
+   "q": "At the end of the remote control design meeting, what material are the two designers told to use to build the prototype?",
+   "answer": "Modelling clay; the next meeting is in thirty minutes.",
+   "span": [
+    1708,
+    1781
+   ],
+   "all": [
+    [
+     "clay"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-h1",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, where did the interface designer want to place the channel up and down buttons?",
+   "answer": "Where the user's thumb rests, so channels can easily be shifted up or down.",
+   "span": [
+    735,
+    774
+   ],
+   "all": [
+    [
+     "thumb"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-h2",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, how did the team settle the choice between a wooden and a black-grey remote?",
+   "answer": "Make one standard remote with changeable case covers, like mobile phones, sold in wood and other colours.",
+   "span": [
+    1400,
+    1460
+   ],
+   "all": [
+    [
+     "cover",
+     "case"
+    ],
+    [
+     "chang",
+     "swap"
+    ]
+   ]
+  },
+  {
+   "id": "TS3003c-h3",
+   "meeting": "TS3003c",
+   "lang": "en",
+   "ui": "en",
+   "q": "In the remote control conceptual design meeting, which case shape did the project manager suggest, and why?",
+   "answer": "The single curved case, because the curve is good for holding the screen so elderly users can see it easily.",
+   "span": [
+    1918,
+    1960
+   ],
+   "all": [
+    [
+     "single"
+    ],
+    [
+     "curve"
+    ]
+   ]
+  },
+  {
+   "id": "none-h-zh1",
+   "meeting": null,
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "會議中決定公司尾牙要請哪位歌手來表演？",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-h-zh2",
+   "meeting": null,
+   "lang": "zh",
+   "ui": "zh-TW",
+   "q": "會議裡提到新產品的保固期是幾年？",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-h-en1",
+   "meeting": null,
+   "lang": "en",
+   "ui": "en",
+   "q": "Which hotel did the team book for the sales conference in Madrid?",
+   "answer": null,
+   "span": null,
+   "all": []
+  },
+  {
+   "id": "none-h-en2",
+   "meeting": null,
+   "lang": "en",
+   "ui": "en",
+   "q": "How many new engineers did the meeting agree to hire next quarter?",
+   "answer": null,
+   "span": null,
+   "all": []
+  }
+ ]
+}
