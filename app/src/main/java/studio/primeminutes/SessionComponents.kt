@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -500,6 +501,7 @@ internal fun LineMenu(
     onMerge: (Int) -> Unit,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    onSplit: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val open = expanded
@@ -511,6 +513,11 @@ internal fun LineMenu(
                 text = { Text(stringResource(R.string.cd_edit)) },
                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 onClick = { onExpandedChange(false); onEdit() },
+            )
+            if (onSplit != null) DropdownMenuItem(
+                text = { Text(stringResource(R.string.line_split)) },
+                leadingIcon = { Icon(Icons.Filled.UnfoldMore, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                onClick = { onExpandedChange(false); onSplit() },
             )
             if (others.isEmpty()) return@DropdownMenu
             HorizontalDivider()
@@ -827,6 +834,8 @@ internal fun UtteranceRow(
     speakerIds: List<Int>,
     onReassignLine: (Int) -> Unit,
     onMergeSpeaker: (Int) -> Unit,
+    onSplitLine: (() -> Unit)? = null,
+    topPadding: Dp? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // Two shapes:
@@ -842,7 +851,7 @@ internal fun UtteranceRow(
             // A turn = one visual block: the first line opens it with clear space above
             // (OUTSIDE drawBehind, so the separator stays rail-free); continuation lines
             // are flush, making the speaker rail one unbroken bar over the whole turn.
-            .padding(top = if (showSpeaker) 20.dp else 8.dp)
+            .padding(top = topPadding ?: if (showSpeaker) 20.dp else 8.dp)
             .drawBehind {
                 // Speaker rail: a thin bar in the speaker's colour on EVERY line of a
                 // same-speaker run. The chip is only shown on the run's first line, so
@@ -930,7 +939,7 @@ internal fun UtteranceRow(
                     color = pal.Slate200,
                 )
                 LineMenu(utt.speaker, speakerIds, speakerNames, onBeginEdit, onReassignLine, onMergeSpeaker,
-                    expanded = menuOpen, onExpandedChange = { menuOpen = it })
+                    expanded = menuOpen, onExpandedChange = { menuOpen = it }, onSplit = onSplitLine)
             }
         }
     }

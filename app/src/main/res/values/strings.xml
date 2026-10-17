@@ -559,4 +559,18 @@
         <item quantity="one">%d meeting waits: its voice did not match</item>
         <item quantity="other">%d meetings wait: their voice did not match</item>
     </plurals>
+    <string name="boundary_title">Speaker boundary</string>
+    <string name="cd_boundary_handle">Adjust where %1$s stops and %2$s starts</string>
+    <string name="boundary_hint">Drag the marker, or tap the first word %1$s says</string>
+    <string name="boundary_before">Before</string>
+    <string name="boundary_after">After</string>
+    <string name="cd_boundary_earlier">One word earlier</string>
+    <string name="cd_boundary_later">One word later</string>
+    <string name="boundary_moved">Boundary moved</string>
+    <string name="boundary_at">Boundary at %1$s</string>
+    <string name="line_split">Split line here…</string>
+    <string name="boundary_split_title">Who says the rest?</string>
+    <string name="line_split_done">Line split</string>
+    <string name="boundary_apply">Apply</string>
+    <string name="cd_boundary_marker">Boundary marker</string>
 </resources>

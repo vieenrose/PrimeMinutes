@@ -547,4 +547,18 @@
     <plurals name="voice_person_pending">
         <item quantity="other">%d 場會議待確認：聲音不符</item>
     </plurals>
+    <string name="boundary_title">語者分界</string>
+    <string name="cd_boundary_handle">調整 %1$s 與 %2$s 的分界</string>
+    <string name="boundary_hint">拖曳分界線，或點一下 %1$s 說的第一個字</string>
+    <string name="boundary_before">分界前</string>
+    <string name="boundary_after">分界後</string>
+    <string name="cd_boundary_earlier">往前一字</string>
+    <string name="cd_boundary_later">往後一字</string>
+    <string name="boundary_moved">已調整分界</string>
+    <string name="boundary_at">分界：%1$s</string>
+    <string name="line_split">從這裡分開…</string>
+    <string name="boundary_split_title">後半段是誰說的？</string>
+    <string name="line_split_done">已分開此句</string>
+    <string name="boundary_apply">套用</string>
+    <string name="cd_boundary_marker">分界線</string>
 </resources>
