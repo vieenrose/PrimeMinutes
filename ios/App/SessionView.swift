@@ -159,7 +159,8 @@ struct SessionView: View {
         let l = s.lines[r.line]
         if let i = hits.firstIndex(where: { $0.id == l.id }) { match = i }
         jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id }
-        if player.available { player.seek(r.kind == .line ? l.start : r.timeSec) }
+        // At the line's start: a note's whole-second time is before its line, which made the line above the playing one.
+        if player.available { player.seek(l.start) }
     }
     private var resultsList: some View {
         let rs = meetingResults
@@ -368,13 +369,15 @@ struct SessionView: View {
             }
             .background(Color(.systemGroupedBackground))
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
-                if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let l = s.lines.last(where: { $0.start <= t + 0.01 }) ?? s.lines.first { withAnimation { proxy.scrollTo(l.id, anchor: .center) } }; if player.available { player.seek(t) } } } }
+                if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             .onChange(of: current) { _, id in if follow, player.playing, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
             .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
             .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
-            .onChange(of: hits.first?.id) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
+            // Not while the results list is open: the bar and the list sit in this scroll view, and jumping to the
+            // first hit as the query was typed (or the ≈ passages landed) scrolled them off screen (14 Pro Max).
+            .onChange(of: hits.first?.id) { _, _ in if !(resultsOpen && !meetingResults.isEmpty), hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
@@ -414,8 +417,9 @@ struct SessionView: View {
             AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in
                 askMeeting = nil; tab = 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    if let l = s.lines.last(where: { $0.start <= t + 0.01 }) ?? s.lines.first { jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
-                    if player.available { player.seek(t) }
+                    let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
+                    if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
+                    if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
                 }
             }, meeting: s)
         }

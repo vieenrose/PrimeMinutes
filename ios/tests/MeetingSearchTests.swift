@@ -23,6 +23,14 @@ import Foundation
         check(MeetingSearch.stepLines(rd, semantic: true), [1, 2, 3], "stepper, with meaning")
         check(MeetingSearch.lineAt(us, 3), 0, "lineAt"); check(MeetingSearch.lineAt(us, 600), 2, "lineAt mid"); check(MeetingSearch.lineAt(us, -5), 0, "lineAt before")
         check(MeetingSearch.lineAt([], 5), -1, "lineAt empty")
+        // Note10+ 2026-10-18: the 3:22 note opened the 3:16 line (the 3:22 line starts at 202.4 s).
+        let ls = [196.2, 202.4, 210.3, 210.8].map { MeetingSearch.Line(start: $0, text: "x", speaker: 0) }
+        check(MeetingSearch.lineAt(ls, 202), 1, "whole second takes the line shown with it")
+        check(MeetingSearch.lineAt(ls, 201), 0, "earlier second")
+        check(MeetingSearch.lineAt(ls, 210.3), 2, "exact line start keeps that line")
+        check(MeetingSearch.lineAt(ls, 205.5), 1, "mid line")
+        check(MeetingSearch.results("x", lines: [], notes: [MeetingSearch.NoteIn(ts: "3:22", text: "x")]).first?.line, -1, "note, no lines")
+        check(MeetingSearch.results("note", lines: ls, notes: [MeetingSearch.NoteIn(ts: "3:22", text: "a note")]).first?.line, 1, "note 3:22 -> line at 202.4")
         let many = (0..<80).map { MeetingSearch.Line(start: Double($0) * 10, text: "budget \($0)", speaker: 0) }
         check(MeetingSearch.results("budget", lines: many, notes: []).count, MeetingSearch.maxResults, "capped")
         check(MeetingSearch.approxTokens("搬遷預算"), 4, "approxTokens Han")

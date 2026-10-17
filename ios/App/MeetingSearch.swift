@@ -22,10 +22,14 @@ enum MeetingSearch {
         return p.count == 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.count == 2 ? p[0] * 60 + p[1] : 0
     }
 
-    /// The index of the last line starting at or before `t`, -1 for none.
-    static func lineAt(_ lines: [Line], _ t: Double) -> Int {
-        guard !lines.isEmpty else { return -1 }
-        return max(0, lines.lastIndex { $0.start <= t + 0.01 } ?? 0)
+    /// The line a time falls in: the last line starting at or before `t`, -1 for none. A whole-second time
+    /// (a note's or a citation's `m:ss`) also takes a line starting later in that same second: the note cites
+    /// the line shown with that time (a line at 202.4 s shows 3:22; "3:22" is 202.0 s). Android parity.
+    static func lineAt(_ lines: [Line], _ t: Double) -> Int { lineAt(starts: lines.map(\.start), t) }
+    static func lineAt(starts: [Double], _ t: Double) -> Int {
+        guard !starts.isEmpty else { return -1 }
+        let limit = t == t.rounded(.down) ? t + 0.999 : t + 0.01
+        return max(0, starts.lastIndex { $0 <= limit } ?? 0)
     }
 
     static func results(_ query: String, lines: [Line], notes: [NoteIn], dense: [Dense] = []) -> [Result] {

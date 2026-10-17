@@ -282,9 +282,12 @@ extension AskHolder {
         let p = AskEngine.retrieval
         let depth = max(p.perMeeting, p.routeDepth)
         let indexed = LibrarySearch.index(s.id) != nil
+        // Not indexed yet: the keyword half only, and the index is asked for meanwhile (Android parity).
+        if !indexed, EmbedHost.ready, Dev.env["VOX_NOINDEX"] == nil { DispatchQueue.main.async { LibraryIndexer.shared.request(s) } }
         let qv = indexed ? (EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil) : nil
         let dense = qv.map { LibrarySearch.dense([s], qv: $0, maxPassages: depth, snippetChars: 1200) } ?? []
         let keyword = LibrarySearch.keyword([s], query: question, maxPassages: depth, snippetChars: 1200, unindexed: true)
+        StatusLog.add("ask this meeting: indexed \(indexed), dense \(dense.flatMap(\.passages).count), keyword \(keyword.flatMap(\.passages).count)")
         let speakers = PeopleStore.meetingsNaming(question, [s])[s.id.uuidString] ?? []
         let ranked = AskEngine.fuse(dense, keyword, k: p.rrfK) { _, sid in sid.map { speakers.contains($0) } ?? false }
         let id = s.id.uuidString
@@ -397,6 +400,11 @@ struct AskSheet: View {
             else if meeting != nil, initial.isEmpty { SessionView.preloadEmbedder() }
         }
         .task {
+            // DEV: VOX_ASK_CLEAR=<seconds> taps ↺ that long after the sheet opens (history checks without UI automation).
+            if let m = meeting, let c = Dev.env["VOX_ASK_CLEAR"].flatMap(Double.init) {
+                try? await Task.sleep(nanoseconds: UInt64(c * 1e9)); ask.reset(); history = []; AskHistory.clear(m.id)
+                StatusLog.add("ask history cleared: \(AskHistory.load(m.id).count) left"); return
+            }
             // DEV (README animation): VOX_ASK_OPEN=<seconds> taps the source at that second once the answer is in.
             guard let sec = Dev.env["VOX_ASK_OPEN"].flatMap(Int.init) else { return }
             for _ in 0..<240 {
