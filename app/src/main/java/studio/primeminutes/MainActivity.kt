@@ -573,6 +573,9 @@ private fun TranscribeScreen(
     var askQuestion by remember { mutableStateOf<String?>(null) }
     // A speaker merge (from, into) waiting for its confirmation.
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // Speaker-boundary editor: the seam (index of the line that starts the new speaker) or the line to split.
+    var boundarySeam by remember { mutableStateOf<Int?>(null) }
+    var splitLineAt by remember { mutableStateOf<Int?>(null) }
     // DEV (debug builds only): `am start … --es vox_query "…" --es vox_ask "…"` pre-fills the Studio
     // search or opens Ask with a question, so screenshots and device checks need no CJK typing;
     // `--es vox_type "…"` types the query in, one character at a time (README animations).
@@ -596,6 +599,19 @@ private fun TranscribeScreen(
         val ids = s.utterances.mapNotNull { it.speaker }.distinct()
         if (ids.size >= 2) { delay(2_000); devMergeAsked = true; mergeAsk = ids[0] to ids[1] }
     }
+    // DEV: `--ei vox_boundary N` opens the boundary editor on the N-th speaker change of the open meeting;
+    // `--ei vox_split N` opens the split editor on line N.
+    var devBoundaryAsked by remember { mutableStateOf(false) }
+    if (devExtras != null && !devBoundaryAsked && (devExtras.containsKey("vox_boundary") || devExtras.containsKey("vox_split")))
+        LaunchedEffect(s.utterances.size) {
+            if (s.utterances.size < 2) return@LaunchedEffect
+            delay(2_000); devBoundaryAsked = true
+            if (devExtras.containsKey("vox_split")) splitLineAt = devExtras.getInt("vox_split").coerceIn(0, s.utterances.size - 1)
+            else {
+                val seams = (1 until s.utterances.size).filter { s.utterances[it].speaker != s.utterances[it - 1].speaker }
+                seams.getOrNull(devExtras.getInt("vox_boundary"))?.let { boundarySeam = it }
+            }
+        }
 
     // --- Update notifier: once/day GitHub release check → dismissible banner → download+install. ---
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -762,6 +778,18 @@ private fun TranscribeScreen(
     fun seekAndPlay(ms: Int) {
         if (vm.now.audioUri == null) return
         pc.seekAndPlay(ms)
+    }
+
+    // Boundary editor preview: play [from, to] once, then pause (a newer preview cancels the older stop).
+    var previewJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun boundaryPreview(from: Double, to: Double) {
+        if (vm.now.audioUri == null) return
+        previewJob?.cancel()
+        pc.seekAndPlay((from * 1000).toInt())
+        previewJob = scope.launch {
+            delay(((to - from) * 1000).toLong().coerceAtLeast(300))
+            runCatching { pc.player?.pause() }; pc.isPlaying = false
+        }
     }
 
     // Also keyed on player: a source swap must cancel the old loop — its gentle start() retry
@@ -1286,6 +1314,17 @@ private fun TranscribeScreen(
             // Consecutive utterances from the same speaker read as one turn: only the
             // first line of a run carries the speaker chip (timestamps stay per line).
             val speakerChanged = idx == 0 || utterances[idx - 1].speaker != u.speaker
+            // A seam handle between two speakers (finished transcripts only: live lines still move).
+            val seam = !s.running && idx > 0 && speakerChanged && u.speaker != null && utterances[idx - 1].speaker != null
+            if (seam) {
+                val a = utterances[idx - 1].speaker!!; val b = u.speaker!!
+                studio.primeminutes.ui.SpeakerSeam(
+                    Color(speakerColorOn(a, pal.isDark)), Color(speakerColorOn(b, pal.isDark)),
+                    s.speakerNames[a]?.name ?: stringResource(R.string.speaker_n, a + 1),
+                    s.speakerNames[b]?.name ?: stringResource(R.string.speaker_n, b + 1),
+                    onOpen = { boundarySeam = idx },
+                )
+            }
             UtteranceRow(
                 utt = u,
                 showSpeaker = speakerChanged,
@@ -1305,6 +1344,8 @@ private fun TranscribeScreen(
                 onReassignLine = { target -> vm.reassignLine(idx, target) },
                 // A merge relabels every line of a speaker: confirmed first, then offered for Undo.
                 onMergeSpeaker = { target -> u.speaker?.let { mergeAsk = it to target } },
+                onSplitLine = if (!s.running && studio.primeminutes.data.BoundaryEdits.tokenize(u.text).size > 1) ({ splitLineAt = idx }) else null,
+                topPadding = if (seam) 0.dp else null,
             )
         }
     }
@@ -1789,6 +1830,45 @@ private fun TranscribeScreen(
     }
     if (s.showPodcastSheet) {
         PodcastSheet(onDismiss = { vm.showPodcastSheet(false) })
+    }
+    boundarySeam?.let { seamIdx ->
+        val us = s.utterances
+        if (seamIdx !in 1 until us.size) { boundarySeam = null; return@let }
+        val a = us[seamIdx - 1]; val b = us[seamIdx]
+        val sm = remember(a, b) { studio.primeminutes.data.BoundaryEdits.seam(a, b) }
+        val nm = { sid: Int? -> sid?.let { s.speakerNames[it]?.name ?: context.getString(R.string.speaker_n, it + 1) } ?: "" }
+        val col = { sid: Int? -> Color(speakerColorOn(sid ?: 0, pal.isDark)) }
+        studio.primeminutes.ui.BoundaryEditorSheet(
+            tokens = sm.tokens, starts = sm.starts, end = sm.end, initialSplit = sm.split,
+            colorA = col(a.speaker), labelA = nm(a.speaker), colorB = col(b.speaker), labelB = nm(b.speaker),
+            canPlay = s.audioUri != null,
+            onPreview = { from, to -> boundaryPreview(from, to) },
+            onApply = { k, _ -> boundarySeam = null; vm.moveBoundary(seamIdx, k) },
+            onDismiss = { boundarySeam = null },
+        )
+    }
+    splitLineAt?.let { li ->
+        val us = s.utterances
+        if (li !in us.indices) { splitLineAt = null; return@let }
+        val u = us[li]
+        val toks = remember(u) { studio.primeminutes.data.BoundaryEdits.tokenize(u.text) }
+        val starts = remember(u) { studio.primeminutes.data.BoundaryEdits.tokenStarts(u, toks) }
+        val nm = { sid: Int -> s.speakerNames[sid]?.name ?: context.getString(R.string.speaker_n, sid + 1) }
+        val col = { sid: Int -> Color(speakerColorOn(sid, pal.isDark)) }
+        val ids = us.mapNotNull { it.speaker }.distinct().sorted()
+        // The likeliest owner of the rest first: the neighbouring lines' other speaker, then the others,
+        // then a new speaker.
+        val near = listOfNotNull(us.getOrNull(li + 1)?.speaker, us.getOrNull(li - 1)?.speaker).filter { it != u.speaker }
+        val order = (near + ids.filter { it != u.speaker }).distinct() + ((ids.maxOrNull() ?: -1) + 1)
+        studio.primeminutes.ui.BoundaryEditorSheet(
+            tokens = toks, starts = starts, end = u.endSec, initialSplit = toks.size / 2,
+            colorA = col(u.speaker ?: 0), labelA = nm(u.speaker ?: 0), colorB = col(order.first()), labelB = nm(order.first()),
+            choices = order.map { studio.primeminutes.ui.SpeakerChoice(it, nm(it), col(it)) },
+            canPlay = s.audioUri != null,
+            onPreview = { from, to -> boundaryPreview(from, to) },
+            onApply = { k, spk -> splitLineAt = null; vm.splitLine(li, k, spk ?: order.first()) },
+            onDismiss = { splitLineAt = null },
+        )
     }
     mergeAsk?.let { (from, into) ->
         val name = { sid: Int -> s.speakerNames[sid]?.name ?: context.getString(R.string.speaker_n, sid + 1) }

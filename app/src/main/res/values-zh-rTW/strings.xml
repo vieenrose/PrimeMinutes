@@ -447,4 +447,18 @@
     <string name="bg_long_job_message">螢幕關閉時，長篇轉錄需要一段時間。部分手機（Samsung、小米…）會凍結未排除電池最佳化的 App，工作會停到你再次開啟 App 為止。要允許 Prime Minutes 在背景不受限制地執行嗎？</string>
     <string name="bg_long_job_allow">允許</string>
     <string name="bg_long_job_not_now">暫時不要</string>
+    <string name="boundary_title">語者分界</string>
+    <string name="cd_boundary_handle">調整 %1$s 與 %2$s 的分界</string>
+    <string name="boundary_hint">拖曳分界線，或點一下 %1$s 說的第一個字</string>
+    <string name="boundary_before">分界前</string>
+    <string name="boundary_after">分界後</string>
+    <string name="cd_boundary_earlier">往前一字</string>
+    <string name="cd_boundary_later">往後一字</string>
+    <string name="boundary_moved">已調整分界</string>
+    <string name="boundary_at">分界：%1$s</string>
+    <string name="line_split">從這裡分開…</string>
+    <string name="boundary_split_title">後半段是誰說的？</string>
+    <string name="line_split_done">已分開此句</string>
+    <string name="boundary_apply">套用</string>
+    <string name="cd_boundary_marker">分界線</string>
 </resources>

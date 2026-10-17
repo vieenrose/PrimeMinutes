@@ -10,6 +10,7 @@ import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.llm.MeetingNotes
 import studio.primeminutes.core.session.PrimeMinutesSession
+import studio.primeminutes.data.BoundaryEdits
 import studio.primeminutes.data.SpeakerEdits
 import studio.primeminutes.data.SpeakerName
 import studio.primeminutes.service.TranscriptionService
@@ -451,6 +452,16 @@ object SessionReducer {
     /** Merge a speaker into another (undoable: one tap rewrites every line of that speaker). */
     fun mergeSpeaker(state: SessionState, env: SessionEnv, from: Int, into: Int): Next = tx(state, env) {
         speakerEditUndoable(SpeakerEdits.merge(s.utterances, s.speakerNames, from, into), R.string.speaker_merged)
+    }
+
+    /** Move the boundary between lines [seam]-1 and [seam] to token [split] of their joined text (undoable). */
+    fun moveBoundary(state: SessionState, env: SessionEnv, seam: Int, split: Int): Next = tx(state, env) {
+        speakerEditUndoable(BoundaryEdits.move(s.utterances, seam, split) to s.speakerNames, R.string.boundary_moved)
+    }
+
+    /** Split line [index] at token [at]; the rest goes to [speaker] (undoable). */
+    fun splitLine(state: SessionState, env: SessionEnv, index: Int, at: Int, speaker: Int): Next = tx(state, env) {
+        speakerEditUndoable(BoundaryEdits.split(s.utterances, index, at, speaker) to s.speakerNames, R.string.line_split_done)
     }
 
     /** The Undo of a speaker edit: only if nothing changed the transcript since. */
