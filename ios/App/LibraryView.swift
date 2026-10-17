@@ -161,17 +161,19 @@ struct LibraryView: View {
         return s.id.uuidString + "|" + s.title + "|" + ps.map { "\($0.kind)\($0.uttIndex)\($0.semanticOnly)" }.joined(separator: ",")
     }
     private func jobCard(_ j: Job) -> some View {
-        let active = j.id == m.runner.activeJob
+        let active = j.id == m.runner.activeJob, failedDl = j.download?.error != nil
         return HStack(spacing: 12) {
-            Group { if active { ProgressView() } else { Image(systemName: "clock").font(.title3.weight(.semibold)).foregroundStyle(.orange) } }
-                .frame(width: 40, height: 40).background(Color.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
-                .accessibilityLabel(L(active ? "cd_status_processing" : "cd_status_queued"))
+            JobGlyph(m: m, j: j)
             VStack(alignment: .leading, spacing: 2) {
                 Text(j.title ?? L("meeting")).font(.headline).lineLimit(2)
-                Text(m.jobStatus(j)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? .red : .secondary).lineLimit(2)
+                if let f = m.dlFraction(j) { ProgressView(value: f).tint(.blue).padding(.top, 4) }
             }
             Spacer(minLength: 0)
-            if active {
+            if j.download != nil {
+                Menu { DownloadActions(m: m, j: j) }
+                    label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+            } else if active {
                 Menu { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
                     label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             } else if m.runner.parked.contains(j.id) {
@@ -201,7 +203,7 @@ struct LibraryView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
+            Color.clear.frame(height: 0).onAppear { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))
@@ -237,7 +239,7 @@ struct LibraryView: View {
                 else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
             }
             if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, 16).padding(.top, 6) }
-            else if resumer.paused > 0 && !m.imports.downloadPaused {   // a run's own model download, waiting to resume
+            else if resumer.paused > 0 && !m.imports.dlPaused {   // a run's own model download, waiting to resume
                 HStack {
                     Image(systemName: "pause.circle").foregroundStyle(.orange)
                     Text(L("download_paused")).font(.caption).foregroundStyle(.secondary)
@@ -277,33 +279,14 @@ struct LibraryView: View {
                     }
                 }.padding(.horizontal, 16)
             }
-            if let d = m.imports.downloading {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(d.isEmpty ? L("import_download_title") : d).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Spacer()
-                        Button(L("cancel")) { m.imports.cancelDownload() }.font(.subheadline)
-                    }
-                    if let f = m.imports.downloadFraction { ProgressView(value: f) } else { ProgressView().progressViewStyle(.linear) }
-                    if m.imports.downloadPaused {
-                        HStack {
-                            Text(pausedText(m.imports.downloadBytes)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            Spacer()
-                            Button(L("download_resume")) { m.imports.resumeDownload() }.font(.caption.weight(.semibold))
-                        }
-                    } else {
-                        Text(L("podcast_downloading", Int((m.imports.downloadFraction ?? 0) * 100))).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 6)
-            }
             if m.runner.activeJob != nil {
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
                     .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)
             } else {
                 Text(m.screen.status).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 16)
             }
-            if m.runner.activeJob == nil && !m.capture.recording && !m.runner.waiting.isEmpty {
-                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
+            if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
+                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
                     .buttonStyle(.bordered).padding(.horizontal, 16)
             }
             Button { if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
@@ -362,8 +345,55 @@ struct AddSourceSheet: View {
 extension Model {
     /// A queue row's second line (and the live view's status): what the job is doing or waiting for.
     func jobStatus(_ j: Job) -> String {
+        if let d = j.download {
+            if let e = d.error { return L("dl_failed_reason", e) }
+            guard imports.dlId == j.id else { return L("dl_waiting") }
+            if imports.dlPaused { return pausedText(imports.dlBytes) }
+            guard let (got, total) = imports.dlBytes, got > 0 else { return L("dl_downloading") }
+            return total > 0 ? L("dl_progress", Int(Double(got) * 100 / Double(total)), SizeFormat.bytes(got), SizeFormat.bytes(total))
+                : L("dl_progress_bytes", SizeFormat.bytes(got))
+        }
         if j.id == runner.activeJob { return screen.status }
         return runner.failed[j.id] ?? L(runner.parked.contains(j.id) ? "stop_resumable" : "cd_status_queued")
+    }
+}
+
+extension Model {
+    /// The fraction downloaded of a podcast item downloading now (nil when not, or the size is unknown).
+    func dlFraction(_ j: Job) -> Double? {
+        guard j.download != nil, imports.dlId == j.id, let (got, total) = imports.dlBytes, total > 0 else { return nil }
+        return min(1, Double(got) / Double(total))
+    }
+}
+
+/// A queue row's leading glyph: downloading (blue), download failed (red), processing (spinner), queued (clock).
+struct JobGlyph: View {
+    @ObservedObject var m: Model
+    let j: Job
+    var body: some View {
+        let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
+        let tint: Color = failed ? .red : dl ? .blue : .orange
+        Group {
+            if failed { Image(systemName: "exclamationmark.circle").font(.title3.weight(.semibold)).foregroundStyle(.red) }
+            else if dl { Image(systemName: m.imports.dlPaused && m.imports.dlId == j.id ? "pause.circle" : "arrow.down.circle").font(.title3.weight(.semibold)).foregroundStyle(.blue) }
+            else if active { ProgressView() }
+            else { Image(systemName: "clock").font(.title3.weight(.semibold)).foregroundStyle(.orange) }
+        }
+        .frame(width: 40, height: 40).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityLabel(L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
+    }
+}
+
+/// A podcast item's actions while not downloaded: Resume now (paused) or Retry (failed), and Delete (stops the
+/// download and removes its partial file). `onDelete` also leaves the item's screen.
+struct DownloadActions: View {
+    @ObservedObject var m: Model
+    let j: Job
+    var onDelete: () -> Void = {}
+    var body: some View {
+        if j.download?.error != nil { Button(L("retry"), systemImage: "arrow.clockwise") { m.imports.retry(j) } }
+        else if m.imports.dlId == j.id && m.imports.dlPaused { Button(L("download_resume"), systemImage: "play.circle") { m.imports.resumeDownload() } }
+        Button(L("delete"), systemImage: "trash", role: .destructive) { m.imports.remove(j); onDelete() }
     }
 }
 
@@ -386,13 +416,19 @@ struct LiveJobView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                if active { ProgressView().controlSize(.small) } else { Image(systemName: "clock").foregroundStyle(.orange) }
-                Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(2)
+                if let j = job, j.download != nil {
+                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? .red : .blue)
+                } else if active { ProgressView().controlSize(.small) } else { Image(systemName: "clock").foregroundStyle(.orange) }
+                Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
                 Spacer(minLength: 0)
+                if let j = job, j.download?.error != nil { Button(L("retry")) { m.imports.retry(j) }.font(.subheadline.weight(.semibold)) }
+                else if let j = job, j.download != nil, m.imports.dlId == j.id, m.imports.dlPaused { Button(L("download_resume")) { m.imports.resumeDownload() }.font(.subheadline.weight(.semibold)) }
                 // The engines' load while this job runs (Android: the same place, the status row of the meeting screen).
                 if active { HwStatusLine() }
             }
             if active { ProgressView(value: m.runner.jobProgress) }
+            else if let j = job, let f = m.dlFraction(j) { ProgressView(value: f).tint(.blue) }
+            else if let j = job, j.download != nil, j.download?.error == nil, m.imports.dlId == j.id, !m.imports.dlPaused { ProgressView().progressViewStyle(.linear).tint(.blue) }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -429,8 +465,8 @@ struct LiveJobView: View {
                             if m.screen.agent.state == nil { Text(L("watch_live_hint")).font(.footnote).foregroundStyle(.secondary) }
                             AgentPanel(agent: m.screen.agent) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } }
                         } else { transcript }
-                    } else if job != nil {
-                        Text(L("watch_live_queued")).font(.footnote).foregroundStyle(.secondary)
+                    } else if let j = job {
+                        Text(L(j.download != nil ? "dl_item_hint" : "watch_live_queued")).font(.footnote).foregroundStyle(.secondary)
                     }
                 }.padding(16)
             }
@@ -445,7 +481,8 @@ struct LiveJobView: View {
             if let j = job {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        if active { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
+                        if j.download != nil { DownloadActions(m: m, j: j) { path.removeAll { $0 == .job(id) } } }
+                        else if active { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
                         else if m.runner.parked.contains(j.id) {
                             Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }
                             Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j); path.removeAll { $0 == .job(id) } }
@@ -463,6 +500,7 @@ struct LiveJobView: View {
             if Dev.env["VOX_PLAY"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if player.available && !player.playing { player.toggle() }; DispatchQueue.main.asyncAfter(deadline: .now() + 8) { StatusLog.add("live view player t=\(Int(player.time)) playing=\(player.playing) lines=\(m.screen.lines.count) status=\(m.screen.status)") } } }
         }
         .onChange(of: job?.audio) { _, a in player.load(a) }
+        .onChange(of: job?.download == nil) { _, done in if done { player.load(job?.audio) } }   // downloaded: playable while it is processed
         .onDisappear { player.stop() }
         // Saved: the live view becomes the meeting (Android: the watched item's screen shows the result).
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
@@ -528,6 +566,7 @@ func pausedText(_ b: (Int64, Int64)?) -> String {
             let del = Set(ids.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
             Task {
                 for j in await m.queue.all where del.contains(j.id) {
+                    if j.download != nil { m.imports.remove(j); StatusLog.add("DEV deleted download item \(j.id)"); continue }
                     await m.queue.remove(j.id); Checkpoint.remove(j.id)
                     try? FileManager.default.removeItem(at: JobQueue.url(j))
                     StatusLog.add("DEV deleted job \(j.id)")
@@ -536,10 +575,21 @@ func pausedText(_ b: (Int64, Int64)?) -> String {
                 await m.runner.syncQueue()
             }
         }
+        // VOX_SNAP_ACTIVE=<spec>: VOX_SNAP's shots again each time the app comes back to the front (a paused download).
+        if let sa = Dev.env["VOX_SNAP_ACTIVE"] {
+            NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                Task { @MainActor in StatusLog.add("DEV active: download \(m.imports.dlId?.uuidString ?? "-") paused=\(m.imports.dlPaused) bytes=\(m.imports.dlBytes.map { "\($0.0)" } ?? "-")"); Snap.schedule(sa) }
+            }
+        }
         if Dev.env["VOX_IDS"] != nil {
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                var o = (await m.queue.all).map { "job \($0.id) \($0.title ?? "")" }
+                var o = (await m.queue.all).map { j in
+                    let part = j.download.map { (try? FileManager.default.attributesOfItem(atPath: Podcast.partURL($0.url).path)[.size] as? Int64) ?? -1 }
+                    return "job \(j.id) \(j.title ?? "")" + (j.download.map { " download error=\($0.error ?? "-") part=\(part ?? -1)" } ?? "")
+                        + " audio=\(FileManager.default.fileExists(atPath: JobQueue.url(j).path)) status=\(m.jobStatus(j))"
+                }
+                o += (try? FileManager.default.contentsOfDirectory(atPath: JobQueue.audioDir.path).filter { $0.hasSuffix(".part") }.map { "part \($0)" }) ?? []
                 o += (await m.library.all()).prefix(8).map { "meeting \($0.id) \($0.date.timeIntervalSince1970) \($0.title)" }
                 try? o.joined(separator: "\n").write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/ids.txt"), atomically: true, encoding: .utf8)
             }

@@ -375,3 +375,10 @@
 "download_paused" = "Download paused · resumes automatically";
 "download_paused_bytes" = "Paused · %1$@ / %2$@ · resumes automatically";
 "download_resume" = "Resume";
+"dl_waiting" = "Waiting to download";
+"dl_progress" = "Downloading… %1$d %% · %2$@ / %3$@";
+"dl_progress_bytes" = "Downloading… %@";
+"dl_failed_reason" = "Download failed: %@";
+"cd_status_downloading" = "Downloading";
+"cd_status_download_failed" = "Download failed";
+"dl_item_hint" = "The meeting is processed once its audio is downloaded. You can leave this screen meanwhile.";

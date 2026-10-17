@@ -8,6 +8,15 @@ struct Job: Codable, Identifiable, Equatable {
     var date = Date()
     var audio: String        // file name in Application Support/audio
     var title: String? = nil // source title (podcast episode) — wins over a generated one
+    /// A podcast episode not downloaded yet (Android download.json): the item exists from the pick on, shows its
+    /// download, survives a kill (it resumes from its `.part`) and is processed once `audio` is on disk.
+    var download: JobDownload? = nil
+}
+
+struct JobDownload: Codable, Equatable {
+    var url: String
+    /// Why the last attempt failed for good (404, too large…): the row shows it with Retry. Nil while it downloads or waits.
+    var error: String? = nil
 }
 
 actor JobQueue {
@@ -29,8 +38,11 @@ actor JobQueue {
     func promote(_ id: UUID) { if let i = jobs.firstIndex(where: { $0.id == id }), i > 0 { jobs.insert(jobs.remove(at: i), at: 0); persist() } }
     func contains(_ id: UUID) -> Bool { jobs.contains { $0.id == id } }
     func remove(_ id: UUID) { jobs.removeAll { $0.id == id }; persist() }
-    func first(skipping: UUID? = nil) -> Job? { jobs.first { $0.id != skipping } }
-    func first(excluding: Set<UUID>) -> Job? { jobs.first { !excluding.contains($0.id) } }
+    /// The next job to process: one still downloading has no audio yet and waits for it.
+    func first(skipping: UUID? = nil) -> Job? { jobs.first { $0.id != skipping && $0.download == nil } }
+    func first(excluding: Set<UUID>) -> Job? { jobs.first { !excluding.contains($0.id) && $0.download == nil } }
+    func update(_ j: Job) { if let i = jobs.firstIndex(where: { $0.id == j.id }) { jobs[i] = j; persist() } }
+    func job(_ id: UUID) -> Job? { jobs.first { $0.id == id } }
     var count: Int { jobs.count }
     var all: [Job] { jobs }
     static func url(_ j: Job) -> URL { audioDir.appendingPathComponent(j.audio) }

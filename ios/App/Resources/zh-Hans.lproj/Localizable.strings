@@ -375,3 +375,10 @@
 "download_paused" = "下载已暂停 · 会自动继续";
 "download_paused_bytes" = "已暂停 · %1$@ / %2$@ · 会自动继续";
 "download_resume" = "继续";
+"dl_waiting" = "等待下载";
+"dl_progress" = "下载中… %1$d %% · %2$@ / %3$@";
+"dl_progress_bytes" = "下载中… %@";
+"dl_failed_reason" = "下载失败：%@";
+"cd_status_downloading" = "下载中";
+"cd_status_download_failed" = "下载失败";
+"dl_item_hint" = "音频下载完成后就会开始处理这场会议，期间可以先离开这个页面。";

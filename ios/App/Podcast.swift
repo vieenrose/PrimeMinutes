@@ -37,7 +37,7 @@ enum Podcast {
         // The partial file is named after the episode, not the job (a fresh UUID per tap): a cancelled or failed
         // download resumes when the same episode is picked again (Android podcast_<hash>), instead of leaving an
         // orphan .part behind and starting over.
-        let dest = JobQueue.audioDir.appendingPathComponent(name), part = JobQueue.audioDir.appendingPathComponent("podcast_\(stableHash(ep.audioUrl)).\(ext(ep.audioUrl)).part")
+        let dest = JobQueue.audioDir.appendingPathComponent(name), part = partURL(ep.audioUrl)
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
         let report: @Sendable (Int64) -> Void = { got in progress(got, total) }
         do { try await Chunked.fetch(request(u, ua), to: part, resumeFrom: have, onProgress: report) }
@@ -51,6 +51,9 @@ enum Podcast {
         try FileManager.default.moveItem(at: part, to: dest)
         return dest
     }
+
+    /// The episode's partial download (deleted with its item).
+    static func partURL(_ audioUrl: String) -> URL { JobQueue.audioDir.appendingPathComponent("podcast_\(stableHash(audioUrl)).\(ext(audioUrl)).part") }
 
     /// FNV-1a 64 of the URL in hex: stable across launches (Swift's hashValue is seeded per process).
     static func stableHash(_ s: String) -> String {

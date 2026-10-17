@@ -375,3 +375,10 @@
 "download_paused" = "下載已暫停 · 會自動繼續";
 "download_paused_bytes" = "已暫停 · %1$@ / %2$@ · 會自動繼續";
 "download_resume" = "繼續";
+"dl_waiting" = "等待下載";
+"dl_progress" = "下載中… %1$d %% · %2$@ / %3$@";
+"dl_progress_bytes" = "下載中… %@";
+"dl_failed_reason" = "下載失敗：%@";
+"cd_status_downloading" = "下載中";
+"cd_status_download_failed" = "下載失敗";
+"dl_item_hint" = "音訊下載完成後就會開始處理這場會議，期間可以先離開這個畫面。";

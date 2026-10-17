@@ -71,7 +71,9 @@ final class ReaderWorker: @unchecked Sendable {
     /// Jobs whose last run failed → their error, shown on the queue row with Retry.
     @Published var failed: [UUID: String] = [:]
     func processNext(_ j: Job) { guard j.id != activeJob else { return }; Task { await queue.promote(j.id); await syncQueue() } }
-    func unqueue(_ j: Job) { guard j.id != activeJob else { return }; failed[j.id] = nil; Task {
+    func unqueue(_ j: Job) { guard j.id != activeJob else { return }; failed[j.id] = nil
+        if j.download != nil { Model.shared.imports.remove(j); return }   // not downloaded yet: its download stops, its partial file goes
+        Task {
         await queue.remove(j.id); Checkpoint.remove(j.id)
         // Android: removing from the queue keeps the recording in the library (unprocessed), so it can be transcribed later
         if FileManager.default.fileExists(atPath: JobQueue.url(j).path), !(await library.all()).contains(where: { $0.id == j.id }) {

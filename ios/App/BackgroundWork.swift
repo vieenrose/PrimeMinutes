@@ -68,7 +68,7 @@ enum BackgroundWork {
     }
     static func schedule() {
         Task {
-            guard await Model.shared.queue.count > 0 else { return }
+            guard await Model.shared.queue.first() != nil else { return }   // a podcast item still downloading is not work for it
             let r = BGProcessingTaskRequest(identifier: id)
             r.requiresNetworkConnectivity = false; r.requiresExternalPower = false
             do { try BGTaskScheduler.shared.submit(r) } catch { StatusLog.add("trace background schedule failed: \(error)") }
@@ -129,13 +129,14 @@ enum BackgroundWork {
         }
         // VOX_RECSTOP=s: tap Stop on the recording.
         after("VOX_RECSTOP") { if Model.shared.capture.recording { Model.shared.capture.toggleRecord() } else { StatusLog.add("trace probe recstop: not recording") } }
-        // VOX_DLCANCEL=s: Cancel the import download (VOX_CANCEL's fixed 4 s often lands before the first byte).
-        after("VOX_DLCANCEL") { let i = Model.shared.imports; StatusLog.add("trace probe cancel download \(i.downloading ?? "-") at \(Int((i.downloadFraction ?? 0) * 100)) %"); i.cancelDownload() }
-        // VOX_DLCANCEL_PCT=p: Cancel the import download once it has passed p percent.
+        // VOX_DLCANCEL=s: Delete the podcast item downloading now (its partial file goes with it).
+        after("VOX_DLCANCEL") { let i = Model.shared.imports; StatusLog.add("trace probe delete download item \(i.dlId?.uuidString ?? "-") at \(i.dlBytes.map { "\($0.0)/\($0.1)" } ?? "-")"); i.removeCurrent() }
+        // VOX_DLCANCEL_PCT=p: the same once it has passed p percent.
         if let p = env["VOX_DLCANCEL_PCT"].flatMap(Double.init) { Task { @MainActor in
             let i = Model.shared.imports
-            while (i.downloadFraction ?? 0) * 100 < p { try? await Task.sleep(nanoseconds: 100_000_000) }
-            StatusLog.add("trace probe cancel download at \(Int((i.downloadFraction ?? 0) * 100)) %"); i.cancelDownload() } }
+            @MainActor func pct() -> Double { i.dlBytes.map { $0.1 > 0 ? Double($0.0) * 100 / Double($0.1) : 0 } ?? 0 }
+            while pct() < p { try? await Task.sleep(nanoseconds: 100_000_000) }
+            StatusLog.add("trace probe delete download item at \(Int(pct())) %"); i.removeCurrent() } }
         // VOX_CLEARQ=s: Stop the running job and take every job off the queue (each stays in the library, unprocessed).
         after("VOX_CLEARQ") { let r = Model.shared.runner; Task { @MainActor in
             await r.syncQueue()
