@@ -35,7 +35,7 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             let d = PeopleOps.rename(PeopleCodec.decode(text), "a", "Marc")
             let o = (try? JSONSerialization.jsonObject(with: PeopleCodec.encode(d))) as? [String: Any]
             let p = ((o?["people"] as? [[String: Any]]) ?? []).first { $0["id"] as? String == "a" }
-            check(p?["name"] as? String == "Marc" && p?["contact"] as? String == "lk-1" && p?["emails"] as? [String] == ["m@x.org"], "extra kept \(String(describing: p))")
+            check(p?["name"] as? String == "Marc" && p?["contact"] as? String == "lk-1" && (p?["emails"] as? [[String: Any]])?.first?["address"] as? String == "m@x.org", "extra kept \(String(describing: p))")
             check(d.byId("b")?.extra == nil, "no extra")
             check(PeopleCodec.decode(PeopleCodec.encode(d)) == d, "extra round trip")
         }

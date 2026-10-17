@@ -89,6 +89,9 @@ struct SessionView: View {
     @State private var exporting = false
     @State private var exportFile: URL?
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
+    /// "Email participants" (docs/design/speaker-contacts.md §4). DEV: VOX_MAIL=1 (or preview) opens it.
+    @State private var mailOpen = Dev.env["VOX_MAIL"] != nil
+    @ObservedObject private var peopleStore = PeopleStore.shared
 
     let openAt: Double?
     init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil) {
@@ -211,6 +214,9 @@ struct SessionView: View {
                 ForEach(n.extra) { notesSection($0.key, $0.lines) }
             }
             if !s.lines.isEmpty { SpeakerStats(s: s, palette: Self.palette).id("stats") }
+            if peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }) {
+                HStack { Spacer(); Button { mailOpen = true } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
+            }
             if s.summary.isEmpty { Text(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).font(.subheadline).foregroundStyle(.secondary).padding(.top, 12) }
         }.padding(.horizontal, 16)
     }
@@ -314,6 +320,7 @@ struct SessionView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(L("rename")) { draft = s.title; renamingTitle = true }
+                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") } }
                     Button(L("export_menu_entry")) { showExport = true }
                     if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) } }
                     if s.audio != nil {
@@ -328,6 +335,20 @@ struct SessionView: View {
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
+        .sheet(isPresented: $mailOpen) {
+            EmailParticipantsSheet(session: s, onSend: { r in
+                mailOpen = false
+                let cur = s
+                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
+            }, onShareChat: { r in
+                mailOpen = false
+                let cur = s
+                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
+            }, onNameSpeaker: { k in
+                mailOpen = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
+            }, onDismiss: { mailOpen = false })
+        }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
             Button(L("done")) { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }

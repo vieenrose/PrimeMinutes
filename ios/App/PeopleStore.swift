@@ -132,7 +132,9 @@ import Foundation
         VoiceHooks.impl?.onMerge(from: from, into: into)
     }
     func delete(_ id: String, clearNames: Bool) async {
+        let addresses = Set(doc.byId(id)?.emails.map { EmailRules.key($0.address) } ?? [])
         mutate { PeopleOps.delete($0, id) }
+        Self.scrubShares(person: id, addresses: addresses)
         await rewriteSessions { LinkOps.delete($1, id, clearNames: clearNames) }
         VoiceHooks.impl?.onDeletePerson(id)
     }
@@ -146,7 +148,34 @@ import Foundation
         return p
     }
     /// A meeting was deleted (SessionLibrary.remove): its links went with its file; announce it (voice samples).
-    func onMeetingDeleted(_ id: UUID) { objectWillChange.send(); VoiceHooks.impl?.onMeetingDeleted(id) }
+    func onMeetingDeleted(_ id: UUID) { objectWillChange.send(); try? FileManager.default.removeItem(at: ShareHistory.url(id)); VoiceHooks.impl?.onMeetingDeleted(id) }
+
+    // MARK: addresses and contact link (docs/design/speaker-contacts.md §3)
+
+    func addEmail(_ id: String, _ address: String, makeDefault: Bool = false) { mutate { PeopleOps.addEmail($0, id, address, makeDefault: makeDefault) } }
+    func removeEmail(_ id: String, _ address: String) { mutate { PeopleOps.removeEmail($0, id, address) } }
+    func makeDefaultEmail(_ id: String, _ address: String) { mutate { PeopleOps.makeDefault($0, id, address) } }
+    func linkContact(_ id: String, _ c: PickedContact, chosen: String? = nil) { mutate { PeopleOps.linkContact($0, id, c, now: Self.now(), chosen: chosen) } }
+    func unlinkContact(_ id: String, removeEmails: Bool) { mutate { PeopleOps.unlinkContact($0, id, removeEmails: removeEmails) } }
+    /// A new person from a picked contact, under the name the user confirmed.
+    @discardableResult func createFromContact(_ name: String, _ c: PickedContact, chosen: String?) -> Person {
+        let p = create(name)
+        linkContact(p.id, c, chosen: chosen)
+        return doc.byId(p.id) ?? p
+    }
+    /// "Which one is you?": only `id` is Me.
+    func setMe(_ id: String) {
+        mutate { d in var n = d; n.people = d.people.map { var p = $0; p.me = $0.id == id; return p }; return n }
+    }
+    /// A deleted person leaves no trace in the meetings' "last shared".
+    private nonisolated static func scrubShares(person: String, addresses: Set<String>) {
+        let fm = FileManager.default
+        for f in (try? fm.contentsOfDirectory(at: ShareHistory.dir, includingPropertiesForKeys: nil)) ?? [] where f.pathExtension == "json" {
+            let old = ShareHistory.decode(try? Data(contentsOf: f))
+            let new = ShareHistory.scrub(old, person: person, addresses: addresses)
+            if new != old { try? ShareHistory.encode(new).write(to: f, options: .atomic) }
+        }
+    }
 
     // MARK: migration
 

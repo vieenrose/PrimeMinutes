@@ -20,9 +20,70 @@ struct Person: Codable, Hashable, Identifiable {
     var voiceEnabled = true
     /// The phone's owner ("Me"). Phase 2.
     var me = false
+    /// E-mail addresses (docs/design/speaker-contacts.md §2.1), the first is the default (★).
+    var emails: [PersonEmail] = []
+    /// The address-book entry this person was linked to through the system picker, or nil.
+    var contact: ContactLink? = nil
     /// The JSON object of the keys this version does not know (a later app's fields): written back unchanged, so an
     /// older app never drops them (Android Person.extra). Nil when there are none.
     var extra: String? = nil
+}
+
+/// One address of a person. `from`: "contact" (came from the address book) or "user" (typed).
+struct PersonEmail: Codable, Hashable {
+    var address: String
+    var from: String = PersonEmail.fromUser
+    static let fromUser = "user", fromContact = "contact"
+}
+
+/// A link to an address-book entry (§2.2): the platform's stable key and a snapshot of what the picker returned.
+/// `platform` "android" | "ios": a link made on the other platform is kept but not used. `raw`: unknown keys.
+struct ContactLink: Codable, Hashable {
+    var platform: String
+    var key: String
+    /// Android CONTACT_ID; nil on iOS.
+    var id: Int64? = nil
+    var name: String? = nil
+    var org: String? = nil
+    var linked: Int64 = 0
+    var synced: Int64 = 0
+    var missing = false
+    var raw: String? = nil
+}
+
+/// What the system contact picker handed over for one person (one tap, no permission).
+struct PickedContact: Equatable {
+    var name: String?
+    var emails: [String]
+    var key: String?
+    var id: Int64? = nil
+    var org: String? = nil
+    var platform = "ios"
+}
+
+/// E-mail address rules (§7.3), the same as Android EmailRules: NFKC, one `@`, a 1–64 character local part, a dotted
+/// domain with a 2+ character TLD, no spaces, 254 at most. The mail app does the final check.
+enum EmailRules {
+    static func normalize(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCompatibilityMapping.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    static func isValid(_ s: String) -> Bool {
+        let a = normalize(s)
+        guard a.count <= 254, !a.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) }) else { return false }
+        let parts = a.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        let local = parts[0], domain = parts[1]
+        guard !local.isEmpty, local.count <= 64 else { return false }
+        let labels = domain.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2, !labels.contains(where: { $0.isEmpty }), let tld = labels.last, tld.count >= 2 else { return false }
+        return tld.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) || $0 == "-" }
+    }
+    /// Dedup key: the local part as typed, the domain lowercased.
+    static func key(_ s: String) -> String {
+        let a = normalize(s)
+        guard let at = a.lastIndex(of: "@") else { return a }
+        return String(a[..<at]) + "@" + a[a.index(after: at)...].lowercased()
+    }
 }
 
 struct PeopleDoc: Equatable {
@@ -45,18 +106,57 @@ struct SpeakerLink: Equatable, Hashable {
 /// The JSON of `people/people.json` (same on Android and iOS).
 enum PeopleCodec {
     static let version = 1
-    static let known: Set<String> = ["id", "name", "note", "aliases", "created", "lastUsed", "voiceEnabled", "me"]
+    static let known: Set<String> = ["id", "name", "note", "aliases", "created", "lastUsed", "voiceEnabled", "me", "emails", "contact"]
+    static let contactKnown: Set<String> = ["platform", "key", "id", "name", "org", "linked", "synced", "missing"]
+
+    static func encodeContact(_ c: ContactLink) -> [String: Any] {
+        var o: [String: Any] = [:]
+        if let r = c.raw?.data(using: .utf8), let x = (try? JSONSerialization.jsonObject(with: r)) as? [String: Any] {
+            for (k, v) in x where !contactKnown.contains(k) { o[k] = v }
+        }
+        o["platform"] = c.platform; o["key"] = c.key
+        if let i = c.id { o["id"] = i }
+        if let n = c.name { o["name"] = n }
+        if let g = c.org { o["org"] = g }
+        o["linked"] = c.linked; o["synced"] = c.synced
+        if c.missing { o["missing"] = true }
+        return o
+    }
+    static func decodeContact(_ v: Any?) -> ContactLink? {
+        guard let o = v as? [String: Any], let key = o["key"] as? String, !key.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        func s(_ k: String) -> String? { (o[k] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty }
+        let x = o.filter { !contactKnown.contains($0.key) }
+        let raw = x.isEmpty ? nil : (try? JSONSerialization.data(withJSONObject: x, options: [.sortedKeys])).map { String(decoding: $0, as: UTF8.self) }
+        return ContactLink(platform: s("platform") ?? "android", key: key, id: (o["id"] as? NSNumber)?.int64Value, name: s("name"), org: s("org"),
+                           linked: int64(o["linked"]), synced: int64(o["synced"]), missing: (o["missing"] as? Bool) ?? false, raw: raw)
+    }
+    static func decodeEmails(_ v: Any?) -> [PersonEmail] {
+        var out: [PersonEmail] = []
+        for e in (v as? [Any]) ?? [] {
+            // A plain string is accepted too (a hand-written or older file).
+            let pe: PersonEmail?
+            if let o = e as? [String: Any] {
+                pe = PersonEmail(address: ((o["address"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+                                 from: (o["from"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? PersonEmail.fromUser)
+            } else if let t = e as? String { pe = PersonEmail(address: t.trimmingCharacters(in: .whitespacesAndNewlines)) } else { pe = nil }
+            if let pe, !pe.address.isEmpty, !out.contains(where: { EmailRules.key($0.address) == EmailRules.key(pe.address) }) { out.append(pe) }
+        }
+        return out
+    }
 
     static func encode(_ doc: PeopleDoc) -> Data {
         let people: [[String: Any]] = doc.people.map { p in
             var o: [String: Any] = [:]
             if let e = p.extra?.data(using: .utf8), let x = (try? JSONSerialization.jsonObject(with: e)) as? [String: Any] {
-                for (k, v) in x where !known.contains(k) { o[k] = v }
+                // An unknown-shaped `contact` (not an object) rides in `extra` and is written back as it was.
+                for (k, v) in x where !known.contains(k) || (k == "contact" && p.contact == nil) { o[k] = v }
             }
             o.merge(["id": p.id, "name": p.name, "created": p.created, "lastUsed": p.lastUsed, "voiceEnabled": p.voiceEnabled] as [String: Any]) { _, new in new }
             if let n = p.note { o["note"] = n }
             if !p.aliases.isEmpty { o["aliases"] = p.aliases }
             if p.me { o["me"] = true }
+            if !p.emails.isEmpty { o["emails"] = p.emails.map { ["address": $0.address, "from": $0.from] } }
+            if let c = p.contact { o["contact"] = encodeContact(c) }
             return o
         }
         let o: [String: Any] = ["version": version, "people": people, "migrated": doc.migrated, "migrationFound": doc.migrationFound, "voice": doc.voice]
@@ -75,14 +175,15 @@ enum PeopleCodec {
             return Person(id: id, name: name, note: note?.isEmpty == false ? note : nil,
                           aliases: ((p["aliases"] as? [Any]) ?? []).compactMap { $0 as? String }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty },
                           created: int64(p["created"]), lastUsed: int64(p["lastUsed"]),
-                          voiceEnabled: (p["voiceEnabled"] as? Bool) ?? true, me: (p["me"] as? Bool) ?? false, extra: extra(p))
+                          voiceEnabled: (p["voiceEnabled"] as? Bool) ?? true, me: (p["me"] as? Bool) ?? false,
+                          emails: decodeEmails(p["emails"]), contact: decodeContact(p["contact"]), extra: extra(p))
         }
         return PeopleDoc(people: people, migrated: (o["migrated"] as? Bool) ?? false, migrationFound: (o["migrationFound"] as? NSNumber)?.intValue ?? 0,
                          voice: (o["voice"] as? Bool) ?? false)
     }
     static func decode(_ text: String) -> PeopleDoc { decode(text.data(using: .utf8)) }
     private static func extra(_ p: [String: Any]) -> String? {
-        let x = p.filter { !known.contains($0.key) }
+        let x = p.filter { !known.contains($0.key) || ($0.key == "contact" && !($0.value is [String: Any])) }
         guard !x.isEmpty, let d = try? JSONSerialization.data(withJSONObject: x, options: [.sortedKeys]) else { return nil }
         return String(decoding: d, as: UTF8.self)
     }
@@ -148,11 +249,67 @@ enum PeopleOps {
         m.aliases = (b.aliases + [a.name] + a.aliases).filter { seen.insert($0).inserted && $0 != b.name }
         m.lastUsed = max(a.lastUsed, b.lastUsed); m.created = min(a.created, b.created)
         m.note = b.note ?? a.note; m.me = a.me || b.me
+        var keys = Set<String>()
+        m.emails = (b.emails + a.emails).filter { keys.insert(EmailRules.key($0.address)).inserted }
+        m.contact = b.contact ?? a.contact
         var d = doc
         d.people = doc.people.filter { $0.id != from }.map { $0.id == into ? m : $0 }
         return d
     }
     static func delete(_ doc: PeopleDoc, _ id: String) -> PeopleDoc { var d = doc; d.people.removeAll { $0.id == id }; return d }
+
+    // MARK: contact side (docs/design/speaker-contacts.md §2)
+
+    /// Adds `address` (normalised) unless the person has it already; `makeDefault` puts it first.
+    static func addEmail(_ doc: PeopleDoc, _ id: String, _ address: String, from: String = PersonEmail.fromUser, makeDefault: Bool = false) -> PeopleDoc {
+        guard EmailRules.isValid(address) else { return doc }
+        let a = EmailRules.normalize(address), k = EmailRules.key(a)
+        return edit(doc, id) { p in
+            let had = p.emails.first { EmailRules.key($0.address) == k }
+            let rest = p.emails.filter { EmailRules.key($0.address) != k }
+            let e = had ?? PersonEmail(address: a, from: from)
+            if makeDefault || (had == nil && p.emails.isEmpty) { p.emails = [e] + rest } else if had == nil { p.emails.append(e) }
+        }
+    }
+    static func removeEmail(_ doc: PeopleDoc, _ id: String, _ address: String) -> PeopleDoc {
+        edit(doc, id) { p in p.emails.removeAll { EmailRules.key($0.address) == EmailRules.key(address) } }
+    }
+    static func makeDefault(_ doc: PeopleDoc, _ id: String, _ address: String) -> PeopleDoc {
+        edit(doc, id) { p in
+            let k = EmailRules.key(address)
+            p.emails = p.emails.filter { EmailRules.key($0.address) == k } + p.emails.filter { EmailRules.key($0.address) != k }
+        }
+    }
+    /// Links `id` to the picked contact: its addresses are added (the tapped one first, after the person's own), the
+    /// link and its snapshot set. The person's name never changes; the organisation fills an empty note.
+    static func linkContact(_ doc: PeopleDoc, _ id: String, _ c: PickedContact, now: Int64, chosen: String? = nil) -> PeopleDoc {
+        var d = doc
+        for e in [chosen].compactMap({ $0 }) + c.emails { d = addEmail(d, id, e, from: PersonEmail.fromContact) }
+        return edit(d, id) { p in
+            if let k = c.key {
+                p.contact = ContactLink(platform: c.platform, key: k, id: c.id, name: c.name?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
+                                        org: c.org?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty, linked: now, synced: now)
+            }
+            if p.note == nil { p.note = c.org?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty }
+        }
+    }
+    /// "Unlink from contact": the link goes; its addresses stay as the user's, or go too (`removeEmails`).
+    static func unlinkContact(_ doc: PeopleDoc, _ id: String, removeEmails: Bool) -> PeopleDoc {
+        edit(doc, id) { p in
+            p.contact = nil
+            p.emails = removeEmails ? p.emails.filter { $0.from != PersonEmail.fromContact } : p.emails.map { PersonEmail(address: $0.address, from: PersonEmail.fromUser) }
+        }
+    }
+    /// Other people linked to the same address-book entry as `p` (usually the same human named twice).
+    static func sameContact(_ doc: PeopleDoc, _ p: Person) -> [Person] {
+        guard let c = p.contact else { return [] }
+        return doc.people.filter { $0.id != p.id && $0.contact?.platform == c.platform && $0.contact?.key == c.key }
+    }
+}
+
+extension String {
+    /// Nil when empty.
+    var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 /// How a directory edit rewrites one meeting's links (pure; the store applies it to every meeting).

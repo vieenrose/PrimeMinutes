@@ -11,6 +11,8 @@ enum PersonPick {
     case new(String)
     /// Back to the default "Speaker n" label.
     case clear
+    /// A contact from the system picker and the address the user tapped (the caller confirms the name).
+    case contact(PickedContact, String)
 }
 
 private func defaultLabel(_ id: Int) -> String { L("speaker_n", id + 1) }
@@ -32,6 +34,8 @@ struct PersonPickerSheet: View {
     var voiceNote: String? = nil
     var onPlaySample: (() -> Void)? = nil
     var allowClear: Bool? = nil
+    /// "Choose from contacts…" (the system picker, no permission): a new person, or an existing one, with an address.
+    var allowContacts = true
     let onPick: (PersonPick) -> Void
     @ObservedObject private var store = PeopleStore.shared
     @State private var query = Dev.env["VOX_PICKQ"] ?? ""
@@ -103,6 +107,16 @@ struct PersonPickerSheet: View {
                 if doc.people.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(L("people_picker_empty")).font(.footnote).foregroundStyle(.secondary)
                 }
+                if allowContacts && query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Section {
+                        Button { ContactPicker.present { c, chosen in onPick(.contact(c, chosen)) } } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Label(L("contact_choose"), systemImage: "person.crop.rectangle")
+                                Text(L("contact_choose_hint")).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.accessibilityIdentifier("picker-contacts")
+                    }
+                }
                 if sec.canAdd || (clearable && current != nil) {
                     Section {
                         if sec.canAdd {
@@ -162,6 +176,10 @@ struct SpeakerNameFlow: View {
     let onMerge: (Int) -> Void
     let onDismiss: () -> Void
     @State private var mergeAsk: (Person, PickerSpeaker)?
+    /// A picked contact: its name to confirm (the person's name in the app), then "same person?" on a homonym.
+    @State private var contactAsk: (PickedContact, String)?
+    @State private var contactName = ""
+    @State private var contactSame: (PickedContact, String, String, Person)?
 
     private func picked(_ pick: PersonPick) {
         switch pick {
@@ -169,7 +187,18 @@ struct SpeakerNameFlow: View {
             if let other = speakers.first(where: { $0.id != speaker.id && $0.person == p.id }) { mergeAsk = (p, other) } else { onLink(p) }
         case .new(let n): onNew(n)
         case .clear: onClear()
+        case .contact(let c, let chosen):
+            contactName = c.name ?? ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { contactAsk = (c, chosen) }   // after the picker is gone
         }
+    }
+    private func contactNamed(_ c: PickedContact, _ chosen: String, _ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard PersonNames.isPersonName(n) else { return }
+        let store = PeopleStore.shared
+        if let same = store.doc.people.filter({ PersonNames.same($0.name, n, PeopleStore.fold) }).max(by: { $0.lastUsed < $1.lastUsed }) {
+            contactSame = (c, chosen, n, same)
+        } else { picked(.existing(store.createFromContact(n, c, chosen: chosen))) }
     }
     var body: some View {
         PersonPickerSheet(title: L("people_who_is", speaker.label), current: speaker, speakers: speakers, sessions: sessions,
@@ -180,6 +209,16 @@ struct SpeakerNameFlow: View {
                 Button(L("people_both", a.0.name)) { mergeAsk = nil; onLink(a.0) }
                 Button(L("cancel"), role: .cancel) { mergeAsk = nil; onDismiss() }
             } message: { a in Text(L("people_merge_text", speaker.label, a.1.label)) }
+            .alert(L("contact_name_title"), isPresented: Binding(get: { contactAsk != nil }, set: { if !$0 { contactAsk = nil } }), presenting: contactAsk) { a in
+                TextField(L("speaker_name"), text: $contactName)
+                Button(L("people_save")) { contactAsk = nil; contactNamed(a.0, a.1, contactName) }
+                Button(L("cancel"), role: .cancel) { contactAsk = nil }
+            } message: { a in Text(a.1) }
+            .alert(contactSame.map { L("people_same_title_bare", $0.3.name) } ?? "", isPresented: Binding(get: { contactSame != nil }, set: { if !$0 { contactSame = nil } }), presenting: contactSame) { a in
+                Button(L("people_same_yes")) { contactSame = nil; PeopleStore.shared.linkContact(a.3.id, a.0, chosen: a.1); picked(.existing(PeopleStore.shared.doc.byId(a.3.id) ?? a.3)) }
+                Button(L("people_same_no", a.2)) { contactSame = nil; picked(.existing(PeopleStore.shared.createFromContact(a.2, a.0, chosen: a.1))) }
+                Button(L("cancel"), role: .cancel) { contactSame = nil }
+            }
             .task {   // DEV: VOX_PICKAUTO=<name> picks that person after 2.5 s (device checks without taps)
                 guard let n = Dev.env["VOX_PICKAUTO"] else { return }
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
@@ -273,6 +312,7 @@ private struct PersonPage: View {
                 if store.doc.people.count > 1 { Button(L("people_merge_into")) { merging = true } }
                 Button(L("people_delete"), role: .destructive) { deleting = true }
             }
+            PersonContactSections(person: p) { o in Task { await store.merge(from: p.id, into: o.id) } }
             PersonVoiceRow(person: p)
             Section(L("people_meetings_of", p.name)) {
                 if meetings.isEmpty { Text(L("people_no_meetings")).foregroundStyle(.secondary) }

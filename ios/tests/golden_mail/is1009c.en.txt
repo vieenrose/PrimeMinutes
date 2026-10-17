@@ -1,0 +1,64 @@
+To: Jana <jana@example.com>, Francine <francine@example.com>, Marco <marco@example.org>
+Subject: Meeting notes: Remote Control Product Concept and Feature Discussion (Oct 13)
+
+Hi all,
+
+Here are the notes from “Remote Control Product Concept and Feature Discussion” (Oct 13), prepared automatically from the recording by Prime Minutes on my phone.
+
+MEETING
+Date: Tuesday, Oct 13, 2026
+Time: 10:00–10:30
+Length: 30 min
+Participants: Ben, Jana, Francine, Marco
+
+SUMMARY
+The meeting began with several product proposals, including a simple, attractive product with a short learning curve suggested by the Marketing manager [0:45], and a chip with infrared bits and interface controls suggested by the Technical manager [2:14]. Features to include were lit buttons, a beep, a child lock, and a display clock [2:43]. Components mentioned included button bulbs, infrared bulbs, a battery, chips, wires, and a holder [3:10]. A most important feature proposed was speech recognition integrated into the remote [8:03]. The remote control interface should be simple and user-friendly [8:56], with one remote featuring an integrated voice recognizer for multipurpose use [9:36], and another interface designed for children being user-friendly and attractive [10:02]. A Jumbo Universal remote was proposed to be oversized and impossible to misplace [11:04], with the T-shape remote and the child remote being considered good options [12:09]. However, the T-shape remote was deemed too unwieldy for impulse purchase [12:24]. Components for the remote controller included a strong, recyclable plastic case and a highly sophisticated, temperature-resistant IC [13:37]. Other components needed were a timer, alarm facility, and a battery capacitor [14:57], along with a diode, transistor, and resonator for the remote controller [15:26]. A suggestion was made to use a rechargeable battery to reduce high-performance battery costs [15:38]. Discussion followed on the circuit board design and its components [16:11], noting that circuit board components include a chip with eighteen pins, capacitor, resistors, and a diode [18:26]. It was proposed that circuit boards are inexpensive and can be built in bulk via printing [19:22]. Energy source options included a basic battery and a hard dynamo [21:07], and material suggestions included plastic, rubber, wood, and titanium, though titanium was not allowed [21:47]. A decision was made to use ordinary push buttons for cost reasons [22:40]. The product must launch before competitors to gain a sales advantage [24:19], and considerations included fruit and vegetable shapes and soft, spongy materials for salability [25:12]. The voice recognizer was proposed as the star feature for the remote concept [25:49], and it was considered a single, sellable feature [26:03]. The most cost-effective energy source was agreed upon as the battery [27:10]. The design for the case should be bright, colorful, trendy, compact, and strong [27:20].
+
+DECISIONS
+- Decision made to use ordinary push buttons for cost reasons. [22:40]
+- Agreed on battery as the most cost-effective energy source. [27:10]
+- Agreed on a bright, colorful, trendy, compact, and strong design for the case. [27:20]
+
+ACTION ITEMS AND OWNERS
+- Jana and Francine to work on a prototype using modeling clay for user interface design. [28:38]
+
+ON HOLD AND OPEN
+- The T-shape remote is deemed too unwieldy for impulse purchase. [12:24]
+
+DISCUSSION POINTS
+- Marketing manager suggested a simple, attractive product with a short learning curve. [0:45]
+- Technical manager suggested a chip with infrared bits and an interface controls. [2:14]
+- Features to include: lit buttons, beep, child lock, and display clock. [2:43]
+- Components: button bulbs, infrared bulbs, battery, chips, wires, and a holder. [3:10]
+- Most important feature: speech recognition integrated into the remote. [8:03]
+- Remote control interface should be simple and user-friendly. [8:56]
+- One remote features an integrated voice recognizer for multipurpose use. [9:36]
+- Another interface is designed for children, being user-friendly and attractive. [10:02]
+- A Jumbo Universal remote is proposed to be oversized and impossible to misplace. [11:04]
+- The T-shape remote and the child remote are considered good options. [12:09]
+- Components include a strong, recyclable plastic case and a highly sophisticated, temperature-resistant IC. [13:37]
+- The remote controller must include a timer, alarm facility, and a battery capacitor. [14:57]
+- Components needed include diode, transistor, resonator for the remote controller. [15:26]
+- Suggestion to use a rechargeable battery to reduce high-performance battery costs. [15:38]
+- Discussion on the circuit board design and its components. [16:11]
+- Transistor amplifies the signal and translates it into infrared light. [17:12]
+- Circuit boards are inexpensive and can be built in bulk via printing. [19:22]
+- Scroll wheels require a more sophisticated chip than simple push buttons. [20:50]
+- Energy source options include a basic battery and a hard dynamo. [21:07]
+- Material suggestions include plastic, rubber, wood, and titanium (titanium not allowed). [21:47]
+- Product must launch before competitors to gain a sales advantage. [24:19]
+- Consider fruit and vegetable shapes and soft, spongy materials for salability. [25:12]
+- Voice recognizer is proposed as the star feature for the remote concept. [25:49]
+- Voice recognizer is considered a single, sellable feature. [26:03]
+- User interface will use push buttons for switches. [27:53]
+- Suggested adding mute buttons or feature recognition as supplements. [28:13]
+- Postponed speech recognition due to need for further research on cost. [28:20]
+
+KEY FIGURES
+- Circuit board components include a chip with eighteen pins, capacitor, resistors, and diode. [18:26]
+
+Attached: Remote-control-concept.pdf
+
+--
+Note: these notes were generated by AI from the recording and may contain mistakes. Check figures and decisions in particular against the recording. [m:ss] is where each point is in the recording.
+Generated by Prime Minutes. The recording, transcript and notes were processed on the sender's phone; no cloud service was used.
