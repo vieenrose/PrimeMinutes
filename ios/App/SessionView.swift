@@ -33,7 +33,22 @@ import AVFoundation
     @Published var volume: Float = 1 { didSet { p?.volume = muted ? 0 : volume } }
     @Published var muted = false { didSet { p?.volume = muted ? 0 : volume } }
     func seek(_ t: Double) { p?.currentTime = max(0, min(t, duration)); time = p?.currentTime ?? 0 }
-    func stop() { p?.stop(); timer?.invalidate(); playing = false }
+    func stop() { previewStop?.cancel(); previewStop = nil; p?.stop(); timer?.invalidate(); playing = false }
+    func pause() { guard let p, p.isPlaying else { return }; p.pause(); playing = false; timer?.invalidate() }
+    /// Speaker-boundary editor preview: play [from, to] once, then pause (a newer preview cancels the older stop).
+    private var previewStop: Task<Void, Never>?
+    func preview(from a: Double, to b: Double) {
+        guard let p else { return }
+        previewStop?.cancel()
+        seek(a); if !p.isPlaying { toggle() }
+        previewStop = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0.3, b - a) * 1_000_000_000))
+            if Task.isCancelled { return }
+            self?.pause(); self?.previewStop = nil
+        }
+    }
+    /// Closing the editor stops a preview that is still playing (it must not run on into the meeting).
+    func endPreview() { if previewStop != nil { previewStop?.cancel(); previewStop = nil; pause() } }
 }
 
 /// One finished meeting: player, summary (timestamps seek), notes, searchable transcript, rename, export.
@@ -63,6 +78,14 @@ struct SessionView: View {
         /// A name only (the people picker): the transcript is unchanged, no "re-summarize?" afterwards.
         var nameOnly = false
         static func == (a: Self, b: Self) -> Bool { a.id == b.id } }
+    /// Speaker-boundary editor: the seam (index of the line that starts the new speaker) or the line to split.
+    @State private var seamAt: Int?
+    @State private var splitAt: Int?
+    /// Transcript hand-edits (speaker moves and merges, boundary moves, splits, text, names), newest last:
+    /// Undo / Redo in the toolbar while the meeting is open (Android SessionState.editUndo / editRedo).
+    struct Step { let before: [Utterance]; let beforeNames: [String: String]?; let beforePeople: [String: String]?; let after: [Utterance]; let afterNames: [String: String]?; let afterPeople: [String: String]? }
+    @State private var undoSteps: [Step] = []
+    @State private var redoSteps: [Step] = []
     @State private var exporting = false
     @State private var exportFile: URL?
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
@@ -232,7 +255,12 @@ struct SessionView: View {
                 }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
             }
             if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
-            ForEach(shown) { l in
+            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
+                // A seam handle between two speakers: adjust where one stops and the next starts.
+                if idx > 0, shown[idx - 1].speaker != l.speaker {
+                    SpeakerSeam(colorA: tint(shown[idx - 1].speaker), colorB: tint(l.speaker), labelA: s.name(shown[idx - 1].speaker), labelB: s.name(l.speaker)) { seamAt = idx }
+                        .padding(.vertical, -4)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
@@ -272,6 +300,14 @@ struct SessionView: View {
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if !undoSteps.isEmpty || !redoSteps.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo).accessibilityLabel(L("undo"))
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { redoEdit() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo).accessibilityLabel(L("redo"))
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { tab = 1; searching = true; searchFocus = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
             }
@@ -320,7 +356,8 @@ struct SessionView: View {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
                         ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
                             let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t { s.lines[i].text = t; edited() }
+                            if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
+                                let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
                             editingLine = nil } }
                     }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
             }.presentationDetents([.medium, .large])
@@ -329,6 +366,42 @@ struct SessionView: View {
                             isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
             Button(L("speaker_merge")) { if let (f, t) = merging { merge(f, t) }; merging = nil }
             Button(L("cancel"), role: .cancel) { merging = nil }
+        }
+        .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
+            if let k = seamAt, k >= 1, k < s.lines.count {
+                let a = s.lines[k - 1], b = s.lines[k], sm = BoundaryEdits.seam(a, b)
+                BoundaryEditorSheet(tokens: sm.tokens, starts: sm.starts, end: sm.end, initialSplit: sm.split,
+                                    colorA: tint(a.speaker), labelA: s.name(a.speaker), colorB: tint(b.speaker), labelB: s.name(b.speaker),
+                                    canPlay: player.available, demo: Self.devDemo,
+                                    onPreview: { player.preview(from: $0, to: $1) },
+                                    onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
+                                    onCancel: { player.endPreview(); seamAt = nil })
+                    .presentationDetents([.medium, .large]).presentationBackground(Color(.systemGroupedBackground))
+            }
+        }
+        .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
+            if let li = splitAt, s.lines.indices.contains(li) {
+                let u = s.lines[li], toks = BoundaryEdits.tokenize(u.text), order = BoundaryEdits.splitCandidates(s.lines, index: li)
+                let known = Set(s.lines.map(\.speaker))
+                BoundaryEditorSheet(tokens: toks, starts: BoundaryEdits.tokenStarts(u, toks), end: u.end, initialSplit: toks.count / 2,
+                                    colorA: tint(u.speaker), labelA: s.name(u.speaker), colorB: tint(order[0]), labelB: s.name(order[0]),
+                                    choices: order.map { SpeakerChoice(id: $0, label: s.name($0), color: tint($0), isNew: !known.contains($0)) },
+                                    canPlay: player.available, demo: Self.devDemo,
+                                    onPreview: { player.preview(from: $0, to: $1) },
+                                    onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
+                                    onCancel: { player.endPreview(); splitAt = nil })
+                    .presentationDetents([.medium, .large]).presentationBackground(Color(.systemGroupedBackground))
+            }
+        }
+        .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N
+            guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            tab = 1
+            if let n = Dev.env["VOX_SPLIT"].flatMap(Int.init) { splitAt = min(max(0, n), s.lines.count - 1) }
+            else if let n = Dev.env["VOX_BOUNDARY"].flatMap(Int.init) {
+                let seams = s.lines.indices.dropFirst().filter { s.lines[$0].speaker != s.lines[$0 - 1].speaker }
+                if seams.indices.contains(n) { seamAt = seams[n] }
+            }
         }
         .alert(L("transcript_changed_resummarize"), isPresented: $transcriptDirty) {
             if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
@@ -415,6 +488,9 @@ struct SessionView: View {
     /// Android LineMenu: edit the text, move this line to another speaker, or merge this speaker into another.
     @ViewBuilder private func lineMenu(_ l: Utterance) -> some View {
         Button { editingLine = l.id; draft = l.text } label: { Label(L("cd_edit"), systemImage: "pencil") }
+        if BoundaryEdits.tokenize(l.text).count > 1, let i = s.lines.firstIndex(where: { $0.id == l.id }) {
+            Button { splitAt = i } label: { Label(L("line_split"), systemImage: "arrow.up.and.down") }
+        }
         let others = Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != l.speaker }
         if !others.isEmpty {
             Section(L("speaker_move_line")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { reassign(l.id, k) } } }
@@ -436,6 +512,7 @@ struct SessionView: View {
     }
     /// Saved at once with an Undo banner; the "re-summarize?" question waits until the banner is gone.
     private func speakerEdited(_ message: String, _ before: ([Utterance], [String: String]?, [String: String]?), nameOnly: Bool = false) {
+        record(before)
         save(s)
         withAnimation { speakerUndo = SpeakerUndo(message: message, lines: before.0, names: before.1, people: before.2, after: s.lines.map(\.speaker), earlierEdit: speakerUndo != nil && !(speakerUndo?.nameOnly ?? false), nameOnly: nameOnly) }
     }
@@ -470,13 +547,47 @@ struct SessionView: View {
     private func undoSpeakerEdit(_ u: SpeakerUndo) {
         withAnimation { speakerUndo = nil }
         guard s.lines.map(\.speaker) == u.after else { return }   // the transcript changed since: nothing safe to restore
-        s.lines = u.lines; s.speakerNames = u.names; s.speakerPeople = u.people; save(s)
+        if canUndo, undoSteps.last?.before == u.lines { undoEdit() } else { s.lines = u.lines; s.speakerNames = u.names; s.speakerPeople = u.people; save(s) }
         if u.earlierEdit && !s.summary.isEmpty { transcriptDirty = true }
     }
     private func dropName(_ k: Int) {
         s.speakerNames?[String(k)] = nil; if s.speakerNames?.isEmpty == true { s.speakerNames = nil }
         s.speakerPeople?[String(k)] = nil; if s.speakerPeople?.isEmpty == true { s.speakerPeople = nil }
+    }    /// Push the edit that just turned `before` into the current transcript; a new edit drops the redo branch.
+    private func record(_ before: ([Utterance], [String: String]?, [String: String]?)) {
+        // An older step that no longer matches (a re-summarize replaced the session) is dropped.
+        if let last = undoSteps.last, last.after != before.0 || last.afterNames != before.1 || last.afterPeople != before.2 { undoSteps = [] }
+        undoSteps = Array((undoSteps + [Step(before: before.0, beforeNames: before.1, beforePeople: before.2, after: s.lines, afterNames: s.speakerNames, afterPeople: s.speakerPeople)]).suffix(50))
+        redoSteps = []
     }
+    private var canUndo: Bool { undoSteps.last.map { $0.after == s.lines && $0.afterNames == s.speakerNames && $0.afterPeople == s.speakerPeople } ?? false }
+    private var canRedo: Bool { redoSteps.last.map { $0.before == s.lines && $0.beforeNames == s.speakerNames && $0.beforePeople == s.speakerPeople } ?? false }
+    private func undoEdit() {
+        guard canUndo, let st = undoSteps.popLast() else { return }
+        s.lines = st.before; s.speakerNames = st.beforeNames; s.speakerPeople = st.beforePeople; redoSteps.append(st); save(s)
+        withAnimation { speakerUndo = nil }
+    }
+    private func redoEdit() {
+        guard canRedo, let st = redoSteps.popLast() else { return }
+        s.lines = st.after; s.speakerNames = st.afterNames; s.speakerPeople = st.afterPeople; undoSteps.append(st); save(s)
+        withAnimation { speakerUndo = nil }
+    }
+    /// Boundary moves and splits: saved at once, undoable from the toolbar; no "re-summarize?" question (like a relabel,
+    /// they change who said a few words, not what was said).
+    private func moveBoundary(_ seam: Int, _ split: Int) {
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
+        let out = BoundaryEdits.move(s.lines, seam: seam, split: split)
+        guard out != s.lines else { return }
+        s.lines = out; record(before); save(s); toast = L("boundary_moved")
+    }
+    private func splitLine(_ index: Int, _ at: Int, _ speaker: Int) {
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
+        let out = BoundaryEdits.split(s.lines, index: index, at: at, speaker: speaker)
+        guard out != s.lines else { return }
+        s.lines = out; record(before); save(s); toast = L("line_split_done")
+    }
+    /// DEV (README animation): VOX_BOUNDARY_STEPS="-1,-1" moves the open editor's marker by these steps, then applies.
+    static var devDemo: [Int]? { Dev.on ? Dev.env["VOX_BOUNDARY_STEPS"].map { $0.split(separator: ",").compactMap { Int($0) } } : nil }
     private func edited() { save(s); if !s.summary.isEmpty { transcriptDirty = true } }
 
     private func stepMatch(_ d: Int) {

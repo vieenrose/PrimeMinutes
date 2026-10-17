@@ -430,3 +430,21 @@
 "people_settings_open" = "People (%d)";
 "people_meetings_one" = "%d meeting";
 "people_meetings_other" = "%d meetings";
+/* Speaker-boundary editor */
+"boundary_title" = "Speaker boundary";
+"cd_boundary_handle" = "Adjust where %1$@ stops and %2$@ starts";
+"boundary_hint" = "Drag the marker, or tap the first word %@ says";
+"boundary_before" = "Before";
+"boundary_after" = "After";
+"cd_boundary_earlier" = "One word earlier";
+"cd_boundary_later" = "One word later";
+"boundary_moved" = "Boundary moved";
+"boundary_at" = "Boundary at %@";
+"line_split" = "Split line here…";
+"boundary_split_title" = "Who says the rest?";
+"line_split_done" = "Line split";
+"boundary_apply" = "Apply";
+"cd_boundary_marker" = "Boundary marker";
+"boundary_state" = "%1$@ starts with “%2$@”";
+"boundary_new_speaker" = "New speaker";
+"redo" = "Redo";

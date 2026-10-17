@@ -148,6 +148,19 @@ struct Config {
     // The diarizer revises recent labels for tens of seconds; live-vs-final agreement on 4 meetings is
     // 93.0% at 8 s, 94.7% at 15 s, 95.8% at 30 s. The app passes the user's setting (default 15).
     double live_settle_s = 15.0;
+    // Prime Minutes: a speaker change moves to the incoming speaker's diarizer turn start when that start
+    // is within this many seconds and nobody else is talking then (Fusion::set_turn_snap). 0 = off.
+    // NEMO_TURN_SNAP=<s> overrides it (quality-eval before/after runs on one build).
+    // The change lands this far after the (padded) turn start, i.e. 0.15 s before the unpadded start;
+    // it never crosses a pause of turn_snap_pause_s or more that the text already put it at, and never
+    // moves by more than turn_snap_max_s (longer moves were right only about half the time and pushed
+    // time-weighted DER up). Measured on the 10 quality-eval meetings (replay of the final pass, before ->
+    // after): exact boundaries on clean changes 53 -> 59 % (EN) and 36 -> 37 % (ZH); ER unchanged,
+    // cpER 26.77 -> 26.61 (EN) / 39.17 -> 39.17 (ZH), transcript DER 27.74 -> 27.73 / 21.79 -> 21.79.
+    double turn_snap_s = 3.0;
+    double turn_snap_lead_s = 0.30;
+    double turn_snap_pause_s = 0.5;
+    double turn_snap_max_s = 0.4;
 };
 
 struct Segment {
@@ -158,6 +171,9 @@ struct Segment {
     double start_s = 0, end_s = 0;
     float  min_confidence = 0.0f;
     std::string asr_text_so_far;    // cumulative transcript at close time (for diffing)
+    // Start time (s) of every codepoint of [text], from the timeline the final pass attributed against
+    // (model token times when available). Filled by the final pass only; empty in the live view.
+    std::vector<double> char_starts;
 };
 
 // The model's own token timeline, with the speaker each token landed on. Only available when the model
@@ -250,7 +266,8 @@ private:
     LiveCursor live_cursor_;            // the app's live view (cfg_.live_settle_s)
     struct SegCounts { size_t segments = 0, pieces = 0, unattributed = 0, snapped_chars = 0; };
     SegCounts build_segments(std::vector<TaggedPiece> pieces, size_t char_base, size_t byte_base,
-                             const std::function<void(const Segment&, size_t, size_t)>& emit);
+                             const std::function<void(const Segment&, size_t, size_t)>& emit,
+                             const std::vector<Fusion::CharSpan>* spans = nullptr);
     int64_t fed_ = 0, charged_upto_ = 0;
     size_t turns_seen_ = 0;
     double t0_ = 0;

@@ -1,5 +1,6 @@
 #include "nemo_c.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,10 +18,19 @@ struct nemo_handle {
 };
 
 namespace {
-std::string encode_segment(const nemo::Segment& s) {
+std::string encode_segment(const nemo::Segment& s, bool with_times = false) {
     // Times in fixed text, never printf's %f: it follows the C locale (a "0,500" breaks the Swift parser).
-    return std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) + "\x1f" +
-           s.text + "\x1e";
+    std::string out = std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) +
+                      "\x1f" + s.text;
+    // Optional 5th field (nemo_finish_timed): each codepoint's start, in ms after start_s, comma-separated.
+    if (with_times && !s.char_starts.empty()) {
+        out += "\x1f";
+        for (size_t i = 0; i < s.char_starts.size(); i++) {
+            if (i) out += ',';
+            out += std::to_string((long long)std::llround((s.char_starts[i] - s.start_s) * 1000.0));
+        }
+    }
+    return out + "\x1e";
 }
 char* dup(const std::string& s) {
     char* p = static_cast<char*>(std::malloc(s.size() + 1));
@@ -91,11 +101,11 @@ char* nemo_live(nemo_handle* h) {
     return dup(out);
 }
 
-char* nemo_finish(nemo_handle* h) {
+static char* finish(nemo_handle* h, bool with_times) {
     std::string out, err;
     std::lock_guard<std::mutex> lk(h->mu);
     bool ok;
-    try { ok = h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s); }, err); }
+    try { ok = h->engine->finish([&](const nemo::Segment& s) { out += encode_segment(s, with_times); }, err); }
     catch (const std::exception& e) { ok = false; err = e.what(); }
     if (!ok) {
         std::fprintf(stderr, "primeminutes-nemo: finish failed: %s\n", err.c_str());
@@ -106,6 +116,9 @@ char* nemo_finish(nemo_handle* h) {
                  st.audio_s > 0 ? st.wall_s / st.audio_s : 0.0, st.speakers, st.turns);
     return dup(out);
 }
+
+char* nemo_finish(nemo_handle* h) { return finish(h, false); }
+char* nemo_finish_timed(nemo_handle* h) { return finish(h, true); }
 
 double nemo_fed_seconds(nemo_handle* h) {
     std::lock_guard<std::mutex> lk(h->mu);

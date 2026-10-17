@@ -347,6 +347,14 @@ bool Engine::init(std::string& err) {
     fusion_.set_char_dur_ms(cfg_.char_dur_ms);
     fusion_.set_gap_snap_ms(cfg_.gap_snap_ms);
     fusion_.set_gap_fill(cfg_.gap_fill == 1 ? Fusion::GapFill::PREVIOUS : Fusion::GapFill::NEAREST);
+    {
+        if (const char* e = getenv("NEMO_TURN_SNAP")) cfg_.turn_snap_s = std::atof(e);
+        double pad_frames = 0;      // 10 ms diarizer frames
+        for (const auto& kv : cfg_.diar_opts)
+            if (kv.first == "speaker_pad_frames") pad_frames = std::atof(kv.second.c_str());
+        fusion_.set_turn_snap(cfg_.turn_snap_s, pad_frames * 0.010, cfg_.turn_snap_lead_s,
+                              cfg_.turn_snap_pause_s, cfg_.turn_snap_max_s);
+    }
     return true;
 }
 
@@ -440,7 +448,8 @@ static bool ends_sentence(const std::string& t) {
 // just past its last character, so the live view can resume attribution exactly at a segment boundary.
 Engine::SegCounts Engine::build_segments(
         std::vector<TaggedPiece> pieces, size_t char_base, size_t byte_base,
-        const std::function<void(const Segment&, size_t, size_t)>& emit) {
+        const std::function<void(const Segment&, size_t, size_t)>& emit,
+        const std::vector<Fusion::CharSpan>* spans) {
     std::map<std::string, int>& spk_id = spk_id_;
     SegCounts n;
     Segment open;
@@ -455,7 +464,16 @@ Engine::SegCounts Engine::build_segments(
     };
     auto take = [&](const std::string& t) {            // text appended to the open segment
         open.text += t;
-        cur_c += codepoints(t).size();
+        const size_t m = codepoints(t).size();
+        if (spans) {
+            for (size_t i = 0; i < m; i++) {
+                const size_t c = cur_c + i;
+                const double at = c < spans->size() ? double((*spans)[c].start) / 16000.0
+                                                    : (open.char_starts.empty() ? open.start_s : open.char_starts.back());
+                open.char_starts.push_back(at);
+            }
+        }
+        cur_c += m;
         cur_b += t.size();
         open_c = cur_c;
         open_b = cur_b;
@@ -476,6 +494,7 @@ Engine::SegCounts Engine::build_segments(
             if ((len >= cfg_.max_segment_s && ends_sentence(open.text)) || len >= 2 * cfg_.max_segment_s) {
                 close(open);
                 open.text.clear();
+                open.char_starts.clear();
                 open.start_s = p.start_s;
                 open.end_s = p.end_s;
                 open.min_confidence = p.min_confidence;
@@ -508,6 +527,7 @@ Engine::SegCounts Engine::build_segments(
                 n.unattributed += codepoints(p.text).size();
             }
             open.text.clear();
+            open.char_starts.clear();
             open.start_s = p.start_s;
             open.end_s = p.end_s;
             open.min_confidence = p.min_confidence;
@@ -564,7 +584,8 @@ void Engine::attribute(const std::function<void(const Segment&)>& on_segment, bo
     // The final snapshot replaces every live segment on both apps, so renumbering here is safe.
     if (final_pass) spk_id_.clear();
     const SegCounts n = build_segments(use->attribute_all(), 0, 0,
-                                       [&](const Segment& seg, size_t, size_t) { on_segment(seg); });
+                                       [&](const Segment& seg, size_t, size_t) { on_segment(seg); },
+                                       final_pass ? &use->spans() : nullptr);
 
     if (final_pass) {
         if (const char* dump = getenv("NEMO_DUMP_TIMELINE")) {
@@ -574,9 +595,10 @@ void Engine::attribute(const std::function<void(const Segment&)>& on_segment, bo
                 const auto& sp = use->spans();
                 std::fprintf(f, "[\n");
                 for (size_t i = 0; i < cps.size() && i < sp.size(); i++)
-                    std::fprintf(f, "%s  {\"c\": \"%s\", \"t\": %s}\n", i ? ",\n" : "",
+                    std::fprintf(f, "%s  {\"c\": \"%s\", \"t\": %s, \"e\": %s}\n", i ? ",\n" : "",
                                  use->text().substr(cps[i].first, cps[i].second).c_str(),
-                                 fixed(double(sp[i].start) / 16000.0, 3).c_str());
+                                 fixed(double(sp[i].start) / 16000.0, 3).c_str(),
+                                 fixed(double(sp[i].end) / 16000.0, 3).c_str());
                 std::fprintf(f, "]\n");
                 std::fclose(f);
             }

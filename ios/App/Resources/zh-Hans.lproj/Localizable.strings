@@ -430,3 +430,21 @@
 "people_settings_open" = "说话人名录（%d 人）";
 "people_meetings_one" = "%d 场会议";
 "people_meetings_other" = "%d 场会议";
+/* Speaker-boundary editor */
+"boundary_title" = "说话人分界";
+"cd_boundary_handle" = "调整 %1$@ 与 %2$@ 的分界";
+"boundary_hint" = "拖动分界线，或点一下 %@ 说的第一个字";
+"boundary_before" = "分界前";
+"boundary_after" = "分界后";
+"cd_boundary_earlier" = "往前一字";
+"cd_boundary_later" = "往后一字";
+"boundary_moved" = "已调整分界";
+"boundary_at" = "分界：%@";
+"line_split" = "从这里分开…";
+"boundary_split_title" = "后半段是谁说的？";
+"line_split_done" = "已分开此句";
+"boundary_apply" = "应用";
+"cd_boundary_marker" = "分界线";
+"boundary_state" = "%1$@ 从「%2$@」开始";
+"boundary_new_speaker" = "新说话人";
+"redo" = "重做";

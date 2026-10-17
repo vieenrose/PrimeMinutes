@@ -1,11 +1,5 @@
 import Foundation
 
-struct Utterance: Identifiable, Hashable, Codable {
-    var id = UUID()
-    private enum CodingKeys: String, CodingKey { case speaker, start, end, text }
-    var speaker: Int, start: Double, end: Double, text: String
-}
-
 /// Swift face of the C bridge (nemo_c.h). Same wire format as nemo_jni.cpp.
 final class NemoEngine: @unchecked Sendable {
     private let h: OpaquePointer
@@ -36,17 +30,11 @@ final class NemoEngine: @unchecked Sendable {
         return (LongUtteranceSplitter.split(Self.decode(parts.first.map(String.init) ?? "")), LongUtteranceSplitter.split(Self.decode(parts.count > 1 ? String(parts[1]) : "")))
     }
     func finish() -> [Utterance]? {
-        guard let c = nemo_finish(h) else { return nil }
+        guard let c = nemo_finish_timed(h) else { return nil }
         defer { nemo_string_free(c) }
         return LongUtteranceSplitter.split(Self.decode(String(cString: c)))
     }
-    static func decode(_ s: String) -> [Utterance] {
-        s.split(separator: "\u{1e}").compactMap { rec in
-            let f = rec.split(separator: "\u{1f}", maxSplits: 3, omittingEmptySubsequences: false)
-            guard f.count == 4, let sp = Int(f[0]), let a = Double(f[1]), let b = Double(f[2]) else { return nil }
-            return Utterance(speaker: sp, start: a, end: b, text: String(f[3]))
-        }
-    }
+    static func decode(_ s: String) -> [Utterance] { SegmentCodec.decode(s) }
 }
 
 /// 16 kHz mono 16-bit PCM WAV → floats.

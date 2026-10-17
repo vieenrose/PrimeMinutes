@@ -1,8 +1,8 @@
 import Foundation
 
 /// One speaker talking without a pause comes out of the engine as a single utterance, minutes long: an unreadable
-/// wall of text whose every summary link seeks to the same second. Cuts such an utterance at sentence ends; cut times
-/// are estimated from character counts (speech rate is near constant over a sentence), accurate to a second or two.
+/// wall of text whose every summary link seeks to the same second. Cuts such an utterance at sentence ends; with the
+/// engine's token times each piece starts at its first token, else cut times are estimated from character counts.
 /// Port of the Android LongUtteranceSplitter.
 enum LongUtteranceSplitter {
     private static let minSec = 20.0, minChars = 100, chunkChars = 90   // a piece closes at the first sentence end past chunkChars
@@ -15,6 +15,15 @@ enum LongUtteranceSplitter {
         for u in list {
             let parts = long(u) ? pieces(u.text) : [u.text]
             if parts.count <= 1 { out.append(u); continue }
+            if let timed = timedPieces(u, parts) {   // the engine's token times: each piece starts at its first token
+                for (i, tp) in timed.enumerated() {
+                    let start = tp.1[0], end = i + 1 < timed.count ? timed[i + 1].1[0] : u.end
+                    var p = Utterance(speaker: u.speaker, start: start, end: end, text: tp.0)
+                    p.tokenTimes = TokenTimes.relative(tp.1, start)
+                    out.append(p)
+                }
+                continue
+            }
             let total = Double(parts.reduce(0) { $0 + $1.count })
             var at = u.start, used = 0
             for (i, p) in parts.enumerated() {
@@ -25,6 +34,26 @@ enum LongUtteranceSplitter {
             }
         }
         return out
+    }
+
+    /// (trimmed text, absolute token starts) per piece when `u` carries token times that match its text, else nil.
+    private static func timedPieces(_ u: Utterance, _ parts: [String]) -> [(String, [Double])]? {
+        guard let tt = u.tokenTimes, parts.joined() == u.text else { return nil }
+        let toks = TokenTimes.tokenize(u.text)
+        guard tt.count == toks.count else { return nil }
+        var scalarTime: [Double] = []   // time of the token each unicode scalar of the text belongs to
+        for (k, t) in toks.enumerated() { for _ in t.unicodeScalars { scalarTime.append(u.start + tt[k]) } }
+        guard scalarTime.count == u.text.unicodeScalars.count else { return nil }
+        var res: [(String, [Double])] = [], pos = 0
+        for p in parts {
+            let lead = p.unicodeScalars.prefix { CharacterSet.whitespaces.contains($0) }.count
+            let text = p.trimmingCharacters(in: .whitespaces)
+            var off = pos + lead
+            let times = TokenTimes.tokenize(text).map { t -> Double in defer { off += t.unicodeScalars.count }; return scalarTime[min(off, scalarTime.count - 1)] }
+            if !text.isEmpty, !times.isEmpty { res.append((text, times)) }
+            pos += p.unicodeScalars.count
+        }
+        return res.count >= 2 ? res : nil
     }
 
     private static func pieces(_ text: String) -> [String] {
