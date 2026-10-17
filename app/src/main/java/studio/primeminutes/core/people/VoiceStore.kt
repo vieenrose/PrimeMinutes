@@ -69,6 +69,13 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
     @Volatile private var exemplars: List<VoiceFiles.Exemplar>? = null
     private val queue = ArrayDeque<String>()
     private var worker: Job? = null
+    /**
+     * Bumped (under [lock]) when recognition is turned off or its data deleted: a computation that
+     * started before stores nothing, so "Delete all voice data" cannot be undone by a meeting the
+     * lane was still working on.
+     */
+    @Volatile private var generation = 0
+    internal fun generation() = generation
 
     /** Bumped when a sidecar or an exemplar changes (the rename sheet re-ranks). */
     private val _version = MutableStateFlow(0)
@@ -154,15 +161,18 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
     /** Off: [deleteData] also removes every voice vector (people and meetings). */
     fun disable(context: Context, deleteData: Boolean) {
         PeopleStore.mutate(context) { it.copy(voice = false) }
-        synchronized(lock) { queue.clear() }
+        synchronized(lock) { queue.clear(); generation++ }
         if (deleteData) deleteAll(context)
     }
 
     /** "Delete all voice data": the people's exemplars and every meeting's sidecar; the switch goes off. */
     fun deleteAll(context: Context) {
         PeopleStore.mutate(context) { it.copy(voice = false) }
-        synchronized(lock) { queue.clear(); exemplars = emptyList(); runCatching { peopleFile(context).delete() } }
-        SessionLibrary.root(context).listFiles()?.forEach { runCatching { sidecar(it).delete() } }
+        synchronized(lock) {
+            generation++
+            queue.clear(); exemplars = emptyList(); runCatching { peopleFile(context).delete() }
+            SessionLibrary.root(context).listFiles()?.forEach { runCatching { sidecar(it).delete() } }
+        }
         _version.value++
     }
 
@@ -215,6 +225,8 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
         val doc = PeopleStore.doc.value
         val order = SessionLibrary.list(context).associate { it.id to it.createdAt }
         edit(context) { cur ->
+            // Recognition turned off (or its data deleted) meanwhile: nobody learns from this meeting.
+            if (!enabled()) return@edit cur
             var l = cur.filterNot { e -> e.meeting == entryId && links[e.speaker]?.person != e.person }
             for ((sid, link) in links) {
                 val p = doc.byId(link.person) ?: continue
@@ -271,15 +283,16 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
             while (true) {
                 val id = synchronized(lock) { queue.removeFirstOrNull() ?: run { worker = null; null } } ?: break
                 if (!enabled() || !modelReady(app)) { synchronized(lock) { queue.clear() }; continue }
+                val gen = generation
                 while (busy() || !batteryOk(app)) delay(1000)
                 val entry = SessionLibrary.byId(app, id) ?: continue
                 _working.value = _working.value + id
                 try {
                     runMutex.withLock {
                         val m = model ?: SpeakerEmbedder.load(File(ModelManager(app).speakerDir(card), card.graph), threads(), card).also { model = it }
-                        compute(app, entry, m)
+                        compute(app, entry, m, gen)
                     }
-                    syncMeeting(app, id)
+                    if (gen == generation) syncMeeting(app, id)
                 } catch (e: Throwable) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.w(TAG, "voice of $id failed", e)
@@ -293,7 +306,7 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
     private fun threads() = minOf(2, studio.primeminutes.core.hw.HwInfo.cores())
 
     /** Computes the meeting's sidecar if it is missing or stale. Returns true when it was written. */
-    private suspend fun compute(app: Context, entry: SessionLibrary.Entry, m: SpeakerEmbedder): Boolean {
+    private suspend fun compute(app: Context, entry: SessionLibrary.Entry, m: SpeakerEmbedder, gen: Int): Boolean {
         val s = PrimeMinutesSession.peek(entry.sessionFile) ?: return false
         val turns = CleanSpeech.voiceTurns(s.utterances)
         val speakers = s.utterances.mapNotNull { it.speaker }.distinct().sorted()
@@ -335,15 +348,22 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
                 }
             }
             val t2 = System.nanoTime()
-            val f = sidecar(entry.dir); val tf = File(entry.dir, ".$SIDECAR.tmp")
-            tf.writeBytes(VoiceFiles.encodeMeeting(VoiceFiles.MeetingVoices(card.id, fp, out)))
-            if (!tf.renameTo(f)) { f.delete(); tf.renameTo(f) }
+            if (!storeSidecar(entry.dir, VoiceFiles.MeetingVoices(card.id, fp, out), gen)) return false
             lastCost = "voice ${entry.id}: ${out.size}/${speakers.size} speakers, %.0f s speech, decode %d ms, embed %d ms".format(
                 java.util.Locale.ROOT, speech, (t1 - t0) / 1_000_000, (t2 - t1) / 1_000_000)
             Log.i(TAG, lastCost!!)
             _version.value++
             return true
         } finally { tmp?.delete() }
+    }
+
+    /** Writes a meeting's sidecar computed under [gen]; nothing when recognition went off or its data was deleted since. */
+    internal fun storeSidecar(entryDir: File, mv: VoiceFiles.MeetingVoices, gen: Int): Boolean = synchronized(lock) {
+        if (gen != generation || !enabled()) return false
+        val f = sidecar(entryDir); val tf = File(entryDir, ".$SIDECAR.tmp")
+        tf.writeBytes(VoiceFiles.encodeMeeting(mv))
+        if (!tf.renameTo(f)) { f.delete(); tf.renameTo(f) }
+        true
     }
 
     /** "Me": a voice from a short recording of the phone's owner ([pcm] 16 kHz mono). */
