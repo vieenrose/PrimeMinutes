@@ -59,7 +59,7 @@
 
 | 為語者命名（依聲音建議） | 說話者名錄 | 人物頁 | 辨識聲音的說明 |
 |:---:|:---:|:---:|:---:|
-| <img src="docs/screenshots/people-voice-en.gif" width="190" alt="為語者命名：依聲音建議 Laura（●●●）"> | <img src="docs/screenshots/people-people-en.png" width="190" alt="說話者名錄與「辨識聲音」"> | <img src="docs/screenshots/people-person-en.png" width="190" alt="人物頁：會議與聲音"> | <img src="docs/screenshots/people-voice-explain-en.png" width="190" alt="要辨識聲音嗎？隱私說明"> |
+| <img src="docs/screenshots/people-voice-zh.gif" width="190" alt="為語者命名：依聲音建議 陳經理（●●●）"> | <img src="docs/screenshots/people-people-zh.png" width="190" alt="說話者名錄與「辨識聲音」"> | <img src="docs/screenshots/people-person-zh.png" width="190" alt="人物頁：會議與聲音"> | <img src="docs/screenshots/people-voice-explain-zh.png" width="190" alt="要辨識聲音嗎？隱私說明"> |
 
 為語者命名時，從名錄選人或新增：名字在每場會議都一樣，在人物頁改名一次，全部會議都更新；名錄也用於篩選會議庫與「提問」（「陳經理說了什麼？」）。入口：設定 → 說話者名錄，或點逐字稿的語者名稱。
 
@@ -71,7 +71,7 @@
 - 隨時可在人物頁**忘記某人的聲音**，或在名錄上方**刪除所有聲音資料**；**刪除會議也會刪除它提供的聲音樣本**。
 - **命名前請先徵得對方同意**：在某些地區，聲紋屬於需要當事人同意的個人資料。
 
-聲音模型 [CAM++ zh-en](https://huggingface.co/Luigi/primeminutes-speaker-litert)（3D-Speaker，Apache-2.0，約 29 MB，固定於版本 `8b7a1151`）在開啟時下載一次，於 CPU 上執行，只在沒有錄音、轉錄或 AI 筆記時於背景計算。截圖為英文介面（AMI 公開會議）。
+聲音模型 [CAM++ zh-en](https://huggingface.co/Luigi/primeminutes-speaker-litert)（3D-Speaker，Apache-2.0，約 29 MB，固定於版本 `8b7a1151`）在開啟時下載一次，於 CPU 上執行，只在沒有錄音、轉錄或 AI 筆記時於背景計算。截圖為繁體中文介面（模擬器，辦公室搬遷示範會議：在尾牙示範會議命名「陳經理」後，App 依聲音建議他）；英文介面的同組截圖（AMI 公開會議）：[為語者命名](docs/screenshots/people-voice-en.gif)、[名錄](docs/screenshots/people-people-en.png)、[人物頁](docs/screenshots/people-person-en.png)、[說明](docs/screenshots/people-voice-explain-en.png)。
 
 ### 聯絡人與「寄給與會者」
 
