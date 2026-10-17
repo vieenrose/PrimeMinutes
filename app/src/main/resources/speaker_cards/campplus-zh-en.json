@@ -4,7 +4,7 @@
   "licence": "Apache-2.0",
   "source": "modelscope.cn/models/iic/speech_campplus_sv_zh_en_16k-common_advanced (3D-Speaker, arXiv:2303.00332), exported to LiteRT by tools/speaker-id-eval/export_litert.py",
   "dirName": "speaker-campplus-zh-en",
-  "revision": "https://huggingface.co/Luigi/primeminutes-speaker-litert/resolve/main",
+  "revision": "https://huggingface.co/Luigi/primeminutes-speaker-litert/resolve/8b7a115129fa029d6b489f4cda7fe6d56d980faf",
   "files": {
     "campplus_zh_en_400f.tflite": { "size": 28800672, "sha256": "fe33cb21d09b8c5d21d28634c12eea18661a5088fb2a8bbed3818c4876da8b75" }
   },
