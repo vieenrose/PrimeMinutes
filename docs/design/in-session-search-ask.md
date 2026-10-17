@@ -75,6 +75,9 @@ answer-language words all come from the model card as for the global Ask
 5. **Still processing** (queued, transcribing, reading): search works on the lines and notes shown so
    far (keyword only — the index is built after the reading). Ask follows the global rule: it waits
    until no job runs (the pipeline always wins on CPU and memory) and says so.
+   iOS: the live capture/processing view has no transcript search (it never had one); the in-meeting
+   search and Ask live in the meeting screen, as the global ones do. iOS stores the history as
+   `sessions/<id>.askhistory` (not `.json`: the library reads every `.json` there as a meeting).
 6. **History per meeting** — answered questions are kept in `ask-history.json` next to the meeting
    (last 20; question, answer with its citations, the cited times). The sheet shows them under
    "Earlier"; ↺ clears the conversation and this meeting's history. Not exported, deleted with the
