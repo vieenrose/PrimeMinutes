@@ -94,6 +94,22 @@ object LibrarySearch {
         return d
     }
 
+    /** Loads one meeting's text into the cache without evicting the others ([refresh] keeps only the
+     *  entries it is given): the in-meeting search and Ask. */
+    suspend fun load(context: Context, e: SessionLibrary.Entry) = withContext(Dispatchers.IO) { doc(context, e); Unit }
+
+    /** True when the meeting has a readable index (any model; [dense] checks nothing more either). */
+    fun indexed(e: SessionLibrary.Entry): Boolean = index(e) != null
+
+    /**
+     * The units of a meeting with no index yet, cut by the index's own chunker with an estimated token
+     * count ([SessionIndex.approxTokens]), as vectors without a vector (keyword passes only).
+     */
+    private fun unindexedUnits(d: Doc): List<SessionIndex.Vector> {
+        val s = d.loaded ?: return emptyList()
+        return SessionIndex.units(s, SessionIndex::approxTokens).map { SessionIndex.Vector(it.kind, it.a, it.b, it.textHash, ByteArray(0)) }
+    }
+
     private fun index(e: SessionLibrary.Entry): SessionIndex.Index? {
         val f = SessionIndex.file(e.dir)
         val mod = if (f.exists()) f.lastModified() else 0L
@@ -168,10 +184,12 @@ object LibrarySearch {
     suspend fun keyword(
         context: Context, entries: List<SessionLibrary.Entry>, query: String,
         maxPassages: Int = MAX_PASSAGES, snippetChars: Int = 200,
+        /** A meeting with no index is cut on the fly ([unindexedUnits]) instead of skipped: the in-meeting Ask. */
+        unindexed: Boolean = false,
     ): List<Hit> = withContext(Dispatchers.IO) {
         val table = OpenCcConverter.simplifiedChars(context)
         val units = ArrayList<Pair<SessionLibrary.Entry, Pair<Passage, Keywords.Doc>>>()
-        for (e in entries) keywordUnits(context, e, snippetChars, table)?.forEach { units += e to it }
+        for (e in entries) keywordUnits(context, e, snippetChars, table, unindexed)?.forEach { units += e to it }
         val scores = Keywords.score(Keywords.fold(query, table), units.map { it.second.second })
         units.indices.filter { scores[it] > 0f }
             .groupBy { units[it].first.id }
@@ -183,13 +201,17 @@ object LibrarySearch {
     }
 
     /** A meeting's indexed notes and chunks, folded and reduced to BM25 docs once per version. */
-    private suspend fun keywordUnits(context: Context, e: SessionLibrary.Entry, snippetChars: Int, table: CharArray): List<Pair<Passage, Keywords.Doc>>? {
-        val idx = index(e) ?: return null
+    private suspend fun keywordUnits(
+        context: Context, e: SessionLibrary.Entry, snippetChars: Int, table: CharArray, unindexed: Boolean = false,
+    ): List<Pair<Passage, Keywords.Doc>>? {
+        val idx = index(e)
+        if (idx == null && !unindexed) return null
         val d = doc(context, e)
         val f = SessionIndex.file(e.dir)
+        // An index file's mtime of 0 (none) keys the on-the-fly units: the index landing is a new key.
         val key = Triple(d.modified, if (f.exists()) f.lastModified() else 0L, snippetChars)
         synchronized(keywords) { keywords[e.id]?.takeIf { it.key == key }?.let { return it.units } }
-        val units = idx.vectors.filter { it.kind != SessionIndex.Kind.MEETING }
+        val units = (idx?.vectors ?: unindexedUnits(d)).filter { it.kind != SessionIndex.Kind.MEETING }
             .map { v -> passage(d, v, 0f, snippetChars).let { p -> p to Keywords.doc(Keywords.fold(p.snippet, table)) } }
         synchronized(keywords) { keywords[e.id] = KwUnits(key, units) }
         return units
@@ -206,8 +228,9 @@ object LibrarySearch {
     }
 
     /** A meeting's transcript chunks as indexed, in order (utterance ranges): Ask widens a hit with its neighbours. */
-    fun chunkRanges(e: SessionLibrary.Entry): List<IntRange> =
-        index(e)?.vectors?.filter { it.kind == SessionIndex.Kind.CHUNK }?.map { it.a..it.b }?.sortedBy { it.first } ?: emptyList()
+    fun chunkRanges(e: SessionLibrary.Entry, unindexed: Boolean = false): List<IntRange> =
+        (index(e)?.vectors ?: if (unindexed) synchronized(docs) { docs[e.id] }?.let { unindexedUnits(it) } else null)
+            ?.filter { it.kind == SessionIndex.Kind.CHUNK }?.map { it.a..it.b }?.sortedBy { it.first } ?: emptyList()
 
     /** A meeting's loaded session as cached by [refresh] (null before it). */
     private fun cached(e: SessionLibrary.Entry): PrimeMinutesSession.Loaded? = synchronized(docs) { docs[e.id]?.loaded }

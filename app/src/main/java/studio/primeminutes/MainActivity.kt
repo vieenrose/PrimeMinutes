@@ -595,6 +595,7 @@ private fun TranscribeScreen(
     LaunchedEffect(Unit) {
         val q = devExtras?.getString("vox_ask") ?: return@LaunchedEffect
         // `--ez vox_ask_legacy true`: the retrieval before meeting routing, for before/after timings.
+        studio.primeminutes.core.ask.AskEngine.devRepeat = devExtras.getInt("vox_ask_repeat")
         if (devExtras.getBoolean("vox_ask_legacy")) studio.primeminutes.core.ask.AskEngine.retrieval = studio.primeminutes.core.ask.AskEngine.Retrieval.LEGACY
         delay(3_000); askQuestion = q.trim()
     }
@@ -745,6 +746,14 @@ private fun TranscribeScreen(
     // chunk starts whose vector matches the query to the match set.
     var semanticSearch by remember { mutableStateOf(false) }
     var semanticTargets by remember { mutableStateOf<List<Int>>(emptyList()) }
+    // In-meeting search (docs/design/in-session-search-ask.md): the open meeting's passages found by
+    // meaning (notes and chunks), and whether the results list under the bar is unfolded.
+    var densePassages by remember { mutableStateOf<List<studio.primeminutes.core.embed.LibrarySearch.Passage>>(emptyList()) }
+    var resultsOpen by remember { mutableStateOf(true) }
+    // In-meeting Ask: the question (empty = open on the field); null = sheet closed.
+    var askMeeting by remember { mutableStateOf<String?>(null) }
+    // The in-meeting Ask needs the AI notes model only (without the search model it uses keywords).
+    var readerReady by remember { mutableStateOf(false) }
     // A library search passage was tapped: scroll to that time once the session is loaded.
     var pendingSeekSec by remember { mutableStateOf<Double?>(null) }
     // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
@@ -755,6 +764,7 @@ private fun TranscribeScreen(
     var askModelReady by remember { mutableStateOf(false) }
     LaunchedEffect(s.config.llmModelId, s.running, prefetching == null, searchModelReady) {
         askModelReady = withContext(Dispatchers.IO) { studio.primeminutes.core.ask.AskEngine.available(context) }
+        readerReady = withContext(Dispatchers.IO) { ModelManager(context).llmReady(LlmRegistry.byId(s.config.llmModelId)) }
     }
     var searchDownload by remember { mutableStateOf<Float?>(null) }
     val indexingIds by LibraryIndexer.indexing.collectAsState()
@@ -1280,20 +1290,49 @@ private fun TranscribeScreen(
     }
     // Dense pass over the open session's index (index.bin next to its session file). Only for a
     // library session with the model present; the index is requested when it is missing.
-    val semanticAvailable = searchModelReady && s.libraryDir != null
+    val semanticAvailable = searchModelReady && s.libraryDir != null && !s.running   // a meeting still processing has no index yet
     LaunchedEffect(s.searchQuery, semanticSearch, s.libraryDir, s.searchActive) {
-        semanticTargets = emptyList()
+        semanticTargets = emptyList(); densePassages = emptyList()
         val dir = s.libraryDir
         val q = s.searchQuery.trim()
         if (!s.searchActive || !semanticSearch || !semanticAvailable || dir == null || q.isBlank()) return@LaunchedEffect
         delay(300)
-        val idx = withContext(Dispatchers.IO) { SessionIndex.read(dir) }
-        if (idx == null) { LibraryIndexer.request(context, dir.name); return@LaunchedEffect }
+        val e = withContext(Dispatchers.IO) { SessionLibrary.byId(context, dir.name) } ?: return@LaunchedEffect
+        LibrarySearch.load(context, e)
+        if (!withContext(Dispatchers.IO) { LibrarySearch.indexed(e) }) { LibraryIndexer.request(context, dir.name); return@LaunchedEffect }
         val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull() ?: return@LaunchedEffect
-        semanticTargets = idx.vectors.filter { it.kind == SessionIndex.Kind.CHUNK }
-            .map { it.a to SessionIndex.dot(it.q, qv) }
-            .filter { it.second >= LibrarySearch.MIN_COS }
-            .sortedByDescending { it.second }.map { it.first }
+        // One meeting through the library's dense pass: its notes and chunks above the shared threshold.
+        val ps = LibrarySearch.dense(context, listOf(e), qv, maxPassages = studio.primeminutes.core.embed.MeetingSearch.DENSE_PASSAGES, snippetChars = 300)
+            .flatMap { it.passages }
+        densePassages = ps
+        semanticTargets = ps.filter { it.kind == SessionIndex.Kind.CHUNK }.map { it.uttIndex }
+    }
+    // The results list under the bar: AI notes then lines, the meaning-only ones when ≈ is on.
+    val meetingResults = remember(s.searchQuery, utterances.size, agent.notes.size, densePassages, s.searchActive) {
+        if (!s.searchActive) emptyList()
+        else studio.primeminutes.core.embed.MeetingSearch.results(s.searchQuery, utterances, agent.notes.toList(), densePassages)
+    }
+    LaunchedEffect(s.searchQuery) { if (s.searchQuery.isNotBlank()) resultsOpen = true }
+    // DEV: `--es vox_msearch "…"` (with vox_open) opens the in-meeting search with that query; `--ez vox_sem true` adds ≈.
+    var devSearchAsked by remember { mutableStateOf(false) }
+    if (devExtras?.getString("vox_msearch") != null && !devSearchAsked) LaunchedEffect(s.utterances.size) {
+        if (s.utterances.isEmpty()) return@LaunchedEffect
+        delay(1_500); devSearchAsked = true; sessTab = 1
+        semanticSearch = devExtras.getBoolean("vox_sem"); vm.setSearch(true, devExtras.getString("vox_msearch")!!)
+    }
+    // The search model's cold load was most of an in-meeting Ask's retrieval (3.8–5.7 s of ~4–6 s on the
+    // Note10+, the passes themselves 40 ms): load it while the user types, as the Studio search box does.
+    LaunchedEffect(s.searchActive) { if (s.searchActive && searchModelReady && !s.running) EmbedHost.preload(context, 2) }
+    // The open meeting as a library entry (the in-meeting Ask's scope); null for a file opened from outside.
+    val meetingEntry by produceState<SessionLibrary.Entry?>(null, s.libraryDir, s.recentsVersion) {
+        value = s.libraryDir?.let { d -> withContext(Dispatchers.IO) { SessionLibrary.byId(context, d.name) } }
+    }
+    val askMeetingAvailable = s.config.askEnabled && readerReady && meetingEntry != null && utterances.isNotEmpty()
+    fun pickResult(r: studio.primeminutes.core.embed.MeetingSearch.Result) {
+        resultsOpen = false
+        searchMatches.indexOf(r.line).takeIf { it >= 0 }?.let { matchPos = it }
+        // The library-passage path: transcript tab, the line in view, the player parked there (paused).
+        pendingSeekSec = if (r.kind == studio.primeminutes.core.embed.MeetingSearch.Kind.LINE) utterances.getOrNull(r.line)?.startSec ?: r.timeSec else r.timeSec
     }
     // A passage tapped in the library search: once the session is open, show the transcript at it.
     LaunchedEffect(pendingSeekSec, s.opening, s.transcriptReady) {
@@ -1719,6 +1758,7 @@ private fun TranscribeScreen(
                 // No pre-decode here; the picker callback hands the build+write to the service.
                 onOpenExport = { vm.showExportSheet(true) },
                 onEmailParticipants = { mailOpen = true },
+                onAskMeeting = if (askMeetingAvailable) ({ askMeeting = "" }) else null,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1811,6 +1851,12 @@ private fun TranscribeScreen(
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
                             semanticAvailable = semanticAvailable, semantic = semanticSearch,
                             onSemantic = { semanticSearch = !semanticSearch },
+                            resultsOpen = resultsOpen && meetingResults.isNotEmpty(), onToggleResults = { resultsOpen = !resultsOpen },
+                            onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
+                        )
+                        if (s.searchActive && resultsOpen && meetingResults.isNotEmpty()) studio.primeminutes.ui.MeetingSearchResults(
+                            meetingResults, s.searchQuery, speakerName = { speakerLabel(it) }, onPick = { pickResult(it) },
+                            onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                         )
                         LazyColumn(
                             state = listState,
@@ -1835,6 +1881,12 @@ private fun TranscribeScreen(
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
                             semanticAvailable = semanticAvailable, semantic = semanticSearch,
                             onSemantic = { semanticSearch = !semanticSearch },
+                            resultsOpen = resultsOpen && meetingResults.isNotEmpty(), onToggleResults = { resultsOpen = !resultsOpen },
+                            onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
+                        )
+                        if (s.searchActive && resultsOpen && meetingResults.isNotEmpty()) studio.primeminutes.ui.MeetingSearchResults(
+                            meetingResults, s.searchQuery, speakerName = { speakerLabel(it) }, onPick = { pickResult(it) },
+                            onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                         )
                         if (utterances.isEmpty() && !s.running) Text(
                             stringResource(R.string.status_no_speech),
@@ -2019,6 +2071,20 @@ private fun TranscribeScreen(
             onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
             onDismiss = { askQuestion = null },
         )
+    }
+    // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and player there.
+    val askScope = meetingEntry
+    if (askMeeting != null && askScope != null) studio.primeminutes.ui.AskSheet(
+        question = askMeeting ?: "", entries = listOf(askScope), scope = askScope,
+        onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; pendingSeekSec = t },
+        onDismiss = { askMeeting = null },
+    )
+    // DEV: `--es vox_ask_meeting "…"` opens the in-meeting Ask on the open meeting (device checks, screenshots).
+    var devAskMeetingAsked by remember { mutableStateOf(false) }
+    if (devExtras?.getString("vox_ask_meeting") != null && !devAskMeetingAsked) LaunchedEffect(s.utterances.size, askScope) {
+        if (s.utterances.isEmpty() || askScope == null) return@LaunchedEffect
+        studio.primeminutes.core.ask.AskEngine.devRepeat = devExtras.getInt("vox_ask_repeat")
+        delay(3_000); devAskMeetingAsked = true; askMeeting = devExtras.getString("vox_ask_meeting")!!.trim()
     }
     if (mailOpen && s.utterances.isNotEmpty()) studio.primeminutes.ui.EmailParticipantsFlow(
         s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,

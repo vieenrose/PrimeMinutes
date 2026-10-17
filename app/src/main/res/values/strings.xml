@@ -651,4 +651,15 @@
     <string name="mail_preview_close">Close</string>
     <string name="mail_no_app">No app could open the mail. The addresses were copied.</string>
     <string name="mail_addresses_copied">Addresses copied: paste them in To</string>
+    <string name="ask_meeting_title">Ask this meeting</string>
+    <string name="ask_meeting_hint">Ask a question about this meeting…</string>
+    <string name="ask_meeting_query">Ask this meeting: “%1$s”</string>
+    <string name="ask_meeting_stage_searching">Searching this meeting… %1$d s</string>
+    <string name="ask_meeting_earlier">Earlier</string>
+    <string name="ask_meeting_clear">Clear this meeting\'s questions</string>
+    <string name="search_results_notes">AI notes</string>
+    <string name="search_results_transcript">Transcript</string>
+    <string name="search_results_show">Show the results list</string>
+    <string name="search_results_hide">Hide the results list</string>
+    <string name="search_results_more">First %1$d results</string>
 </resources>

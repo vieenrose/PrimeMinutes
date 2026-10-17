@@ -12,6 +12,20 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import studio.primeminutes.core.embed.MeetingSearch
+import studio.primeminutes.core.reader.ReaderProtocol
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +74,11 @@ fun TranscriptSearchBar(
     semanticAvailable: Boolean = false,
     semantic: Boolean = false,
     onSemantic: () -> Unit = {},
+    /** The results list under the bar (in-meeting search): shown / hidden; null = no toggle. */
+    resultsOpen: Boolean? = null,
+    onToggleResults: () -> Unit = {},
+    /** "Ask this meeting" (the query as the question); null when Ask is not available. */
+    onAsk: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val semanticCd = stringResource(R.string.search_semantic_cd)
@@ -117,6 +136,20 @@ fun TranscriptSearchBar(
                 Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = pal.Slate200, modifier = Modifier.size(20.dp))
             }
         }
+        if (resultsOpen != null && query.isNotEmpty()) {
+            IconButton(onClick = onToggleResults, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    if (resultsOpen) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
+                    stringResource(if (resultsOpen) R.string.search_results_hide else R.string.search_results_show),
+                    tint = if (resultsOpen) pal.Sky else pal.Slate400, modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        if (onAsk != null) {
+            IconButton(onClick = onAsk, modifier = Modifier.size(32.dp).testTag("search-ask-meeting")) {
+                Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
+            }
+        }
         IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.search_close), tint = pal.Slate400, modifier = Modifier.size(18.dp))
         }
@@ -147,4 +180,86 @@ fun highlightedTranscript(
             i = hit + query.length
         }
     }
+}
+
+/**
+ * The in-meeting search results under the bar (docs/design/in-session-search-ask.md): AI notes, then
+ * transcript lines, each with its time; ≈ marks a passage found by meaning only. A tap jumps there.
+ * [onAsk] adds the "Ask this meeting" row at the end.
+ */
+@Composable
+fun MeetingSearchResults(
+    results: List<MeetingSearch.Result>,
+    query: String,
+    speakerName: (Int) -> String,
+    onPick: (MeetingSearch.Result) -> Unit,
+    onAsk: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    val notes = results.filter { it.kind == MeetingSearch.Kind.NOTE }
+    val lines = results.filter { it.kind == MeetingSearch.Kind.LINE }
+    LazyColumn(
+        modifier.fillMaxWidth().heightIn(max = 280.dp).padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp)).background(pal.PanelSurface).testTag("meeting-search-results"),
+    ) {
+        fun header(label: Int, n: Int) = item(key = "h$label") {
+            Text(
+                stringResource(label) + " · $n", style = MaterialTheme.typography.labelSmall, color = pal.Slate400,
+                fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
+            )
+        }
+        fun rows(rs: List<MeetingSearch.Result>) = rs.forEachIndexed { i, r ->
+            item(key = "${r.kind}-${r.line}-${r.timeSec}-$i") {
+                Row(
+                    Modifier.fillMaxWidth().clickable { onPick(r) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Text(
+                        ReaderProtocol.formatTs(r.timeSec.toInt()), style = MaterialTheme.typography.labelMedium,
+                        color = pal.Sky, modifier = Modifier.width(52.dp),
+                    )
+                    if (r.semanticOnly) Text(
+                        stringResource(R.string.search_semantic_marker), color = pal.Sky, fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 4.dp),
+                    )
+                    val who = r.speaker?.let { speakerName(it) + "  " } ?: ""
+                    Text(
+                        buildAnnotatedString {
+                            if (who.isNotEmpty()) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = pal.Slate400)) { append(who) }
+                            append(highlightedTranscript(snippetAround(r.text, query), query.trim(), pal.Sky, pal.Slate200))
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        if (notes.isNotEmpty()) { header(R.string.search_results_notes, notes.size); rows(notes) }
+        if (lines.isNotEmpty()) { header(R.string.search_results_transcript, lines.size); rows(lines) }
+        if (results.size >= MeetingSearch.MAX_RESULTS) item(key = "more") {
+            Text(
+                stringResource(R.string.search_results_more, MeetingSearch.MAX_RESULTS), style = MaterialTheme.typography.labelSmall,
+                color = pal.Slate400, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
+        if (onAsk != null) item(key = "ask") {
+            Row(
+                Modifier.fillMaxWidth().clickable { onAsk() }.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.ask_meeting_query, query.trim()), style = MaterialTheme.typography.bodySmall,
+                    color = pal.Sky, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** A long line cut so the match shows in a two-line row: from a little before the first match. */
+internal fun snippetAround(text: String, query: String, before: Int = 24): String {
+    val i = if (query.isBlank()) -1 else text.indexOf(query.trim(), ignoreCase = true)
+    return if (i <= before) text else "…" + text.substring(i - before)
 }

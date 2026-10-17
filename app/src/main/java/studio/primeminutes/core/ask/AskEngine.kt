@@ -284,11 +284,21 @@ object AskEngine {
 
     fun busy(): Boolean = studio.primeminutes.service.RunRegistry.busy
 
+    /** DEV (debug builds, `--ei vox_ask_repeat N`): asks the same question again N times once answered,
+     *  to time the warm path (embedder and reader resident). */
+    @Volatile var devRepeat = 0
+
+    /** Milliseconds the last question's retrieval took (logs, the eval harness, the latency report). */
+    @Volatile var lastRetrievalMs = 0L
+        private set
+
     /**
      * Asks [question] over [entries]. A follow-up question keeps the conversation (the model's KV
      * cache holds the earlier turns); [reset] starts over. Streams into [turns].
+     * [meeting]: the in-meeting Ask (docs/design/in-session-search-ask.md) — retrieval over that one
+     * meeting only, no meeting routing, and the answered question kept in its [AskHistory].
      */
-    fun ask(context: Context, entries: List<SessionLibrary.Entry>, question: String, uiLanguage: String) {
+    fun ask(context: Context, entries: List<SessionLibrary.Entry>, question: String, uiLanguage: String, meeting: SessionLibrary.Entry? = null) {
         val app = context.applicationContext
         job?.cancel()
         job = scope.launch {
@@ -296,7 +306,10 @@ object AskEngine {
             try {
                 _startedAt.value = android.os.SystemClock.elapsedRealtime()
                 _phase.value = Phase.Retrieving
-                val excerpts = retrieve(app, entries, question).map { it.copy(k = nextK++) }
+                val tRetrieve = System.nanoTime()
+                val excerpts = (if (meeting != null) retrieveIn(app, meeting, question) else retrieve(app, entries, question)).map { it.copy(k = nextK++) }
+                lastRetrievalMs = (System.nanoTime() - tRetrieve) / 1_000_000
+                Log.i(TAG, "retrieved ${excerpts.size} excerpts in $lastRetrievalMs ms (${if (meeting != null) "this meeting" else "${entries.size} meetings"})")
                 val pool = _turns.value.flatMap { it.excerpts } + excerpts
                 _turns.value = _turns.value + Turn(question, "", excerpts, false, pool)
                 _phase.value = Phase.Reading(excerpts.size)
@@ -350,8 +363,13 @@ object AskEngine {
                             render(excerpts, answerLang).lines().forEach { Log.d("primeminutes-askdump", it) }
                         Log.d(TAG, "answer: " + expandTags(sb.toString(), pool).replace("\n", " ⏎ "))
                     }
-                    publish(expandTags(sb.toString().trim(), pool), done = true)
+                    val answer = expandTags(sb.toString().trim(), pool)
+                    publish(answer, done = true)
+                    if (meeting != null && answer.isNotBlank() && !cut) withContext(Dispatchers.IO) {
+                        AskHistory.append(meeting.dir, AskHistory.Item(question.trim(), answer, System.currentTimeMillis(), excerpts.map { it.sec to it.at }))
+                    }
                     _phase.value = if (busy() && sb.isBlank()) Phase.Busy else Phase.Idle
+                    if (BuildConfig.DEBUG && devRepeat > 0) { devRepeat--; scope.launch { kotlinx.coroutines.delay(500); ask(app, entries, question, uiLanguage, meeting) } }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 publish(currentAnswer(), done = true); _phase.value = Phase.Idle; throw e
@@ -401,9 +419,12 @@ object AskEngine {
         val p = retrieval
         LibrarySearch.refresh(app, entries)
         val depth = if (p.routeMeetings > 0) maxOf(p.perMeeting, p.routeDepth) else p.perMeeting
+        val t0 = System.nanoTime()
         val qv = EmbedHost.use(app, 2) { it.embed(Embedder.Prompts.query(question)) }
+        val t1 = System.nanoTime()
         val dense = if (qv != null) LibrarySearch.dense(app, entries, qv, maxPassages = depth, snippetChars = 1200) else emptyList()
         val keyword = LibrarySearch.keyword(app, entries, question, maxPassages = depth, snippetChars = 1200)
+        Log.d(TAG, "library: embed ${(t1 - t0) / 1_000_000} ms, passes ${(System.nanoTime() - t1) / 1_000_000} ms")
         // "What did Mark say": the meetings Mark is linked in are routed first, and his lines get the
         // note bonus (retrieval only: the excerpts already carry "Mark:", the prompt is unchanged).
         val named = studio.primeminutes.core.people.PeopleRouting.mentioned(
@@ -425,6 +446,39 @@ object AskEngine {
             }
         }
         if (routed.isNotEmpty()) Log.d(TAG, "routed to ${routed.joinToString()}" + if (named.isNotEmpty()) " (people ${named.size})" else "")
+        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
+    }
+
+    /**
+     * The in-meeting retrieval: dense (when the meeting is indexed and the embedder is there) and keyword
+     * passages of [e] only, [routeDepth][Retrieval.routeDepth] candidates per list (what a routed meeting
+     * gets in [retrieve]), no routing, [fuse], then [select]. A meeting not indexed yet is cut on the fly
+     * for the keyword half (the index is requested meanwhile).
+     */
+    internal suspend fun retrieveIn(app: Context, e: SessionLibrary.Entry, question: String): List<Excerpt> {
+        val p = retrieval
+        LibrarySearch.load(app, e)
+        val depth = maxOf(p.perMeeting, p.routeDepth)
+        val indexed = withContext(Dispatchers.IO) { LibrarySearch.indexed(e) }
+        if (!indexed && EmbedHost.ready(app)) studio.primeminutes.core.embed.LibraryIndexer.request(app, e.id)
+        val t0 = System.nanoTime()
+        val qv = if (indexed) EmbedHost.use(app, 2) { it.embed(Embedder.Prompts.query(question)) } else null
+        val t1 = System.nanoTime()
+        val dense = if (qv != null) LibrarySearch.dense(app, listOf(e), qv, maxPassages = depth, snippetChars = 1200) else emptyList()
+        val keyword = LibrarySearch.keyword(app, listOf(e), question, maxPassages = depth, snippetChars = 1200, unindexed = true)
+        Log.d(TAG, "this meeting: embed ${(t1 - t0) / 1_000_000} ms, passes ${(System.nanoTime() - t1) / 1_000_000} ms, indexed $indexed")
+        val named = studio.primeminutes.core.people.PeopleRouting.mentioned(
+            question, studio.primeminutes.core.people.PeopleStore.doc.value, studio.primeminutes.core.people.PeopleStore.fold(app))
+        val speakers = if (named.isEmpty()) emptySet() else studio.primeminutes.core.people.PeopleRouting.meetingsOf(
+            studio.primeminutes.core.people.PeopleStore.allLinks(app), named)[e.id].orEmpty()
+        val ranked = fuse(dense, keyword, p.rrfK) { _, sid -> sid != null && sid in speakers }
+        val t = mutex.withLock { tok ?: tokenizer(app) }
+        val src = object : Transcripts {
+            override fun chunks(e: SessionLibrary.Entry) = LibrarySearch.chunkRanges(e, unindexed = true)
+            override fun span(e: SessionLibrary.Entry, a: Int, b: Int) = LibrarySearch.span(e, a, b)?.let { x ->
+                Excerpt(e, x.timeSec.toInt(), x.snippet, 0f, x.timeSec, a = x.uttIndex, b = x.uttEnd)
+            }
+        }
         return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
     }
 

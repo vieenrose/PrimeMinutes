@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,6 +92,8 @@ fun SessionTopBar(
     onSettings: () -> Unit,
     /** "Email participants…" (docs/design/speaker-contacts.md §4.1), shown with the exports. */
     onEmailParticipants: () -> Unit = {},
+    /** "Ask this meeting" in the ⋮ menu; null when the in-meeting Ask is not available. */
+    onAskMeeting: (() -> Unit)? = null,
     /** Tap on the title: edit it (null → not editable, e.g. no title yet). */
     onTitleClick: (() -> Unit)? = null,
     /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
@@ -158,7 +161,7 @@ fun SessionTopBar(
             OverflowMenu(
                 canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
                 canResume, onResume,
-                canExport, onOpenExport, onSettings, onEmailParticipants,
+                canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting,
             )
         }
         // A healthy idle status ("Loaded session — N lines") is two-second information, not
@@ -208,6 +211,7 @@ private fun OverflowMenu(
     onOpenExport: () -> Unit,
     onSettings: () -> Unit,
     onEmailParticipants: () -> Unit,
+    onAskMeeting: (() -> Unit)?,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     var open by remember { mutableStateOf(false) }
@@ -225,6 +229,12 @@ private fun OverflowMenu(
             if (canReSummarize) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Summarize, null, Modifier.size(18.dp)) },
                 text = { Text(stringResource(R.string.re_summarize)) }, onClick = pick(onReSummarize))
             if (canResume || canReTranscribe || canReSummarize) HorizontalDivider()
+            if (onAskMeeting != null) {
+                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.ask_meeting_title)) }, onClick = pick(onAskMeeting),
+                    modifier = Modifier.testTag("menu-ask-meeting"))
+                HorizontalDivider()
+            }
             // --- exports (disabled while running, like before) ---
             // One entry, not eight: the formats and the save/share choice live in ExportSheet, which
             // groups them by what you get. A dropdown this long also meant several slow full-page

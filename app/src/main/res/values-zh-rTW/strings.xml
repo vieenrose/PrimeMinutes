@@ -638,4 +638,15 @@
     <string name="mail_preview_close">關閉</string>
     <string name="mail_no_app">沒有可開啟郵件的 App，已複製收件人地址。</string>
     <string name="mail_addresses_copied">已複製地址：請貼到收件人欄</string>
+    <string name="ask_meeting_title">問這場會議</string>
+    <string name="ask_meeting_hint">針對這場會議提問…</string>
+    <string name="ask_meeting_query">問這場會議：「%1$s」</string>
+    <string name="ask_meeting_stage_searching">正在搜尋這場會議… %1$d 秒</string>
+    <string name="ask_meeting_earlier">先前的問題</string>
+    <string name="ask_meeting_clear">清除這場會議的問答</string>
+    <string name="search_results_notes">AI 筆記</string>
+    <string name="search_results_transcript">逐字稿</string>
+    <string name="search_results_show">顯示結果清單</string>
+    <string name="search_results_hide">隱藏結果清單</string>
+    <string name="search_results_more">前 %1$d 筆結果</string>
 </resources>

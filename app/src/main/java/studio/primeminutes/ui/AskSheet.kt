@@ -60,6 +60,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import studio.primeminutes.R
 import studio.primeminutes.core.ask.AskEngine
+import studio.primeminutes.core.ask.AskHistory
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.launch
 import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
@@ -86,6 +90,8 @@ fun AskSheet(
     entries: List<SessionLibrary.Entry>,
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
     onDismiss: () -> Unit,
+    /** The in-meeting Ask: questions over this meeting only, its earlier questions shown above. */
+    scope: SessionLibrary.Entry? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -96,7 +102,15 @@ fun AskSheet(
     var followUp by remember { mutableStateOf("") }
 
     // An empty question (the Ask button with no query): the sheet opens on its own question field.
-    LaunchedEffect(question) { AskEngine.reset(); if (question.isNotBlank()) AskEngine.ask(context, entries, question, lang) }
+    // The in-meeting Ask's earlier questions (AskHistory), read once per opening; new answers join
+    // AskEngine.turns and are saved by the engine.
+    var history by remember { mutableStateOf<List<AskEngine.Turn>>(emptyList()) }
+    LaunchedEffect(scope?.id) {
+        history = scope?.let { e -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AskHistory.turns(e, AskHistory.load(e.dir)) } } ?: emptyList()
+    }
+    // Opened on an empty field: load the search model while the question is typed (its cold load was most of the retrieval).
+    LaunchedEffect(Unit) { if (question.isBlank() && studio.primeminutes.core.embed.EmbedHost.ready(context)) studio.primeminutes.core.embed.EmbedHost.preload(context, 2) }
+    LaunchedEffect(question) { AskEngine.reset(); if (question.isNotBlank()) AskEngine.ask(context, entries, question, lang, scope) }
     val startedAt by AskEngine.startedAt.collectAsState()
     var now by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
     LaunchedEffect(phase.working) {
@@ -107,16 +121,22 @@ fun AskSheet(
     val busy = phase.working
     fun send() {
         val q = followUp.trim(); if (q.isEmpty() || busy) return
-        followUp = ""; AskEngine.ask(context, entries, q, lang)
+        followUp = ""; AskEngine.ask(context, entries, q, lang, scope)
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.ask_title), style = MaterialTheme.typography.titleLarge,
-                    color = pal.Slate200, fontWeight = FontWeight.Bold,
-                )
+                Column(Modifier.weight(1f, fill = false)) {
+                    Text(
+                        stringResource(if (scope != null) R.string.ask_meeting_title else R.string.ask_title),
+                        style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                    )
+                    if (scope != null) Text(
+                        scope.title ?: scope.id, style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.width(10.dp))
                 Text(
                     stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
@@ -128,17 +148,32 @@ fun AskSheet(
                 if (busy) IconButton(onClick = { AskEngine.cancel() }) {
                     Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.ask_cancel), tint = pal.Slate400)
                 }
+                // In-meeting: start over and forget this meeting's earlier questions.
+                if (scope != null && !busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                    AskEngine.reset(); history = emptyList()
+                    scope.dir.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
+                }, modifier = Modifier.testTag("ask-meeting-clear")) {
+                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.ask_meeting_clear), tint = pal.Slate400)
+                }
             }
             Column(
                 Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
             ) {
-                turns.forEach { t ->
+                if (history.isNotEmpty()) Text(
+                    stringResource(R.string.ask_meeting_earlier), style = MaterialTheme.typography.labelSmall,
+                    color = pal.Slate400, modifier = Modifier.padding(top = 10.dp),
+                )
+                // The earlier questions (saved), then this opening's; the saved ones are only shown.
+                (history + turns).forEachIndexed { n, t ->
+                    if (n == history.size && history.isNotEmpty()) androidx.compose.material3.HorizontalDivider(
+                        Modifier.padding(top = 12.dp), color = pal.Hairline,
+                    )
                     Text(
                         t.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
                     if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, t.pool, pal.Sky, onOpenAt),
+                        answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null),
                         style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
                     )
                     if (t.done && t.excerpts.isNotEmpty()) {
@@ -148,7 +183,7 @@ fun AskSheet(
                         )
                         t.excerpts.distinctBy { it.entry.id to it.sec / 60 }.forEach { x ->
                             Text(
-                                "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
+                                if (scope != null) ReaderProtocol.formatTs(x.sec) else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
                                 modifier = Modifier.padding(vertical = 2.dp)
                                     .clickable { onOpenAt(x.entry, x.at) },
@@ -159,7 +194,7 @@ fun AskSheet(
                 // The stage and the seconds since the question: a 20 s wait with a bare spinner looked hung.
                 val secs = AskEngine.elapsedSec(startedAt, now)
                 val status = when (val p = phase) {
-                    AskEngine.Phase.Retrieving -> stringResource(R.string.ask_stage_searching, secs)
+                    AskEngine.Phase.Retrieving -> stringResource(if (scope != null) R.string.ask_meeting_stage_searching else R.string.ask_stage_searching, secs)
                     is AskEngine.Phase.Reading -> stringResource(R.string.ask_stage_reading, p.excerpts, secs)
                     AskEngine.Phase.Answering -> stringResource(R.string.ask_stage_answering, secs)
                     AskEngine.Phase.Busy -> stringResource(R.string.ask_busy)
@@ -189,7 +224,7 @@ fun AskSheet(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { send() }),
                     decorationBox = { inner ->
-                        if (followUp.isEmpty()) Text(stringResource(if (turns.isEmpty()) R.string.ask_open_hint else R.string.ask_followup_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
+                        if (followUp.isEmpty()) Text(stringResource(if (turns.isNotEmpty()) R.string.ask_followup_hint else if (scope != null) R.string.ask_meeting_hint else R.string.ask_open_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
                         inner()
                     },
                     modifier = Modifier.weight(1f),
@@ -206,6 +241,8 @@ fun AskSheet(
 private fun answerText(
     raw: String, excerpts: List<AskEngine.Excerpt>, color: androidx.compose.ui.graphics.Color,
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
+    /** The meeting's title in the chip; the in-meeting Ask shows the time alone. */
+    withTitle: Boolean = true,
 ): AnnotatedString = buildAnnotatedString {
     val raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
     var last = 0
@@ -220,7 +257,7 @@ private fun answerText(
             tag = "cite-${e.id}@${x.sec}",
             styles = TextLinkStyles(style = SpanStyle(color = color, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)),
             linkInteractionListener = { onOpenAt(e, x.at) },   // the passage's exact start (a tag carries whole seconds)
-        )) { append("[${(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}]") }
+        )) { append(if (withTitle) "[${(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}]" else "[${ReaderProtocol.formatTs(x.sec)}]") }
     }
     append(raw.substring(last))
 }

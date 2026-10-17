@@ -109,6 +109,25 @@ object SessionIndex {
         return out
     }
 
+    /**
+     * A token count without a tokenizer, for chunking a meeting that has no index yet (the in-meeting
+     * Ask's keyword fallback): one per Han/kana/hangul character, 4/3 per other word. It only has to
+     * keep chunks near [CHUNK_TOKENS]; the excerpt budget is counted with the real tokenizer.
+     */
+    fun approxTokens(text: String): Int {
+        var n = 0; var words = 0; var inWord = false
+        for (c in text) {
+            val cjk = Character.UnicodeScript.of(c.code).let {
+                it == Character.UnicodeScript.HAN || it == Character.UnicodeScript.HIRAGANA ||
+                    it == Character.UnicodeScript.KATAKANA || it == Character.UnicodeScript.HANGUL
+            }
+            if (cjk) { n++; inWord = false }
+            else if (c.isLetterOrDigit()) { if (!inWord) words++; inWord = true }
+            else inWord = false
+        }
+        return n + (words * 4 + 2) / 3
+    }
+
     /** `Name: text` when the speaker has a user/LLM name, else the bare text. */
     fun chunkLine(u: TranscriptEvent.Utterance, names: Map<Int, SpeakerName>): String {
         val name = u.speaker?.let { names[it]?.name }?.takeIf { it.isNotBlank() }
