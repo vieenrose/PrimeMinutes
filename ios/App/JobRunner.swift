@@ -113,6 +113,7 @@ final class ReaderWorker: @unchecked Sendable {
         NotificationCenter.default.post(name: .voxSessionSaved, object: s, userInfo: old.map { ["undo": $0] })
         await library.refresh(); await syncQueue()
         LibraryIndexer.shared.request(s)
+        VoiceStore.shared.request(s.id)   // voice vectors (only when recognition is on)
         Notifier.done(s.title)
     }
 

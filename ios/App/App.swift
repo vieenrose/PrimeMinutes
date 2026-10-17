@@ -74,6 +74,8 @@ final class Model: ObservableObject {
         // Names given before the people directory existed become its people (once).
         await PeopleStore.shared.migrateIfNeeded()
         if let ops = Dev.env["VOX_PEOPLE_DO"], !Dev.ranPeopleOps { Dev.ranPeopleOps = true; await PeopleStore.shared.devRun(ops) }
+        VoiceStore.shared.attach()   // voice hooks + the backfill of meetings without vectors (only when recognition is on)
+        if let ops = Dev.env["VOX_VOICE_DO"], !Dev.ranVoiceOps { Dev.ranVoiceOps = true; await VoiceStore.shared.devRun(ops) }
         LibraryIndexer.shared.catchUp(library.sessions)
     } }
 }

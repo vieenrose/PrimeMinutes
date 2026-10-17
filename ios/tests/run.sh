@@ -11,3 +11,5 @@ swiftc -parse-as-library -O $R/MfaCompute.swift $R/ResumePlan.swift $D/EngineAnd
 swiftc -parse-as-library -O $D/../App/AskSelect.swift $R/ReaderProtocol.swift $D/AskSelectTests.swift -o $O/ask-select-tests && $O/ask-select-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/PeopleTests.swift -o $O/people-tests && $O/people-tests
 swiftc -parse-as-library -O $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/BoundaryEditsTests.swift -o $O/boundary-tests && $O/boundary-tests
+swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/VoiceTests.swift -o $O/voice-tests
+VOX_SPEAKER_CARDS=$D/../App/Resources/speaker_cards $O/voice-tests

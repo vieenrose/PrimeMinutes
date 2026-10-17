@@ -48,6 +48,7 @@ import Foundation
     func touch(_ id: String) { mutate { PeopleOps.touch($0, id, now: Self.now()) } }
     func setNote(_ id: String, _ note: String?) { mutate { PeopleOps.setNote($0, id, note) } }
     func setVoiceEnabled(_ id: String, _ on: Bool) { mutate { PeopleOps.setVoiceEnabled($0, id, on) } }
+    func setVoice(_ on: Bool) { mutate { var d = $0; d.voice = on; return d } }
     func dismissMigrationCard() { mutate { var d = $0; d.migrationFound = 0; return d } }
 
     // MARK: a session's links
@@ -174,7 +175,7 @@ import Foundation
 
 /// Phase 2 voice data hooks (no-ops until a voice store is attached), as Android VoiceHooks.
 @MainActor enum VoiceHooks {
-    protocol Impl: AnyObject {
+    @MainActor protocol Impl: AnyObject {
         func onMerge(from: String, into: String)
         func onDeletePerson(_ id: String)
         func onSplit(session: UUID, from: String, to: String)
@@ -185,7 +186,7 @@ import Foundation
 
 /// Phase 2: a name the user confirmed (or removed) teaches (or unteaches) that person's voice. No-op without voice.
 @MainActor enum VoiceLinks {
-    protocol Impl: AnyObject {
+    @MainActor protocol Impl: AnyObject {
         func confirmed(session: UUID, speaker: Int, person: String)
         func unlinked(session: UUID, speaker: Int, person: String)
     }
@@ -224,7 +225,7 @@ extension PeopleStore {
                 s.id = UUID(); s.title = "SDTEST " + a[2]; s.speakerNames = nil; s.speakerPeople = nil; s.date = Date()
                 try? await library.store.save(s)
             case "dropclones":   // removes the test copies (their files only: the audio belongs to the original)
-                for s in await library.store.all() where s.title.hasPrefix("SDTEST ") { await library.store.delete(s.id); LibraryIndexer.shared.forget(s.id) }
+                for s in await library.store.all() where s.title.hasPrefix("SDTEST ") { await library.store.delete(s.id); LibraryIndexer.shared.forget(s.id); VoiceHooks.impl?.onMeetingDeleted(s.id) }
             case "forget" where a.count == 2: if let p = person(a[1]) { mutate { PeopleOps.delete($0, p.id) } }
             case "forgetall": mutate { var d = $0; d.people = []; d.migrationFound = 0; return d }   // test cleanup
             case "rerun" where a.count == 2: if let s = await session(a[1]) { Model.shared.runner.rerun(s, transcribe: true) }

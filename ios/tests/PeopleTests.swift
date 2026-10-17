@@ -17,7 +17,7 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
 
     static func main() {
         do {   // codecRoundTripsAndToleratesJunk
-            let d = PeopleDoc(people: [person("a", "Mark", 5, aliases: ["Mark Chen"], note: "Sales"), Person(id: "b", name: "我", voiceEnabled: false, me: true)], migrated: true, migrationFound: 3)
+            let d = PeopleDoc(people: [person("a", "Mark", 5, aliases: ["Mark Chen"], note: "Sales"), Person(id: "b", name: "我", voiceEnabled: false, me: true)], migrated: true, migrationFound: 3, voice: true)
             check(PeopleCodec.decode(PeopleCodec.encode(d)) == d, "codec round trip")
             check(PeopleCodec.decode("not json") == PeopleDoc(), "junk file")
             check(PeopleCodec.decode(#"{"people":[{"id":"x","name":"A"},{"name":"no id"},{"id":"y","name":"  "}],"future":1}"#).people.count == 1, "junk entries")
@@ -43,6 +43,7 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             check(PersonNames.normalize("  ＭＡＲＫ   Chen ") == "mark chen", "normalize")
             check(PersonNames.same("陳經理", "陈经理", fold), "fold")
             check(PersonNames.isDefaultLabel("Speaker 2") && PersonNames.isDefaultLabel("語者 12") && PersonNames.isDefaultLabel("说话人3"), "default labels")
+            check(PersonNames.isDefaultLabel("说话者 4") && PersonNames.isDefaultLabel("說話者 1"), "zh-Hans/zh-Hant default labels")
             check(!PersonNames.isDefaultLabel("Speaker Mark") && !PersonNames.isPersonName("  "), "not default")
         }
         do {   // migrationMergesIdenticalNamesAndSkipsDefaults

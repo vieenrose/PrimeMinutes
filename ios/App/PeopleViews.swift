@@ -47,7 +47,9 @@ struct PersonPickerSheet: View {
     var body: some View {
         let doc = store.doc, fold = PeopleStore.fold
         let usage = store.usage(sessions)
-        let sec = PeoplePicker.sections(doc, usage: usage, inMeeting: inMeeting, query: query, fold: fold, exclude: exclude)
+        // A person suggested by voice is listed once, in the voice section (while not searching).
+        let voiceIds = query.trimmingCharacters(in: .whitespaces).isEmpty ? Set(suggestions.map(\.person).filter { inMeeting[$0] == nil }) : []
+        let sec = PeoplePicker.sections(doc, usage: usage, inMeeting: inMeeting, query: query, fold: fold, exclude: exclude.union(voiceIds))
         let homonyms = PeoplePicker.homonyms(doc, fold: fold)
         func hint(_ p: Person) -> String? {
             if let n = p.note { return n }
@@ -353,14 +355,3 @@ struct PeopleFilterChips: View {
         }.buttonStyle(.plain)
     }
 }
-
-// MARK: Phase 2 voice placeholders (Android VoiceSuggestions.kt)
-
-/// Voice suggestions for `speaker` of `session`, and the note shown when there are none. Phase 2.
-@MainActor func voiceSuggestions(_ session: Session, speaker: Int) -> ([VoiceSuggestion], String?) { ([], nil) }
-
-/// Phase 2: the "Recognise voices" switch and its explanation, at the top of the People screen.
-struct VoiceSettingsCard: View { var body: some View { EmptyView() } }
-
-/// Phase 2: what the app knows of `person`'s voice, and "Forget voice".
-struct PersonVoiceRow: View { let person: Person; var body: some View { EmptyView() } }

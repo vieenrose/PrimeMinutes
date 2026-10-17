@@ -11,7 +11,7 @@ import Foundation
 
     func all() async -> [Session] { await store.all() }
     func refresh() async { sessions = await store.all() }
-    func update(_ s: Session) { Task { try? await store.save(s); sessions = await store.all(); LibraryIndexer.shared.request(s) } }
+    func update(_ s: Session) { Task { try? await store.save(s); sessions = await store.all(); LibraryIndexer.shared.request(s); VoiceStore.shared.request(s.id) } }
     func remove(_ s: Session) { Task {
         await store.delete(s.id); LibraryIndexer.shared.forget(s.id); sessions = await store.all()
         PeopleStore.shared.onMeetingDeleted(s.id)

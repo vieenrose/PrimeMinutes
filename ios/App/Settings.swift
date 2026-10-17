@@ -8,7 +8,10 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     var autonym: String { switch self { case .system: return L("lang_system"); case .en: return "English"; case .zhHant: return "繁體中文"; case .zhHans: return "简体中文" } }
 
     static var current: AppLanguage {
-        get { AppLanguage(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .system }
+        get {
+            if let l = Dev.env["VOX_UILANG"], let a = AppLanguage(rawValue: l) { return a }   // DEV: README shots per language
+            return AppLanguage(rawValue: UserDefaults.standard.string(forKey: "language") ?? "") ?? .system
+        }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "language") }
     }
     /// The concrete interface language (never .system).

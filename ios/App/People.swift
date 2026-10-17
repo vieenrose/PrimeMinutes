@@ -31,6 +31,8 @@ struct PeopleDoc: Equatable {
     var migrated = false
     /// How many people that migration created: the People screen's one-time card (0 once seen).
     var migrationFound = 0
+    /// "Recognise voices (on this phone)": off until the user turns it on (Phase 2).
+    var voice = false
     func byId(_ id: String?) -> Person? { id.flatMap { i in people.first { $0.id == i } } }
 }
 
@@ -57,7 +59,7 @@ enum PeopleCodec {
             if p.me { o["me"] = true }
             return o
         }
-        let o: [String: Any] = ["version": version, "people": people, "migrated": doc.migrated, "migrationFound": doc.migrationFound]
+        let o: [String: Any] = ["version": version, "people": people, "migrated": doc.migrated, "migrationFound": doc.migrationFound, "voice": doc.voice]
         return (try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])) ?? Data()
     }
 
@@ -75,7 +77,8 @@ enum PeopleCodec {
                           created: int64(p["created"]), lastUsed: int64(p["lastUsed"]),
                           voiceEnabled: (p["voiceEnabled"] as? Bool) ?? true, me: (p["me"] as? Bool) ?? false, extra: extra(p))
         }
-        return PeopleDoc(people: people, migrated: (o["migrated"] as? Bool) ?? false, migrationFound: (o["migrationFound"] as? NSNumber)?.intValue ?? 0)
+        return PeopleDoc(people: people, migrated: (o["migrated"] as? Bool) ?? false, migrationFound: (o["migrationFound"] as? NSNumber)?.intValue ?? 0,
+                         voice: (o["voice"] as? Bool) ?? false)
     }
     static func decode(_ text: String) -> PeopleDoc { decode(text.data(using: .utf8)) }
     private static func extra(_ p: [String: Any]) -> String? {
@@ -91,7 +94,7 @@ enum PersonNames {
     typealias Fold = (String) -> String
     private static let spaces = try! NSRegularExpression(pattern: "\\s+")
     /// The default labels in the three UI languages: never a person's name.
-    private static let defaultLabel = try! NSRegularExpression(pattern: "^(speaker|語者|语者|說話人|说话人)\\s*\\d+$")
+    private static let defaultLabel = try! NSRegularExpression(pattern: "^(speaker|語者|语者|說話人|说话人|說話者|说话者)\\s*\\d+$")
 
     static func normalize(_ s: String, _ fold: Fold = { $0 }) -> String {
         let t = fold(s.precomposedStringWithCompatibilityMapping).lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -366,6 +369,19 @@ enum CleanSpeech {
     struct Span: Equatable { var start: Double; var end: Double; var sec: Double { end - start } }
 
     static func spans(_ turns: [SpeakerCarryOver.Turn], speaker: Int, cap: Double = cap) -> [Span] {
+        var out: [Span] = [], have = 0.0
+        for s in ordered(turns, speaker: speaker) {
+            if have >= cap { break }
+            let take = min(s.sec, cap - have)
+            out.append(Span(start: s.start, end: s.start + take)); have += take
+        }
+        return out.sorted { $0.start < $1.start }
+    }
+
+    /// Every clean line of `speaker` in the order a voice vector consumes them: round-robin over the
+    /// meeting's thirds, longest first in each third. The voice lane reads them in this order through
+    /// `VoiceGate` until it has `cap` s of actual voice (a line can hold long silences).
+    static func ordered(_ turns: [SpeakerCarryOver.Turn], speaker: Int) -> [Span] {
         let sorted = turns.filter { $0.end > $0.start }.sorted { $0.start < $1.start }
         let others = sorted.filter { $0.speaker != speaker }
         var clean: [Span] = []
@@ -384,17 +400,26 @@ enum CleanSpeech {
             clean.filter { min(max(Int(($0.start / total) * 3), 0), 2) == th }.enumerated()
                 .sorted { $0.element.sec != $1.element.sec ? $0.element.sec > $1.element.sec : $0.offset < $1.offset }.map(\.element)
         }
-        var out: [Span] = [], have = 0.0
-        while have < cap && thirds.contains(where: { !$0.isEmpty }) {
-            for i in 0..<3 {
-                if have >= cap { break }
-                if thirds[i].isEmpty { continue }
-                let s = thirds[i].removeFirst()
-                let take = min(s.sec, cap - have)
-                out.append(Span(start: s.start, end: s.start + take)); have += take
-            }
+        var out: [Span] = []
+        while thirds.contains(where: { !$0.isEmpty }) {
+            for i in 0..<3 where !thirds[i].isEmpty { out.append(thirds[i].removeFirst()) }
         }
-        return out.sorted { $0.start < $1.start }
+        return out
+    }
+
+    /// A line with less text per second than this share of the meeting's median is mostly pause.
+    static let sparse = 0.4
+    static let nobody = -9
+
+    /// The turns a voice vector may use: a line far sparser in text than the meeting's usual (a long
+    /// pause around a whiteboard, a slide change, room noise) keeps its time (it still marks overlap)
+    /// but belongs to nobody. Relative to the meeting, so the same rule holds in every language.
+    static func voiceTurns(_ lines: [Utterance]) -> [SpeakerCarryOver.Turn] {
+        func rate(_ u: Utterance) -> Double { Double(u.text.filter { !$0.isWhitespace }.count) / max(0.5, u.end - u.start) }
+        let rates = lines.filter { $0.end > $0.start }.map(rate).sorted()
+        if rates.isEmpty { return SpeakerCarryOver.turns(lines) }
+        let median = rates[rates.count / 2]
+        return lines.map { SpeakerCarryOver.Turn(start: $0.start, end: $0.end, speaker: rate($0) >= sparse * median ? $0.speaker : nobody) }
     }
     /// Seconds of clean speech `speaker` has (capped), for the "not enough speech" note.
     static func seconds(_ lines: [Utterance], speaker: Int) -> Double { spans(SpeakerCarryOver.turns(lines), speaker: speaker).reduce(0) { $0 + $1.sec } }

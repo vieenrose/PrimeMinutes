@@ -99,7 +99,7 @@ struct SessionView: View {
         _player = StateObject(wrappedValue: Player(file: session.audio))
         switch Dev.env["VOX_DIALOG"] {   // README / guide screenshots: open one dialog without taps
         case "title": _draft = State(initialValue: session.title); _renamingTitle = State(initialValue: true)
-        case "speaker": _draft = State(initialValue: ""); _renamingSpeaker = State(initialValue: session.lines.first?.speaker)
+        case "speaker": _draft = State(initialValue: ""); _renamingSpeaker = State(initialValue: Dev.env["VOX_SPEAKER"].flatMap(Int.init) ?? session.lines.first?.speaker)
         case "line": _draft = State(initialValue: session.lines.first?.text ?? ""); _editingLine = State(initialValue: session.lines.first?.id)
         case "summary": _editingSummary = State(initialValue: true)
         default: break
@@ -336,18 +336,20 @@ struct SessionView: View {
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
         .sheet(isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
             if let k = renamingSpeaker {
-                let voice = voiceSuggestions(s, speaker: k)
-                SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
-                                suggestions: voice.0, voiceNote: voice.1,
-                                onPlaySample: player.available ? { playSample(k) } : nil,
-                                onLink: { p in renamingSpeaker = nil; link(k, p) },
-                                onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
-                                onClear: { renamingSpeaker = nil; clearName(k) },
-                                onMerge: { into in renamingSpeaker = nil; merge(k, into) },
-                                onDismiss: { renamingSpeaker = nil })
-                    .presentationDetents([.medium, .large])
+                VoiceSuggested(session: s, speaker: k) { suggestions, note in
+                    SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
+                                    suggestions: suggestions, voiceNote: note,
+                                    onPlaySample: player.available ? { playSample(k) } : nil,
+                                    onLink: { p in renamingSpeaker = nil; link(k, p) },
+                                    onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
+                                    onClear: { renamingSpeaker = nil; clearName(k) },
+                                    onMerge: { into in renamingSpeaker = nil; merge(k, into) },
+                                    onDismiss: { renamingSpeaker = nil })
+                }
+                .presentationDetents([.medium, .large])
             }
         }
+        .modifier(VoiceOutlierPrompt())
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
             NavigationStack {
