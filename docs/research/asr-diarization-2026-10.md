@@ -153,3 +153,31 @@ How to read the table:
 - Nothing was tested on the 尾牙 recording.
 - 7–10 meetings, 2 corpora, all far-field-ish. The DER references are md-eval style, not NVIDIA's.
 - The CAM++ cost uses `spk_bench` (the app's SpeakerEmbedder, fp32 tflite, 3 s pieces), not the app's own call path.
+
+## 6. Follow-up 2026-10-17: 尾牙 A/B and what shipped
+
+Reference: the demo is a 3-voice TTS script (52 lines). `weiya_score.py` aligns the script to each transcript
+(difflib over normalized characters) and snaps line edges to the audio's silences, which gives a reference
+RTTM, a transcript DER (utterances as segments, collar 0.25 s), confT (share of aligned script characters on
+the wrong speaker after optimal mapping) and the script lines whose majority speaker is wrong.
+
+| run | speakers (≥2 %) | DER c25 (conf) | confT | wrong lines |
+|---|---|---|---|---|
+| host harness, shipped 0.3 / 45 | 8 (6) | 14.5 (13.5) | 12.9 | 9 |
+| host, 0.5 / 20 | 8 (5) | 13.5 (12.4) | 12.2 | 8 |
+| host, spkcache 264 + 0.5 / 20 | 8 (5) | 12.5 (11.4) | 11.1 | 7 |
+| host, spkcache 264, shipped decode | 7 (6) | 12.6 (11.5) | 10.6 | 7 |
+| host, 0.5 / 20 + CAM++ merge 0.7 / reassign 0.1 (relabel) | 7 (5) | 13.5 (12.4) | 12.2 | 8 |
+| Note10+ import, origin/android 3e767514 | 8 (5) | 13.7 (12.6) | 10.9 | 7 |
+| Note10+ import, 0.5 / 20 (2 runs, identical) | 8 (5) | 13.6 (12.5) | 11.3 | 7 |
+
+- Truth is 3. No variant fixes the over-count. The wrong lines are always 17, 19, 21, 24, 25, 27 (167–250 s),
+  plus 39 (331 s) in some runs: the TTS voice drift zone of the 2026-10-15 investigation.
+- CAM++ finds no pair of diarizer speakers above cosine 0.6, so the merge does nothing; the reassign moves 3 s.
+- Note10+ diarizer time on the 460 s demo (`n10_weiya_cost.sh`, 2 threads, big cores, 90 s rest, battery
+  34.5–39.8 °C): shipped 34.8 / 45.7 s, 0.5 / 20 45.3 / 45.8 s, spkcache 264 102.2 / 102.3 s (2.2×).
+- App harness on the 10 corpus meetings (shipped vs 0.5 / 20, same host build): speaker count never worse,
+  exact 4 → 5 of 10 (ES2004b 6 → 5, L_R003S02C02 7 → 6), ≥2 % counts unchanged (zh 4/6, en 3/4); cpER zh
+  34.2 → 33.9, en 29.7 → 26.9; transcript DER flat (zh 18.3 → 18.4, en 28.7 → 28.9). The frame-level zh
+  6/6 → 5/6 of §4 does not show in the app's own count.
+- Shipped: 0.5 / 20 on android (a8345d58) and ios (cc749673). spkcache 264 and the CAM++ pass are not shipped.
