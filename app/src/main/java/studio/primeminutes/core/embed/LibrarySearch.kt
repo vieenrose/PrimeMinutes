@@ -76,7 +76,9 @@ object LibrarySearch {
     }
 
     private suspend fun doc(context: Context, e: SessionLibrary.Entry): Doc {
-        val fileMod = e.sessionFile.takeIf { it.exists() }?.lastModified() ?: 0L
+        // Pending edits ([EditJournal]) are what peek() reads: their write is a new doc too.
+        val fileMod = e.sessionFile.takeIf { it.exists() }?.lastModified()
+            ?.let { maxOf(it, studio.primeminutes.core.library.EditJournal.file(e.dir).lastModified()) } ?: 0L
         // The names come from the speaker sidecar and the people directory too: a change there is a new doc.
         val mod = if (fileMod == 0L) 0L else fileMod * 31 + studio.primeminutes.core.people.PeopleStore.version.value
         synchronized(docs) { docs[e.id]?.takeIf { it.modified == mod }?.let { return it } }

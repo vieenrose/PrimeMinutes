@@ -594,6 +594,19 @@ private fun TranscribeScreen(
         if (devExtras.getBoolean("vox_ask_legacy")) studio.primeminutes.core.ask.AskEngine.retrieval = studio.primeminutes.core.ask.AskEngine.Retrieval.LEGACY
         delay(3_000); askQuestion = q.trim()
     }
+    // DEV: `--es vox_open <library entry id>` opens that meeting (device checks of a given item).
+    LaunchedEffect(Unit) {
+        val id = devExtras?.getString("vox_open") ?: return@LaunchedEffect
+        val e = withContext(Dispatchers.IO) { SessionLibrary.byId(context, id) } ?: return@LaunchedEffect
+        delay(1_000); vm.openSessionUri(Uri.fromFile(e.audioFile))
+    }
+    // DEV: `--ez vox_export true` shares the open meeting as a session file (built into cache/shared).
+    var devExportAsked by remember { mutableStateOf(false) }
+    if (devExtras?.getBoolean("vox_export") == true && !devExportAsked) LaunchedEffect(s.utterances.size) {
+        if (s.utterances.isEmpty()) return@LaunchedEffect
+        delay(3_000); devExportAsked = true
+        vm.stageSessionExport(true, null, PrimeMinutesSession.Format.M4A)
+    }
     // DEV: `--ez vox_merge true` asks to merge the open meeting's first speaker into its second (the
     // confirmation, then the Undo snackbar) once its transcript is loaded.
     var devMergeAsked by remember { mutableStateOf(false) }
@@ -742,6 +755,8 @@ private fun TranscribeScreen(
     var searchDownload by remember { mutableStateOf<Float?>(null) }
     val indexingIds by LibraryIndexer.indexing.collectAsState()
     LaunchedEffect(Unit) { if (searchModelReady) LibraryIndexer.catchUp(context) }
+    // Edits saved to their journal but not yet into their session file when the app last stopped.
+    LaunchedEffect(Unit) { studio.primeminutes.service.EditSaver.foldLeftovers(context) }
     // A download finished from Settings must flip the Studio's search too (it used to need a restart).
     val searchProvisioned by EmbedHost.provisioned.collectAsState()
     LaunchedEffect(searchProvisioned) { if (searchProvisioned > 0) searchModelReady = EmbedHost.ready(context) }
@@ -855,7 +870,12 @@ private fun TranscribeScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
-            if (ev == androidx.lifecycle.Lifecycle.Event.ON_PAUSE && vm.now.screen == Screen.Session) runCatching { vm.persistEdits() }
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                if (vm.now.screen == Screen.Session) runCatching { vm.persistEdits() }
+                // The edits are safe in their journal already; folding them into the m4a now, while
+                // the app is idle, keeps the session files current for other readers and old versions.
+                studio.primeminutes.service.EditSaver.foldSoon(context)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
@@ -1489,7 +1509,8 @@ private fun TranscribeScreen(
                     // Own cache dir (NOT the export flow's cacheDir/shared).
                     val dir = File(context.cacheDir, "share_audio").apply { mkdirs() }
                     dir.listFiles()?.forEach { it.delete() }
-                    File(dir, PrimeMinutesSession.suggestFileName(subject, f.extension)).also { f.copyTo(it, overwrite = true) }
+                    // With edits not yet folded into the entry's file, the copy is built with them.
+                    SessionLibrary.shareableCopy(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, f.extension)))
                 }.getOrNull()
             } ?: return@launch
             val shareUri = runCatching {

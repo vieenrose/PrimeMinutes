@@ -63,7 +63,8 @@ object LibraryIndexer {
         return SessionLibrary.list(context.applicationContext).filter { e ->
             e.status == SessionLibrary.Status.DONE && e.sessionFile.exists() &&
                 !indexFresh(e.dir, maxOf(e.sessionFile.lastModified(), java.io.File(e.dir, "meta.json").lastModified(),
-                    java.io.File(e.dir, studio.primeminutes.core.people.PeopleStore.LINKS).lastModified()), spec.id)
+                    java.io.File(e.dir, studio.primeminutes.core.people.PeopleStore.LINKS).lastModified(),
+                    studio.primeminutes.core.library.EditJournal.file(e.dir).lastModified()), spec.id)
         }.map { it.id }
     }
 

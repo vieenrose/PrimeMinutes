@@ -13,6 +13,7 @@ import studio.primeminutes.core.audio.WavIo
 import studio.primeminutes.core.audio.Mp4Tags
 import studio.primeminutes.core.cover.CoverArt
 import studio.primeminutes.core.events.TranscriptEvent
+import studio.primeminutes.core.library.EditJournal
 import studio.primeminutes.data.SpeakerName
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -77,6 +78,8 @@ object PrimeMinutesSession {
         val coverJpeg: ByteArray? = null,   // embedded cover art (METADATA_BLOCK_PICTURE), if any
         val coverSig: String? = null,       // signature the embedded cover was built from
         val actionItems: String? = null,    // extracted action items + decisions (editable draft)
+        /** Revision of this content ([EditJournal]): 0 for a file written before revisions. */
+        val editRev: Long = 0L,
     )
 
     /** Outcome of a save: FULL = transcript embedded; PARTIAL = audio+summary only (blob too big); FAILED. */
@@ -138,6 +141,8 @@ object PrimeMinutesSession {
         // is disabled), so the default silently produced nothing there. Every caller already
         // passes M4A; making it explicit means a future caller cannot inherit the broken one.
         format: Format,
+        /** Revision embedded with the session ([EditJournal.REV]); 0 outside the library. */
+        editRev: Long = 0L,
     ): Built? = withContext(Dispatchers.IO) {
         if (audioUri == null) return@withContext null
         dir.mkdirs()
@@ -180,7 +185,7 @@ object PrimeMinutesSession {
         // No generated cover art: the per-session identicon read as a random logo and was removed.
         // [coverEnabled] is kept for call-site compatibility and ignored.
         val coverJpeg: ByteArray? = null; val coverW = 0; val coverH = 0
-        val blob = encodeSession(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId)
+        val blob = encodeSession(manifest(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, editRev))
         val cleanTitle = title?.replace('\n', ' ')?.trim()?.ifBlank { null }
         val cleanSummary = summary?.trim()?.ifBlank { null }
         // Player-facing lyrics (©lyr / LYRICS) = LRC-style SYNCHRONIZED lyrics: an `[mm:ss.xx]` timestamp
@@ -263,20 +268,18 @@ object PrimeMinutesSession {
         // audio: it still plays, it just carries no embedded transcript.
         val isM4a = isMp4(audio)
         val coverJpeg = if (isM4a) Mp4Tags.readCover(audio) else null
-        val blob = if (isM4a) Mp4Tags.readSessionBlob(audio) else null
-        if (blob == null || blob.length > MAX_BLOB_CHARS) {
+        val src0 = src.takeIf { it.scheme == "file" }?.path?.let(::File)
+        // A library meeting's pending edits ([EditJournal]) over what its m4a embeds.
+        val json = effectiveManifest(src0, if (isM4a) embeddedManifest(audio) else null)
             // No embedded session (or an implausibly large blob) — load as plain audio.
-            return@withContext Loaded(audio, emptyList(), emptyMap(), null, null, null, null, null, null, recovered = false, coverJpeg = coverJpeg)
-        }
+            ?: return@withContext Loaded(audio, emptyList(), emptyMap(), null, null, null, null, null, null, recovered = false, coverJpeg = coverJpeg)
         // Parse under one guard: 'Open session'/share-in accept arbitrary files, so a blob that is
         // valid gzip+JSON but semantically off (a future schema, a hand-edited or truncated file —
         // a non-object utterance, a non-integer speaker key) must degrade to plain audio, not crash
         // the open flow. parseManifest's strict getInt/getJSONObject calls are inside this guard.
         return@withContext runCatching {
-            val json = JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8))
             val m = parseManifest(json, audio, coverJpeg)
             // A library meeting: its speaker sidecar and the people directory name its speakers.
-            val src0 = src.takeIf { it.scheme == "file" }?.path?.let(::File)
             if (src0 != null) m.copy(speakerNames = studio.primeminutes.core.people.PeopleStore.overlay(src0, m.speakerNames)) else m
         }.getOrElse {
             android.util.Log.w("primeminutes-session", "unreadable embedded session, opening as plain audio", it)
@@ -299,9 +302,8 @@ object PrimeMinutesSession {
      *  the file embeds nothing readable. */
     suspend fun peek(file: File): Loaded? = withContext(Dispatchers.IO) {
         runCatching {
-            val blob = if (isMp4(file)) Mp4Tags.readSessionBlob(file) else null
-            if (blob == null || blob.length > MAX_BLOB_CHARS) return@runCatching null
-            val m = parseManifest(JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8)), file)
+            val json = effectiveManifest(file, embeddedManifest(file)) ?: return@runCatching null
+            val m = parseManifest(json, file)
             m.copy(speakerNames = studio.primeminutes.core.people.PeopleStore.overlay(file, m.speakerNames))
         }.getOrNull()
     }
@@ -351,15 +353,16 @@ object PrimeMinutesSession {
             tokenTimes = o.optJSONArray("token_times")?.let { t -> List(t.length()) { t.getDouble(it) } },
         )
 
-    /** The gzip+base64 session blob, or null when it exceeds the read-side size ceiling (so the
-     *  caller embeds a session-less but playable file and reports PARTIAL instead of a false FULL). */
-    private fun encodeSession(
+    /** The session manifest: the JSON the m4a embeds (gzip+base64) and [EditJournal] holds as is. */
+    fun manifest(
         utterances: List<TranscriptEvent.Utterance>, speakerNames: Map<Int, SpeakerName>,
         summary: String?, actionItems: String?, title: String?, notes: String?,
-        asrModelId: String?, asrBackend: String?, llmModelId: String?,
-    ): String? {
+        asrModelId: String?, asrBackend: String?, llmModelId: String?, editRev: Long = 0L,
+    ): JSONObject {
         val root = JSONObject()
         root.put("primeminutes_version", VERSION)
+        // Unknown to readers older than the edit journal, which ignore it.
+        if (editRev > 0L) root.put(EditJournal.REV, editRev)
         title?.let { root.put("title", it) }
         summary?.let { root.put("summary", it) }
         actionItems?.let { root.put("action_items", it) }
@@ -379,6 +382,12 @@ object PrimeMinutesSession {
         // Multi-page OpusTags removes the size cap, so embed everything for a bit-exact round-trip.
         utterances.forEach { u -> arr.put(utteranceToJson(u)) }
         root.put("utterances", arr)
+        return root
+    }
+
+    /** The gzip+base64 session blob, or null when it exceeds the read-side size ceiling (so the
+     *  caller embeds a session-less but playable file and reports PARTIAL instead of a false FULL). */
+    private fun encodeSession(root: JSONObject): String? {
         val json = root.toString().toByteArray(Charsets.UTF_8)
         // A blob that the READ path would reject must not be embedded as if it round-trips. open()
         // aborts gunzip past MAX_JSON_BYTES (decompressed) and rejects base64 over MAX_BLOB_CHARS —
@@ -389,6 +398,23 @@ object PrimeMinutesSession {
         val blob = Base64.encodeToString(gzip(json), Base64.NO_WRAP)
         return blob.takeIf { it.length <= MAX_BLOB_CHARS }
     }
+
+    /** The manifest embedded in [file] (an m4a), or null: plain audio, too large, unreadable. */
+    fun embeddedManifest(file: File): JSONObject? = runCatching {
+        val blob = if (isMp4(file)) Mp4Tags.readSessionBlob(file) else null
+        if (blob == null || blob.length > MAX_BLOB_CHARS) null
+        else JSONObject(gunzip(Base64.decode(blob, Base64.NO_WRAP)).toString(Charsets.UTF_8))
+    }.onFailure { android.util.Log.w("primeminutes-session", "unreadable embedded session", it) }.getOrNull()
+
+    /** The session [file] stands for: its library entry's pending edits ([EditJournal]) when newer
+     *  than what it embeds, else the embedded manifest. */
+    private fun effectiveManifest(file: File?, embedded: JSONObject?): JSONObject? {
+        val dir = file?.parentFile?.takeIf { it.parentFile?.name == "library" } ?: return embedded
+        return EditJournal.newer(EditJournal.read(dir), embedded) ?: embedded
+    }
+
+    /** A manifest → the restored session (parse errors throw: callers guard). */
+    fun loaded(m: JSONObject, audio: File, coverJpeg: ByteArray? = null): Loaded = parseManifest(m, audio, coverJpeg)
 
     private fun parseManifest(m: JSONObject, audio: File, coverJpeg: ByteArray? = null): Loaded {
         val utts = ArrayList<TranscriptEvent.Utterance>()
@@ -422,6 +448,7 @@ object PrimeMinutesSession {
             recovered = true,
             coverJpeg = coverJpeg,
             coverSig = m.optString("cover_sig", "").ifEmpty { null },
+            editRev = m.optLong(EditJournal.REV, 0L),
         )
     }
 

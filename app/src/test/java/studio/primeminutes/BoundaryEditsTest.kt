@@ -73,4 +73,19 @@ class BoundaryEditsTest {
         assertEquals("I think so.", out[0].text); assertEquals("Sure. Then the buttons", out[1].text)
         assertEquals(1, out[1].speaker); assertEquals(listOf(0, 1, 2), out.map { it.index })
     }
+
+    @Test fun stripShowsTheSpacingOfTheText() {
+        // A ends "two," and B starts "right?": the strip read "two,right?" though the move keeps the space.
+        val utts = listOf(u(0, 0, 0.0, 2.0, "we need two,"), u(1, 1, 2.0, 4.0, "right? Yes."))
+        val seam = BoundaryEdits.seam(utts[0], utts[1])
+        assertEquals("we need two, right? Yes.", BoundaryEdits.displayTokens(seam.tokens).joinToString(""))
+        assertEquals("tokens and their positions are unchanged", seam.tokens.size, BoundaryEdits.displayTokens(seam.tokens).size)
+        // What is shown is what a move produces.
+        val moved = BoundaryEdits.move(utts, 1, 2)
+        assertEquals("we need", moved[0].text); assertEquals("two, right? Yes.", moved[1].text)
+        // Han text and words already followed by a space are left alone.
+        val zh = BoundaryEdits.seam(u(0, 0, 0.0, 1.0, "好的"), u(1, 1, 1.0, 2.0, "可以"))
+        assertEquals("好的可以", BoundaryEdits.displayTokens(zh.tokens).joinToString(""))
+        assertEquals(listOf("Okay, ", "so"), BoundaryEdits.displayTokens(BoundaryEdits.tokenize("Okay, so")))
+    }
 }

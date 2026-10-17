@@ -1,6 +1,7 @@
 package studio.primeminutes.core.library
 
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -163,16 +164,112 @@ object SessionLibrary {
         // Audio to embed. Defaults to the raw capture; the edits-persist path passes the open
         // session's audio instead when the WAV was already pruned (session.m4a-only entries).
         audio: Uri? = null,
-    ): Entry? {
-        val built = buildLocks.getOrPut(entry.id) { kotlinx.coroutines.sync.Mutex() }.withLock {
+    ): Entry? = withBuildLock(entry.id) {
+        // A new result outranks the edits pending before it (and not those made while it builds).
+        attachLocked(context, entry, Content(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId),
+            audio ?: Uri.fromFile(entry.wavFile), EditJournal.nextRev(entry.dir))
+    }
+
+    /** What a session file holds besides its audio. */
+    data class Content(
+        val utterances: List<TranscriptEvent.Utterance>,
+        val speakerNames: Map<Int, SpeakerName>,
+        val summary: String?,
+        val actionItems: String?,
+        val title: String?,
+        val notes: String?,
+        val asrModelId: String?,
+        val asrBackend: String?,
+        val llmModelId: String?,
+    ) {
+        fun manifest(rev: Long) = PrimeMinutesSession.manifest(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, rev)
+        companion object {
+            fun of(l: PrimeMinutesSession.Loaded) = Content(l.utterances, l.speakerNames, l.summary, l.actionItems, l.title, l.notes, l.asrModelId, l.asrBackend, l.llmModelId)
+        }
+    }
+
+    /**
+     * An edit of a DONE entry, durable in a few ms ([EditJournal]): what the meeting screen saves on
+     * every change. The m4a follows later ([foldEdits]). False when the entry is gone or the write failed.
+     */
+    fun saveEdits(context: Context, entryId: String, c: Content): Boolean {
+        val entry = byId(context, entryId) ?: return false   // deleted while open: no ghost row
+        return runCatching {
+            EditJournal.write(entry.dir, c.manifest(EditJournal.nextRev(entry.dir)))
+        }.onFailure { Log.w(TAG, "could not save the edits of $entryId", it) }.isSuccess
+    }
+
+    /** The audio a rebuild of [entry]'s session file starts from: its own session.m4a (only the tags are
+     *  rewritten), else the raw capture, else [fallback]. */
+    private suspend fun rebuildSource(entry: Entry, fallback: Uri?): Uri? = when {
+        entry.sessionFile.isFile && PrimeMinutesSession.hasEmbeddedSession(entry.sessionFile) -> Uri.fromFile(entry.sessionFile)
+        entry.wavFile.isFile -> Uri.fromFile(entry.wavFile)
+        entry.sessionFile.isFile -> Uri.fromFile(entry.sessionFile)
+        else -> fallback
+    }
+
+    /**
+     * Writes [entryId]'s pending edits into its session.m4a and drops them (unless edited again
+     * meanwhile). A kill at any point loses nothing: the build renames into place, and the edits are
+     * removed only once the m4a holds them. The updated entry, or null when there was nothing to fold.
+     */
+    suspend fun foldEdits(context: Context, entryId: String, fallbackAudio: Uri? = null): Entry? = withBuildLock(entryId) {
+        val entry = byId(context, entryId) ?: return@withBuildLock null
+        val pending = EditJournal.read(entry.dir) ?: run { EditJournal.deleteUpTo(entry.dir, 0L); return@withBuildLock null }
+        val rev = pending.optLong(EditJournal.REV, 0L)
+        val embedded = entry.sessionFile.takeIf { it.isFile }?.let { PrimeMinutesSession.embeddedManifest(it) }
+        if (EditJournal.newer(pending, embedded) == null) {
+            // Already in the m4a (a kill between its rename and this cleanup), or superseded by a newer result.
+            EditJournal.deleteUpTo(entry.dir, embedded?.optLong(EditJournal.REV, 0L) ?: 0L)
+            return@withBuildLock null
+        }
+        val c = runCatching { Content.of(PrimeMinutesSession.loaded(pending, entry.sessionFile)) }
+            .onFailure { Log.w(TAG, "unreadable edits of $entryId, kept", it) }.getOrNull() ?: return@withBuildLock null
+        val src = rebuildSource(entry, fallbackAudio) ?: return@withBuildLock null
+        val t0 = System.currentTimeMillis()
+        attachLocked(context, entry, c, src, rev)?.also {
+            Log.i(TAG, "folded the edits of $entryId (rev $rev) into the session file in ${System.currentTimeMillis() - t0} ms")
+        }
+    }
+
+    /** Ids of the entries with edits still to fold (a kill before the fold; folded at the next launch). */
+    fun pendingEdits(context: Context): List<String> =
+        root(context).listFiles()?.filter { EditJournal.exists(it) }?.map { it.name } ?: emptyList()
+
+    /**
+     * [entry]'s session file as it should be shared, at [dest]: a copy when no edit is pending, else
+     * rebuilt with the pending edits (the entry's own file is folded later, as usual). Null on failure.
+     */
+    suspend fun shareableCopy(context: Context, entry: Entry, dest: File): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val src = entry.audioFile
+        val pending = if (src == entry.sessionFile) EditJournal.read(entry.dir) else null
+        val embedded = pending?.let { PrimeMinutesSession.embeddedManifest(src) }
+        val edits = EditJournal.newer(pending, embedded)
+        if (edits == null) return@withContext runCatching { src.copyTo(dest, overwrite = true) }.getOrNull()
+        val c = runCatching { Content.of(PrimeMinutesSession.loaded(edits, src)) }.getOrNull()
+            ?: return@withContext runCatching { src.copyTo(dest, overwrite = true) }.getOrNull()
+        withBuildLock(entry.id) {
             PrimeMinutesSession.buildSession(
-                context, entry.dir, audio ?: Uri.fromFile(entry.wavFile), utterances, speakerNames,
-                summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId,
-                coverEnabled = true, fileName = SESSION_NAME, format = PrimeMinutesSession.Format.M4A,
-            )
-        } ?: return null
-        // The meeting's named speakers and their people (the sidecar the directory reads).
-        studio.primeminutes.core.people.PeopleStore.saveNames(entry.dir, speakerNames)
+                context, dest.parentFile!!, Uri.fromFile(src), c.utterances, c.speakerNames, c.summary, c.actionItems,
+                c.title, c.notes, c.asrModelId, c.asrBackend, c.llmModelId, fileName = dest.name,
+                format = PrimeMinutesSession.Format.M4A, editRev = edits.optLong(EditJournal.REV, 0L),
+            )?.file
+        }
+    }
+
+    /** Builds [entry]'s session file from [c] at revision [rev] (caller holds the entry's build lock). */
+    private suspend fun attachLocked(context: Context, entry: Entry, c: Content, audio: Uri, rev: Long): Entry? {
+        val built = PrimeMinutesSession.buildSession(
+            context, entry.dir, audio, c.utterances, c.speakerNames,
+            c.summary, c.actionItems, c.title, c.notes, c.asrModelId, c.asrBackend, c.llmModelId,
+            coverEnabled = true, fileName = SESSION_NAME, format = PrimeMinutesSession.Format.M4A, editRev = rev,
+        ) ?: return null
+        val utterances = c.utterances
+        // Edits written before this build are in it now; those written while it ran stay pending.
+        val latest = EditJournal.deleteUpTo(entry.dir, rev)
+        // The meeting's named speakers and their people (the sidecar the directory reads) — unless a
+        // newer edit is pending: the screen already wrote ITS names, which these would overwrite.
+        if (latest) studio.primeminutes.core.people.PeopleStore.saveNames(entry.dir, c.speakerNames)
         studio.primeminutes.core.people.VoiceStore.request(context, entry.id)   // voice vectors (only when recognition is on)
         clearProgress(entry)   // the run is complete: nothing left to resume
         // A user-given name (set at capture time or via rename) outranks the LLM title — batch
@@ -187,7 +284,7 @@ object SessionLibrary {
                 // A run that found no speech named the entry "No speech detected": a later run of its
                 // audio that does find speech replaces that with its own title.
                 title = SpeechCheck.keptTitle(byId(context, entry.id)?.title) ?: SpeechCheck.keptTitle(entry.title)
-                    ?: title?.trim()?.ifBlank { null }
+                    ?: c.title?.trim()?.ifBlank { null }
                     ?: context.getString(studio.primeminutes.R.string.status_no_speech).takeIf { utterances.isEmpty() },
                 status = Status.DONE,
                 noSpeech = !SpeechCheck.hasSpeech(utterances.map { it.text }),

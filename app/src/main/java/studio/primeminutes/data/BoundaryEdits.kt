@@ -40,15 +40,28 @@ object BoundaryEdits {
         return Seam(ta + tb, tokenStarts(a, ta) + tokenStarts(b, tb), ta.size, b.endSec)
     }
 
+    /** True when [t] following text that ends in [last] needs a space: two Latin words meeting across the seam. */
+    private fun needsSpace(last: Char, t: String) =
+        t.isNotEmpty() && !last.isWhitespace() && !isHan(last) && !isHan(t.first()) && t.first().isLetterOrDigit() && last != '-'
+
     /** Concatenate tokens, adding the space two Latin words need when they meet across the seam. */
     internal fun join(toks: List<String>): String {
         val sb = StringBuilder()
         for (t in toks) {
-            if (sb.isNotEmpty() && t.isNotEmpty() && !sb.last().isWhitespace() && !isHan(sb.last()) && !isHan(t.first())
-                && t.first().isLetterOrDigit() && sb.last() != '-') sb.append(' ')
+            if (sb.isNotEmpty() && needsSpace(sb.last(), t)) sb.append(' ')
             sb.append(t)
         }
         return sb.toString().trim()
+    }
+
+    /**
+     * The tokens as the boundary strip shows them: where [join] would add a space between two of them
+     * (A's "two," meeting B's "right?" at the seam), the space ends the first, as a token's own trailing
+     * space does. The strip then reads like the text the move produces, not "two,right?".
+     */
+    fun displayTokens(toks: List<String>): List<String> = toks.mapIndexed { i, t ->
+        val next = toks.getOrNull(i + 1)
+        if (next != null && t.isNotEmpty() && needsSpace(t.last(), next)) "$t " else t
     }
 
     /**

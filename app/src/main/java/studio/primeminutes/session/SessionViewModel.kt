@@ -237,12 +237,27 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         _state.value = next.state
         syncSpeakerLinks(before, next.state)
         next.effects.forEach(::run)
+        autoPersist()
     }
 
     private fun update(f: (SessionState) -> SessionState) {
         val before = _state.value
         _state.value = f(before)
         syncSpeakerLinks(before, _state.value)
+        autoPersist()
+    }
+
+    private var autoPersistJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Every edit of a library meeting is saved within [AUTO_PERSIST_MS] (the edit journal makes the
+     * save cheap): a kill right after "Apply" no longer loses it. Edits made during the wait ride along.
+     */
+    private fun autoPersist() {
+        val s = _state.value
+        if (!s.sessionDirty || s.libraryDir == null || s.running || s.isRecording) return
+        if (autoPersistJob?.isActive == true) return
+        autoPersistJob = viewModelScope.launch { kotlinx.coroutines.delay(AUTO_PERSIST_MS); persistEdits() }
     }
 
     /**
@@ -590,17 +605,12 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
             }
             is SessionEffect.ApplyConfig -> TranscriptionConfig.Holder.config = e.config
             is SessionEffect.SaveConfig -> ConfigStore.save(ctx, e.config)
-            is SessionEffect.Persist -> {
-                val ticket = TranscriptionService.pendingPersist.post(TranscriptionService.PersistRequest(
-                    entryId = e.entryId, audioUri = e.audioUri, utterances = e.utterances, speakerNames = e.speakerNames,
-                    summary = e.summary, actionItems = e.actionItems, title = e.title, notes = e.notes ?: agent.journalText(),
-                    asrModelId = e.asrModelId, asrBackend = e.asrBackend, llmModelId = e.llmModelId,
-                ))
-                TranscriptionService.persistQueued(e.entryId)   // openSessionUri waits on it: the rebuild takes seconds
-                ContextCompat.startForegroundService(ctx, Intent(ctx, TranscriptionService::class.java)
-                    .setAction(TranscriptionService.ACTION_PERSIST_LIBRARY)
-                    .putExtra(TranscriptionService.EXTRA_REQUEST, ticket))
-            }
+            // Durable within ms (the edit journal); the session.m4a is rebuilt once the edits settle.
+            is SessionEffect.Persist -> studio.primeminutes.service.EditSaver.submit(ctx, TranscriptionService.PersistRequest(
+                entryId = e.entryId, audioUri = e.audioUri, utterances = e.utterances, speakerNames = e.speakerNames,
+                summary = e.summary, actionItems = e.actionItems, title = e.title, notes = e.notes ?: agent.journalText(),
+                asrModelId = e.asrModelId, asrBackend = e.asrBackend, llmModelId = e.llmModelId,
+            ))
             is SessionEffect.Export -> {
                 val ticket = TranscriptionService.pendingExport.post(TranscriptionService.ExportRequest(
                     share = e.share, saveUri = e.saveUri, audioUri = e.audioUri, utterances = e.utterances,
@@ -720,6 +730,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     companion object {
         /** How long a run's gen must stay gone from the service's work before the screen settles it. */
         private const val RUN_END_GRACE_MS = 1_500L
+        /** Wait between an edit and its save: a burst of edits is one write. */
+        private const val AUTO_PERSIST_MS = 300L
 
         /** Human-facing name of a SAF document (post-conflict, so it reflects any "(1)" the system added). */
         fun documentLabel(context: android.content.Context, uri: Uri): String =

@@ -113,13 +113,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // utterances can be large, so it rides an in-memory holder, not Intent extras.
         const val ACTION_EXPORT = "studio.primeminutes.EXPORT"
 
-        // Persist the open session's EDITS back into its library entry (rebuild session.m4a +
-        // meta): the review loop (fix speaker names, correct text, re-summarize) otherwise lived
-        // only in Compose state and was silently lost on Back — reopening the entry reloaded the
-        // stale session.m4a. Request rides [pendingPersist] (transcripts are too big for Intent
-        // extras); runs in the foreground service like an export so closing the app can't
-        // truncate the file mid-write.
-        const val ACTION_PERSIST_LIBRARY = "studio.primeminutes.PERSIST_LIBRARY"
 
         // Podcast/YouTube import download. Runs here (foreground, notification) rather than in the
         // importer sheet's coroutine scope, so dismissing the sheet can't cancel it. Request rides
@@ -140,22 +133,10 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         /** Pending session exports (ACTION_EXPORT), by ticket. */
         val pendingExport = Mailbox<ExportRequest>()
 
-        /** Pending edits-persists into a library entry (ACTION_PERSIST_LIBRARY), by ticket. */
-        val pendingPersist = Mailbox<PersistRequest>()
 
-        // Entries whose edits-persist is queued or running. Rebuilding session.m4a takes seconds
-        // (the audio is re-muxed), and an open of the same row meanwhile read the OLD file — then,
-        // marked dirty by its own script re-render, wrote that stale state back over the edits
-        // (seen: a renamed speaker and an edited line vanished on reopen). Opens wait on this.
-        /** Serializes the library-entry rebuilds [runPersist] makes. */
-        private val persistLock = kotlinx.coroutines.sync.Mutex()
-        private val persistInFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Unit>>()
-        fun persistQueued(entryId: String) { persistInFlight.putIfAbsent(entryId, kotlinx.coroutines.CompletableDeferred()) }
-        private fun persistDone(entryId: String) { persistInFlight.remove(entryId)?.complete(Unit) }
-        /** Suspends until no edits-persist is in flight for [entryId] (bounded: a service that never ran must not hang an open). */
-        suspend fun awaitPersist(entryId: String) {
-            persistInFlight[entryId]?.let { kotlinx.coroutines.withTimeoutOrNull(120_000) { it.await() } }
-        }
+        /** Suspends until the edits saved for [entryId] are on disk ([EditSaver]): an open of the same
+         *  row must not read the state from before them, then save that stale state over them. */
+        suspend fun awaitPersist(entryId: String) = EditSaver.awaitWritten(entryId)
 
         /** ACTION_SUMMARIZE's request, by ticket. Rides a holder rather than an Intent extra: a
          *  long meeting's transcript exceeds the ~1 MB Binder transaction limit →
@@ -527,10 +508,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                 runImportDownload()
                 return START_NOT_STICKY
             }
-            ACTION_PERSIST_LIBRARY -> {
-                runPersist(pendingPersist.take(intent))
-                return START_NOT_STICKY
-            }
         }
 
         val recording = intent?.action == ACTION_RECORD
@@ -598,7 +575,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                         // into its entry here, not only from the screen, which may be gone by now.
                         val save = summarizeReq?.save
                         if (save != null && r.summary != null) withContext(NonCancellable + Dispatchers.Main) {
-                            persistQueued(save.entryId)
                             runPersist(save.copy(
                                 summary = r.summary, actionItems = r.actions ?: save.actionItems,
                                 title = r.title ?: save.title, notes = r.notes,
@@ -832,44 +808,19 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         f(got, all, if (all > 0) (got.toFloat() / all).coerceIn(0f, 1f) else null)
 
     /**
-     * Write the open session's edits back into its library entry (rebuild session.m4a + meta via
-     * [SessionLibrary.attachResults]). Counted in [activeExports] and shaped like [runExport]: an
-     * out-of-pipeline IO job under the shared foreground, so quitting the app can't truncate the
-     * session file mid-write. Emits [TranscriptEvent.LibrarySaved] so the Studio list refreshes.
+     * Write a session state into its library entry ([EditSaver.saveAndFold]: the edit journal at once,
+     * then the session.m4a). Counted in [activeExports] and shaped like [runExport]: an out-of-pipeline
+     * IO job under the shared foreground, so quitting the app can't stop the rebuild midway.
      */
-    private fun runPersist(req: PersistRequest?) {
-        if (req == null) {
-            satisfyForegroundContract()
-            if (!pipelineBusy() && activeExports == 0) {
-                stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(lastStartId)
-            }
-            return
-        }
+    private fun runPersist(req: PersistRequest) {
         startForegroundTyped(recording = notifRecording, getString(R.string.exporting))
         activeExports++
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching {
-                // Entry may have been deleted while the session was open — attachResults would
-                // mkdirs() the dir back and resurrect a ghost row, so bail if it is gone.
-                val entry = SessionLibrary.byId(this@TranscriptionService, req.entryId) ?: return@runCatching
-                // Prefer the raw capture; older entries have it pruned, so fall back to the open
-                // session's audio (safe even when that IS the entry's session.m4a: buildSession
-                // decodes the input to a temp before it overwrites the output).
-                val audio = if (entry.wavFile.exists()) Uri.fromFile(entry.wavFile) else req.audioUri
-                // One rebuild of an entry at a time: a finished re-summarize's own save and the
-                // screen's edits-persist can land together.
-                val updated = persistLock.withLock { SessionLibrary.attachResults(
-                    this@TranscriptionService, entry, req.utterances, req.speakerNames,
-                    req.summary, req.actionItems, req.title, req.notes, req.asrModelId, req.asrBackend, req.llmModelId,
-                    audio = audio,
-                ) }
-                if (updated != null) {
-                    emitEvent(TranscriptEvent.LibrarySaved(Uri.fromFile(updated.sessionFile).toString(), updated.title))
-                    studio.primeminutes.core.embed.LibraryIndexer.request(this@TranscriptionService, updated.id)
-                }
-            }
+            // One rebuild of an entry at a time: a finished re-summarize's own save and the
+            // screen's edits can land together (the entry's build lock orders them; newest wins).
+            runCatching { EditSaver.saveAndFold(this@TranscriptionService, req) }
+                .onFailure { Log.w("primeminutes-persist", "could not save ${req.entryId}", it) }
             withContext(NonCancellable + Dispatchers.Main) {
-                persistDone(req.entryId)
                 activeExports--
                 if (!pipelineBusy() && activeExports == 0) {
                     stopForeground(STOP_FOREGROUND_REMOVE)

@@ -245,9 +245,11 @@ private fun TokenStrip(
     val pal = LocalPrimeMinutesPalette.current
     // Char offset where each visible token starts (index i - lo), plus the leading ellipsis.
     val lead = if (lo > 0) "… " else ""
-    val offs = remember(tokens, lo, hi) {
+    // The original spacing: the space two Latin words get when they meet across the seam is shown too.
+    val shown = remember(tokens) { studio.primeminutes.data.BoundaryEdits.displayTokens(tokens) }
+    val offs = remember(shown, lo, hi) {
         val o = IntArray(hi - lo + 1); var p = lead.length
-        for (i in lo until hi) { o[i - lo] = p; p += tokens[i].length }
+        for (i in lo until hi) { o[i - lo] = p; p += shown[i].length }
         o[hi - lo] = p; o
     }
     val text = buildAnnotatedString {
@@ -255,7 +257,7 @@ private fun TokenStrip(
         for (i in lo until hi) {
             val c = if (i < split) colorA else colorB
             withStyle(SpanStyle(background = c.copy(alpha = if (pal.isDark) 0.28f else 0.20f), color = pal.Slate200)) {
-                append(tokens[i])
+                append(shown[i])
             }
         }
         if (hi < tokens.size) withStyle(SpanStyle(color = pal.Slate400)) { append(" …") }
