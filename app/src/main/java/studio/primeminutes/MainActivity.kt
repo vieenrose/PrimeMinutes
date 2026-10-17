@@ -1339,7 +1339,7 @@ private fun TranscribeScreen(
         val t = pendingSeekSec ?: return@LaunchedEffect
         if (s.opening || !s.transcriptReady || s.utterances.isEmpty()) return@LaunchedEffect
         pendingSeekSec = null
-        val idx = s.utterances.indexOfLast { it.startSec <= t + 0.01 }.coerceAtLeast(0)
+        val idx = studio.primeminutes.core.embed.MeetingSearch.lineAt(s.utterances, t).coerceAtLeast(0)
         sessTab = 1
         // The transcript list is composed only once its tab shows: an animated scroll issued before its
         // first layout did nothing, so the meeting opened at 0:00. Wait for the items, then jump.
@@ -1347,8 +1347,10 @@ private fun TranscribeScreen(
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > headerCount + idx }
         }
         runCatching { listState.scrollToItem(headerCount + idx, scrollOffset = -120) }
-        // The player waits there too (paused), as on iOS: Play starts at the passage, not at 0:00.
-        val ms = (t * 1000).toInt()
+        // The player waits there too (paused), as on iOS: Play starts at the passage, not at 0:00. At the
+        // line's start rounded up: a truncated 65.3337 s (or a note's whole 3:22 before a line at 202.4 s)
+        // made the line above the playing one.
+        val ms = s.utterances.getOrNull(idx)?.let { studio.primeminutes.core.embed.MeetingSearch.parkMs(it.startSec) } ?: (t * 1000).toInt()
         positionMs = ms
         kotlinx.coroutines.withTimeoutOrNull(5_000) { snapshotFlow { durationMs }.first { it > 0 } }
         positionMs = ms.coerceIn(0, maxOf(durationMs, ms))

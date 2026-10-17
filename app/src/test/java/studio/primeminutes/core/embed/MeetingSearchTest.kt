@@ -59,4 +59,28 @@ class MeetingSearchTest {
         assertEquals(4, SessionIndex.approxTokens("the movers budget"))   // 3 words × 4/3
         assertEquals(9, SessionIndex.approxTokens("預算 80k 上限是多少"))   // 7 Han + one word (2)
     }
+
+    // Note10+ 2026-10-18: the 3:22 note opened the 3:16 line (the 3:22 line starts at 202.4 s), and a
+    // line at 65.3337 s parked the player at 65333 ms, so the line above showed as playing.
+    @Test fun aWholeSecondTimeTakesTheLineShownWithIt() {
+        val ls = listOf(
+            TranscriptEvent.Utterance(0, "a", 196.2, 201.0, 0),
+            TranscriptEvent.Utterance(1, "b", 202.4, 210.0, 1),
+            TranscriptEvent.Utterance(2, "c", 210.3, 215.0, 1),
+            TranscriptEvent.Utterance(3, "d", 210.8, 216.0, 0),
+        )
+        assertEquals(1, MeetingSearch.lineAt(ls, 202.0))   // the note "3:22"
+        assertEquals(0, MeetingSearch.lineAt(ls, 201.0))
+        assertEquals(2, MeetingSearch.lineAt(ls, 210.3))   // an exact line start keeps that line
+        assertEquals(1, MeetingSearch.lineAt(ls, 205.5))
+        val r = MeetingSearch.results("note", ls, listOf(Note(1, 0, "3:22", null, "a note")))
+        assertEquals(1, r.single().line)
+    }
+
+    @Test fun parkingRoundsUpToTheLineStart() {
+        for (start in listOf(65.3337, 65.3, 0.0, 202.4, 1234.5679)) {
+            val ms = MeetingSearch.parkMs(start)
+            assertTrue("$start -> $ms", ms / 1000.0 >= start && ms / 1000.0 - start < 0.002)
+        }
+    }
 }

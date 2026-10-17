@@ -23,9 +23,20 @@ object MeetingSearch {
         val speaker: Int? = null, val semanticOnly: Boolean = false,
     )
 
-    /** The index of the last line starting at or before [t] (the line a time falls in), -1 for none. */
-    fun lineAt(utterances: List<TranscriptEvent.Utterance>, t: Double): Int =
-        if (utterances.isEmpty()) -1 else utterances.indexOfLast { it.startSec <= t + 0.01 }.coerceAtLeast(0)
+    /**
+     * The line a time falls in: the last line starting at or before [t], -1 for none. A whole-second
+     * time (a note's or a citation's `m:ss`) also takes a line starting later in that same second: the
+     * note cites the line shown with that time (a line at 202.4 s shows 3:22; "3:22" is 202.0 s).
+     */
+    fun lineAt(utterances: List<TranscriptEvent.Utterance>, t: Double): Int {
+        if (utterances.isEmpty()) return -1
+        val limit = if (t == kotlin.math.floor(t)) t + 0.999 else t + 0.01
+        return utterances.indexOfLast { it.startSec <= limit }.coerceAtLeast(0)
+    }
+
+    /** The player position (ms) that parks on a line starting at [startSec]: rounded up, so the
+     *  playing-line test (start <= position) picks that line and not the one before. */
+    fun parkMs(startSec: Double): Int = kotlin.math.ceil(startSec * 1000.0).toInt()
 
     /**
      * Keyword results: every note and line containing [query] (case-insensitive, like the in-line
