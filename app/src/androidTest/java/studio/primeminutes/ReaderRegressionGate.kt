@@ -18,6 +18,7 @@ import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.core.reader.AgentEvent
 import studio.primeminutes.core.reader.MeetingLanguage
 import studio.primeminutes.core.reader.ReaderLane
+import studio.primeminutes.core.reader.ReaderLlm
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.core.text.ChineseScript
 import studio.primeminutes.core.text.OpenCcConverter
@@ -72,9 +73,9 @@ class ReaderRegressionGate {
         val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
         val drops = HashMap<String, Int>()
         val t0 = System.nanoTime()
+        val probe = Probe(MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template), engine)
         val (res, prose, title) = try {
-            val session = MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
-            ReaderLane(session, File(dir, spec.systemPromptFile).readText(), card) { ev ->
+            ReaderLane(probe, File(dir, spec.systemPromptFile).readText(), card) { ev ->
                 if (ev is AgentEvent.NoteDropped) synchronized(drops) { drops.merge(ev.reason.name, 1, Int::plus) }
             }.use { lane ->
                 lane.start()
@@ -106,10 +107,12 @@ class ReaderRegressionGate {
             .put("recall", recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
             .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
-            .put("prose", prose).put("journal", notes).put("lang", lang).put("notes_lang", notesLang).put("prose_lang", proseLang)
+            .put("turns", probe.turns).put("prose", prose).put("journal", notes).put("lang", lang).put("notes_lang", notesLang).put("prose_lang", proseLang)
         File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$name-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
         android.util.Log.i("ReaderGate", "$name ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s"
             .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks))
+
+        for (i in 0 until probe.turns.length()) android.util.Log.i("ReaderGate", "TURN $name ${spec.id} ${probe.turns.getJSONObject(i)}")
 
         val threshold = ref.optDouble("threshold", 0.75)
         assertTrue("$name: recall %.2f < %.2f, missed $missed".format(recall, threshold), recall >= threshold)
@@ -117,5 +120,32 @@ class ReaderRegressionGate {
         assertTrue("$name: no summary prose", !prose.isNullOrBlank())
         assertTrue("$name: protocol leaked into the output: $leaks", leaks.isEmpty())
         if (lang != null) assertTrue("$name: notes in $notesLang, summary in $proseLang, meeting in $lang", notesLang == lang && proseLang == lang)
+    }
+}
+
+/**
+ * The reader's session with each decode turn measured (reading windows, then prose and title): the
+ * prompt length it decodes after, the prefill since the previous turn (tokens, seconds: the window's
+ * transcript) and the decode itself, from the engine's own counters.
+ */
+private class Probe(private val s: MfaSession, private val e: MfaEngine) : ReaderLlm by s {
+    val turns = JSONArray()
+    private var preTok = 0; private var preSec = 0.0
+
+    override fun append(tokens: IntArray): Int = s.append(tokens).also { r ->
+        if (r >= 0) e.lastStats?.let { preTok += it.prefilled; preSec += it.prefillSec }
+    }
+
+    override fun reset() { s.reset() }
+
+    override fun generateContinue(maxTokens: Int, stop: String, temp: Float, onToken: (String) -> Unit): String {
+        val prompt = s.seqLength()
+        val out = s.generateContinue(maxTokens, stop, temp, onToken)
+        val st = e.lastStats
+        turns.put(JSONObject().put("prompt", prompt).put("prefill_tok", preTok + (st?.prefilled ?: 0))
+            .put("prefill_s", "%.2f".format(java.util.Locale.ROOT, preSec + (st?.prefillSec ?: 0.0)).toDouble())
+            .put("gen", st?.generated ?: 0).put("decode_s", "%.2f".format(java.util.Locale.ROOT, st?.decodeSec ?: 0.0).toDouble()))
+        preTok = 0; preSec = 0.0
+        return out
     }
 }

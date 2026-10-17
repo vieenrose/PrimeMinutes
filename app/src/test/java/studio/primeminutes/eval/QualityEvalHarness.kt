@@ -63,6 +63,8 @@ import java.nio.ByteOrder
  *  - reader: a transcript -> ReaderLane with the model's card -> prose, actions, title, notes, as
  *            ReaderWorker.finishLane does (the ReaderRegressionGate approach: the whole transcript
  *            at once, not the live reading during the import).
+ *  - prose:  the prose summary (and title) again from a reader output's journal ("reader" json per
+ *            item), with the cfg "card" (prompt or budget experiments without reading again).
  *  - ask:    the meetings seeded into a Robolectric library (session.m4a with the embedded session,
  *            indexed by LibraryIndexer with the app's embedder), then AskEngine.ask over the whole
  *            library, one fresh conversation per question.
@@ -82,6 +84,7 @@ class QualityEvalHarness {
         when (mode) {
             "asr" -> asr()
             "reader" -> reader()
+            "prose" -> proseOnly()
             "ask" -> ask()
             "retrieve" -> retrieveOnly()
             "engines" -> engines()
@@ -233,6 +236,54 @@ class QualityEvalHarness {
                         .put("hay_hans", hans.convert(listOf(title.orEmpty(), minutes, actions, notes).joinToString("\n"))).toString(1))
                 }
             } finally { engine.close(); tok.close() }
+    }
+
+    /** A rendered journal line (ReaderProtocol.render: `#id [ts] (TAG) text`). */
+    private val NOTE_LINE = Regex("""^#(\d+) \[([^\]]+)\] (?:\(([^)\s]+)\) )?(.*)$""")
+
+    private fun proseOnly() = runBlocking {
+        val models = File(cfg.getString("models_dir"))
+        val threads = cfg.optInt("threads", 4)
+        val spec = LlmRegistry.byId(cfg.getJSONArray("llm").getString(0))
+        val card = cfg.optString("card").ifEmpty { null }?.let { ModelCard.parse(File(it).readText()) } ?: spec.card
+        val tag = cfg.optString("tag", "prose")
+        val dir = File(models, spec.dirName)
+        val todo = items().filter { !File(out, "${it.getString("name")}.$tag.json").exists() }
+        if (todo.isEmpty()) return@runBlocking
+        val engine = MfaEngine.load(File(dir, spec.mainFile).parentFile!!.path, ctx = spec.maxCtx, threads = threads,
+            weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, stopIds = spec.template.stopIds)
+        val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
+        try {
+            for (item in todo) {
+                val name = item.getString("name")
+                val r = JSONObject(File(item.getString("reader")).readText())
+                val journal = r.getString("notes").lines().mapNotNull { NOTE_LINE.find(it) }.map { m ->
+                    val (id, ts, t, text) = m.destructured
+                    studio.primeminutes.core.reader.Note(id.toInt(), 0, ts, t.ifEmpty { null }, text)
+                }
+                val lang = r.optString("language").ifEmpty { null }
+                val session = MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template)
+                val t0 = System.nanoTime()
+                var raw: String? = null; var parts = 0; var raws = emptyList<String>()
+                val (prose, title) = ReaderLane(session, File(dir, spec.systemPromptFile).readText(), card) {}.use { lane ->
+                    val p = runCatching { lane.prose(journal, lang) }.getOrNull()
+                    raw = lane.lastProseRaw; parts = lane.lastProseParts; raws = lane.lastProseRaws
+                    p to (if (cfg.optBoolean("title", false)) runCatching { lane.title(journal, lang) }.getOrNull() else null)
+                }
+                val secs = (System.nanoTime() - t0) / 1e9
+                val ts = journal.map { it.ts }
+                File(out, "$name.$tag.json").writeText(JSONObject().put("meeting", name).put("model", spec.id).put("threads", threads)
+                    .put("reader", item.getString("reader")).put("language", lang ?: JSONObject.NULL).put("card", card.name)
+                    .put("notes_count", journal.size).put("parts", parts).put("prose_sec", secs)
+                    .put("summary", prose ?: JSONObject.NULL).put("title", title ?: r.opt("title"))
+                    .put("prose_raw", raw ?: JSONObject.NULL)
+                    .put("raw_tokens", JSONArray(raws.map { tok.encode(it).size })).put("max_tokens", card.forLanguage(lang).prose.maxTokens)
+                    .put("raw_chars", JSONArray(raws.map { it.length }))
+                    .put("tags_raw", JSONArray(TS_ANY.findAll(raw.orEmpty()).map { it.value }.toList()))
+                    .put("tags_bad_raw", JSONArray(TS_ANY.findAll(raw.orEmpty()).map { it.value }.filter { !WELL_FORMED.matches(it) || it.substring(1, it.length - 1) !in ts }.toList()))
+                    .put("hay_hans", hans.convert(prose.orEmpty())).toString(1))
+            }
+        } finally { engine.close(); tok.close() }
     }
 
     /** Any bracket of digits and separators (a timestamp tag, well-formed or not), and a well-formed one. */

@@ -39,8 +39,9 @@ class ReaderLane(
     private val reader = MeetingReader(llm, systemPrompt, events = events, budget = budget, pc = card.reader, temp = card.sampler.temp,
         byLanguage = { card.forLanguage(it).reader })
 
-    /** The card for this meeting's language (as heard so far; call on the lane's thread). */
-    private fun langCard() = card.forLanguage(reader.language)
+    /** The card for this meeting's language (as heard so far; call on the lane's thread), or for
+     *  [lang] when given (a journal summarized again outside a reading). */
+    private fun langCard(lang: String? = null) = card.forLanguage(lang ?: reader.language)
 
     /** The meeting's language as the reader detected it ([MeetingLanguage] code), after [finish]. */
     @Volatile var language: String? = null
@@ -141,10 +142,10 @@ class ReaderLane(
      * write notes, so this is a plain instruction and its output is sanitised hard. Null when the
      * journal is empty or nothing usable comes back.
      */
-    suspend fun title(journal: List<Note>): String? = withContext(dispatcher) {
+    suspend fun title(journal: List<Note>, lang: String? = null): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
         llm.reset()
-        val c = langCard()
+        val c = langCard(lang)
         val toks = fitting(journal, c.title.maxTokens, c.title::render)
         if (llm.append(toks) < 0) return@withContext null
         val raw = llm.generateContinue(c.title.maxTokens, llm.template.end, c.sampler.temp) {}
@@ -159,17 +160,42 @@ class ReaderLane(
      * model and not part of the upstream protocol. Every `[ts]` it cites must be a journal time
      * (anything else is stripped), so the summary's timestamps stay tap-to-play and grounded. Null
      * when the journal is empty or the reply is unusable; callers fall back to the grouped minutes.
+     *
+     * A journal longer than the card's prose `segment_tokens` is summarized in parts of consecutive
+     * notes ([proseParts]), one fresh conversation and one full budget each, and the parts' paragraphs
+     * are joined in order: a single reply under one budget ends long before a long meeting does.
      */
-    suspend fun prose(journal: List<Note>): String? = withContext(dispatcher) {
+    suspend fun prose(journal: List<Note>, lang: String? = null): String? = withContext(dispatcher) {
         if (journal.isEmpty()) return@withContext null
-        llm.reset()
-        val c = langCard()
-        val toks = fitting(journal, c.prose.maxTokens, c.prose::render)
-        if (llm.append(toks) < 0) return@withContext null
-        val raw = llm.generateContinue(c.prose.maxTokens, llm.template.end, c.sampler.temp) {}
-        lastProseRaw = raw
-        cleanProse(raw, journal.map { it.ts }.toSet(), llm.template.end)
+        val c = langCard(lang)
+        val known = journal.map { it.ts }.toSet()
+        val sizes = if (c.prose.segmentTokens > 0) journal.map { llm.tokenize(ReaderProtocol.render(it) + "\n", false).size } else emptyList()
+        val parts = proseParts(sizes, c.prose.segmentTokens, c.prose.segmentMax).ifEmpty { listOf(journal.indices) }
+        val raws = ArrayList<String>()
+        val texts = ArrayList<String>()
+        for ((i, range) in parts.withIndex()) {
+            val part = journal.slice(range)
+            llm.reset()
+            val prompt: (String) -> String = if (i == 0) c.prose::render else { n -> c.prose.renderSegment(n, part.first().ts, part.last().ts) }
+            val toks = fitting(part, c.prose.maxTokens, prompt)
+            if (llm.append(toks) < 0) continue
+            val raw = llm.generateContinue(c.prose.maxTokens, llm.template.end, c.sampler.temp) {}
+            raws += raw
+            cleanProse(raw, known, llm.template.end)?.let(texts::add)
+        }
+        lastProseRaw = raws.joinToString("\n\n").ifEmpty { null }
+        lastProseRaws = raws.toList()
+        lastProseParts = parts.size
+        texts.joinToString("\n\n").ifEmpty { null }
     }
+
+    /** How many parts the last [prose] was written in (diagnostics, the quality harness). */
+    @Volatile var lastProseParts: Int = 0
+        private set
+
+    /** The last [prose]'s replies, one per part, as the model wrote them (diagnostics). */
+    @Volatile var lastProseRaws: List<String> = emptyList()
+        private set
 
     private fun notesFor(journal: List<Note>, chars: Int = notesChars): List<Note> =
         if (chars > 0) card.reader.compactNotes(journal, chars) else journal
@@ -216,6 +242,28 @@ class ReaderLane(
                 if (end != null) text = text.substring(0, end.range.last + 1).trim()
             }
             return text.takeIf { it.length >= 20 }
+        }
+
+        /** The prose summary's parts: consecutive note ranges of a journal whose notes take [sizes]
+         *  tokens each. One part (the whole journal) when it fits [segmentTokens] or segmenting is off
+         *  (0); else ceil(total / [segmentTokens]) parts, at most [segmentMax], cut where the running
+         *  total crosses each equal share, so the parts are about the same size. Empty for no notes. */
+        fun proseParts(sizes: List<Int>, segmentTokens: Int, segmentMax: Int): List<IntRange> {
+            if (sizes.isEmpty()) return emptyList()
+            val total = sizes.sum()
+            val k = if (segmentTokens <= 0) 1 else ((total + segmentTokens - 1) / segmentTokens).coerceIn(1, maxOf(1, minOf(segmentMax, sizes.size)))
+            if (k == 1) return listOf(sizes.indices)
+            val out = ArrayList<IntRange>()
+            var start = 0; var run = 0
+            for (i in sizes.indices) {
+                run += sizes[i]
+                val left = sizes.size - 1 - i          // notes after this one
+                val partsLeft = k - out.size - 1        // parts still to open after this one closes
+                // Close here once this part's share is reached, keeping a note for each part still to come.
+                if (partsLeft > 0 && left >= partsLeft && (left == partsLeft || run * k >= total * (out.size + 1))) { out += start..i; start = i + 1 }
+            }
+            out += start until sizes.size
+            return out
         }
 
         /** A title kept short: 40 characters, or 60 cut at a word end for a spaced (English) one —
