@@ -28,6 +28,12 @@ data class Person(
     val voiceEnabled: Boolean = true,
     /** The phone's owner ("Me"). Phase 2. */
     val me: Boolean = false,
+    /**
+     * Fields this version does not know (a JSON object, or null), written back unchanged: a later
+     * feature (an address-book `contact` link, `emails`, …) can add keys to a person without an older
+     * app dropping them.
+     */
+    val extra: String? = null,
 )
 
 data class PeopleDoc(
@@ -48,10 +54,12 @@ data class SpeakerLink(val name: String, val person: String? = null)
 /** The JSON of `people/people.json` and of a meeting's `speakers.json` (same on Android and iOS). */
 object PeopleCodec {
     const val VERSION = 1
+    private val KNOWN = setOf("id", "name", "note", "aliases", "created", "lastUsed", "voiceEnabled", "me")
 
     fun encode(doc: PeopleDoc): String {
         val arr = JSONArray()
         for (p in doc.people) arr.put(JSONObject().apply {
+            p.extra?.let { e -> runCatching { JSONObject(e) }.getOrNull()?.let { x -> for (k in x.keys()) if (k !in KNOWN) put(k, x.get(k)) } }
             put("id", p.id); put("name", p.name)
             p.note?.let { put("note", it) }
             if (p.aliases.isNotEmpty()) put("aliases", JSONArray(p.aliases))
@@ -78,6 +86,7 @@ object PeopleCodec {
                 aliases = p.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } ?: emptyList(),
                 created = p.optLong("created"), lastUsed = p.optLong("lastUsed"),
                 voiceEnabled = p.optBoolean("voiceEnabled", true), me = p.optBoolean("me", false),
+                extra = JSONObject().also { x -> for (k in p.keys()) if (k !in KNOWN) x.put(k, p.get(k)) }.takeIf { it.length() > 0 }?.toString(),
             )
         }
         return PeopleDoc(people.distinctBy { it.id }, o.optBoolean("migrated", false), o.optInt("migrationFound", 0), o.optBoolean("voice", false))

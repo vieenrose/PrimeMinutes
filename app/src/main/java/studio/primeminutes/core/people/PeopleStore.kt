@@ -84,6 +84,16 @@ object PeopleStore {
 
     fun touch(context: Context, id: String) { mutate(context) { PeopleOps.touch(it, id, now()) } }
 
+    /**
+     * The people of one meeting: each linked speaker → its person (unnamed speakers and plain labels
+     * are absent). The API later features build on (e.g. "email participants").
+     */
+    fun peopleOf(context: Context, entryDir: File): Map<Int, Person> {
+        init(context)
+        val d = doc.value
+        return (readLinks(entryDir) ?: emptyMap()).mapNotNull { (sid, l) -> d.byId(l.person)?.let { sid to it } }.toMap()
+    }
+
     private fun now() = System.currentTimeMillis() / 1000
 
     // --- per-meeting links ---------------------------------------------------------------------

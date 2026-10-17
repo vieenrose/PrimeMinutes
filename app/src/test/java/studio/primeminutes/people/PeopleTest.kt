@@ -141,4 +141,15 @@ class PeopleTest {
         assertTrue(s.any { it.start > 200 } && s.any { it.start in 100.0..160.0 })   // every third sampled
         assertEquals(40.1, s.first().start, 1e-6)                    // trimmed 0.1 s
     }
+
+    @Test fun unknownPersonFieldsSurviveARoundTrip() {
+        val json = """{"version":1,"people":[{"id":"a","name":"Mark","contact":"lk-1","emails":["m@x.org"],"created":1,"lastUsed":2}]}"""
+        val doc = PeopleCodec.decode(json)
+        val again = PeopleCodec.decode(PeopleCodec.encode(PeopleOps.rename(doc, "a", "Marc")))
+        val o = org.json.JSONObject(PeopleCodec.encode(again)).getJSONArray("people").getJSONObject(0)
+        assertEquals("Marc", o.getString("name"))
+        assertEquals("lk-1", o.getString("contact"))
+        assertEquals("m@x.org", o.getJSONArray("emails").getString(0))
+        assertNull(PeopleCodec.decode("""{"people":[{"id":"b","name":"Ada"}]}""").people[0].extra)
+    }
 }

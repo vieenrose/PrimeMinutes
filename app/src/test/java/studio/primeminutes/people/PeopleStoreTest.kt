@@ -32,6 +32,8 @@ class PeopleStoreTest {
         // Split this meeting's Marcus off.
         val other = PeopleStore.split(ctx, dir.name, mark.id, "Marco")!!
         assertEquals(other.id, PeopleStore.readLinks(dir)!![0]!!.person)
+        // The people of a meeting (speaker 2 "Lin" is a plain label: absent).
+        assertEquals(mapOf(0 to other.id), PeopleStore.peopleOf(ctx, dir).mapValues { it.value.id })
         // Delete keeps the name as a plain label.
         PeopleStore.delete(ctx, other.id, clearNames = false)
         assertEquals(SpeakerLink("Marco", null), PeopleStore.readLinks(dir)!![0])
