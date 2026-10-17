@@ -119,7 +119,7 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 ## 需求
 
 - iOS 17.0 以上，arm64 iPhone。驗證機型：iPhone 14 Pro Max（6 GB）。
-- 模型在第一次開啟時詢問後下載（會先顯示總量，可選僅限 Wi‑Fi）：語音引擎約 271 MB，AI 筆記模型 E2B 約 2.2 GB（E4B 約 3.3 GB）。
+- 模型在第一次開啟時詢問後下載（會先顯示總量，可選僅限 Wi‑Fi）：語音引擎約 271 MB，AI 筆記模型 E2B 約 2.2 GB（E4B 約 3.3 GB）。E4B 已更新為行動版 v2（摘要較完整、與原話不符的筆記較少）：原本選用 E4B 的 iPhone 會在背景下載新版（與舊版相同的檔案直接沿用），下載完成前繼續使用舊版，之後刪除舊版檔案。
 - RAM 不足 4.5 GB 的 iPhone 自動改為循序處理：錄音結束後才閱讀。3 GB 機型（如 iPhone XR）無法可靠執行 E2B。
 - 唯一的網路連線：下載模型與 Podcast。
 
