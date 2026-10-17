@@ -83,7 +83,8 @@ checked by `core/power/CpuSupport.kt`).
 ## Meeting reader (`core/reader/`)
 
 The summarizer is a Gemma-4 model fine-tuned as a reading agent, in Google's mobile graph format:
-E2B mobile-v1 by default, E4B on 8 GB phones (pinned in `LlmRegistry`; the weights and
+E2B mobile-v1 by default, E4B mobile-v2 on 8 GB phones (E4B mobile-v1 is `replacedBy` v2: a saved v1
+choice reads as v2, v1 keeps running until v2 is installed, then its files are reclaimed; pinned in `LlmRegistry`; the weights and
 `system_prompt.txt` are pinned together and must stay paired).
 
 - **Engine.** `cpp/mfa/` is the forked LiteRT-LM CPU engine (vieenrose/LiteRT-LM, branch

@@ -275,3 +275,39 @@ Branch `mobile-v2-e4b` (from origin/android 1e265164, not merged, not released, 
 
 Data: ~/voxsum-models/eval-corpora/work/mv2/seg/ (cards, cfg_*, p_*/ outputs, judge/, judge_sum_keys.json,
 sum_scores.json), n10/ctx/ (device turns, speed, runs).
+
+## 10. Integration (2026-10-18): E4B mobile-v2 replaces E4B mobile-v1
+
+Settings: v2 card `gemma4-meeting-agent-zh-v2`, **max_notes 12, prose budget 1600**; segmented prose off.
+
+Host, 10 meetings, blind Opus judge (QualityEvalHarness is deterministic: two runs of the same config gave
+identical notes and summaries, so one run per config is shown and the spread is 0):
+
+| E4B config | coverage | summary /5 | title /5 | contradicted notes | summary contradictions | language |
+|---|---|---|---|---|---|---|
+| v1 shipped (600) | 0.675 | 2.80 | 3.6 | 14/296 (4.7 %) | 12 | 9/10 |
+| v1, 1600 | 0.675 | 3.20 | 3.6 | 14/296 (4.7 %) | 13 | 9/10 |
+| v2, 8 notes, 1600 | 0.723 | 3.90 | 3.7 | 4/399 (1.0 %) | 5 | 10/10 |
+| **v2, 12 notes, 1600** | **0.743** | **3.90** | **4.0** | **4/422 (0.9 %)** | **5** | **10/10** |
+
+12 notes: notes dropped by the cap go from 39 to 6; v2@12 beats shipped v1 on 9 of 10 meetings (TS3003c 3 vs 4).
+
+Note10+ (test app, ReaderRegressionGate, order v1, v2, v2, v1, 90 s pauses; the two runs of each model
+gave the same recall):
+
+| | move recall / time / prose | weiya | AMI IS1009c (EN, 29 min) | VmHWM | prefill / decode |
+|---|---|---|---|---|---|
+| v1 | 0.75 / 315–366 s / 117 s | 0.92 / 314 s / 97 s | 0.74 / 687 s / 140 s | 2.88 GB | 47–48 / 4.9–5.4 tok/s |
+| v2 | 0.92 / 438–459 s / 155 s | 1.00 / 407 s / 133 s | 0.79 / 823 s / 207 s | 2.89 GB | 48 / 5.3–5.4 tok/s |
+
+v2 writes more notes (23 vs 15 on move), so reading takes ~30 % longer; the prose cites the last note on
+both. Same speed and memory.
+
+Migration (verified on the Note10+): a saved E4B v1 choice reads as v2; v1 keeps reading until v2 is
+installed; the existing prefetch downloads v2 on Wi-Fi (2.3 GB net: the embedders and tokenizer are copied
+from v1 and sha-checked; Android refuses app hard links, so they are copies); v1 is deleted once v2 is
+installed and has built its weight cache.
+
+E2B (measured, not switched): v1 vs v2, both at 1600 — coverage 0.641 vs 0.653, summary 3.30 vs 3.40, title
+3.2 vs 3.5, contradicted notes 7/337 (2.1 %) vs 7/397 (1.8 %), 3 meetings better / 3 worse / 4 equal. No
+clear win.
