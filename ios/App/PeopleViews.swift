@@ -109,7 +109,7 @@ struct PersonPickerSheet: View {
                 }
                 if allowContacts && query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Section {
-                        Button { ContactPicker.present { c, chosen in onPick(.contact(c, chosen)) } } label: {
+                        Button { chooseContact() } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Label(L("contact_choose"), systemImage: "person.crop.rectangle")
                                 Text(L("contact_choose_hint")).font(.caption).foregroundStyle(.secondary)
@@ -137,7 +137,13 @@ struct PersonPickerSheet: View {
             Button(L("people_same_yes")) { sameAsk = nil; onPick(.existing(a.1)) }
             Button(L("people_same_no", a.0)) { sameAsk = nil; onPick(.new(a.0)) }
         }
+        .task {   // DEV: VOX_CONTACT_TAP=speaker taps "Choose from contacts…" (device checks without taps)
+            guard allowContacts, Dev.env["VOX_CONTACT_TAP"] == "speaker" else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000); chooseContact()
+        }
     }
+
+    private func chooseContact() { ContactPicker.present { c, chosen in onPick(.contact(c, chosen)) } }
 
     private func row(_ name: String, _ sub: String?, greyed: Bool = false, dots: Int = 0, _ tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
@@ -209,6 +215,10 @@ struct SpeakerNameFlow: View {
                 Button(L("people_both", a.0.name)) { mergeAsk = nil; onLink(a.0) }
                 Button(L("cancel"), role: .cancel) { mergeAsk = nil; onDismiss() }
             } message: { a in Text(L("people_merge_text", speaker.label, a.1.label)) }
+            .task(id: contactAsk?.1) {   // DEV: VOX_CONTACT_SAVE=<s> presses Save on "Name in Prime Minutes" after <s> seconds
+                guard let a = contactAsk, let t = Double(Dev.env["VOX_CONTACT_SAVE"] ?? "") else { return }
+                try? await Task.sleep(nanoseconds: UInt64(t * 1e9)); contactAsk = nil; contactNamed(a.0, a.1, contactName)
+            }
             .alert(L("contact_name_title"), isPresented: Binding(get: { contactAsk != nil }, set: { if !$0 { contactAsk = nil } }), presenting: contactAsk) { a in
                 TextField(L("speaker_name"), text: $contactName)
                 Button(L("people_save")) { contactAsk = nil; contactNamed(a.0, a.1, contactName) }

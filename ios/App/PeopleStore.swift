@@ -226,7 +226,8 @@ extension PeopleStore {
     /// DEV (device checks without taps): VOX_PEOPLE_DO=op;op… run once at launch, then Documents/people-dev.txt lists
     /// the directory and every linked meeting. Meetings are named by id prefix. Ops: link:<id>:<speaker>:<name>
     /// (an existing person by name, else a new one), clear:<id>:<speaker>, rename:<name>:<new>, merge:<from>:<into>,
-    /// delete:<name>:keep|clear, split:<id>:<name>:<new>, remigrate, dump.
+    /// delete:<name>:keep|clear, split:<id>:<name>:<new>, email:<name>:<address>, me:<name>,
+    /// contact:<name>:<contact name>:<org>:<address>, remigrate, dump.
     func devRun(_ spec: String) async {
         guard let library else { return }
         func person(_ n: String) -> Person? { doc.people.first { PersonNames.same($0.name, n, Self.fold) } }
@@ -255,6 +256,10 @@ extension PeopleStore {
                 try? await library.store.save(s)
             case "dropclones":   // removes the test copies (their files only: the audio belongs to the original)
                 for s in await library.store.all() where s.title.hasPrefix("SDTEST ") { await library.store.delete(s.id); LibraryIndexer.shared.forget(s.id); VoiceHooks.impl?.onMeetingDeleted(s.id) }
+            case "email" where a.count == 3: if let p = person(a[1]) { addEmail(p.id, a[2]) }
+            case "me" where a.count == 2: if let p = person(a[1]) { setMe(p.id) }
+            case "contact" where a.count == 5:   // a demo contact link (README shots): contact:<person>:<contact name>:<org>:<address>
+                if let p = person(a[1]) { linkContact(p.id, PickedContact(name: a[2], emails: [a[4]], key: "dev-" + a[2], id: nil, org: a[3].isEmpty ? nil : a[3]), chosen: a[4]) }
             case "forget" where a.count == 2: if let p = person(a[1]) { mutate { PeopleOps.delete($0, p.id) } }
             case "forgetall": mutate { var d = $0; d.people = []; d.migrationFound = 0; return d }   // test cleanup
             case "rerun" where a.count == 2: if let s = await session(a[1]) { Model.shared.runner.rerun(s, transcribe: true) }
@@ -264,7 +269,7 @@ extension PeopleStore {
         }
         await library.refresh()
         var out = "ops \(spec)\npeople \(doc.people.count) migrated=\(doc.migrated) found=\(doc.migrationFound)\n"
-        for p in doc.people { out += "  \(p.id.prefix(8)) \(p.name)" + (p.aliases.isEmpty ? "" : " aliases=\(p.aliases)") + (p.note.map { " note=\($0)" } ?? "") + " last=\(p.lastUsed)\n" }
+        for p in doc.people { out += "  \(p.id.prefix(8)) \(p.name)" + (p.aliases.isEmpty ? "" : " aliases=\(p.aliases)") + (p.note.map { " note=\($0)" } ?? "") + (p.me ? " me" : "") + (p.emails.isEmpty ? "" : " emails=\(p.emails.map { "\($0.address)(\($0.from))" })") + (p.contact.map { " contact=\($0.name ?? "-")/\($0.org ?? "-")" } ?? "") + " last=\(p.lastUsed)\n" }
         if spec.contains("list") { for s in library.sessions { out += "# \(s.id.uuidString.prefix(8)) \(Int(s.seconds))s spk=\(Set(s.lines.map(\.speaker)).count) audio=\(s.audio != nil) \(s.title.prefix(30))\n" } }
         for s in library.sessions where s.speakerNames != nil {
             out += "\(s.id.uuidString.prefix(8)) \(s.title.prefix(30)): " + Self.links(s).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value.name)" + ($0.value.person.map { "→\($0.prefix(8))" } ?? "") }.joined(separator: ", ") + "\n"

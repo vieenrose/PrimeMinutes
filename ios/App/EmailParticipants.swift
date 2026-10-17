@@ -239,7 +239,8 @@ struct EmailParticipantsSheet: View {
                 }
             }
         }
-        .task {   // DEV: VOX_MAIL=preview opens the preview (README / guide screenshots)
+        .task {   // DEV: VOX_MAIL=preview opens the preview (README / guide screenshots); send presses "Open in mail app"
+            if Dev.env["VOX_MAIL"] == "send" { try? await Task.sleep(nanoseconds: 1_500_000_000); onSend(request()) }
             if Dev.env["VOX_MAIL"] == "preview" {
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 var o = request().options; o.attachments = MeetingMailSource.attachNames(attach, MeetingMailSource.title(session))
@@ -378,6 +379,9 @@ private struct AddRecipientView: View {
             active = d; c.mailComposeDelegate = d
             StatusLog.add("mail: composer, \(r.to.count) recipient(s), \(m.plain.count) chars, attach=\(r.attach ?? "-"), truncated=\(m.truncated)")
             top.present(c, animated: true)
+            if let t = Double(Dev.env["VOX_MAIL_CLOSE"] ?? "") {   // DEV: closes the composer unsent (device checks: never send)
+                DispatchQueue.main.asyncAfter(deadline: .now() + t) { c.dismiss(animated: true); active = nil; StatusLog.add("mail: DEV composer closed unsent") }
+            }
             return
         }
         // No Mail account: the default mail app through mailto: (plain body within the link budget, no attachment).

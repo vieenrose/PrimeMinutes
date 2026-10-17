@@ -34,7 +34,15 @@ import ContactsUI
 
     /// Shows the picker over the frontmost screen; `done` gets the contact and the address the user chose.
     static func present(_ done: @escaping @MainActor (PickedContact, String) -> Void) {
-        guard let top = topController() else { return }
+        if let f = Dev.env["VOX_CONTACT"], f.hasPrefix("fake:") {   // DEV: a picked contact without the picker, "fake:name|org|a,b|chosen"
+            let a = f.dropFirst(5).split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            let emails = (a.count > 2 ? a[2] : "").split(separator: ",").map(String.init)
+            let c = PickedContact(name: a.first, emails: emails, key: "dev-" + (a.first ?? ""), id: nil, org: a.count > 1 && !a[1].isEmpty ? a[1] : nil)
+            StatusLog.add("contacts: DEV fake pick \(a.first ?? "")")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { done(c, a.count > 3 ? a[3] : emails.first ?? "") }
+            return
+        }
+        guard let top = topController() else { StatusLog.add("contacts: no screen to show the picker over"); return }
         let d = Delegate(done); active = d
         let p = CNContactPickerViewController()
         p.delegate = d
@@ -43,6 +51,10 @@ import ContactsUI
         p.predicateForSelectionOfContact = NSPredicate(format: "emailAddresses.@count == 1")
         p.predicateForSelectionOfProperty = NSPredicate(format: "key == 'emailAddresses'")
         top.present(p, animated: true)
+        StatusLog.add("contacts: picker shown over \(type(of: top))")
+        if let t = Double(Dev.env["VOX_CONTACT_CLOSE"] ?? "") {   // DEV: closes the picker, nothing picked
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { p.dismiss(animated: true); active = nil; StatusLog.add("contacts: DEV picker closed") }
+        }
     }
 
     static func topController() -> UIViewController? {
@@ -72,12 +84,7 @@ struct PersonContactSections: View {
                 Text(contactLine(p)).font(.subheadline).foregroundStyle(.secondary)
                 if p.contact == nil { Text(L("contact_choose_hint")).font(.caption).foregroundStyle(.secondary) }
             }
-            Button(L(p.contact == nil ? "contact_choose" : "contact_update")) {
-                ContactPicker.present { c, chosen in
-                    if let old = p.contact, old.platform == c.platform, old.key != c.key { replaceAsk = (c, chosen) }
-                    else { store.linkContact(p.id, c, chosen: chosen) }
-                }
-            }.accessibilityIdentifier("contact-pick")
+            Button(L(p.contact == nil ? "contact_choose" : "contact_update")) { choose(p) }.accessibilityIdentifier("contact-pick")
             if p.contact != nil { Button(L("contact_unlink")) { unlinking = true }.foregroundStyle(.secondary) }
             if let o = PeopleOps.sameContact(store.doc, p).first {
                 HStack {
@@ -107,6 +114,10 @@ struct PersonContactSections: View {
             }
             Button { draft = ""; adding = true } label: { Label(L("email_add"), systemImage: "plus") }.accessibilityIdentifier("email-add")
         } header: { Label(L("email_card_title"), systemImage: "envelope") }
+        .task {   // DEV: VOX_CONTACT_TAP=person taps "Choose from contacts…" (device checks without taps)
+            guard Dev.env["VOX_CONTACT_TAP"] == "person" else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000); choose(person)
+        }
         .alert(L("email_add"), isPresented: $adding) {
             TextField("name@example.com", text: $draft).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
             Button(L("people_save")) {
@@ -125,6 +136,13 @@ struct PersonContactSections: View {
         .alert(L("contact_replace", p.contact?.name ?? "—"), isPresented: Binding(get: { replaceAsk != nil }, set: { if !$0 { replaceAsk = nil } }), presenting: replaceAsk) { a in
             Button(L("contact_replace_yes")) { replaceAsk = nil; store.linkContact(p.id, a.0, chosen: a.1) }
             Button(L("cancel"), role: .cancel) { replaceAsk = nil }
+        }
+    }
+
+    private func choose(_ p: Person) {
+        ContactPicker.present { c, chosen in
+            if let old = p.contact, old.platform == c.platform, old.key != c.key { replaceAsk = (c, chosen) }
+            else { store.linkContact(p.id, c, chosen: chosen) }
         }
     }
 
