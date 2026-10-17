@@ -13,5 +13,6 @@ swiftc -parse-as-library -O $D/../App/People.swift $D/PeopleTests.swift -o $O/pe
 swiftc -parse-as-library -O $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/BoundaryEditsTests.swift -o $O/boundary-tests && $O/boundary-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/VoiceTests.swift -o $O/voice-tests
 VOX_SPEAKER_CARDS=$D/../App/Resources/speaker_cards $O/voice-tests
+swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/../App/VoiceGeneration.swift $D/VoiceGenerationTests.swift -o $O/voice-gen-tests && $O/voice-gen-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/MeetingMail.swift $D/MeetingMailTests.swift -o $O/mail-tests
 VOX_MAIL_DIR=$D/../App/Resources/mail $O/mail-tests $D/golden_mail $D/../App/Resources/model_cards/gemma4-meeting-agent-zh.json

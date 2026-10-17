@@ -68,6 +68,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines) == card.revision
     }
     nonisolated static let threads = min(2, ProcessInfo.processInfo.activeProcessorCount)
+    /// Bumped by `disable` / `deleteAll`: a computation that started before stores nothing (Android generation).
+    nonisolated static let generation = VoiceGeneration()
 
     private init() {}
     /// Attaches the hooks and starts the backfill (Model, at launch).
@@ -137,15 +139,17 @@ final class SpeakerEmbedder: @unchecked Sendable {
     /// Off: `deleteData` also removes every voice vector (people and meetings).
     func disable(deleteData: Bool) {
         PeopleStore.shared.setVoice(false)
-        queue = []
+        queue = []; Self.generation.bump()
         if deleteData { deleteAll() }
     }
     /// "Delete all voice data": the people's exemplars and every meeting's sidecar; the switch goes off.
     func deleteAll() {
         PeopleStore.shared.setVoice(false)
         queue = []; exemplars = []
-        try? FileManager.default.removeItem(at: Self.peopleFile)
-        try? FileManager.default.removeItem(at: Self.sidecarDir)
+        Self.generation.bump {
+            try? FileManager.default.removeItem(at: Self.peopleFile)
+            try? FileManager.default.removeItem(at: Self.sidecarDir)
+        }
         StatusLog.add("voice: all voice data deleted")
         version += 1
     }
@@ -203,6 +207,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
         let order = Dictionary(sessions.map { ($0.id.uuidString, Int64($0.date.timeIntervalSince1970)) }, uniquingKeysWith: { a, _ in a })
         var found: Outlier?
         edit { cur in
+            // Recognition turned off (or its data deleted) meanwhile: nobody learns from this meeting.
+            guard enabled else { return cur }
             var l = cur.filter { e in !(e.meeting == key && links[e.speaker]?.person != e.person) }
             for (sid, link) in links.sorted(by: { $0.key < $1.key }) {
                 guard let p = doc.byId(link.person), p.voiceEnabled, let v = mv.of(sid), Double(v.seconds) >= card.minCleanSec else { continue }
@@ -259,16 +265,17 @@ final class SpeakerEmbedder: @unchecked Sendable {
                 model = await Task.detached(priority: .utility) { SpeakerEmbedder(path: path, threads: Self.threads, card: Self.card) }.value
                 if model == nil { StatusLog.add("voice: model load failed"); working.remove(id); queue = []; break }
             }
-            let m = model!
-            let r = await Task.detached(priority: .utility) { Self.compute(s, m) }.value
+            let m = model!, gen = Self.generation.current
+            let r = await Task.detached(priority: .utility) { Self.compute(s, m, gen: gen) }.value
             working.remove(id)
             if let cost = r { StatusLog.add(cost); version += 1 }
-            syncMeeting(id)
+            if gen == Self.generation.current { syncMeeting(id) }
         }
     }
 
     /// Computes the meeting's sidecar if it is missing or stale: its cost line when it was written, else nil.
-    nonisolated static func compute(_ s: Session, _ m: SpeakerEmbedder) -> String? {
+    /// Nothing is written when recognition went off or its data was deleted since `gen`.
+    nonisolated static func compute(_ s: Session, _ m: SpeakerEmbedder, gen: Int) -> String? {
         let card = Self.card
         let turns = CleanSpeech.voiceTurns(s.lines)
         let speakers = Array(Set(s.lines.map(\.speaker))).sorted()
@@ -320,11 +327,19 @@ final class SpeakerEmbedder: @unchecked Sendable {
         }
         let t2 = Date()
         do {
-            try FileManager.default.createDirectory(at: sidecarDir, withIntermediateDirectories: true)
-            try VoiceFiles.encodeMeeting(VoiceFiles.MeetingVoices(modelId: card.id, fingerprint: fp, speakers: out)).write(to: sidecar(s.id), options: .atomic)
+            let mv = VoiceFiles.MeetingVoices(modelId: card.id, fingerprint: fp, speakers: out)
+            guard try storeSidecar(s.id, mv, gen: gen) else { StatusLog.add("voice \(s.id): dropped, recognition off or its data deleted meanwhile"); return nil }
         } catch { StatusLog.add("voice \(s.id): could not write: \(error)"); return nil }
         return String(format: "voice %@: %d/%d speakers, %.0f s speech, decode %d ms, embed %d ms", s.id.uuidString, out.count, speakers.count,
                       speech, Int(t1.timeIntervalSince(t0) * 1000), Int(t2.timeIntervalSince(t1) * 1000))
+    }
+
+    /// Writes a meeting's sidecar computed under `gen`; false (nothing written) after a `disable` / `deleteAll` since.
+    nonisolated static func storeSidecar(_ id: UUID, _ mv: VoiceFiles.MeetingVoices, gen: Int, dir: URL = sidecarDir) throws -> Bool {
+        try generation.store(gen) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try VoiceFiles.encodeMeeting(mv).write(to: dir.appendingPathComponent(id.uuidString + ".bin"), options: .atomic)
+        }
     }
 
     /// "Me": a voice from a short recording of the phone's owner (`pcm` 16 kHz mono). Only the vector is kept.
