@@ -305,7 +305,12 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 if (ids != null && dir.name in ids) studio.primeminutes.core.people.PeopleStore.readLinks(dir)?.let(studio.primeminutes.core.people.PeopleStore::resolve)
                 else studio.primeminutes.core.people.PeopleStore.resolve(studio.primeminutes.core.people.PeopleStore.linksOf(s.speakerNames))
             } ?: return@launch
-            if (now.sessionGen == s.sessionGen) update { SessionReducer.namesRelinked(it, names) }
+            if (now.sessionGen != s.sessionGen) return@launch
+            // The names changed while this resolved (the user just named a speaker, which may also
+            // have created a person and so triggered this): resolve again from the current names,
+            // never write a stale snapshot over the user's choice.
+            if (now.speakerNames != s.speakerNames) { relinkFromStore(ids); return@launch }
+            update { SessionReducer.namesRelinked(it, names) }
         }
     }
 
