@@ -302,14 +302,11 @@ private fun ReaderModelSelector(selected: String, enabled: Boolean, onSelect: (S
         (context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
         mi.totalMem >= LlmRegistry.E4B_MIN_RAM
     }
-    val current = LlmRegistry.byId(selected).id
-    // E4B mobile-v1 stays selectable (go back to it, re-summarize with it) while it is the choice or its
-    // files are still on the phone; a new choice of E4B gets mobile-v2.
-    val e4bV1 = remember(current) { current == LlmRegistry.E4B_MOBILE_ID || ModelManager(context).llmReady(LlmRegistry.byId(LlmRegistry.E4B_MOBILE_ID)) }
-    val options = listOfNotNull(
+    // A replaced model's choice shows as its successor (E4B mobile-v1 -> mobile-v2): only those are offered.
+    val current = LlmRegistry.current(selected).id
+    val options = listOf(
         LlmRegistry.E2B_MOBILE_ID to R.string.reader_model_e2b,
         LlmRegistry.E4B_MOBILE_V2_ID to R.string.reader_model_e4b,
-        (LlmRegistry.E4B_MOBILE_ID to R.string.reader_model_e4b_v1).takeIf { e4bV1 },
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (id, labelRes) ->

@@ -76,7 +76,10 @@ object ModelPrefetch {
     fun pending(context: Context): DownloadPlan.Pending {
         val mm = ModelManager(context)
         val llm = LlmRegistry.byId(ConfigStore.load(context).llmModelId)
-        return DownloadPlan.pending(mm.asrReady(), mm.asrDownloadBytes(), mm.llmReady(llm), llm.totalBytes)
+        val ready = mm.llmReady(llm)
+        // A replaced model still installed (E4B mobile-v1 while mobile-v2 is fetched) keeps the reader working.
+        val replacedReady = !ready && mm.readerSpec(llm.id).id != llm.id
+        return DownloadPlan.pending(mm.asrReady(), mm.asrDownloadBytes(), ready, mm.llmDownloadBytes(llm), replacedReady)
     }
 
     /** Starts the background prefetch when the user's consent covers the current network. [userAsked]:

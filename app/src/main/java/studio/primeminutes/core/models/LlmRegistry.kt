@@ -36,6 +36,10 @@ data class LlmSpec(
     /** How to drive these weights (model_cards/<name>.json): chat template, sampler, budgets,
      *  the reader protocol and the title/prose/Ask prompts. */
     val card: ModelCard = ModelCard.DEFAULT,
+    /** The model that replaces this one, or null. A replaced model is not offered any more; it stays
+     *  listed so a phone that has it keeps reading with it until its successor is installed (then its
+     *  files are deleted), and so meetings and notes it wrote keep their provenance. */
+    val replacedBy: String? = null,
 ) {
     val totalBytes: Long get() = files.values.sumOf { it.first }
     val template: ChatTemplate get() = card.template
@@ -58,9 +62,10 @@ data class SamplerProfile(val topK: Int, val topP: Float, val temp: Float)
  */
 object LlmRegistry {
     const val E2B_MOBILE_ID = "gemma4-e2b-meeting-agent-zh-mobile-v1"
+    /** E4B mobile-v1: replaced by [E4B_MOBILE_V2_ID] (2026-10-18), kept only to migrate phones that have it. */
     const val E4B_MOBILE_ID = "gemma4-e4b-meeting-agent-zh-mobile"
-    /** E4B mobile-v2 (2026-10): fewer contradicted notes than mobile-v1; read with at most 8 notes per
-     *  window (its card), the number it was trained and evaluated with. mobile-v1 E4B stays selectable. */
+    /** E4B mobile-v2 (2026-10): fewer contradicted notes and better summaries than mobile-v1 E4B, which
+     *  it replaces (docs/model-eval-mobile-v2.md); its card sets its note cap and prose budget. */
     const val E4B_MOBILE_V2_ID = "gemma4-e4b-meeting-agent-zh-mobile-v2"
     /** E2B mobile-v1 on the LiteRT engine; it replaced the llama.cpp v11 GGUF (2026-10-03). */
     const val DEFAULT_ID = E2B_MOBILE_ID
@@ -90,9 +95,10 @@ object LlmRegistry {
                 836_778_512L to "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a",
                 2_260_210_576L to "34858194f4f596fae132470a2e0f2f0f276e540c7af8502e4ef7cca99e871424",
             ),
+            replacedBy = E4B_MOBILE_V2_ID,
         ),
-        // mobile-v2 (integration note 05b0d33b §10): a new main graph and system prompt (每段最多 8 則);
-        // the embedders and tokenizer are byte-identical to mobile-v1 E4B (reused on device, no re-download).
+        // mobile-v2 (integration note 05b0d33b §10): a new main graph and system prompt; the embedders and
+        // tokenizer are byte-identical to mobile-v1 E4B (reused on device, not downloaded again).
         mobile(
             id = E4B_MOBILE_V2_ID, displayName = "Gemma-4-E4B meeting agent mobile-v2 (zh)", shortName = "E4B",
             dirName = "gemma4-meeting-agent-e4b-mobile-v2",
@@ -111,6 +117,31 @@ object LlmRegistry {
     /** The large E4B models (offered on 8 GB phones only). */
     val E4B_IDS = setOf(E4B_MOBILE_ID, E4B_MOBILE_V2_ID)
 
+    /** The models Settings offers: the ones nothing replaces. */
+    val OFFERED: List<LlmSpec> get() = ALL.filter { it.replacedBy == null }
+
+    /** The model a saved choice [id] stands for today: [id], or what replaced it (followed to the end). */
+    fun current(id: String): LlmSpec {
+        var s = byId(id)
+        repeat(ALL.size) { s = s.replacedBy?.let(::byId) ?: return s }
+        return s
+    }
+
+    /**
+     * The model to run for the choice [id]: the [current] one when it is installed ([ready]); while it is
+     * not (its download pending or running), an installed model it replaced, so a phone being migrated
+     * keeps reading; else the current one (to be downloaded).
+     */
+    fun runnable(id: String, ready: (LlmSpec) -> Boolean): LlmSpec {
+        val want = current(id)
+        if (ready(want)) return want
+        return ALL.firstOrNull { it.replacedBy != null && it.id != want.id && current(it.id).id == want.id && ready(it) } ?: want
+    }
+
+    /** Replaced models whose successor ([current]) passes [installed]: their files can go. */
+    fun reclaimable(installed: (LlmSpec) -> Boolean): List<LlmSpec> =
+        ALL.filter { it.replacedBy != null && current(it.id).let { c -> c.id != it.id && installed(c) } }
+
     private const val MOBILE_V1_PROMPT_SHA = "406040c70270b5b9d47a4222138fcf2177f361dcbfb79fba164ca2559e0ffbf3"
     private const val MOBILE_V2_PROMPT_SHA = "044150e8e18c05f807c88ca88358953f81fcc74fe85959184d66c65d81fd4843"
 
@@ -121,7 +152,7 @@ object LlmRegistry {
     private fun mobile(
         id: String, displayName: String, shortName: String, dirName: String, repo: String, rev: String,
         dir: String, prompt: String, sizes: List<Pair<Long, String>>,
-        promptSha: String = MOBILE_V1_PROMPT_SHA, card: ModelCard = ModelCard.DEFAULT,
+        promptSha: String = MOBILE_V1_PROMPT_SHA, card: ModelCard = ModelCard.DEFAULT, replacedBy: String? = null,
     ) = LlmSpec(
         id = id, displayName = displayName, shortName = shortName, dirName = dirName,
         revision = "https://huggingface.co/$repo/resolve/$rev",
@@ -137,6 +168,7 @@ object LlmRegistry {
         maxCtx = 4096,
         systemPromptFile = prompt,
         card = card,
+        replacedBy = replacedBy,
     )
 
     fun byId(id: String): LlmSpec =

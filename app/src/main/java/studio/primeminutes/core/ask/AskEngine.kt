@@ -279,8 +279,8 @@ object AskEngine {
 
     /** The loaded-model holder: the embedder of the search index must be present. */
     fun available(context: Context): Boolean =
-        EmbedHost.ready(context) && ModelManager(context).llmReady(LlmRegistry.byId(
-            studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId))
+        EmbedHost.ready(context) && ModelManager(context).let { it.llmReady(it.readerSpec(
+            studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId)) }
 
     fun busy(): Boolean = studio.primeminutes.service.RunRegistry.busy
 
@@ -523,17 +523,17 @@ object AskEngine {
     }
 
     /** The card of the model loaded for Ask (else the chosen one). */
-    private fun card() = LlmRegistry.byId(modelId ?: studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId).card
+    private fun card() = LlmRegistry.byId(modelId ?: LlmRegistry.current(studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId).id).card
 
     private fun tokenizer(app: Context): SpTokenizer {
         tok?.let { return it }
-        val spec = LlmRegistry.byId(studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId)
+        val spec = ModelManager(app).readerSpec(studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId)
         return SpTokenizer.load(ModelManager(app).llmTokenizer(spec).path).also { tok = it }
     }
 
     /** Loads the reader model (CPU, the XNNPACK weight cache the reader built). */
     private fun open(app: Context): MfaSession {
-        val spec = LlmRegistry.byId(studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId)
+        val spec = ModelManager(app).readerSpec(studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId)
         session?.takeIf { modelId == spec.id }?.let { return it }
         close()
         val mm = ModelManager(app)

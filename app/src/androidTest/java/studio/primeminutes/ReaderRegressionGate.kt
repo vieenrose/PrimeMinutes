@@ -48,6 +48,9 @@ class ReaderRegressionGate {
     @Test fun weiya() = gate("weiya")
     /** An English meeting (AMI IS1009c, 30 min): the notes and summary must be in English too. */
     @Test fun english() = gate("ami_is1009c")
+    /** Any meeting, no key facts (`-e utts <path of a gate-format JSON on the device>`): timings, the
+     *  prose summary's length and how far into the meeting it cites, peak memory. */
+    @Test fun file() = gate("file")
 
     private fun gate(name: String) = runBlocking {
         val ins = InstrumentationRegistry.getInstrumentation()
@@ -58,10 +61,18 @@ class ReaderRegressionGate {
         val card = spec.card.let { c ->
             c.copy(reader = args.getString("max_notes")?.toIntOrNull()?.let { c.reader.copy(maxNotes = it) } ?: c.reader,
                 budget = args.getString("window_tokens")?.toIntOrNull()?.let { c.budget.copy(windowTokens = it) } ?: c.budget)
+        }.let { c ->
+            // -e prose_tokens N: the prose summary's budget (all languages).
+            args.getString("prose_tokens")?.toIntOrNull()?.let { n ->
+                c.copy(prose = c.prose.copy(maxTokens = n), languages = c.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(maxTokens = n)) })
+            } ?: c
         }
         val mm = ModelManager(ctx)
         assumeTrue("model ${spec.id} not installed", mm.llmReady(spec))
-        val ref = JSONObject(ins.context.assets.open("reader_gate/$name.json").bufferedReader().readText())
+        val utFile = args.getString("utts")
+        val ref = if (name == "file") JSONObject(File(requireNotNull(utFile) { "-e utts <path>" }).readText()).apply { if (!has("facts")) put("facts", JSONArray()) }
+            else JSONObject(ins.context.assets.open("reader_gate/$name.json").bufferedReader().readText())
+        val label = if (name == "file") ref.optString("name", "file") else name
         val utts = ref.getJSONArray("utterances").let { a -> List(a.length()) { i -> a.getJSONObject(i) } }.map {
             TranscriptEvent.Utterance(it.getInt("index"), it.getString("text"), it.getDouble("start"), it.getDouble("end"),
                 if (it.isNull("speaker")) null else it.getInt("speaker"))
@@ -72,6 +83,7 @@ class ReaderRegressionGate {
             weightCache = File(dir, ModelManager.WEIGHT_CACHE).path, stopIds = spec.template.stopIds)
         val tok = SpTokenizer.load(File(dir, spec.tokenizerFile).path)
         val drops = HashMap<String, Int>()
+        var proseSecs = 0.0
         val t0 = System.nanoTime()
         val probe = Probe(MfaSession(engine, tok, spec.sampler.topK, spec.sampler.topP, template = spec.template), engine)
         val (res, prose, title) = try {
@@ -80,7 +92,10 @@ class ReaderRegressionGate {
             }.use { lane ->
                 lane.start()
                 val r = lane.finish(utts)
-                Triple(r, runCatching { lane.prose(r.journal) }.getOrNull(), runCatching { lane.title(r.journal) }.getOrNull())
+                val p0 = System.nanoTime()
+                val p = runCatching { lane.prose(r.journal) }.getOrNull()
+                proseSecs = (System.nanoTime() - p0) / 1e9
+                Triple(r, p, runCatching { lane.title(r.journal) }.getOrNull())
             }
         } finally { engine.close(); tok.close() }
         val secs = (System.nanoTime() - t0) / 1e9
@@ -95,7 +110,12 @@ class ReaderRegressionGate {
             val groups = f.getJSONArray("all")
             (0 until groups.length()).all { g -> groups.getJSONArray(g).let { alts -> (0 until alts.length()).any { hay.contains(alts.getString(it).lowercase()) } } }
         }.map { it.getString("id") }
-        val recall = 1.0 - missed.size.toDouble() / facts.size
+        val recall = if (facts.isEmpty()) Double.NaN else 1.0 - missed.size.toDouble() / facts.size
+        // How far into the meeting the summary goes: its last cited time over the last note's.
+        fun secsOf(ts: String) = ts.split(":").fold(0) { a, x -> a * 60 + (x.toIntOrNull() ?: 0) }
+        val cited = Regex("""\[(\d+:\d{2}(?::\d{2})?)\]""").findAll(prose.orEmpty()).map { secsOf(it.groupValues[1]) }.maxOrNull() ?: 0
+        val lastNote = res.journal.maxOfOrNull { secsOf(it.ts) } ?: 0
+        val vmHwmKb = File("/proc/self/status").readLines().firstOrNull { it.startsWith("VmHWM") }?.filter(Char::isDigit)?.toLongOrNull() ?: 0L
         // Format: the protocol must not leak into what the user reads.
         // Language: the notes and the summary follow the meeting's.
         val lang = ref.optString("lang").ifEmpty { null }
@@ -107,15 +127,17 @@ class ReaderRegressionGate {
             .put("recall", recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
             .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
+            .put("prose_tokens", card.prose.maxTokens).put("prose_seconds", proseSecs.toInt()).put("prose_chars", prose.orEmpty().length)
+            .put("prose_cited_s", cited).put("last_note_s", lastNote).put("vm_hwm_mb", vmHwmKb / 1024)
             .put("turns", probe.turns).put("prose", prose).put("journal", notes).put("lang", lang).put("notes_lang", notesLang).put("prose_lang", proseLang)
-        File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$name-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
-        android.util.Log.i("ReaderGate", "$name ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s"
-            .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks))
+        File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$label-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
+        android.util.Log.i("ReaderGate", "$label ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s, prose %ds %d chars cites %d/%d s, VmHWM %d MB"
+            .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks, proseSecs.toInt(), prose.orEmpty().length, cited, lastNote, vmHwmKb / 1024))
 
-        for (i in 0 until probe.turns.length()) android.util.Log.i("ReaderGate", "TURN $name ${spec.id} ${probe.turns.getJSONObject(i)}")
+        for (i in 0 until probe.turns.length()) android.util.Log.i("ReaderGate", "TURN $label ${spec.id} ${probe.turns.getJSONObject(i)}")
 
         val threshold = ref.optDouble("threshold", 0.75)
-        assertTrue("$name: recall %.2f < %.2f, missed $missed".format(recall, threshold), recall >= threshold)
+        if (facts.isNotEmpty()) assertTrue("$name: recall %.2f < %.2f, missed $missed".format(recall, threshold), recall >= threshold)
         assertTrue("$name: no title", !title.isNullOrBlank())
         assertTrue("$name: no summary prose", !prose.isNullOrBlank())
         assertTrue("$name: protocol leaked into the output: $leaks", leaks.isEmpty())

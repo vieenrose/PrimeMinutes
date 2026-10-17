@@ -250,7 +250,7 @@ internal class ReaderWorker(private val host: Host) {
     /** Load (downloading first if needed) the reader model. */
     private suspend fun loadReaderModel(): ReaderModel {
         val models = ModelManager(ctx)
-        val spec = LlmRegistry.byId(TranscriptionConfig.Holder.config.llmModelId)
+        val spec = models.readerSpec(TranscriptionConfig.Holder.config.llmModelId)
         ensureLlm(spec, models)
         val dir = models.llmDir(spec)
         val system = File(dir, spec.systemPromptFile).readText()
@@ -270,7 +270,7 @@ internal class ReaderWorker(private val host: Host) {
     }
 
     /** Read one meeting to the end (runs under the task's RunGen, so its events reach its session). */
-    fun readerModelId() = LlmRegistry.byId(TranscriptionConfig.Holder.config.llmModelId).id
+    fun readerModelId() = ModelManager(ctx).readerSpec(TranscriptionConfig.Holder.config.llmModelId).id
 
     /** A reading that continued from saved notes and failed is redone from the start: a bad
      *  checkpoint must never cost the summary. */
@@ -293,7 +293,8 @@ internal class ReaderWorker(private val host: Host) {
         val gen = task.gen
         TranscriptionService.events.tryEmit(gen to TranscriptEvent.Agent(AgentEvent.State(AgentState.STARTING)))
         // The model setting changed since this one was loaded (E2B ↔ E4B): load the chosen one.
-        val wanted = LlmRegistry.byId(TranscriptionConfig.Holder.config.llmModelId).id
+        // A model being replaced keeps reading until its successor is installed (LlmRegistry.runnable).
+        val wanted = readerModelId()
         readModel?.takeIf { it.specId != wanted }?.let { it.close(); readModel = null }
         Log.i("primeminutes-reader", "reader model: wanted=$wanted loaded=${readModel?.specId}")
         val model = readModel ?: loadReaderModel().also { readModel = it }
@@ -387,7 +388,7 @@ internal class ReaderWorker(private val host: Host) {
         val cfg = TranscriptionConfig.Holder.config
         val updated = SessionLibrary.attachResults(
             ctx, entry, fin, emptyMap(), r.summary, r.actions, r.title, r.notes,
-            cfg.asrModelId, cfg.asrBackend, cfg.llmModelId,
+            cfg.asrModelId, cfg.asrBackend, readModel?.specId ?: readerModelId(),
         )
         if (updated == null) {
             Log.w("primeminutes-reader", "read done: could not save ${entry.id} (gen ${task.gen})")
@@ -472,6 +473,8 @@ internal class ReaderWorker(private val host: Host) {
             } finally { host.dlEnd("llm"); host.downloadsDone(gen) }
         }
         prepareWeights(spec, models)
+        // The chosen model now loads: a model it replaced (still on the phone during a migration) can go.
+        runCatching { models.reclaimReplacedLlm() }
     }
 
     /**

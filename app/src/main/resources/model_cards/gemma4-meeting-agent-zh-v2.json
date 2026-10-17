@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "name": "gemma4-meeting-agent-zh-v2",
- "about": "The mobile-v2 weights' card: the mobile-v1 card (gemma4-meeting-agent-zh) with at most 8 notes per window, the number mobile-v2 was trained and evaluated with (integration note 05b0d33b §10), and a prose budget of 1600 tokens: mobile-v2 writes denser summaries, and 600 tokens stopped them at about 70 % of a 40-minute meeting (docs/model-eval-mobile-v2.md §5). Everything the app must know to drive the Gemma-4 meeting-agent fine-tune: chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
+ "about": "The mobile-v2 weights' card (E4B mobile-v2, which replaced E4B mobile-v1 on 2026-10-18): the mobile-v1 card (gemma4-meeting-agent-zh) with a prose budget of 1600 tokens (mobile-v2 writes denser summaries; 600 tokens stopped them at about 70 % of a 40-minute meeting) and at most 12 notes per window like mobile-v1 (8, the number in its training prompt, dropped about 4 notes per meeting and covered fewer key points: docs/model-eval-mobile-v2.md §10). Everything the app must know to drive the Gemma-4 meeting-agent fine-tune: chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
  "template": {
   "bos": "<bos>",
   "bos_id": 2,
@@ -28,7 +28,7 @@
  },
  "reader": {
   "read_max": 400,
-  "max_notes": 8,
+  "max_notes": 12,
   "segment_s": 20,
   "stop": "\nNEXT",
   "primer": "NEXT",

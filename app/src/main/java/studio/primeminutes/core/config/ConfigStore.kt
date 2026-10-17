@@ -23,7 +23,9 @@ object ConfigStore {
             asrBackend = p.getString("asrBackend", d.asrBackend) ?: d.asrBackend,
             speakerDelaySec = p.getInt("speakerDelaySec", d.speakerDelaySec)
                 .coerceIn(TranscriptionConfig.SPEAKER_DELAY_MIN, TranscriptionConfig.SPEAKER_DELAY_MAX),
-            llmModelId = p.getString("llmModelId", d.llmModelId) ?: d.llmModelId,
+            // A replaced model's choice reads as its successor (E4B mobile-v1 -> mobile-v2); until the
+            // successor is installed the reader keeps running the old one (LlmRegistry.runnable).
+            llmModelId = studio.primeminutes.core.models.LlmRegistry.current(p.getString("llmModelId", d.llmModelId) ?: d.llmModelId).id,
             summaryScript = summaryScript,
             showActionItems = p.getBoolean("showActionItems", d.showActionItems),
             // A new key: "askEnabled" was saved false by every settings change while Ask was an

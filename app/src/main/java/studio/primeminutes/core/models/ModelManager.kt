@@ -129,6 +129,30 @@ class ModelManager(context: Context) {
      *  never leaves the device without a summarizer). */
     private fun reclaimRetiredLlm() {
         RETIRED_LLM_DIRS.forEach { File(modelsDir, it).takeIf(File::exists)?.deleteRecursively() }
+        reclaimReplacedLlm()
+    }
+
+    /** Replaced reader models (E4B mobile-v1), deleted once their successor is installed AND has loaded
+     *  once (its weight cache exists): until then the reader keeps running the old one. */
+    fun reclaimReplacedLlm() {
+        LlmRegistry.reclaimable { llmReady(it) && File(llmDir(it), WEIGHT_CACHE).exists() }.forEach { old ->
+            llmDir(old).takeIf(File::exists)?.let { android.util.Log.i("primeminutes-models", "deleting replaced ${old.id}"); it.deleteRecursively() }
+        }
+    }
+
+    /** The reader model to run for the saved choice [id] (see [LlmRegistry.runnable]). */
+    fun readerSpec(id: String): LlmSpec = LlmRegistry.runnable(id, ::llmReady)
+
+    /** Bytes [spec] still has to download: its files not yet in its folder and not lent by an installed model. */
+    fun llmDownloadBytes(spec: LlmSpec): Long {
+        if (llmReady(spec)) return 0L
+        fun read(name: String) = runCatching { File(llmDir(spec), name).readText().trim() }.getOrNull()
+        // A partial set of this revision keeps its complete files (beginSet); any other is fetched again.
+        val marked = read(REVISION_MARKER) == spec.revision || read(FETCHING_MARKER) == spec.revision
+        return spec.files.entries.sumOf { (rel, meta) ->
+            val have = marked && File(llmDir(spec), rel).length() == meta.first
+            if (have || reuseSource(spec, rel, LlmRegistry.ALL, ::llmDir) { llmReady(it) } != null) 0L else meta.first
+        }
     }
 
     // --- LLM: a revision-pinned, multi-file artifact set under its own directory. --------------
@@ -450,10 +474,14 @@ class ModelManager(context: Context) {
         }
     }
 
-    /** [src] copied to [dest] through a temporary file, kept only when its sha256 is [sha]. */
+    /** [src] linked (no second copy of a GB file) or else copied to [dest] through a temporary name, kept
+     *  only when its sha256 is [sha]. Android refuses app hard links (seen on the Note10+): there it is a
+     *  copy, and the space comes back when the old model is deleted. */
     private fun copyVerified(src: File, dest: File, sha: String): Boolean = runCatching {
         val tmp = File(dest.path + ".copy")
-        src.copyTo(tmp, overwrite = true)
+        tmp.delete()
+        val linked = runCatching { java.nio.file.Files.createLink(tmp.toPath(), src.toPath()); true }.getOrDefault(false)
+        if (!linked) src.copyTo(tmp, overwrite = true)
         if (sha256Of(tmp) != sha) { tmp.delete(); return false }
         tmp.renameTo(dest)
     }.getOrDefault(false)

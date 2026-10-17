@@ -16,23 +16,30 @@ object DownloadPlan {
         ASK,
     }
 
-    /** What a first-launch download needs: the parts still missing, in bytes. */
-    data class Pending(val speechBytes: Long, val readerBytes: Long) {
+    /** What a first-launch download needs: the parts still missing, in bytes. [readerUpgrade]: the
+     *  missing AI notes model replaces one that is installed and keeps working meanwhile (a model
+     *  migration), so nothing waits for it. */
+    data class Pending(val speechBytes: Long, val readerBytes: Long, val readerUpgrade: Boolean = false) {
         val total: Long get() = speechBytes + readerBytes
         val any: Boolean get() = total > 0L
+        /** What a recording or an import has to wait for. */
+        val blocking: Long get() = speechBytes + if (readerUpgrade) 0L else readerBytes
     }
 
-    fun pending(speechReady: Boolean, speechBytes: Long, readerReady: Boolean, readerBytes: Long) =
-        Pending(if (speechReady) 0L else speechBytes, if (readerReady) 0L else readerBytes)
+    fun pending(speechReady: Boolean, speechBytes: Long, readerReady: Boolean, readerBytes: Long, replacedReady: Boolean = false) =
+        Pending(if (speechReady) 0L else speechBytes, if (readerReady) 0L else readerBytes, !readerReady && replacedReady)
 
+    /** Before a recording or an import: ask only for what it cannot run without. */
     fun decide(consent: Consent, unmetered: Boolean, pending: Pending): Action = when {
-        !pending.any -> Action.PROCEED
+        pending.blocking <= 0L -> Action.PROCEED
         consent == Consent.ANY_NETWORK -> Action.PROCEED
         consent == Consent.WIFI_ONLY && unmetered -> Action.PROCEED
         else -> Action.ASK
     }
 
-    /** A background prefetch may run: consent given for the current network. */
+    /** A background prefetch may run: consent given for the current network. A model upgrade alone
+     *  (the old model still works) waits for Wi-Fi whatever the consent: it is GBs nobody waits for. */
     fun mayPrefetch(consent: Consent, unmetered: Boolean, pending: Pending): Boolean =
-        pending.any && (consent == Consent.ANY_NETWORK || consent == Consent.WIFI_ONLY && unmetered)
+        pending.any && (consent == Consent.ANY_NETWORK || consent == Consent.WIFI_ONLY && unmetered) &&
+            (unmetered || pending.blocking > 0L)
 }

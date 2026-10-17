@@ -43,4 +43,23 @@ class DownloadPlanTest {
         assertTrue(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, false, both))
         assertFalse(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, true, none))
     }
+
+    /** A model migration (E4B mobile-v1 installed, mobile-v2 missing): nothing waits for the new model,
+     *  and its GBs are fetched in the background on Wi-Fi only. */
+    @Test fun anUpgradeNeverBlocksARunAndWaitsForWifi() {
+        val upgrade = DownloadPlan.pending(true, 270_000_000, false, 2_260_000_000, replacedReady = true)
+        assertTrue(upgrade.any && upgrade.readerUpgrade)
+        assertEquals(0L, upgrade.blocking)
+        Consent.values().forEach { c -> listOf(true, false).forEach { w -> assertEquals(Action.PROCEED, DownloadPlan.decide(c, w, upgrade)) } }
+        assertTrue(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, true, upgrade))
+        assertTrue(DownloadPlan.mayPrefetch(Consent.WIFI_ONLY, true, upgrade))
+        assertFalse(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, false, upgrade))
+        assertFalse(DownloadPlan.mayPrefetch(Consent.UNSET, true, upgrade))
+        // Speech still missing: the run needs it, so the normal rules apply.
+        val withSpeech = DownloadPlan.pending(false, 270_000_000, false, 2_260_000_000, replacedReady = true)
+        assertEquals(270_000_000L, withSpeech.blocking)
+        assertTrue(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, false, withSpeech))
+        // No old model: not an upgrade.
+        assertFalse(DownloadPlan.pending(true, 0, false, 2_260_000_000).readerUpgrade)
+    }
 }

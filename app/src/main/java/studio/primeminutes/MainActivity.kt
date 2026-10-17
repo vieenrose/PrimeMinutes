@@ -764,7 +764,7 @@ private fun TranscribeScreen(
     var askModelReady by remember { mutableStateOf(false) }
     LaunchedEffect(s.config.llmModelId, s.running, prefetching == null, searchModelReady) {
         askModelReady = withContext(Dispatchers.IO) { studio.primeminutes.core.ask.AskEngine.available(context) }
-        readerReady = withContext(Dispatchers.IO) { ModelManager(context).llmReady(LlmRegistry.byId(s.config.llmModelId)) }
+        readerReady = withContext(Dispatchers.IO) { ModelManager(context).let { it.llmReady(it.readerSpec(s.config.llmModelId)) } }
     }
     var searchDownload by remember { mutableStateOf<Float?>(null) }
     val indexingIds by LibraryIndexer.indexing.collectAsState()
@@ -981,7 +981,8 @@ private fun TranscribeScreen(
         } else withModels { vm.processDownloaded(e) }
     }
     LaunchedEffect(Unit) {
-        val p = withContext(Dispatchers.IO) { ModelPrefetch.pending(context) }
+        // A replaced reader model whose successor already loads (a migration that finished): its files go.
+        val p = withContext(Dispatchers.IO) { runCatching { ModelManager(context).reclaimReplacedLlm() }; ModelPrefetch.pending(context) }
         val unmetered = ModelPrefetch.unmetered(context)
         // DEV (debug builds): `--ez vox_dlgate true` shows the prompt with the full sizes, models present or not.
         if (devExtras?.getBoolean("vox_dlgate") == true) {
@@ -2064,7 +2065,7 @@ private fun TranscribeScreen(
         )
     }
     askQuestion?.let { q ->
-        if (!ModelManager(context).llmReady(LlmRegistry.byId(s.config.llmModelId))) {
+        if (!ModelManager(context).let { it.llmReady(it.readerSpec(s.config.llmModelId)) }) {
             LaunchedEffect(q) {
                 Toast.makeText(context, R.string.ask_no_model, Toast.LENGTH_LONG).show(); askQuestion = null
             }
