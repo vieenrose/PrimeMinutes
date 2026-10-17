@@ -77,6 +77,15 @@ import Foundation
             check(AskLanguage.asked("尾牙的頭獎是什麼？", ui: "en", system: "en", answerIn: ai) == "尾牙的頭獎是什麼？<HANT>", "directive for chinese")
             check(AskLanguage.asked(q, ui: "zh-Hant", system: "zh-Hant", answerIn: [:]) == q, "no directive in the card")
         }
+        do {   // a person the question names: their meetings are routed first, their lines get the note bonus (Android aNamedPersonsLinesGetTheNoteBonus)
+            let dense: [(String, [Float])] = [("A", [0.9, 0.8]), ("B", [0.5])], kw: [(String, [Float])] = [("A", [5])]
+            check(AskSelect.routeMeetings(dense: dense, keyword: kw, 1, people: ["B"]) == ["B"], "person routes first")
+            check(AskSelect.routeMeetings(dense: dense, keyword: kw, 0, people: ["B"]) == ["B"], "person routes at least one")
+            check(AskSelect.routeMeetings(dense: dense, keyword: kw, 1, people: ["Z"]) == ["A"], "person without passages: usual routing")
+            check(AskSelect.routeMeetings(dense: dense, keyword: kw, 1, people: []) == ["A"], "no person")
+            let x = AskSelect.denseScore(0.80, note: false, namedSpeaker: false, bonus: 0.05), y = AskSelect.denseScore(0.78, note: false, namedSpeaker: true, bonus: 0.05)
+            check(y > x && abs(AskSelect.denseScore(0.78, note: true, namedSpeaker: false, bonus: 0.05) - y) < 1e-6, "named speaker bonus = note bonus")
+        }
         print(failures == 0 ? "ask-select: PASS" : "ask-select: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

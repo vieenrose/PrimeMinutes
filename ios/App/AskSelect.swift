@@ -82,6 +82,22 @@ enum AskSelect {
     /// Meeting routing: the `n` meetings ranked first by reciprocal-rank fusion (k 60) of two meeting scores — the mean
     /// cosine of its 3 best passages (`dense`, summaries left out) and the sum of its 3 best BM25 scores (`keyword`), each
     /// list given in its meetings' order with their passage scores. Empty when n ≤ 0.
+    /// "What did Mark say" (Android AskEngine.retrieve): the meetings `people` (meeting ids where a person the question
+    /// names is linked) are routed first, at least one of them; when none of them has a passage, the usual routing.
+    static func routeMeetings(dense: [(String, [Float])], keyword: [(String, [Float])], _ n: Int, people: Set<String>) -> Set<String> {
+        if !people.isEmpty {
+            let r = routeMeetings(dense: dense.filter { people.contains($0.0) }, keyword: keyword.filter { people.contains($0.0) }, max(n, 1))
+            if !r.isEmpty { return r }
+        }
+        return routeMeetings(dense: dense, keyword: keyword, n)
+    }
+
+    /// A passage's rank score in the dense list: a note, or a transcript chunk spoken by a person the question names,
+    /// gets `bonus` (Android AskEngine.fuse: retrieval only, the excerpts already carry "Mark:").
+    static func denseScore(_ score: Float, note: Bool, namedSpeaker: Bool, bonus: Float) -> Float {
+        score + (note ? bonus : 0) + (namedSpeaker ? bonus : 0)
+    }
+
     static func routeMeetings(dense: [(String, [Float])], keyword: [(String, [Float])], _ n: Int) -> Set<String> {
         guard n > 0 else { return [] }
         var score: [String: Float] = [:], seen: [String: Int] = [:]

@@ -107,6 +107,7 @@ enum Frames {
 enum Dev {
     /// The root view's onAppear runs again when a cover closes; the launch hooks must run once.
     @MainActor static var ranOnce = false
+    @MainActor static var ranPeopleOps = false
     #if VOX_DEV
     static let on = true
     static let env = ProcessInfo.processInfo.environment

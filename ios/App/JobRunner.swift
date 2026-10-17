@@ -99,8 +99,15 @@ final class ReaderWorker: @unchecked Sendable {
         // edited while the reader ran were overwritten by the snapshot taken at the tap.
         if let old {
             let cur = await library.all().first { $0.id == s.id } ?? old
-            s.lines = cur.lines; s.speakerNames = cur.speakerNames
+            s.lines = cur.lines; s.speakerNames = cur.speakerNames; s.speakerPeople = cur.speakerPeople
             if cur.title != old.title { s.title = cur.title }
+        } else if job != nil, let prev = await library.all().first(where: { $0.id == s.id }), prev.speakerNames?.isEmpty == false, !prev.lines.isEmpty, !lines.isEmpty {
+            // A re-transcribe renumbers the speakers: the names (and person links) follow the new speakers that cover
+            // the same speech (SpeakerCarryOver, Android SessionReducer carry).
+            let old = Dictionary(uniqueKeysWithValues: (prev.speakerNames ?? [:]).compactMap { k, v in Int(k).map { ($0, SpeakerLink(name: v, person: prev.speakerPeople?[k])) } })
+            let kept = SpeakerCarryOver.carry(SpeakerCarryOver.turns(prev.lines), old, SpeakerCarryOver.turns(lines))
+            PeopleStore.apply(kept, to: &s)
+            if !kept.isEmpty { StatusLog.add("people: \(kept.count) speaker names kept by the re-run") }
         }
         do { try await library.store.save(s) } catch { screen.status = L("session_save_failed"); Notifier.failed(s.title); return }   // Android: never claim success on a failed save
         NotificationCenter.default.post(name: .voxSessionSaved, object: s, userInfo: old.map { ["undo": $0] })

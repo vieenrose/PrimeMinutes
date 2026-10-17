@@ -59,7 +59,9 @@ struct SessionView: View {
     @State private var undoable: Session?
     /// The last speaker move or merge, undoable for a few seconds (Android OfferSpeakerUndo snackbar).
     @State private var speakerUndo: SpeakerUndo?
-    struct SpeakerUndo: Equatable { let id = UUID(); let message: String; let lines: [Utterance]; let names: [String: String]?; let after: [Int]; let earlierEdit: Bool
+    struct SpeakerUndo: Equatable { let id = UUID(); let message: String; let lines: [Utterance]; let names: [String: String]?; var people: [String: String]? = nil; let after: [Int]; let earlierEdit: Bool
+        /// A name only (the people picker): the transcript is unchanged, no "re-summarize?" afterwards.
+        var nameOnly = false
         static func == (a: Self, b: Self) -> Bool { a.id == b.id } }
     @State private var exporting = false
     @State private var exportFile: URL?
@@ -234,7 +236,7 @@ struct SessionView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                        Button { renamingSpeaker = l.speaker; draft = s.speakerNames?[String(l.speaker)] ?? "" } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless)
+                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless)
                         Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
                     }
                     Text(Self.marked(l.text, query))
@@ -295,16 +297,20 @@ struct SessionView: View {
             Button(L("done")) { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }
             Button(L("cancel"), role: .cancel) {}
         }
-        .alert(L("speaker_rename"), isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
-            TextField(L("speaker_name"), text: $draft)
-            Button(L("done")) {
-                if let k = renamingSpeaker {
-                    var n = s.speakerNames ?? [:]; let t = draft.trimmingCharacters(in: .whitespaces)
-                    if t.isEmpty { n[String(k)] = nil } else { n[String(k)] = t }
-                    s.speakerNames = n.isEmpty ? nil : n; save(s)
-                }
+        // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
+        .sheet(isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+            if let k = renamingSpeaker {
+                let voice = voiceSuggestions(s, speaker: k)
+                SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
+                                suggestions: voice.0, voiceNote: voice.1,
+                                onPlaySample: player.available ? { playSample(k) } : nil,
+                                onLink: { p in renamingSpeaker = nil; link(k, p) },
+                                onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
+                                onClear: { renamingSpeaker = nil; clearName(k) },
+                                onMerge: { into in renamingSpeaker = nil; merge(k, into) },
+                                onDismiss: { renamingSpeaker = nil })
+                    .presentationDetents([.medium, .large])
             }
-            Button(L("cancel"), role: .cancel) {}
         }
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
@@ -399,7 +405,7 @@ struct SessionView: View {
                         try? await Task.sleep(nanoseconds: 8_000_000_000)
                         guard speakerUndo == u else { return }
                         withAnimation { speakerUndo = nil }
-                        if !s.summary.isEmpty { transcriptDirty = true }
+                        if !s.summary.isEmpty && !u.nameOnly { transcriptDirty = true }
                     }
             }
         }
@@ -418,28 +424,59 @@ struct SessionView: View {
     /// Android SpeakerEdits: plain relabels, ids kept (labels and colours stay put); a speaker left without lines loses its name.
     private func reassign(_ id: UUID, _ to: Int) {
         guard let i = s.lines.firstIndex(where: { $0.id == id }) else { return }
-        let before = (s.lines, s.speakerNames)
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
         let old = s.lines[i].speaker; s.lines[i].speaker = to
         if !s.lines.contains(where: { $0.speaker == old }) { dropName(old) }
         speakerEdited(L("speaker_line_moved"), before)
     }
     private func merge(_ from: Int, _ into: Int) {
-        let before = (s.lines, s.speakerNames)
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
         for i in s.lines.indices where s.lines[i].speaker == from { s.lines[i].speaker = into }
         dropName(from); speakerEdited(L("speaker_merged"), before)
     }
     /// Saved at once with an Undo banner; the "re-summarize?" question waits until the banner is gone.
-    private func speakerEdited(_ message: String, _ before: ([Utterance], [String: String]?)) {
+    private func speakerEdited(_ message: String, _ before: ([Utterance], [String: String]?, [String: String]?), nameOnly: Bool = false) {
         save(s)
-        withAnimation { speakerUndo = SpeakerUndo(message: message, lines: before.0, names: before.1, after: s.lines.map(\.speaker), earlierEdit: speakerUndo != nil) }
+        withAnimation { speakerUndo = SpeakerUndo(message: message, lines: before.0, names: before.1, people: before.2, after: s.lines.map(\.speaker), earlierEdit: speakerUndo != nil && !(speakerUndo?.nameOnly ?? false), nameOnly: nameOnly) }
+    }
+    // MARK: people (docs/design/speaker-tags.md): the picker's choices, undoable like a merge
+    private var pickerSpeakers: [PickerSpeaker] {
+        let doc = PeopleStore.shared.doc
+        return Array(Set(s.lines.map(\.speaker))).sorted().map { k in PickerSpeaker(id: k, label: s.name(k), person: s.speakerPeople?[String(k)].flatMap { doc.byId($0)?.id }) }
+    }
+    private func pickerSpeaker(_ k: Int) -> PickerSpeaker { pickerSpeakers.first { $0.id == k } ?? PickerSpeaker(id: k, label: s.name(k), person: nil) }
+    /// `k` is `p` of the directory.
+    private func link(_ k: Int, _ p: Person) {
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
+        var l = PeopleStore.links(s); l[k] = SpeakerLink(name: p.name, person: p.id); PeopleStore.apply(l, to: &s)
+        speakerEdited(L("people_linked"), before, nameOnly: true)
+        PeopleStore.shared.touch(p.id)
+        VoiceLinks.impl?.confirmed(session: s.id, speaker: k, person: p.id)
+    }
+    /// Back to "Speaker n": the person stays in the directory.
+    private func clearName(_ k: Int) {
+        let was = s.speakerPeople?[String(k)]
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
+        var l = PeopleStore.links(s); l[k] = nil; PeopleStore.apply(l, to: &s)
+        speakerEdited(L("people_linked"), before, nameOnly: true)
+        if let was { VoiceLinks.impl?.unlinked(session: s.id, speaker: k, person: was) }
+    }
+    /// A short clip of the speaker: its longest clean line (CleanSpeech), 5 s.
+    private func playSample(_ k: Int) {
+        guard let t = CleanSpeech.sampleStart(s.lines, speaker: k) else { return }
+        player.seek(t); if !player.playing { player.toggle() }
+        Task { try? await Task.sleep(nanoseconds: 5_000_000_000); if player.playing, player.time >= t, player.time < t + 6 { player.toggle() } }
     }
     private func undoSpeakerEdit(_ u: SpeakerUndo) {
         withAnimation { speakerUndo = nil }
         guard s.lines.map(\.speaker) == u.after else { return }   // the transcript changed since: nothing safe to restore
-        s.lines = u.lines; s.speakerNames = u.names; save(s)
+        s.lines = u.lines; s.speakerNames = u.names; s.speakerPeople = u.people; save(s)
         if u.earlierEdit && !s.summary.isEmpty { transcriptDirty = true }
     }
-    private func dropName(_ k: Int) { s.speakerNames?[String(k)] = nil; if s.speakerNames?.isEmpty == true { s.speakerNames = nil } }
+    private func dropName(_ k: Int) {
+        s.speakerNames?[String(k)] = nil; if s.speakerNames?.isEmpty == true { s.speakerNames = nil }
+        s.speakerPeople?[String(k)] = nil; if s.speakerPeople?.isEmpty == true { s.speakerPeople = nil }
+    }
     private func edited() { save(s); if !s.summary.isEmpty { transcriptDirty = true } }
 
     private func stepMatch(_ d: Int) {

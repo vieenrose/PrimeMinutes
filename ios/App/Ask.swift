@@ -52,14 +52,18 @@ import Combine
     /// Reciprocal-rank fusion of the dense and keyword passages (meeting summaries left out), one score per
     /// passage: 1/(k+rank) in each list it appears in. A note outranks a chunk at equal cosine in the dense
     /// list (noteBonus); the keyword list keeps the BM25 order.
-    nonisolated static func fuse(_ dense: [LibrarySearch.Hit], _ keyword: [LibrarySearch.Hit], k: Float = rrfK) -> [Excerpt] {
+    /// `speaks`: a transcript passage (meeting, speaker id) of a person the question names gets the note bonus too.
+    nonisolated static func fuse(_ dense: [LibrarySearch.Hit], _ keyword: [LibrarySearch.Hit], k: Float = rrfK,
+                                 speaks: (UUID, Int?) -> Bool = { _, _ in false }) -> [Excerpt] {
         struct Key: Hashable { let id: UUID, kind: UInt8, a: Int }
         var score: [Key: Float] = [:], first: [Key: Excerpt] = [:], order: [Key] = []
         func add(_ hits: [LibrarySearch.Hit], bonus: Bool) {
             let ps = hits.flatMap { h in h.passages.filter { $0.kind != .meeting }.map { (h.session, $0) } }
             let ranked = ps.enumerated().sorted { a, b in
-                let sa = a.element.1.score + (bonus && a.element.1.kind == .note ? noteBonus : 0)
-                let sb = b.element.1.score + (bonus && b.element.1.kind == .note ? noteBonus : 0)
+                func sc(_ x: (Session, LibrarySearch.Passage)) -> Float {
+                    bonus ? AskSelect.denseScore(x.1.score, note: x.1.kind == .note, namedSpeaker: x.1.kind == .chunk && speaks(x.0.id, x.1.speakerId), bonus: noteBonus) : x.1.score
+                }
+                let sa = sc(a.element), sb = sc(b.element)
                 return sa != sb ? sa > sb : a.offset < b.offset
             }.map(\.element)
             for (rank, (s, p)) in ranked.enumerated() {
@@ -235,14 +239,17 @@ final class AskHolder: @unchecked Sendable {
         let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil
         let dense = qv.map { LibrarySearch.dense(sessions, qv: $0, maxPassages: depth, snippetChars: 1200) } ?? []
         let keyword = LibrarySearch.keyword(sessions, query: question, maxPassages: depth, snippetChars: 1200)
+        // "What did Mark say": the meetings Mark is linked in are routed first, and his lines get the note bonus
+        // (retrieval only: the excerpts already carry "Mark:", the prompt is unchanged).
+        let personMeetings = PeopleStore.meetingsNaming(question, sessions)
         let routed = AskSelect.routeMeetings(
             dense: dense.map { h in (h.session.id.uuidString, h.passages.filter { $0.kind != .meeting }.map(\.score)) },
-            keyword: keyword.map { h in (h.session.id.uuidString, h.passages.map(\.score)) }, p.routeMeetings)
+            keyword: keyword.map { h in (h.session.id.uuidString, h.passages.map(\.score)) }, p.routeMeetings, people: Set(personMeetings.keys))
         // The other meetings keep perMeeting candidates per list (the passages are in score order).
         func trim(_ hs: [LibrarySearch.Hit]) -> [LibrarySearch.Hit] {
             hs.map { h in routed.contains(h.session.id.uuidString) ? h : LibrarySearch.Hit(session: h.session, score: h.score, passages: Array(h.passages.prefix(p.perMeeting))) }
         }
-        let fused = AskEngine.fuse(trim(dense), trim(keyword), k: p.rrfK)
+        let fused = AskEngine.fuse(trim(dense), trim(keyword), k: p.rrfK) { id, sid in sid.map { personMeetings[id.uuidString]?.contains($0) == true } ?? false }
         let ranked = fused.filter { routed.contains($0.session.id.uuidString) } + fused.filter { !routed.contains($0.session.id.uuidString) }
         let byId = Dictionary(sessions.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { a, _ in a })
         let items = ranked.map { AskSelect.Item(meeting: $0.session.id.uuidString, sec: $0.sec, at: $0.at, text: $0.text, score: $0.score, a: $0.a, b: $0.b) }

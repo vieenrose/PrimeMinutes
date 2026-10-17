@@ -21,6 +21,10 @@ struct SettingsView: View {
     @AppStorage("askOn") private var askEnabled = true
     @ObservedObject private var indexer = LibraryIndexer.shared
     @Environment(\.dismiss) private var dismiss
+    /// Opens a meeting at a time (the People screen's meeting rows).
+    var openMeeting: (Session, Double) -> Void = { _, _ in }
+    @ObservedObject private var people = PeopleStore.shared
+    @State private var showPeople = Dev.env["VOX_PEOPLE"] != nil
     var body: some View {
         NavigationStack {
             Form {
@@ -37,6 +41,15 @@ struct SettingsView: View {
                     Stepper(value: $delay, in: 5...30, step: 5) { HStack { Text(L("settings_speaker_delay")); Spacer(); Text(L("settings_seconds", delay)).foregroundStyle(.secondary) } }
                         .onChange(of: delay) { Prefs.speakerDelay = delay }
                 } header: { Text(L("settings_recording")) } footer: { Text(L("settings_speaker_delay_hint")) }
+                // The people directory (names shared by all meetings; voice recognition will live there too).
+                Section(L("people_title")) {
+                    NavigationLink { PeopleScreen(library: m.library, openMeeting: openMeeting) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("people_settings_open", people.doc.people.count))
+                            Text(L("people_settings_desc")).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Section {
                     Picker(L("notes_model"), selection: $reader) {
                         Text(L("reader_model_e2b") + " · 2.2 GB").tag("E2B")
@@ -94,6 +107,7 @@ struct SettingsView: View {
             .confirmationDialog(L("storage_delete_title"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
                 Button(L("storage_delete"), role: .destructive) { if let i = toDelete { Storage.delete(i); models = Storage.models() } }
             } message: { if let i = toDelete { Text(L("storage_delete_body", i.label, SizeFormat.bytes(i.bytes))) } }
+            .navigationDestination(isPresented: $showPeople) { PeopleScreen(library: m.library, openMeeting: openMeeting) }
             .navigationTitle(L("settings"))
             .toolbar { Button(L("done")) { dismiss() } }
         }

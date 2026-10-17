@@ -8,6 +8,8 @@ struct LibraryView: View {
     let onSettings: () -> Void
     @State private var query = ""
     @State private var filter = Filter.all
+    /// The person whose meetings the list is narrowed to (nil: everyone).
+    @State private var personFilter: String? = Dev.env["VOX_FILTER"].flatMap { n in PeopleStore.shared.doc.people.first { PersonNames.same($0.name, n, PeopleStore.fold) }?.id }
     @State private var renaming: Session?
     @State private var deleting: Session?
     @State private var draft = ""
@@ -71,7 +73,8 @@ struct LibraryView: View {
     private func isDone(_ s: Session) -> Bool { !isNew(s) && !s.noSpeech }
     private var shown: [Session] {
         let base = m.library.sessions.filter { s in
-            switch filter { case .all: true; case .new: isNew(s); case .done: isDone(s) }
+            guard personFilter.map({ p in s.speakerPeople?.values.contains(p) == true }) ?? true else { return false }
+            switch filter { case .all: return true; case .new: return isNew(s); case .done: return isDone(s) }
         }
         if query.trimmingCharacters(in: .whitespaces).isEmpty { return base }
         let order = Dictionary(uniqueKeysWithValues: hits.enumerated().map { ($0.element.session.id, $0.offset) })
@@ -253,6 +256,7 @@ struct LibraryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack { ForEach(Filter.allCases.filter { $0 == .all || !m.library.sessions.isEmpty && ($0 == .done || m.library.sessions.contains { isNew($0) }) }, id: \.self) { chip($0) } }.padding(.horizontal, 16)
             }.padding(.vertical, 10)
+            PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {

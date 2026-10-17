@@ -9,3 +9,4 @@ swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderL
 VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/guard-tests
 swiftc -parse-as-library -O $R/MfaCompute.swift $R/ResumePlan.swift $D/EngineAndResumeTests.swift -o $O/engine-tests && $O/engine-tests
 swiftc -parse-as-library -O $D/../App/AskSelect.swift $R/ReaderProtocol.swift $D/AskSelectTests.swift -o $O/ask-select-tests && $O/ask-select-tests
+swiftc -parse-as-library -O $D/../App/People.swift $D/PeopleTests.swift -o $O/people-tests && $O/people-tests

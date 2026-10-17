@@ -349,7 +349,9 @@ final class IndexStop: @unchecked Sendable {
 enum LibrarySearch {
     static let maxPassages = 3, minCos: Float = 0.45, rrfK: Float = 60, lexWeight: Float = 0.3
     struct Passage { let kind: SessionIndex.Kind, uttIndex: Int, uttEnd: Int, timeSec: Double, speaker: String?, snippet: String, semanticOnly: Bool
-        var score: Float }
+        var score: Float
+        /// A chunk's speaker (its first line's): Ask gives a named person's lines the note bonus.
+        var speakerId: Int? = nil }
     struct Hit { let session: Session, score: Float, passages: [Passage] }
 
     private static let cc = OpenCC.transcript(.simplified)
@@ -365,7 +367,7 @@ enum LibrarySearch {
             if all(s.title) { ps.append(Passage(kind: .meeting, uttIndex: -1, uttEnd: -1, timeSec: 0, speaker: nil, snippet: s.title, semanticOnly: false, score: 1)) }
             for l in s.summary.split(separator: "\n").map(String.init) where all(l) { ps.append(Passage(kind: .meeting, uttIndex: -1, uttEnd: -1, timeSec: 0, speaker: nil, snippet: l.trimmingCharacters(in: .whitespaces), semanticOnly: false, score: 0.9)) }
             for (i, n) in s.notes.enumerated() where all(n.text) { ps.append(Passage(kind: .note, uttIndex: i, uttEnd: i, timeSec: SessionIndex.noteTime(n), speaker: nil, snippet: n.text, semanticOnly: false, score: 0.9)) }
-            if s.id == openId { for (i, u) in s.lines.enumerated() where all(u.text) { ps.append(Passage(kind: .chunk, uttIndex: i, uttEnd: i, timeSec: u.start, speaker: s.name(u.speaker), snippet: u.text, semanticOnly: false, score: 0.8)) } }
+            if s.id == openId { for (i, u) in s.lines.enumerated() where all(u.text) { ps.append(Passage(kind: .chunk, uttIndex: i, uttEnd: i, timeSec: u.start, speaker: s.name(u.speaker), snippet: u.text, semanticOnly: false, score: 0.8, speakerId: u.speaker)) } }
             guard !ps.isEmpty else { continue }
             ps.sort { $0.score > $1.score }
             hits.append(Hit(session: s, score: ps[0].score, passages: Array(ps.prefix(maxPassages))))
@@ -425,7 +427,7 @@ enum LibrarySearch {
         return per.values.map { ix -> Hit in
             let ps = ix.sorted { scores[$0] > scores[$1] }.prefix(maxPassages).map { i -> Passage in
                 let p = units[i].1
-                return Passage(kind: p.kind, uttIndex: p.uttIndex, uttEnd: p.uttEnd, timeSec: p.timeSec, speaker: p.speaker, snippet: p.snippet, semanticOnly: false, score: scores[i]) }
+                return Passage(kind: p.kind, uttIndex: p.uttIndex, uttEnd: p.uttEnd, timeSec: p.timeSec, speaker: p.speaker, snippet: p.snippet, semanticOnly: false, score: scores[i], speakerId: p.speakerId) }
             return Hit(session: units[ix[0]].0, score: ps[0].score, passages: Array(ps))
         }.sorted { $0.score > $1.score }
     }
@@ -443,7 +445,7 @@ enum LibrarySearch {
         case .chunk:
             let a = Int(v.a), b = Int(v.b); guard s.lines.indices.contains(a), s.lines.indices.contains(b), a <= b else { return nil }
             let text = s.lines[a...b].map(\.text).joined(separator: " ")
-            return Passage(kind: .chunk, uttIndex: a, uttEnd: b, timeSec: s.lines[a].start, speaker: s.name(s.lines[a].speaker), snippet: String(text.prefix(chars)), semanticOnly: true, score: cos)
+            return Passage(kind: .chunk, uttIndex: a, uttEnd: b, timeSec: s.lines[a].start, speaker: s.name(s.lines[a].speaker), snippet: String(text.prefix(chars)), semanticOnly: true, score: cos, speakerId: s.lines[a].speaker)
         }
     }
 

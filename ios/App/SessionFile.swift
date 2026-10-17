@@ -12,7 +12,7 @@ enum SessionFile {
 
     // MARK: manifest
     struct Manifest: Codable {
-        struct SN: Codable { var name: String; var confidence: String?; var reason: String? }
+        struct SN: Codable { var name: String; var confidence: String?; var reason: String?; var person: String? = nil }   // person: the people directory id (Android SpeakerName.person)
         struct U: Codable { var index: Int?; var start: Double; var end: Double; var text: String; var speaker: Int? }
         var primeminutes_version: Int? = 1   // optional: a file from before the rename carries the old key
         var title: String?, summary: String?, action_items: String?, notes: String?
@@ -28,7 +28,7 @@ enum SessionFile {
         m.asr_backend = "ios"
         m.asr_model = "xasr-stream-q8-octav+sortformer-int8-f190"   // the LiteRT pair NemoEngine loads; same id as Android
         m.llm_model = s.reader
-        m.speaker_names = (s.speakerNames ?? [:]).filter { !$0.value.isEmpty }.mapValues { Manifest.SN(name: $0, confidence: "user", reason: "") }
+        m.speaker_names = Dictionary(uniqueKeysWithValues: (s.speakerNames ?? [:]).filter { !$0.value.isEmpty }.map { k, v in (k, Manifest.SN(name: v, confidence: "user", reason: "", person: s.speakerPeople?[k])) })
         m.utterances = s.lines.enumerated().map { Manifest.U(index: $0.offset, start: $0.element.start, end: $0.element.end, text: $0.element.text, speaker: $0.element.speaker) }
         return m
     }
@@ -47,8 +47,10 @@ enum SessionFile {
     static func session(_ m: Manifest, audio: String?) -> Session {
         let lines = (m.utterances ?? []).map { Utterance(speaker: $0.speaker ?? 0, start: $0.start, end: $0.end, text: $0.text) }
         var names: [String: String] = [:]
-        for (k, v) in m.speaker_names ?? [:] where !v.name.isEmpty { names[k] = v.name }
+        var people: [String: String] = [:]
+        for (k, v) in m.speaker_names ?? [:] where !v.name.isEmpty { names[k] = v.name; if let p = v.person, !p.isEmpty { people[k] = p } }
         var s = Session(title: m.title ?? "", summary: m.summary ?? "", seconds: lines.last?.end ?? 0, lines: lines, notes: notes(m.notes), audio: audio, speakerNames: names.isEmpty ? nil : names)
+        s.speakerPeople = people.isEmpty ? nil : people
         if s.notes.isEmpty, let t = m.notes, MeetingNotes.parse(t) != nil { s.legacyNotes = t }   // Android: v2 NOTES first, else the journal
         s.reader = m.llm_model   // Android sessionModels: the summary stays attributed to the model that wrote it
         // Android saves its action items as shown, edits included: keep them when they are not what the notes give.

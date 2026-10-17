@@ -26,6 +26,9 @@ struct Session: Identifiable, Codable, Hashable {
     var notes: [Note]
     var audio: String? = nil      // file name in Application Support/audio
     var speakerNames: [String: String]? = nil   // speaker index -> custom name
+    /// Speaker index → people directory id (People.swift): the named speakers linked to a person. Their name in
+    /// speakerNames is the person's, rewritten here by every directory edit (this file is the authority on iOS).
+    var speakerPeople: [String: String]? = nil
     var reader: String? = nil     // reader model id that wrote the summary (Android sessionModels.first)
     var actionsEdited: String? = nil   // the action items as the user edited them; nil = derived from the notes
     var legacyNotes: String? = nil     // v2 NOTES text of a session written by the older summarizer (MeetingNotes)
