@@ -80,6 +80,11 @@ struct Config {
     // and 45.8->29.3 (45s, never tuned on) at pad=45, with false alarm <= 1.1. Silence/noise/tone still
     // produce ZERO turns at these settings. Raising pad further keeps helping on presentation-style audio
     // and will start merging fast turn-taking, so 45 (~1.7 s) is a middle choice, not the eval optimum.
+    // 2026-10-17: 0.5 / 20 replaces 0.3 / 45 (docs/research/asr-diarization-2026-10.md, branch asr-diar-research).
+    // Same graph and phone time; meeting DER zh 14.8 -> 9.8 %, en 17.0 -> 12.0 % (AISHELL-4 + AMI, 10 meetings,
+    // the gain is false alarm); 尾牙 demo DER 14.5 -> 13.5 %. The litert_host path (Android, iOS) reads the
+    // decode from DiarHostConfig (diar_host.h), and only speaker_pad_frames from here (fusion turn snap):
+    // keep both in step.
     // SESSION-scoped diarizer options (audiocpp_options passed to session_create). The split is load-bearing:
     // the decode knobs (speaker_*) are read off the REQUEST, while the streaming geometry and memory sizing -
     // latency_profile, chunk_len, chunk_right_context, fifo_len, spkcache_len, spkcache_update_period,
@@ -116,7 +121,7 @@ struct Config {
     };
 
     std::vector<std::pair<std::string, std::string>> diar_opts = {
-        {"speaker_threshold", "0.3"}, {"speaker_pad_frames", "45"}
+        {"speaker_threshold", "0.5"}, {"speaker_pad_frames", "20"}
     };
     // Affinity, in hex cpu masks (0xc0 = cpu6-7 = the two A78 primes on the Dimensity 1300).
     // PROBE, NOT FIX. audio.cpp creates ~8 threads during streaming (measured: 1 thread through init, 10
