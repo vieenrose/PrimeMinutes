@@ -2,6 +2,7 @@
 #include "fusion.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <map>
 
@@ -220,6 +221,7 @@ std::vector<TaggedPiece> Fusion::attribute_from(size_t char_from, size_t byte_fr
         snap[i] = sn ? 1 : 0;
     }
     auto pieces = tag_sequence(tail, mark, snap);
+    snap_to_turn_starts(pieces, tail, char_from);
     // Recover the time range each piece covers from the character spans (tag_sequence groups by word,
     // so times cannot travel with the text there).
     size_t pos = char_from;
@@ -232,6 +234,112 @@ std::vector<TaggedPiece> Fusion::attribute_from(size_t char_from, size_t byte_fr
         pos += n;
     }
     return pieces;
+}
+
+void Fusion::snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::string& text, size_t char_from) const {
+    if (turn_snap_s_ <= 0 || pieces.size() < 2 || turns_.empty()) return;
+    const auto cps = codepoints(text);
+    const size_t n = cps.size();
+    // Which piece each character belongs to; the pieces tile the text in order.
+    std::vector<int> label(n, -1);
+    std::vector<size_t> first(pieces.size() + 1, n);
+    size_t c = 0;
+    for (size_t k = 0; k < pieces.size(); k++) {
+        first[k] = c;
+        const size_t m = codepoints(pieces[k].text).size();
+        for (size_t i = 0; i < m && c < n; i++) label[c++] = (int)k;
+    }
+    if (c != n) return;
+    first[pieces.size()] = n;
+    auto at = [&](size_t i) { return char_from + i < spans_.size() ? spans_[char_from + i].start : INT64_MAX; };
+    auto word = [&](size_t i) { return word_char(text, cps[i].first, cps[i].second); };
+    // A spoken character (not punctuation or space): each side of a moved change keeps at least one, else a
+    // side left with only "？" is handed back whole by build_segments and two lines of one speaker merge
+    // across the other's turn.
+    auto spoken = [&](size_t i) {
+        const unsigned char* u = (const unsigned char*)text.data() + cps[i].first;
+        uint32_t cp = u[0];
+        if (cps[i].second == 2) cp = ((u[0] & 0x1F) << 6) | (u[1] & 0x3F);
+        else if (cps[i].second == 3) cp = ((u[0] & 0x0F) << 12) | ((u[1] & 0x3F) << 6) | (u[2] & 0x3F);
+        else if (cps[i].second == 4) cp = ((u[0] & 0x07) << 18) | ((u[1] & 0x3F) << 12) | ((u[2] & 0x3F) << 6) | (u[3] & 0x3F);
+        if (cp < 0x80) return (bool)std::isalnum((int)cp);
+        return !((cp >= 0x2000 && cp <= 0x206F) || (cp >= 0x3000 && cp <= 0x303F) || (cp >= 0xFF00 && cp <= 0xFF0F) ||
+                 (cp >= 0xFF1A && cp <= 0xFF20) || (cp >= 0xFF3B && cp <= 0xFF40) || (cp >= 0xFF5B && cp <= 0xFF65));
+    };
+    auto any_spoken = [&](size_t from, size_t to) {
+        for (size_t j = from; j < to; j++) if (spoken(j)) return true;
+        return false;
+    };
+    // Silence before character i: from the end of the last spoken character before it to its start.
+    auto pause_before = [&](size_t i) -> int64_t {
+        size_t j = i;
+        while (j > 0 && !spoken(j - 1)) j--;
+        if (j == 0 || char_from + j - 1 >= spans_.size()) return 0;
+        size_t s = i;
+        while (s < n && !spoken(s)) s++;
+        return s < n ? at(s) - spans_[char_from + j - 1].end : 0;
+    };
+    const int64_t pause = (int64_t)(turn_pause_s_ * rate_), max_shift = (int64_t)(turn_max_shift_s_ * rate_);
+    const int64_t win = (int64_t)(turn_snap_s_ * rate_), pad = (int64_t)(turn_pad_s_ * rate_),
+                  lead = (int64_t)(turn_lead_s_ * rate_);
+    bool moved = false;
+    size_t floor = 0;                                   // a later change never moves before an earlier one
+    for (size_t k = 0; k + 1 < pieces.size(); k++) {
+        const TaggedPiece& a = pieces[k];
+        const TaggedPiece& b = pieces[k + 1];
+        if (a.speaker.empty() || b.speaker.empty() || a.speaker == b.speaker) continue;
+        size_t ka = k, kb = k + 1;                      // the runs of A's and B's pieces around the change
+        while (ka > 0 && pieces[ka - 1].speaker == a.speaker) ka--;
+        while (kb + 1 < pieces.size() && pieces[kb + 1].speaker == b.speaker) kb++;
+        const size_t lo = std::max(first[ka] + 1, floor + 1), hi = first[kb + 1] - 1, pos = first[k + 1];
+        if (lo > hi) continue;
+        const int64_t t = at(pos);
+        // B's own turn starting nearest to the change.
+        const Turn* tb = nullptr;
+        for (const Turn& e : turns_) {
+            if (e.speaker != b.speaker || std::abs(e.start + lead - t) > win) continue;
+            if (!tb || std::abs(e.start + lead - t) < std::abs(tb->start + lead - t)) tb = &e;
+        }
+        if (!tb) continue;
+        // Someone else still talking when B starts (unpadded): overlap, leave the change where it is.
+        const int64_t core = tb->start == 0 ? 0 : tb->start + pad;
+        bool overlap = false;
+        for (const Turn& e : turns_) {
+            if (e.speaker == b.speaker) continue;
+            const int64_t es = e.start == 0 ? 0 : e.start + pad, ee = e.end - pad;
+            if (es < core && ee > core) { overlap = true; break; }
+        }
+        if (overlap) continue;
+        // First character at or after the turn start, moved back to the start of a word it falls in.
+        const int64_t target = tb->start + lead;
+        size_t i = lo;
+        while (i <= hi && at(i) < target) i++;
+        if (i > hi) continue;
+        while (i > lo && word(i - 1) && word(i)) i--;
+        if (i == pos || (word(i - 1) && word(i))) continue;
+        if (!any_spoken(std::max(first[ka], floor), i) || !any_spoken(i, first[kb + 1])) continue;
+        // Moving only a space or punctuation changes nothing anyone said, but would stretch a line's time
+        // span across the pause to the other speaker's first word.
+        if (!any_spoken(std::min(i, pos), std::max(i, pos))) continue;
+        // A pause right at the change is the strongest cue there is: keep it unless the turn start points at a
+        // longer one (else the moved words drag a line's time span across the silence).
+        if (std::abs(at(i) - t) > max_shift) continue;
+        if (pause_before(pos) >= pause && pause_before(i) < pause_before(pos)) continue;
+        for (size_t j = std::min(i, pos); j < std::max(i, pos); j++) label[j] = (int)(i < pos ? k + 1 : k);
+        floor = i;
+        moved = true;
+    }
+    if (!moved) return;
+    std::vector<TaggedPiece> out;
+    for (size_t i = 0; i < n;) {
+        size_t j = i + 1;
+        while (j < n && label[j] == label[i]) j++;
+        TaggedPiece p = pieces[label[i]];
+        p.text = text.substr(cps[i].first, (j < n ? cps[j].first : text.size()) - cps[i].first);
+        out.push_back(std::move(p));
+        i = j;
+    }
+    pieces = std::move(out);
 }
 
 std::vector<TaggedPiece> Fusion::on_delta(const std::string& delta, int64_t span_start, int64_t span_end) {

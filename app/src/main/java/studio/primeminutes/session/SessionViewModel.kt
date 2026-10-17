@@ -322,6 +322,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     fun reassignLine(index: Int, target: Int) = apply(SessionReducer.reassignLine(now, env, index, target))
     fun mergeSpeaker(from: Int, into: Int) = apply(SessionReducer.mergeSpeaker(now, env, from, into))
     fun moveBoundary(seam: Int, split: Int) = apply(SessionReducer.moveBoundary(now, env, seam, split))
+    fun undoEdit() { update { SessionReducer.undoEdit(it) }; persistEdits() }
+    fun redoEdit() { update { SessionReducer.redoEdit(it) }; persistEdits() }
     fun splitLine(index: Int, at: Int, speaker: Int) = apply(SessionReducer.splitLine(now, env, index, at, speaker))
     fun configChanged(cfg: TranscriptionConfig) = apply(SessionReducer.configChanged(now, env, cfg))
     fun languageChanged() = update { SessionReducer.languageChanged(it, env) }

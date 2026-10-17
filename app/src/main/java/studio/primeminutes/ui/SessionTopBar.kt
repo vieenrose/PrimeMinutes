@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -87,6 +89,9 @@ fun SessionTopBar(
     onSettings: () -> Unit,
     /** Tap on the title: edit it (null → not editable, e.g. no title yet). */
     onTitleClick: (() -> Unit)? = null,
+    /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
+    canUndo: Boolean = false, canRedo: Boolean = false,
+    onUndo: () -> Unit = {}, onRedo: () -> Unit = {},
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // statusBarsPadding: as a Scaffold topBar this composable owns its own inset — without it the
@@ -129,6 +134,16 @@ fun SessionTopBar(
             if (running) {
                 IconButton(onClick = onStop) {
                     Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop_resumable), tint = PrimeMinutesPalette.Red)
+                }
+            }
+            if (canUndo || canRedo) {
+                IconButton(onClick = onUndo, enabled = canUndo) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo),
+                        tint = if (canUndo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
+                }
+                IconButton(onClick = onRedo, enabled = canRedo) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.redo),
+                        tint = if (canRedo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
                 }
             }
             if (transcriptAvailable) {

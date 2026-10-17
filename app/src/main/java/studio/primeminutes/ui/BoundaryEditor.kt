@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,8 +101,26 @@ fun SpeakerSeam(colorA: Color, colorB: Color, labelA: String, labelB: String, on
     }
 }
 
-/** A speaker the rest of a split line can go to. */
-data class SpeakerChoice(val id: Int, val label: String, val color: Color)
+/** A speaker the rest of a split line can go to; [isNew] = a speaker id no line uses yet. */
+data class SpeakerChoice(val id: Int, val label: String, val color: Color, val isNew: Boolean = false)
+
+/**
+ * Who says the rest of a split line: one chip per candidate, in the order given (the neighbouring
+ * speakers first, then the others, then a new speaker: [studio.primeminutes.data.BoundaryEdits.splitCandidates]).
+ *
+ * The seam with the speaker directory (built separately): it may replace this composable with its
+ * own picker as long as it keeps the contract — show [choices], report the pick through [onPick].
+ */
+@Composable
+fun SpeakerPicker(choices: List<SpeakerChoice>, selected: SpeakerChoice?, onPick: (SpeakerChoice) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        choices.forEach { c ->
+            FilterChip(selected = selected == c, onClick = { onPick(c) },
+                label = { Text(if (c.isNew) "+ ${c.label}" else c.label, maxLines = 1) },
+                leadingIcon = { SpeakerDot(c.color) })
+        }
+    }
+}
 
 /**
  * Bottom sheet that moves the boundary between two speakers word by word (Han text: character by
@@ -164,16 +183,9 @@ fun BoundaryEditorSheet(
                 SpeakerDot(cB); Text(" $lB", color = cB, fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.labelLarge)
             }
-            if (choices != null) {
-                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    choices.forEach { c ->
-                        FilterChip(selected = pick == c, onClick = { pick = c }, label = { Text(c.label) },
-                            leadingIcon = { SpeakerDot(c.color) })
-                    }
-                }
-            }
+            if (choices != null) SpeakerPicker(choices, pick, onPick = { pick = it }, Modifier.padding(top = 6.dp).fillMaxWidth())
             Spacer(Modifier.height(10.dp))
-            TokenStrip(tokens, lo, hi, split, colorA, cB, onTap = { set(it) }, onDrag = { set(it) },
+            TokenStrip(tokens, lo, hi, split, colorA, cB, lB, onTap = { set(it) }, onDrag = { set(it) },
                 stepEarlier = { set(split - 1) }, stepLater = { set(split + 1) },
                 modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp))
             Spacer(Modifier.height(6.dp))
@@ -226,7 +238,7 @@ private fun SpeakerDot(c: Color) = Canvas(Modifier.size(10.dp)) { drawCircle(c) 
  */
 @Composable
 private fun TokenStrip(
-    tokens: List<String>, lo: Int, hi: Int, split: Int, colorA: Color, colorB: Color,
+    tokens: List<String>, lo: Int, hi: Int, split: Int, colorA: Color, colorB: Color, labelB: String,
     onTap: (Int) -> Unit, onDrag: (Int) -> Unit, stepEarlier: () -> Unit, stepLater: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -269,14 +281,14 @@ private fun TokenStrip(
     val desc = stringResource(R.string.cd_boundary_marker)
     val earlier = stringResource(R.string.cd_boundary_earlier)
     val later = stringResource(R.string.cd_boundary_later)
-    val around = tokens.getOrNull(split)?.trim().orEmpty()
+    val state = stringResource(R.string.boundary_state, labelB, tokens.getOrNull(split)?.trim().orEmpty())
     Box(
         modifier
             .clip(RoundedCornerShape(10.dp)).background(pal.Slate800)
             .verticalScroll(rememberScrollState())
             .semantics {
                 contentDescription = desc
-                stateDescription = "| $around"
+                stateDescription = state
                 customActions = listOf(
                     CustomAccessibilityAction(earlier) { stepEarlier(); true },
                     CustomAccessibilityAction(later) { stepLater(); true },

@@ -105,16 +105,22 @@ class NemoStreamEngine(
             val out = ArrayList<TranscriptEvent.Utterance>()
             for (rec in raw.split('\u001e')) {
                 if (rec.isEmpty()) continue
-                val f = rec.split('\u001f', limit = 4)
+                val f = rec.split('\u001f', limit = 5)
                 if (f.size < 4) continue
                 val text = AsrEngine.cleanTranscript(f[3]).trim()
                 if (text.isEmpty()) continue
+                val start = f[1].toDouble()
+                // Optional 5th field (final pass): each raw codepoint's start, ms after start -> per-token times.
+                val times = f.getOrNull(4)?.takeIf { it.isNotEmpty() }?.let { ms ->
+                    runCatching { ms.split(',').map { start + it.toLong() / 1000.0 } }.getOrNull()
+                }?.let { TokenTimes.fromCodepoints(f[3], it, text) }
                 out += TranscriptEvent.Utterance(
                     index = firstIndex + out.size,
                     text = text,
-                    startSec = f[1].toDouble(),
+                    startSec = start,
                     endSec = f[2].toDouble(),
                     speaker = f[0].toInt().takeIf { it >= 0 },
+                    tokenTimes = times?.let { TokenTimes.relative(it, start) },
                 )
             }
             return LongUtteranceSplitter.split(out).mapIndexed { i, u -> u.copy(index = firstIndex + i) }

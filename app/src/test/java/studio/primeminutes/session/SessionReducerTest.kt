@@ -263,6 +263,65 @@ class SessionReducerTest {
         assertEquals(edited, SessionReducer.undoSpeakerEdit(edited, u.gen, u.before, u.after))
     }
 
+    @Test fun transcriptEditsUndoAndRedoFromTheTopBar() {
+        var s = s0.copy(utterances = listOf(utt(0, "We agreed. Yeah but", 0), utt(1, "what about it?", 1)))
+        val original = s.utterances
+        assertFalse(SessionReducer.canUndoEdit(s))
+        // boundary move, then a text edit, then a split: three steps
+        s = SessionReducer.moveBoundary(s, env, 1, 2).state
+        assertEquals("We agreed.", s.utterances[0].text)
+        s = SessionReducer.saveLineText(s, 0, "We all agreed.")
+        s = SessionReducer.splitLine(s, env, 1, 2, 2).state
+        assertEquals(3, s.utterances.size)
+        assertEquals(3, s.editUndo.size)
+        s = SessionReducer.undoEdit(s)                      // split undone
+        assertEquals(2, s.utterances.size); assertTrue(SessionReducer.canRedoEdit(s))
+        s = SessionReducer.undoEdit(s)                      // text undone
+        assertEquals("We agreed.", s.utterances[0].text)
+        s = SessionReducer.redoEdit(s)                      // text redone
+        assertEquals("We all agreed.", s.utterances[0].text)
+        s = SessionReducer.undoEdit(SessionReducer.undoEdit(s))
+        assertEquals(original, s.utterances); assertFalse(SessionReducer.canUndoEdit(s)); assertTrue(s.sessionDirty)
+        // a new edit drops the redo branch
+        s = SessionReducer.reassignLine(s, env, 0, 1).state
+        assertFalse(SessionReducer.canRedoEdit(s)); assertTrue(SessionReducer.canUndoEdit(s))
+        // the snackbar's Undo is the same step
+        val n = SessionReducer.moveBoundary(s, env, 1, 3)
+        val u = n.effects.one<SessionEffect.OfferSpeakerUndo>()
+        val back = SessionReducer.undoSpeakerEdit(n.state, u.gen, u.before, u.after)
+        assertEquals(s.utterances, back.utterances); assertTrue(SessionReducer.canRedoEdit(back))
+    }
+
+    @Test fun undoStopsWhenSomethingElseRewroteTheTranscript() {
+        var s = s0.copy(utterances = listOf(utt(0, "a b", 0), utt(1, "c d", 1)))
+        s = SessionReducer.moveBoundary(s, env, 1, 1).state
+        assertTrue(SessionReducer.canUndoEdit(s))
+        // a run (or a script conversion) replaces the list: the step no longer applies
+        val rewritten = s.copy(utterances = s.utterances.map { it.copy(text = it.text.uppercase()) })
+        assertFalse(SessionReducer.canUndoEdit(rewritten))
+        assertEquals(rewritten, SessionReducer.undoEdit(rewritten))
+        // nor while a run is in flight, and a new session starts with an empty history
+        assertFalse(SessionReducer.canUndoEdit(s.copy(running = true)))
+        val cleared = SessionReducer.clearSession(s, env).state
+        assertTrue(cleared.editUndo.isEmpty() && cleared.editRedo.isEmpty())
+    }
+
+    @Test fun anEditThatChangesNothingIsNotAStep() {
+        val s = s0.copy(utterances = listOf(utt(0, "same", 0)))
+        assertTrue(SessionReducer.saveLineText(s, 0, "same").editUndo.isEmpty())
+        assertTrue(SessionReducer.reassignLine(s, env, 0, 0).state.editUndo.isEmpty())
+    }
+
+    @Test fun boundaryMovesAndSplitsAreSavedAtOnce() {
+        val s = s0.copy(utterances = listOf(utt(0, "We agreed. Yeah but", 0), utt(1, "what about it?", 1)), libraryDir = File(root, "e1"))
+        val moved = SessionReducer.moveBoundary(s, env, 1, 2)
+        assertEquals("e1", moved.effects.one<SessionEffect.Persist>().entryId)
+        assertEquals("We agreed.", moved.effects.one<SessionEffect.Persist>().utterances[0].text)
+        assertFalse(moved.state.sessionDirty)
+        val split = SessionReducer.splitLine(moved.state, env, 1, 1, 2)
+        assertEquals(3, split.effects.one<SessionEffect.Persist>().utterances.size)
+    }
+
     @Test fun persistOnlyWhenDirtyIdleAndLibraryBound() {
         val s = s0.copy(utterances = listOf(utt(0)), libraryDir = File(root, "e1"), sessionDirty = true)
         val n = SessionReducer.persistEdits(s, env)

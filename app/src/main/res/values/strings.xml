@@ -573,4 +573,7 @@
     <string name="line_split_done">Line split</string>
     <string name="boundary_apply">Apply</string>
     <string name="cd_boundary_marker">Boundary marker</string>
+    <string name="redo">Redo</string>
+    <string name="boundary_state">%1$s starts with “%2$s”</string>
+    <string name="boundary_new_speaker">New speaker</string>
 </resources>

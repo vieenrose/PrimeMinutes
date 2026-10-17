@@ -42,6 +42,30 @@ class BoundaryEditsTest {
         assertEquals("好的", out[0].text.take(2)); assertEquals(1, BoundaryEdits.tokenize(out[1].text).size)
     }
 
+    @Test fun engineTokenTimesAreUsedInsteadOfTheEstimate() {
+        // "預算定了對" + "可是": the engine says 對 starts at 12.9 s (the proportional guess would be 12.4 s).
+        val a = Utterance(0, "預算定了對", 10.0, 13.0, 0, tokenTimes = listOf(0.0, 0.5, 1.0, 1.6, 2.9))
+        val b = Utterance(1, "可是", 13.0, 14.0, 1, tokenTimes = listOf(0.0, 0.4))
+        val out = BoundaryEdits.move(listOf(a, b), 1, 4)
+        assertEquals("對可是", out[1].text)
+        assertEquals(12.9, out[1].startSec, 1e-9); assertEquals(12.9, out[0].endSec, 1e-9)
+        // the moved token keeps its time, the rest are re-based on the new start
+        assertEquals(listOf(0.0, 0.1, 0.5), out[1].tokenTimes)
+        assertEquals(listOf(0.0, 0.5, 1.0, 1.6), out[0].tokenTimes)
+        // times that no longer match the text (an edit changed the token count) fall back to the estimate
+        val stale = a.copy(text = "預算定了對嗎")
+        assertEquals(6, BoundaryEdits.tokenStarts(stale).size)
+        assertEquals(10.0 + 3.0 * 5 / 6, BoundaryEdits.tokenStarts(stale)[5], 1e-9)
+    }
+
+    @Test fun splitCandidatesNeighboursFirstThenOthersThenNew() {
+        val utts = listOf(u(0, 3, 0.0, 1.0, "a"), u(1, 0, 1.0, 2.0, "b c"), u(2, 2, 2.0, 3.0, "d"), u(3, 1, 3.0, 4.0, "e"))
+        assertEquals(listOf(2, 3, 1, 4), BoundaryEdits.splitCandidates(utts, 1))
+        // the line's own speaker is never offered, even as a neighbour
+        val same = listOf(u(0, 0, 0.0, 1.0, "a"), u(1, 0, 1.0, 2.0, "b c"))
+        assertEquals(listOf(1), BoundaryEdits.splitCandidates(same, 1))
+    }
+
     @Test fun splitMissedTurn() {
         val utts = listOf(u(0, 0, 0.0, 6.0, "I think so. Sure. Then the buttons"), u(1, 2, 6.0, 8.0, "next"))
         val out = BoundaryEdits.split(utts, 0, 3, 1)

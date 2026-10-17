@@ -1,10 +1,12 @@
 // JNI bridge for the nemo-x-asr-diarizer streaming engine (studio.primeminutes.core.asr.NemoNative).
 //
 // Segments cross the boundary as one string: records separated by RS (0x1e), fields by US (0x1f):
-//   speaker US start_s US end_s US text
+//   speaker US start_s US end_s US text [US ms,ms,...]
+// The optional last field (final pass only) gives each codepoint's start in ms after start_s.
 // Cheaper and simpler than building Java objects per segment, and the text never contains either byte.
 #include <jni.h>
 #include <android/log.h>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <mutex>
@@ -23,8 +25,17 @@ struct Handle {
 
 std::string encode_segment(const nemo::Segment& s) {
     // Times in fixed text, never printf's %f: it follows the C locale ("0,000" broke parseSegments).
-    return std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) + "\x1f" +
-           s.text + "\x1e";
+    std::string out = std::to_string(s.speaker) + "\x1f" + nemo::fixed(s.start_s, 3) + "\x1f" + nemo::fixed(s.end_s, 3) +
+                      "\x1f" + s.text;
+    // Optional 5th field (final pass): each codepoint's start, in ms after start_s, comma-separated.
+    if (!s.char_starts.empty()) {
+        out += "\x1f";
+        for (size_t i = 0; i < s.char_starts.size(); i++) {
+            if (i) out += ',';
+            out += std::to_string((long long)std::llround((s.char_starts[i] - s.start_s) * 1000.0));
+        }
+    }
+    return out + "\x1e";
 }
 
 jstring to_jstring(JNIEnv* env, const std::string& s) {

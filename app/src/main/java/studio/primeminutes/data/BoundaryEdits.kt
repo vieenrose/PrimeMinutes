@@ -1,5 +1,6 @@
 package studio.primeminutes.data
 
+import studio.primeminutes.core.asr.TokenTimes
 import studio.primeminutes.core.events.TranscriptEvent
 
 /**
@@ -8,41 +9,22 @@ import studio.primeminutes.core.events.TranscriptEvent
  *
  * Unit of correction = a token: one Han character, or one Latin word, with the punctuation and spaces
  * that follow it attached (so tokens concatenate back to the exact text). Times: the utterance's own
- * per-token times when they line up with this tokenization, else spread over [startSec, endSec] by
- * character count. The edited pair gets per-token times written back ([TranscriptEvent.Utterance.tokens]
- * / tokenTimes, relative to startSec) so the next nudge starts from the same estimate.
+ * per-token times (the engine's, carried over JNI) when they line up with this tokenization, else spread
+ * over [startSec, endSec] by character count. The edited pair gets per-token times written back
+ * ([TranscriptEvent.Utterance.tokenTimes], relative to startSec) so the next nudge starts from the same times.
  */
 object BoundaryEdits {
 
     private fun isHan(c: Char) = Character.UnicodeScript.of(c.code) == Character.UnicodeScript.HAN
-    private fun isWordChar(c: Char) = c.isLetterOrDigit() && !isHan(c) || c == '\'' || c == '’' || c == '-'
 
-    /** Lossless tokenization: joinToString("") == text. */
-    fun tokenize(text: String): List<String> {
-        val out = mutableListOf<StringBuilder>()
-        var i = 0
-        while (i < text.length) {
-            val c = text[i]
-            when {
-                isHan(c) -> { out += StringBuilder().append(c); i++ }
-                isWordChar(c) -> {
-                    val sb = StringBuilder()
-                    while (i < text.length && isWordChar(text[i])) sb.append(text[i++])
-                    out += sb
-                }
-                else -> {   // space / punctuation: attach to the previous token (or lead the first one)
-                    if (out.isEmpty()) out += StringBuilder()
-                    out.last().append(c); i++
-                }
-            }
-        }
-        return out.map { it.toString() }.filter { it.isNotEmpty() }
-    }
+    /** Lossless tokenization: joinToString("") == text ([TokenTimes.tokenize]). */
+    fun tokenize(text: String): List<String> = TokenTimes.tokenize(text)
 
     /** Absolute start time of every token of [u] (seconds). */
     fun tokenStarts(u: TranscriptEvent.Utterance, toks: List<String> = tokenize(u.text)): List<Double> {
+        // The engine's times (or the ones an earlier edit wrote back) when they still describe this text's tokens.
         val tt = u.tokenTimes
-        if (tt != null && u.tokens == toks && tt.size == toks.size) return tt.map { u.startSec + it }
+        if (tt != null && tt.size == toks.size && (u.tokens == null || u.tokens.size == toks.size)) return tt.map { u.startSec + it }
         val weights = toks.map { t -> t.count { !it.isWhitespace() }.coerceAtLeast(1).toDouble() }
         val total = weights.sum().coerceAtLeast(1.0)
         val span = (u.endSec - u.startSec).coerceAtLeast(0.0)
@@ -89,8 +71,20 @@ object BoundaryEdits {
     /** Store per-token times (relative to startSec) when the text re-tokenizes to the same count. */
     private fun withTimes(u: TranscriptEvent.Utterance, starts: List<Double>): TranscriptEvent.Utterance {
         val toks = tokenize(u.text)
-        return if (toks.size == starts.size) u.copy(tokens = toks, tokenTimes = starts.map { it - u.startSec })
+        return if (toks.size == starts.size) u.copy(tokens = null, tokenTimes = TokenTimes.relative(starts, u.startSec))
         else u.copy(tokens = null, tokenTimes = null)
+    }
+
+    /**
+     * Who may say the rest of line [index] when it is split, likeliest first: the speakers of the
+     * neighbouring lines (next, then previous), then every other speaker of the meeting, then a new
+     * speaker id (one past the highest). The line's own speaker is never offered.
+     */
+    fun splitCandidates(utts: List<TranscriptEvent.Utterance>, index: Int): List<Int> {
+        val own = utts.getOrNull(index)?.speaker
+        val ids = utts.mapNotNull { it.speaker }.distinct().sorted()
+        val near = listOfNotNull(utts.getOrNull(index + 1)?.speaker, utts.getOrNull(index - 1)?.speaker)
+        return ((near + ids).filter { it != own }.distinct()) + ((ids.maxOrNull() ?: -1) + 1)
     }
 
     /**

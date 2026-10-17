@@ -561,4 +561,7 @@
     <string name="line_split_done">已分开此句</string>
     <string name="boundary_apply">应用</string>
     <string name="cd_boundary_marker">分界线</string>
+    <string name="redo">重做</string>
+    <string name="boundary_state">%1$s 从「%2$s」开始</string>
+    <string name="boundary_new_speaker">新说话人</string>
 </resources>

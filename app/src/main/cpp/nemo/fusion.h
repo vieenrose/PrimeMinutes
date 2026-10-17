@@ -60,6 +60,20 @@ public:
     // person's stretch - and on this material 41% of speech frames are missed, so that is the common case.
     enum class GapFill { NEAREST, PREVIOUS };
     void set_gap_fill(GapFill g) { gap_fill_ = g; }
+    // Prime Minutes: move a speaker change to the start of the incoming speaker's own diarizer turn when
+    // that turn starts within [window_s] of where the text put the change AND nobody else is talking at
+    // that moment. Character times at a turn change are coarse (the transcript is 1 token off at the
+    // median, docs/design/speaker-boundary.md); the diarizer's turn start is not, except in overlap,
+    // where it was measured to be worse - so overlapped changes are left alone. 0 = off.
+    // [pad_s]: the diarizer pads every turn by this much on both sides (speaker_pad_frames), so two
+    // speakers' padded turns always overlap a little at a clean change; overlap is judged unpadded.
+    // [lead_s]: where the change lands after the padded turn start. [pause_s]: a pause at least this long
+    // at the text's change keeps it there unless the turn start points at a longer one. [max_shift_s]:
+    // never move the change further than this.
+    void set_turn_snap(double window_s, double pad_s, double lead_s, double pause_s = 0.5, double max_shift_s = 0.4) {
+        turn_snap_s_ = window_s; turn_pad_s_ = pad_s; turn_lead_s_ = lead_s; turn_pause_s_ = pause_s;
+        turn_max_shift_s_ = max_shift_s;
+    }
     double char_dur_ms() const { return char_dur_s_ * 1000.0; }
     double gap_snap_ms() const { return gap_snap_s_ * 1000.0; }
 
@@ -104,6 +118,7 @@ public:
 
 private:
     void append_placed(const std::string& text, int64_t span_start, int64_t span_end, bool exact);
+    void snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::string& text, size_t char_from) const;
 
     int rate_;
     double latency_s_;
@@ -112,6 +127,7 @@ private:
     double char_dur_s_ = 0.09;     // ~11 chars/s, between Mandarin (~5/s) and English (~15/s) speech rates
     double gap_snap_s_ = 0.40;
     GapFill gap_fill_ = GapFill::NEAREST;     // turn gaps in the bilingual gate set run 0.05-0.30 s
+    double turn_snap_s_ = 0, turn_pad_s_ = 0, turn_lead_s_ = 0, turn_pause_s_ = 0.5, turn_max_shift_s_ = 0.4;
     std::vector<Turn> turns_;
 };
 

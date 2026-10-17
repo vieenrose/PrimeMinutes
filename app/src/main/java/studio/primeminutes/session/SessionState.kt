@@ -17,6 +17,21 @@ data class ResummaryUndo(
     val titleEdited: Boolean, val journal: String?,
 )
 
+/** The transcript and speaker names of the open session, as one undo step holds them. */
+data class TranscriptSnapshot(
+    val utterances: List<TranscriptEvent.Utterance>,
+    val speakerNames: Map<Int, SpeakerName>,
+)
+
+/**
+ * One hand-edit of the transcript, undoable from the top bar: what it replaced and what it made.
+ * Valid only while the session still shows [after] (by identity: anything else that rewrote the
+ * transcript — a run, a script conversion — made a new list).
+ */
+data class TranscriptEdit(val before: TranscriptSnapshot, val after: TranscriptSnapshot) {
+    fun isCurrent(s: SessionState) = after.utterances === s.utterances && after.speakerNames === s.speakerNames
+}
+
 /**
  * Everything the session screen shows and edits: the open session (transcript, speaker names,
  * notes), the run that feeds it, the inline-edit cursors and the live view of the queue's current
@@ -68,6 +83,10 @@ data class SessionState(
     val speakerNames: Map<Int, SpeakerName> = emptyMap(),
     /** A re-run's previous transcript and names: carried over by time overlap when the new one lands. */
     val carry: SpeakerCarry? = null,
+    /** Hand-edits of the transcript (speaker moves and merges, boundary moves, splits, text, names),
+     *  newest last: Undo / Redo in the top bar while the session is open. */
+    val editUndo: List<TranscriptEdit> = emptyList(),
+    val editRedo: List<TranscriptEdit> = emptyList(),
     /** What a re-summarize replaced, put back if it is stopped before a new summary arrives. */
     val resummaryUndo: ResummaryUndo? = null,
     // --- Inline editing: which row / speaker / card is open. ---

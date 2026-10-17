@@ -123,6 +123,7 @@ object SessionReducer {
             lastSaveUri = null, coverBitmap = null, coverFromSession = false,
             summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
             sessionGen = s.sessionGen + 1,
+            editUndo = emptyList(), editRedo = emptyList(),
             watchingQueue = false, pendingNextTalk = false, pendingAutoProcess = false, downloadEntryId = null,
             // deferStopped must reset here: a ⏹ Stop&save's terminal event goes to the QUEUE, so a
             // stale true would tear a later recording's run down before its summary phase.
@@ -440,10 +441,11 @@ object SessionReducer {
 
     fun saveLineText(s: SessionState, index: Int, text: String): SessionState {
         if (text.isEmpty() || index !in s.utterances.indices) return s
+        if (text == s.utterances[index].text) return s.copy(editingIndex = -1)
         val utts = s.utterances.toMutableList().also { it[index] = it[index].copy(text = text) }
         // Transcript changed → its summary AND action-items children are now stale.
         val dirtyChildren = !s.summary.isNullOrBlank() || s.actionItems != null
-        return s.copy(
+        return recordEdit(s, utts, s.speakerNames).copy(
             utterances = utts, editingIndex = -1, editSeq = s.editSeq + 1, sessionDirty = true,
             transcriptDirty = s.transcriptDirty || dirtyChildren,
         )
@@ -454,10 +456,51 @@ object SessionReducer {
 
     fun cancelSpeakerEdit(s: SessionState) = s.copy(editingSpeakerId = null)
 
-    fun commitSpeakerName(s: SessionState, speaker: Int, name: String): SessionState = s.copy(
-        speakerNames = if (name.isBlank()) s.speakerNames - speaker else s.speakerNames + (speaker to SpeakerName(name, confidence = "user")),
-        sessionDirty = true, editingSpeakerId = null,
-    )
+    fun commitSpeakerName(s: SessionState, speaker: Int, name: String): SessionState {
+        val names = if (name.isBlank()) s.speakerNames - speaker else s.speakerNames + (speaker to SpeakerName(name, confidence = "user"))
+        if (names == s.speakerNames) return s.copy(editingSpeakerId = null)
+        return recordEdit(s, s.utterances, names).copy(speakerNames = names, sessionDirty = true, editingSpeakerId = null)
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Undo / Redo of transcript hand-edits (top bar)
+    // ---------------------------------------------------------------------------------------------
+
+    private const val UNDO_DEPTH = 50
+
+    /** Push the edit that turns the current transcript into ([utts], [names]); a new edit drops the redo branch. */
+    private fun recordEdit(s: SessionState, utts: List<TranscriptEvent.Utterance>, names: Map<Int, SpeakerName>): SessionState {
+        val e = TranscriptEdit(TranscriptSnapshot(s.utterances, s.speakerNames), TranscriptSnapshot(utts, names))
+        // An older step that no longer matches (a run or a script conversion rewrote the transcript) is dropped.
+        val keep = if (s.editUndo.lastOrNull()?.isCurrent(s) == true) s.editUndo else emptyList()
+        return s.copy(utterances = utts, speakerNames = names, editUndo = (keep + e).takeLast(UNDO_DEPTH), editRedo = emptyList())
+    }
+
+    fun canUndoEdit(s: SessionState) = !s.running && s.editUndo.lastOrNull()?.isCurrent(s) == true
+    fun canRedoEdit(s: SessionState) = !s.running && s.editRedo.lastOrNull()?.let {
+        it.before.utterances === s.utterances && it.before.speakerNames === s.speakerNames
+    } == true
+
+    /** Put back what the newest edit replaced (no-op when it no longer applies). */
+    fun undoEdit(s: SessionState): SessionState {
+        if (!canUndoEdit(s)) return s
+        val e = s.editUndo.last()
+        return s.copy(
+            utterances = e.before.utterances, speakerNames = e.before.speakerNames,
+            editUndo = s.editUndo.dropLast(1), editRedo = s.editRedo + e,
+            editingIndex = -1, editingSpeakerId = null, editSeq = s.editSeq + 1, sessionDirty = true,
+        )
+    }
+
+    fun redoEdit(s: SessionState): SessionState {
+        if (!canRedoEdit(s)) return s
+        val e = s.editRedo.last()
+        return s.copy(
+            utterances = e.after.utterances, speakerNames = e.after.speakerNames,
+            editUndo = s.editUndo + e, editRedo = s.editRedo.dropLast(1),
+            editingIndex = -1, editingSpeakerId = null, editSeq = s.editSeq + 1, sessionDirty = true,
+        )
+    }
 
     /** Link [speaker] to a person of the directory, named [name] (null [person]: a plain name; blank name: cleared). */
     fun linkSpeaker(s: SessionState, speaker: Int, person: String?, name: String): SessionState = s.copy(
@@ -479,9 +522,10 @@ object SessionReducer {
         )
 
     private fun Tx.speakerEditUndoable(result: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>, @StringRes done: Int) {
+        if (result.first == s.utterances && result.second == s.speakerNames) return   // nothing changed
         val before = s.utterances to s.speakerNames
-        s = applySpeakerEdit(s, result)
-        emit(SessionEffect.OfferSpeakerUndo(done, s.sessionGen, before, result.first))
+        s = applySpeakerEdit(recordEdit(s, result.first, result.second), result)
+        emit(SessionEffect.OfferSpeakerUndo(done, s.sessionGen, before, s.utterances))
     }
 
     /** Move one line to another speaker (undoable). */
@@ -494,19 +538,21 @@ object SessionReducer {
         speakerEditUndoable(SpeakerEdits.merge(s.utterances, s.speakerNames, from, into), R.string.speaker_merged)
     }
 
-    /** Move the boundary between lines [seam]-1 and [seam] to token [split] of their joined text (undoable). */
+    /** Move the boundary between lines [seam]-1 and [seam] to token [split] of their joined text (undoable, saved at once). */
     fun moveBoundary(state: SessionState, env: SessionEnv, seam: Int, split: Int): Next = tx(state, env) {
         speakerEditUndoable(BoundaryEdits.move(s.utterances, seam, split) to s.speakerNames, R.string.boundary_moved)
+        persist()   // saved right away: a boundary fix must survive the app being killed
     }
 
     /** Split line [index] at token [at]; the rest goes to [speaker] (undoable). */
     fun splitLine(state: SessionState, env: SessionEnv, index: Int, at: Int, speaker: Int): Next = tx(state, env) {
         speakerEditUndoable(BoundaryEdits.split(s.utterances, index, at, speaker) to s.speakerNames, R.string.line_split_done)
+        persist()   // saved right away: a boundary fix must survive the app being killed
     }
 
-    /** The Undo of a speaker edit: only if nothing changed the transcript since. */
+    /** The snackbar's Undo of a speaker edit: the same step as the top bar's Undo, only if nothing changed since. */
     fun undoSpeakerEdit(s: SessionState, gen: Int, before: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>, after: List<TranscriptEvent.Utterance>): SessionState =
-        if (s.sessionGen == gen && s.utterances == after) applySpeakerEdit(s, before) else s
+        if (s.sessionGen == gen && s.utterances === after && s.editUndo.lastOrNull()?.before?.utterances === before.first) undoEdit(s) else s
 
     fun saveTitle(s: SessionState, title: String) =
         s.copy(title = title, editingTitle = false, titleEdited = true, editSeq = s.editSeq + 1, sessionDirty = true)

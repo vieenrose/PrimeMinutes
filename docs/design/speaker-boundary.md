@@ -75,6 +75,15 @@ These counts only include changes between turns of at least 3 tokens. Back-chann
 
    Note that those turns come from a separate host run (`nemo_eval_noggml`) of the same engine and geometry, not from the same run as the transcripts.
 
+5. **What the engine snap actually achieved (implemented, `Fusion::snap_to_turn_starts`).** The numbers in point 4 were measured with reference token times. In the engine only the hypothesis character times exist, so the gain is smaller. Each non-overlapped change moves to the first word starting at least 0.30 s after B's padded turn start, under these rules: it never crosses a pause of 0.5 s or more that the text already put it at, it never moves by more than 0.4 s, and it never moves only spaces or punctuation. Before → after, measured on the 10 meetings by replaying the final pass:
+
+   | | exact (clean) | exact (all) | ER | cpER | DER (transcript, collar 0.25) |
+   |---|---|---|---|---|---|
+   | EN | 53 % → **59 %** | 44 % → 49 % | 18.67 → 18.67 | 26.77 → 26.61 | 27.74 → 27.73 |
+   | ZH | 36 % → 37 % | 36 % → 36 % | 18.45 → 18.45 | 39.17 → 39.17 | 21.79 → 21.79 |
+
+   Without the 0.4 s cap the exact rate rose further (EN 65 %, ZH 46 %). But only 56 % of the moved tokens went to the right speaker, so EN cpER rose by 0.15 and DER by 0.3 to 0.7, and the cap was kept. Moving a boundary across a pause stretched a line over the silence; that was the DER cost of the first version. `NEMO_TURN_SNAP=0` turns the snap off.
+
 ## 2. Current state (both platforms)
 
 ### Data model
@@ -282,4 +291,4 @@ Total: about 6–7 days for both platforms. Steps 1–2 alone give the full feat
 2. Is auto-play on every marker move wanted, or only on the Before/After buttons?
 3. Overlap: is "one speaker per line" fine, or should a span be markable as "both speaking" (needs a model change and display rules)?
 4. After a boundary move or split, offer "Re-summarize" like text edits, or stay silent like speaker relabels?
-5. Phase 2: also fix the root cause in the engine, by placing the change at the diarizer's B-turn start on non-overlapping changes? That moved exact boundaries from 51 % to 74 % (EN) and from 38 % to 65 % (ZH) in the test above, before any user edit.
+5. Phase 2: also fix the root cause in the engine, by placing the change at the diarizer's B-turn start on non-overlapping changes? That moved exact boundaries from 51 % to 74 % (EN) and from 38 % to 65 % (ZH) in the test above, before any user edit. *Decided: yes. See §1, point 5, for what it achieved with real character times.*
