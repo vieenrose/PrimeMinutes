@@ -30,10 +30,11 @@ struct DiarHostConfig {
     int chunk_len = 50;
     int chunk_right_context = 12;
     int spkcache_update_period = 60;
-    // Turn decoding.
-    float threshold = 0.3f;
+    // Turn decoding (10 ms frames). 0.5 / 20 since 2026-10-17 (was 0.3 / 45): fewer false alarms, same cost;
+    // engine.h diar_opts carries the same values for the fusion turn snap.
+    float threshold = 0.5f;
     int min_frames = 0;
-    int pad_frames = 45;
+    int pad_frames = 20;
 };
 
 class DiarHost {
