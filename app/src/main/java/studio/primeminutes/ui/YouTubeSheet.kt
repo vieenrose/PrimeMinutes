@@ -68,18 +68,10 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
 
     // The download runs in the foreground service (ImportDownloads), not in this sheet's scope:
     // dismissing the sheet no longer cancels it, and MainActivity picks the file up when it is ready.
-    fun transcribe(url: String) {
+    fun transcribe(url: String, title: String? = null) {
         error = null
-        val started = ImportDownloads.start(
-            context,
-            ImportDownloads.Request(null) { stage, progress ->
-                val audio = YouTube.resolve(context, url)
-                stage(R.string.dl_downloading)
-                YouTube.download(context, audio, progress) to audio.title
-            },
-            R.string.dl_resolving,
-        )
-        if (started) onDismiss() else error = context.getString(R.string.import_busy)
+        ImportDownloads.submit(context, title, studio.primeminutes.core.library.SessionLibrary.PendingDownload.YOUTUBE, url)
+        onDismiss()
     }
     fun go() {
         val q = query.trim()
@@ -137,7 +129,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
                         color = pal.InsetSurface,
                         shape = MaterialTheme.shapes.medium,
                         border = BorderStroke(1.dp, pal.Hairline),
-                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { transcribe(v.url) },
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { transcribe(v.url, v.title) },
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Text(v.title, style = MaterialTheme.typography.bodyMedium,

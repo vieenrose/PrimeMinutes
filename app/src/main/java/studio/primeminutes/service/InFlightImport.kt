@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class InFlightImport(
     /** Keep the import's source with the entry it was banked into ([SessionLibrary.keepImportSource]). */
     private val keepSource: (SessionLibrary.Entry, File) -> Boolean = SessionLibrary::keepImportSource,
+    /** Move it into an existing entry instead ([SessionLibrary.promoteInto]): a downloaded item. */
+    private val promoteInto: (SessionLibrary.Entry, File, Int, Boolean) -> SessionLibrary.Entry? = SessionLibrary::promoteInto,
     /** Move the finalized WAV into a new library entry ([SessionLibrary.promoteRecording]). */
     private val promote: (wav: File, durationSec: Int) -> SessionLibrary.Entry?,
 ) {
@@ -35,6 +37,9 @@ internal class InFlightImport(
     var durationSec = 0
     /** The import copy being decoded (filesDir/audio), or null when there is none to keep. */
     var source: File? = null
+    /** The library item whose kept source is being decoded (a downloaded podcast / YouTube item): the
+     *  audio goes into it, not into a new entry. */
+    var into: SessionLibrary.Entry? = null
     /** The decoder reached the end of [source]: [wav] holds the whole file. */
     @Volatile var decoded = false
     /** One-shot: the stop handler and the pipeline both try to save; whoever gets there first wins. */
@@ -56,10 +61,11 @@ internal class InFlightImport(
     @Volatile var owner: SessionLibrary.Entry? = null
 
     /** A foreground import that owns no library entry yet starts: publish its work WAV. */
-    @Synchronized fun begin(wav: File, durationSec: Int, source: File? = null) {
+    @Synchronized fun begin(wav: File, durationSec: Int, source: File? = null, into: SessionLibrary.Entry? = null) {
         this.wav = wav
         this.durationSec = durationSec
         this.source = source
+        this.into = into
         decoded = false
         saved.set(false)
         owner = null
@@ -68,7 +74,7 @@ internal class InFlightImport(
 
     /** A foreground run over the library entry [entry] starts (nothing to promote: only progress to bank). */
     @Synchronized fun beginOwned(entry: SessionLibrary.Entry) {
-        wav = null; source = null; decoded = false
+        wav = null; source = null; into = null; decoded = false
         owner = entry
         checkpoint = null
     }
@@ -101,6 +107,15 @@ internal class InFlightImport(
         // The decoder was still streaming into this file, so its header is the placeholder: finalize it
         // for what is on disk, or the entry is not a canonical WAV and the session .m4a cannot be built.
         runCatching { patchWavHeader(wav, (wav.length() - WavIo.HEADER) / 2) }
+        val target = into
+        if (target != null) {
+            // A downloaded item: its source already sits in the entry (kept until fully decoded).
+            val e = promoteInto(target, wav, if (decoded) bankedSeconds(wav, durationSec) else durationSec, decoded)
+            Log.i(STOP_TAG, "saveInFlightImport($reason) into ${target.id} -> ${e?.id ?: "NULL"} decoded=$decoded")
+            if (e != null) { this.wav = null; savedEntry = e }
+            source = null
+            return e
+        }
         val entry = runCatching { promote(wav, bankedSeconds(wav, durationSec)) }
             .onFailure { Log.w(STOP_TAG, "saveInFlightImport($reason) failed", it) }
             .getOrNull()

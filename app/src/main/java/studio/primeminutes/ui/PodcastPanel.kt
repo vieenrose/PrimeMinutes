@@ -141,14 +141,9 @@ fun PodcastPanel(onStarted: () -> Unit) {
                         Spacer(Modifier.width(8.dp))
                         GradientButton(stringResource(R.string.podcast_transcribe), enabled = !busy, onClick = {
                             error = null
-                            val started = ImportDownloads.start(
-                                context,
-                                ImportDownloads.Request(e.title) { _, progress ->
-                                    Podcast.downloadEpisode(context, e, onProgress = progress) to e.title
-                                },
-                                R.string.dl_downloading,
-                            )
-                            if (started) onStarted() else error = context.getString(R.string.import_busy)
+                            // The item appears in the library at once and shows its own download.
+                            ImportDownloads.submit(context, e.title, studio.primeminutes.core.library.SessionLibrary.PendingDownload.PODCAST, e.audioUrl)
+                            onStarted()
                         })
                     }
                 }

@@ -436,6 +436,13 @@
     <string name="dl_prefetching">正在下载模型…</string>
     <string name="dl_paused">下载已暂停 · 会自动继续</string>
     <string name="dl_resume">继续</string>
+    <string name="dl_waiting">等待下载</string>
+    <string name="dl_failed_reason">下载失败：%1$s</string>
+    <string name="dl_downloaded_ready">已下载 · 点按开始处理</string>
+    <string name="dl_will_start">已下载，当前的工作完成后开始处理</string>
+    <string name="cd_status_downloading">下载中</string>
+    <string name="cd_status_download_failed">下载失败</string>
+    <string name="dl_item_hint">音频下载完成后就会开始处理这场会议，期间可以先离开这个页面。</string>
     <string name="ask_stage_searching">正在搜索会议… %1$d 秒</string>
     <string name="ask_stage_reading">正在阅读 %1$d 段摘录… %2$d 秒</string>
     <string name="ask_stage_answering">正在回答… %1$d 秒</string>

@@ -17,6 +17,8 @@ internal suspend fun resumableDownload(
     out: File,
     userAgent: String,
     maxBytes: Long = Long.MAX_VALUE,
+    /** Bytes so far and in all (0 when the server does not say), on every block. */
+    onBytes: (Long, Long) -> Unit = { _, _ -> },
     onProgress: (Float) -> Unit,
 ) {
     val tmp = File(out.parentFile, "${out.name}.part")
@@ -29,7 +31,7 @@ internal suspend fun resumableDownload(
     try {
         val code = conn.responseCode
         // 416 = the .part already holds the whole file (or is stale): start over.
-        if (code == 416) { tmp.delete(); return resumableDownload(url, out, userAgent, maxBytes, onProgress) }
+        if (code == 416) { tmp.delete(); return resumableDownload(url, out, userAgent, maxBytes, onBytes, onProgress) }
         // Fail on a non-2xx response instead of saving an error page's HTML as "audio".
         check(code in 200..299) { "Download failed (HTTP $code)" }
         val resumed = code == 206 && have > 0
@@ -45,6 +47,7 @@ internal suspend fun resumableDownload(
                     f.write(buf, 0, n); read += n
                     check(read <= maxBytes) { "Download too large (over ${maxBytes / (1024 * 1024)} MB)" }
                     if (total != null) onProgress((read.toFloat() / total).coerceIn(0f, 1f))
+                    onBytes(read, total ?: 0L)
                 }
             }
         }

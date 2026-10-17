@@ -94,18 +94,17 @@ object Podcast {
         episodes
     }
 
-    /** Stream-download the enclosure into filesDir/audio and return its file:// Uri. */
-    suspend fun downloadEpisode(ctx: Context, ep: Episode, onProgress: (Float) -> Unit): Uri =
-        withContext(Dispatchers.IO) {
-            requireHttp(ep.audioUrl)
-            val dir = File(ctx.filesDir, "audio").apply { mkdirs() }
-            val ext = ep.audioUrl.substringAfterLast('.', "mp3").substringBefore('?').filter { it.isLetterOrDigit() }.take(4).ifBlank { "mp3" }
-                .ifBlank { "mp3" }
-            val out = File(dir, "podcast_${ep.audioUrl.hashCode().toUInt()}.$ext")
-            resumableDownload(ep.audioUrl, out, "PrimeMinutes/1.0", MAX_DOWNLOAD_BYTES, onProgress)
-            enforceRetentionCap(dir, max = 20)
-            Uri.fromFile(out)
-        }
+    /**
+     * Download an episode's audio into [dir] (a library item's directory: its `.part` stays there, so a
+     * paused or killed download resumes and deleting the item removes it). Returns the finished file.
+     */
+    suspend fun downloadInto(url: String, dir: File, onBytes: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
+        requireHttp(url)
+        val ext = url.substringAfterLast('.', "mp3").substringBefore('?').filter { it.isLetterOrDigit() }.take(4).ifBlank { "mp3" }
+        val out = File(dir, "download.$ext")
+        resumableDownload(url, out, "PrimeMinutes/1.0", MAX_DOWNLOAD_BYTES, onBytes) {}
+        out
+    }
 
     private fun safeText(parser: XmlPullParser): String =
         runCatching { parser.nextText().trim() }.getOrDefault("")
@@ -120,15 +119,6 @@ object Podcast {
             connectTimeout = 15_000; readTimeout = 15_000; instanceFollowRedirects = true
             setRequestProperty("User-Agent", "PrimeMinutes/1.0")
         }.inputStream
-
-    // Bound ONLY this feature's own downloads (podcast_*). filesDir/audio also holds pipeline work
-    // WAVs (decoded_*) and shared imports (shared_*) the user may still be transcribing or have
-    // saved — an all-files cap could delete an in-use file out from under an active session.
-    private fun enforceRetentionCap(dir: File, max: Int) {
-        val files = dir.listFiles()?.filter { it.isFile && it.name.startsWith("podcast_") }
-            ?.sortedBy { it.lastModified() } ?: return
-        if (files.size > max) files.take(files.size - max).forEach { it.delete() }
-    }
 }
 
 /** itunes:duration is either "HH:MM:SS"/"MM:SS" or plain seconds ("3080"); show the latter as "51:20". */

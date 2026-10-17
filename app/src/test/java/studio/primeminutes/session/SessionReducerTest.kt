@@ -57,6 +57,34 @@ class SessionReducerTest {
         assertTrue(n.state.recordingRun)
     }
 
+    @Test fun aDownloadedItemRunsAsAnImportOfItsOwnEntry() {
+        val n = SessionReducer.launchAudio(s0, env, entryUri("20261017-090000", "import_source"), "Episode 7")
+        assertEquals(File(root, "20261017-090000"), n.state.libraryDir)
+        assertFalse("an import: no ⏭ Next talk, the queue does not supersede it", n.state.recordingRun)
+        assertEquals("Episode 7", n.state.title)
+    }
+
+    @Test fun aDownloadItemOpensItsScreenAndProcessingReplacesIt() {
+        val e = studio.primeminutes.core.library.SessionLibrary.Entry(
+            "20261017-090000", File(root, "20261017-090000"), "Episode 7", 0L, 0,
+            studio.primeminutes.core.library.SessionLibrary.Status.RECORDED,
+            download = studio.primeminutes.core.library.SessionLibrary.PendingDownload("podcast", "https://x/e.mp3"),
+        )
+        val running = s0.copy(sessionGen = 2)
+        val open = SessionReducer.openDownload(running, env, e).state
+        assertEquals(Screen.Session, open.screen)
+        assertEquals("20261017-090000", open.downloadEntryId)
+        assertEquals("Episode 7", open.title)
+        assertFalse(open.running)
+        assertNull(open.audioUri)
+        assertEquals(3, open.sessionGen)
+        // The download lands and processing starts: the live view replaces the download card.
+        val live = SessionReducer.launchAudio(open, env, entryUri(e.id, "import_source"), e.title).state
+        assertNull(live.downloadEntryId)
+        assertTrue(live.running)
+        assertNull(SessionReducer.leaveToStudio(open, env).state.downloadEntryId)
+    }
+
     @Test fun eventsOfASupersededRunAreDropped() {
         val s = SessionReducer.launchAudio(s0, env, Uri.parse("content://x/a.mp3")).state
         val stale = SessionReducer.onEvent(s, env, s.sessionGen - 1, TranscriptEvent.Status("old"), null)

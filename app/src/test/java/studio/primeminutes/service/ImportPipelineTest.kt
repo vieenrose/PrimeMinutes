@@ -158,6 +158,67 @@ class ImportPipelineTest {
         utts.zipWithNext().forEach { (a, b) -> assertTrue("no duplicate or overlapping line: $a / $b", b.startSec >= a.endSec - 1e-6) }
     }
 
+    /** A downloaded podcast / YouTube item: its kept source, in the item's own directory. */
+    private fun downloadedItem(seconds: Double, title: String = "Episode 7"): SessionLibrary.Entry {
+        val e = SessionLibrary.createDownloadEntry(ctx, title,
+            SessionLibrary.PendingDownload(SessionLibrary.PendingDownload.PODCAST, "https://example.com/e7.mp3"))!!
+        val f = testWav(File(e.dir, "download.mp3"), seconds)
+        return SessionLibrary.downloadDone(e, f, seconds.toInt())!!
+    }
+
+    @Test fun aDownloadedItemIsProcessedIntoItselfNotANewEntry() = runBlocking {
+        val item = downloadedItem(4.0)
+        val host = FakePipelineHost(ctx, scope, durationSec = 4.0)
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(SessionLibrary.importSource(item)!!).toString()) }
+        val task = withTimeout(20_000) {
+            while (host.reader.readTasks.firstOrNull()?.final?.isCompleted != true) delay(20)
+            host.reader.readTasks.single()
+        }
+        val e = SessionLibrary.list(ctx).single()
+        assertEquals(item.id, e.id)
+        assertEquals("the player follows the audio into the item", Uri.fromFile(e.wavFile).toString(),
+            host.of<TranscriptEvent.RecordingSaved>().single().uri)
+        task.result.complete(ReaderWorker.SummaryResult("Model title", "Summary"))
+        withTimeout(20_000) { run.await() }!!
+        val done = SessionLibrary.list(ctx).single()
+        assertEquals(item.id, done.id)
+        assertEquals("the episode title stays", "Episode 7", done.title)
+        assertNull("decoded whole: the source is gone", SessionLibrary.importSource(done))
+        assertFalse(done.sourceOnly)
+    }
+
+    @Test fun aStopWhileADownloadedItemDecodesKeepsItResumable() = runBlocking {
+        val item = downloadedItem(12.0)
+        val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 5), durationSec = 12.0)
+        host.decodeDelayMs = 25
+        val p = ImportPipeline(host)
+        val run = scope.async(RunGen(3)) { p.run(Uri.fromFile(SessionLibrary.importSource(item)!!).toString()) }
+        withTimeout(20_000) { while (p.inFlight.checkpoint == null || host.of<TranscriptEvent.UtteranceSnapshot>().size < 4) delay(10) }
+        assertFalse("still decoding", p.inFlight.decoded)
+        p.inFlight.bankOnStop { "model" }
+        run.cancelAndJoin()
+        val stopped = SessionLibrary.list(ctx).single()
+        assertEquals(item.id, stopped.id)
+        assertNotNull("the source stays for Resume", SessionLibrary.importSource(stopped))
+        assertEquals("the row lists the episode's length", 12, stopped.durationSec)
+        assertTrue(SessionLibrary.hasProgress(stopped))
+        // Resume: the library row re-runs its recording.wav, which decodes the kept source to the end.
+        val host2 = FakePipelineHost(ctx, scope, ScriptedEngine(), durationSec = 12.0)
+        TranscriptionService.resumeRequested = true
+        val run2 = scope.async(RunGen(4)) { ImportPipeline(host2).run(Uri.fromFile(stopped.wavFile).toString()) }
+        val task = withTimeout(20_000) {
+            while (host2.reader.readTasks.firstOrNull()?.final?.isCompleted != true) delay(20)
+            host2.reader.readTasks.single()
+        }
+        task.result.complete(ReaderWorker.SummaryResult("T", "S"))
+        withTimeout(20_000) { run2.await() }!!
+        val done = SessionLibrary.list(ctx).single()
+        assertEquals(item.id, done.id)
+        assertEquals(12, done.durationSec)
+        assertNull(SessionLibrary.importSource(done))
+    }
+
     @Test fun aStopAfterTheDecodeKeepsNoSource() = runBlocking {
         val host = FakePipelineHost(ctx, scope, ScriptedEngine(blockDelayMs = 30), durationSec = 4.0)
         val p = ImportPipeline(host)

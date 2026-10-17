@@ -349,11 +349,9 @@ class MainActivity : ComponentActivity() {
         // copies live under filesDir/library, so these are all reclaimable. Off the main thread —
         // it's file IO. NOT safe while the foreground service is mid-run (an Activity recreation,
         // not a cold start): the sweep would delete the pipeline's in-flight files.
-        // A podcast/YouTube download writes into filesDir/audio from the service without a pipeline
-        // (Running), and its finished file waits there for the user (Ready): neither may be swept.
-        val downloading = studio.primeminutes.online.ImportDownloads.state.value.let {
-            it is studio.primeminutes.online.ImportDownloads.State.Running || it is studio.primeminutes.online.ImportDownloads.State.Ready
-        }
+        // Podcast/YouTube downloads go into their library item's directory now; while one runs, leave
+        // the sweep for the next cold start anyway (the service is mid-work).
+        val downloading = studio.primeminutes.online.ImportDownloads.running
         if (!studio.primeminutes.service.RunRegistry.pipelineActive && studio.primeminutes.service.RunRegistry.exportsInFlight == 0 && !downloading) {
             Thread {
                 ModelManager(applicationContext).sweepStalePartFiles()
@@ -597,6 +595,19 @@ private fun TranscribeScreen(
         if (ids.size >= 2) { delay(2_000); devMergeAsked = true; mergeAsk = ids[0] to ids[1] }
     }
 
+    // DEV: `--es vox_podcast "<query>" [--ei vox_podcast_ep n]` submits episode n (default 2, newest
+    // first) of the first series found, as the Podcast sheet does (device checks, no typing).
+    LaunchedEffect(Unit) {
+        val q = devExtras?.getString("vox_podcast") ?: return@LaunchedEffect
+        val n = devExtras.getInt("vox_podcast_ep", 2)
+        runCatching {
+            val feed = studio.primeminutes.online.Podcast.searchSeries(q).first().feedUrl
+            val ep = studio.primeminutes.online.Podcast.fetchEpisodes(feed, n + 1)[n]
+            android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title}")
+            studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl)
+        }.onFailure { android.util.Log.w("primeminutes-dev", "vox_podcast failed", it) }
+    }
+
     // --- Update notifier: once/day GitHub release check → dismissible banner → download+install. ---
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var updateDismissed by remember { mutableStateOf(false) }
@@ -681,6 +692,8 @@ private fun TranscribeScreen(
                     .maxByOrNull { it.createdAt }
             }
         }
+        // Podcast / YouTube items whose download a kill cut short carry on (from their partial file).
+        studio.primeminutes.online.ImportDownloads.kick(context)
         // SessionAutosave is legacy: the library durably holds every session. Discard any old snapshot.
         withContext(Dispatchers.IO) { SessionAutosave.clear(context) }
         // Invariant: a non-empty queue means the user already asked for processing — so if no
@@ -888,6 +901,13 @@ private fun TranscribeScreen(
             if (DownloadPlan.decide(ModelPrefetch.consent(context), unmetered, p) == DownloadPlan.Action.PROCEED) action()
             else { dlUnmetered = unmetered; dlAsk = p to action }
         }
+    }
+    /** A downloaded podcast / YouTube item, tapped: processed now, or after the job that runs (one at a time). */
+    fun processDownloaded(e: SessionLibrary.Entry) {
+        if (RunRegistry.busy || vm.now.isRecording) {
+            studio.primeminutes.online.ImportDownloads.markReady(e.id)
+            vm.notify(context.getString(R.string.dl_will_start))
+        } else withModels { vm.processDownloaded(e) }
     }
     LaunchedEffect(Unit) {
         val p = withContext(Dispatchers.IO) { ModelPrefetch.pending(context) }
@@ -1312,12 +1332,26 @@ private fun TranscribeScreen(
     // Title / summary / speaker-stats overview — the Summary tab in portrait, the left pane in
     // landscape. onSeek only when there IS audio to seek.
     val anchorSeek: ((Int) -> Unit)? = if (s.audioUri != null) ({ ms -> seekAndPlay(ms) }) else null
+    // The download item this screen shows (re-read as its download state changes on disk).
+    val dlChangesNow by studio.primeminutes.online.ImportDownloads.changes.collectAsState()
+    val dlStateNow by studio.primeminutes.online.ImportDownloads.state.collectAsState()
+    val dlEntry by produceState<SessionLibrary.Entry?>(null, s.downloadEntryId, dlChangesNow) {
+        value = s.downloadEntryId?.let { id -> withContext(Dispatchers.IO) { SessionLibrary.byId(context, id) } }
+    }
     val summaryCards: @Composable () -> Unit = {
         CompositionLocalProvider(
             studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t },
             studio.primeminutes.ui.LocalSpeakerNames provides utterances.mapNotNull { it.speaker }.toSet().associateWith { unbreakable(speakerLabel(it)) },
         ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // A podcast / YouTube item still downloading: its download, and what can be done about it.
+            dlEntry?.takeIf { it.download != null }?.let { e ->
+                studio.primeminutes.ui.ItemDownloadCard(
+                    e, dlStateNow,
+                    onRetry = { studio.primeminutes.online.ImportDownloads.retry(context, e) },
+                    onDelete = { vm.deleteEntries(listOf(e)); vm.leaveToStudio() },
+                )
+            }
             // The reading agent at work (live during recording/processing; stays after as a log).
             val shownAgent = if (s.watchingQueue) queueAgent else agent
             if (shownAgent.active) SectionCard {
@@ -1390,7 +1424,7 @@ private fun TranscribeScreen(
     }
 
     // Blank slate → the EmptyState hero carries the primary "Add audio" CTA.
-    val isEmptyState = utterances.isEmpty() && !s.running && player == null
+    val isEmptyState = utterances.isEmpty() && !s.running && player == null && s.downloadEntryId == null
 
     // Share a library entry's audio via the FileProvider (files/library is an exported path).
     fun shareEntryAudio(e: SessionLibrary.Entry) {
@@ -1442,7 +1476,9 @@ private fun TranscribeScreen(
             // thread on every change: list() opens one meta.json per meeting.
             var studioEntries by remember { mutableStateOf(SessionLibrary.list(context)) }
             var studioQueuedIds by remember { mutableStateOf(ProcessingQueue.ids(context).toSet()) }
-            LaunchedEffect(s.recentsVersion, s.queueItemId) {
+            val dlChanges by studio.primeminutes.online.ImportDownloads.changes.collectAsState()
+            val dlState by studio.primeminutes.online.ImportDownloads.state.collectAsState()
+            LaunchedEffect(s.recentsVersion, s.queueItemId, dlChanges) {
                 withContext(Dispatchers.IO) { SessionLibrary.list(context) to ProcessingQueue.ids(context).toSet() }
                     .let { (e, q) -> studioEntries = e; studioQueuedIds = q }
             }
@@ -1468,6 +1504,13 @@ private fun TranscribeScreen(
                 foregroundRun = s.running && !s.watchingQueue && !s.deferStopped,
                 foregroundLabel = s.title ?: s.status,
                 onResumeSession = { vm.showScreen(Screen.Session) },
+                // The screen's own run over a library item (a downloaded podcast / YouTube item, a Resume):
+                // that row is live, and tapping it returns to the run.
+                foregroundId = s.libraryDir?.name?.takeIf { s.running && !s.watchingQueue && !s.deferStopped },
+                foregroundFraction = s.progress,
+                downloadState = dlState,
+                onOpenDownload = { e -> vm.openDownload(e) },
+                onRetryDownload = { e -> studio.primeminutes.online.ImportDownloads.retry(context, e) },
                 // Exclude already-queued items: they show the Queued glyph on their row.
                 pendingCount = studioEntries.count {
                     it.status == SessionLibrary.Status.RECORDED && it.wavFile.exists() && it.id !in studioQueuedIds
@@ -1487,7 +1530,7 @@ private fun TranscribeScreen(
                 onDownloadSearchModel = { downloadSearchModel() },
                 indexingIds = indexingIds,
                 onWatchLive = { e -> vm.watchQueueItem(e) },
-                onProcessNow = { e -> vm.enqueueAndStart(listOf(e.id)) },
+                onProcessNow = { e -> if (e.sourceOnly) processDownloaded(e) else vm.enqueueAndStart(listOf(e.id)) },
                 onResume = { e -> vm.resumeEntry(e) },
                 onRemoveFromQueue = { e ->
                     scope.launch { withContext(Dispatchers.IO) { ProcessingQueue.remove(context, e.id) }; vm.bumpRecents() }
@@ -1642,6 +1685,10 @@ private fun TranscribeScreen(
                     onAddSource = { vm.showAddSourceSheet(true) },
                     modifier = Modifier.weight(1f),
                 )
+            } else if (s.downloadEntryId != null && utterances.isEmpty() && !s.running) {
+                // A podcast / YouTube item not downloaded yet: its download card alone (no tabs, nothing to read yet).
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) { summaryCards() }
             } else if (twoPane) {
                 // Landscape: two panes — the overview on the left scrolls independently of the
                 // transcript on the right.
@@ -1765,25 +1812,22 @@ private fun TranscribeScreen(
             onUpdateFound = { info -> updateInfo = info; updateDismissed = false; vm.showConfigSheet(false) },
         )
     }
-    // Podcast/YouTube downloads run in the service, so they outlive the importer sheet: show a
-    // compact card while one is active and hand the file to the pipeline when it lands.
-    val importDl by studio.primeminutes.online.ImportDownloads.state.collectAsState()
-    LaunchedEffect(importDl) {
-        when (val st = importDl) {
-            is studio.primeminutes.online.ImportDownloads.State.Ready -> {
-                studio.primeminutes.online.ImportDownloads.consume()
-                withModels { vm.launchAudio(st.uri, st.title) }
-            }
-            is studio.primeminutes.online.ImportDownloads.State.Failed -> {
-                studio.primeminutes.online.ImportDownloads.consume()
-                vm.notify(st.message)   // the download was started from Studio: a snackbar there has no host
-            }
-            else -> {}
-        }
+    // Podcast/YouTube items: their row and their screen show the download (no floating card any more).
+    // A finished download is processed as soon as nothing else runs (one job at a time); a failure is said
+    // once here, and stays on the item.
+    val dlReady by studio.primeminutes.online.ImportDownloads.ready.collectAsState()
+    val runJobs by RunRegistry.jobs.collectAsState()
+    LaunchedEffect(dlReady, runJobs.busy, s.isRecording) {
+        val id = dlReady.firstOrNull() ?: return@LaunchedEffect
+        if (runJobs.busy || s.isRecording) return@LaunchedEffect
+        val e = withContext(Dispatchers.IO) { SessionLibrary.byId(context, id) }
+        // Consumed only after the last suspension: it changes this effect's key, which cancels it.
+        studio.primeminutes.online.ImportDownloads.consumeReady(id)
+        if (e != null && e.sourceOnly) withModels { vm.processDownloaded(e) }
     }
-    (importDl as? studio.primeminutes.online.ImportDownloads.State.Running)?.let {
-        val above = if (s.screen == Screen.Session && player != null) with(LocalDensity.current) { playerBarPx.toDp() } else 0.dp
-        studio.primeminutes.ui.ImportDownloadBanner(it, above, onCancel = { studio.primeminutes.online.ImportDownloads.cancel() })
+    val dlFailure by studio.primeminutes.online.ImportDownloads.failure.collectAsState()
+    LaunchedEffect(dlFailure) {
+        dlFailure?.let { vm.notify(context.getString(R.string.dl_failed_reason, it)); studio.primeminutes.online.ImportDownloads.consumeFailure() }
     }
     if (s.showPodcastSheet) {
         PodcastSheet(onDismiss = { vm.showPodcastSheet(false) })

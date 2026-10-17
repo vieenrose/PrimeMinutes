@@ -444,6 +444,13 @@
     <string name="dl_prefetching">Downloading the models…</string>
     <string name="dl_paused">Download paused · resumes automatically</string>
     <string name="dl_resume">Resume</string>
+    <string name="dl_waiting">Waiting to download</string>
+    <string name="dl_failed_reason">Download failed: %1$s</string>
+    <string name="dl_downloaded_ready">Downloaded · tap to process</string>
+    <string name="dl_will_start">Downloaded: processing starts when the current job ends</string>
+    <string name="cd_status_downloading">Downloading</string>
+    <string name="cd_status_download_failed">Download failed</string>
+    <string name="dl_item_hint">The meeting is processed once its audio is downloaded. You can leave this screen meanwhile.</string>
     <string name="ask_stage_searching">Searching the meetings… %1$d s</string>
     <string name="ask_stage_reading">Reading %1$d excerpts… %2$d s</string>
     <string name="ask_stage_answering">Answering… %1$d s</string>

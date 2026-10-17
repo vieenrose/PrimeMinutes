@@ -52,6 +52,9 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -125,11 +128,13 @@ private enum class StatusFilter { ALL, NEW, DONE }
 /** A row's single derived state (computed once at the list call site) — one priority definition, so
  *  the color and glyph decoders can't silently drift out of order. Selection is an orthogonal overlay. */
 /** [NoSpeech]: processed, but nothing was said — not "Done" (no check mark, no AI notes). */
-private enum class RowStatus { New, Queued, Processing, Done, NoSpeech }
+/** [Downloading] / [DownloadFailed]: a podcast / YouTube item whose audio is still to come. */
+private enum class RowStatus { New, Queued, Processing, Done, NoSpeech, Downloading, DownloadFailed }
 
 /** One priority definition for a row's status (color + glyph decode from it). */
-private fun rowStatus(e: SessionLibrary.Entry, processingId: String?, queuedIds: Set<String>): RowStatus = when {
-    e.id == processingId -> RowStatus.Processing
+private fun rowStatus(e: SessionLibrary.Entry, processingId: String?, queuedIds: Set<String>, foregroundId: String? = null): RowStatus = when {
+    e.download != null -> if (e.download.error != null) RowStatus.DownloadFailed else RowStatus.Downloading
+    e.id == processingId || e.id == foregroundId -> RowStatus.Processing
     e.status == SessionLibrary.Status.DONE && e.noSpeech -> RowStatus.NoSpeech
     e.status == SessionLibrary.Status.DONE -> RowStatus.Done
     e.id in queuedIds -> RowStatus.Queued
@@ -164,6 +169,8 @@ fun StudioScreen(
     foregroundRun: Boolean,
     foregroundLabel: String,
     onResumeSession: () -> Unit,
+    /** The screen's own run's progress (its row's bar when it processes a library item). */
+    foregroundFraction: Float = 0f,
     pendingCount: Int,
     onRecord: () -> Unit,
     onResumeCapture: () -> Unit,
@@ -196,6 +203,13 @@ fun StudioScreen(
     initialQuery: String = "",
     /** DEV (debug builds): typed into the search box one character at a time, for README animations. */
     typeQuery: String = "",
+    /** The podcast / YouTube download running now (its item's row shows it). */
+    downloadState: studio.primeminutes.online.ImportDownloads.State = studio.primeminutes.online.ImportDownloads.State.Idle,
+    /** The library item the screen's own run (not the queue) is processing: its row is live. */
+    foregroundId: String? = null,
+    /** A download item was tapped: its screen (download state, Resume / Retry / Delete). */
+    onOpenDownload: (SessionLibrary.Entry) -> Unit = {},
+    onRetryDownload: (SessionLibrary.Entry) -> Unit = {},
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -208,6 +222,30 @@ fun StudioScreen(
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var deleteFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var confirmDeleteMany by remember { mutableStateOf(false) }
+    // A row's tap: a live run opens its live view (the queue's, or the screen's own run), a download item its
+    // screen, a downloaded item starts processing, a saved meeting opens; the rest offer their actions.
+    fun onRowTap(e: SessionLibrary.Entry, status: RowStatus) {
+        when {
+            status == RowStatus.Processing -> if (e.id == foregroundId) onResumeSession() else onWatchLive(e)
+            status == RowStatus.Downloading || status == RowStatus.DownloadFailed -> onOpenDownload(e)
+            status == RowStatus.Done || status == RowStatus.NoSpeech -> onOpen(e)
+            e.sourceOnly && e.id !in queuedIds -> onProcessNow(e)
+            else -> actionsFor = e
+        }
+    }
+    // Feed live text ONLY to the live rows — otherwise every tick changes the args of every visible row
+    // and defeats skipping (a full e-ink refresh per tick).
+    @Composable fun rowLabel(e: SessionLibrary.Entry, status: RowStatus): String = when (status) {
+        RowStatus.Processing -> if (e.id == foregroundId) foregroundLabel else processingLabel
+        RowStatus.Downloading, RowStatus.DownloadFailed -> downloadLine(e, downloadState)
+        else -> if (e.sourceOnly) stringResource(R.string.dl_downloaded_ready) else ""
+    }
+    fun rowFraction(e: SessionLibrary.Entry, status: RowStatus): Float = when (status) {
+        RowStatus.Processing -> if (e.id == foregroundId) foregroundFraction else processingFraction
+        RowStatus.Downloading -> (downloadState as? studio.primeminutes.online.ImportDownloads.State.Running)
+            ?.takeIf { it.entryId == e.id && !it.paused }?.progress ?: 0f
+        else -> 0f
+    }
     var query by remember { mutableStateOf(initialQuery) }
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
 
@@ -414,7 +452,7 @@ fun StudioScreen(
             }
 
             // While recording, the big bottom button already says so (and returns to the booth).
-            if (foregroundRun && !isRecording) {
+            if (foregroundRun && !isRecording && entries.none { it.id == foregroundId }) {
                 Banner(
                     icon = Icons.Filled.PlaylistPlay, tint = pal.Sky,
                     text = stringResource(R.string.studio_processing_banner, foregroundLabel.ifBlank { stringResource(R.string.status_processing) }),
@@ -489,21 +527,17 @@ fun StudioScreen(
             ) {
                 if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
                     val e = h.entry
-                    val status = rowStatus(e, processingId, queuedIds)
+                    val status = rowStatus(e, processingId, queuedIds, foregroundId)
                     Column {
                         SessionRow(
                             entry = e, status = status,
-                            processingLabel = if (status == RowStatus.Processing) processingLabel else "",
-                            processingFraction = if (status == RowStatus.Processing) processingFraction else 0f,
+                            processingLabel = rowLabel(e, status),
+                            processingFraction = rowFraction(e, status),
                             selectionMode = selectionMode, selected = e.id in selected,
                             onClick = {
                                 if (selectionMode) {
                                     if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
-                                } else when (status) {
-                                    RowStatus.Processing -> onWatchLive(e)
-                                    RowStatus.Done, RowStatus.NoSpeech -> onOpen(e)
-                                    else -> actionsFor = e
-                                }
+                                } else onRowTap(e, status)
                             },
                             onLongClick = { if (!selectionMode) { selectionMode = true; selected[e.id] = Unit } },
                             onManage = { actionsFor = e },
@@ -524,24 +558,20 @@ fun StudioScreen(
                         )
                     }
                     items(list, key = { it.id }, contentType = { "row" }) { e ->
-                        val status = rowStatus(e, processingId, queuedIds)
+                        val status = rowStatus(e, processingId, queuedIds, foregroundId)
                         SessionRow(
                             entry = e, status = status,
                             // Feed live progress ONLY to the processing row — otherwise every tick
                             // changes the args of every visible row and defeats skipping (a full
                             // e-ink refresh per tick).
-                            processingLabel = if (status == RowStatus.Processing) processingLabel else "",
-                            processingFraction = if (status == RowStatus.Processing) processingFraction else 0f,
+                            processingLabel = rowLabel(e, status),
+                            processingFraction = rowFraction(e, status),
                             selectionMode = selectionMode,
                             selected = e.id in selected,
                             onClick = {
                                 if (selectionMode) {
                                     if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
-                                } else when (status) {
-                                    RowStatus.Processing -> onWatchLive(e)
-                                    RowStatus.Done, RowStatus.NoSpeech -> onOpen(e)
-                                    else -> actionsFor = e
-                                }
+                                } else onRowTap(e, status)
                             },
                             onLongClick = {
                                 if (!selectionMode) { selectionMode = true; selected[e.id] = Unit }
@@ -600,6 +630,13 @@ fun StudioScreen(
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+                if (e.download != null) {
+                    // A download item: its own actions only (nothing to process or share yet).
+                    if (e.download.error != null) ActionRow(Icons.Filled.Refresh, stringResource(R.string.retry)) { actionsFor = null; onRetryDownload(e) }
+                    else ActionRow(Icons.Filled.Download, stringResource(R.string.cd_status_downloading)) { actionsFor = null; onOpenDownload(e) }
+                    ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
+                    ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { deleteFor = e; actionsFor = null }
+                } else {
                 if (e.id == processingId) {
                     ActionRow(Icons.Filled.PlaylistPlay, stringResource(R.string.action_watch_live)) { actionsFor = null; onWatchLive(e) }
                     ActionRow(Icons.Filled.Stop, stringResource(R.string.action_stop_processing), PrimeMinutesPalette.Red) { actionsFor = null; onStopProcessing() }
@@ -627,6 +664,7 @@ fun StudioScreen(
                 ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
                 ActionRow(Icons.Filled.Share, stringResource(R.string.action_share_audio)) { actionsFor = null; onShareAudio(e) }
                 ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { deleteFor = e; actionsFor = null }
+                }
             }
         }
     }
@@ -754,10 +792,13 @@ private fun SessionRow(
     val pal = LocalPrimeMinutesPalette.current
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val processing = status == RowStatus.Processing
+    val downloading = status == RowStatus.Downloading
     val statusColor = when (status) {
         RowStatus.Processing, RowStatus.Queued -> PrimeMinutesPalette.Warning
         RowStatus.Done -> PrimeMinutesPalette.Success
         RowStatus.New, RowStatus.NoSpeech -> pal.Slate400
+        RowStatus.Downloading -> pal.Sky
+        RowStatus.DownloadFailed -> PrimeMinutesPalette.Red
     }
     // Screen-reader description: status is otherwise carried only by a glyph shape + color, invisible
     // to TalkBack. Announce "<title>, <status>"; selection is exposed as the semantic selected state.
@@ -767,6 +808,8 @@ private fun SessionRow(
         RowStatus.Processing -> R.string.cd_status_processing
         RowStatus.Done -> R.string.cd_status_done
         RowStatus.NoSpeech -> R.string.status_no_speech
+        RowStatus.Downloading -> R.string.cd_status_downloading
+        RowStatus.DownloadFailed -> R.string.cd_status_download_failed
     })
     val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)}, $statusLabel"
     val isSelected = selected
@@ -796,6 +839,8 @@ private fun SessionRow(
                             RowStatus.Done -> Icons.Filled.CheckCircle
                             RowStatus.NoSpeech -> Icons.Filled.MicOff
                             RowStatus.Queued -> Icons.Filled.Schedule
+                            RowStatus.Downloading -> Icons.Filled.Download
+                            RowStatus.DownloadFailed -> Icons.Filled.ErrorOutline
                             else -> Icons.Filled.GraphicEq
                         },
                         contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp),
@@ -810,12 +855,16 @@ private fun SessionRow(
                 )
                 val meta = buildString {
                     append(TIME_FMT.format(Date(entry.createdAt)))
-                    append(" · ")
-                    append("%d:%02d".format(entry.durationSec / 60, entry.durationSec % 60))
-                    if (processing && processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
+                    // A download item has no length yet (or only the feed's): its state says more.
+                    if (entry.durationSec > 0 || entry.download == null) {
+                        append(" · ")
+                        append("%d:%02d".format(entry.durationSec / 60, entry.durationSec % 60))
+                    }
+                    if (processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
                     if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }
                 }
-                Text(meta, color = pal.Slate400, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta, color = if (status == RowStatus.DownloadFailed) PrimeMinutesPalette.Red else pal.Slate400,
+                    style = MaterialTheme.typography.labelMedium, maxLines = if (status == RowStatus.DownloadFailed) 2 else 1, overflow = TextOverflow.Ellipsis)
             }
             // In selection mode the leading glyph IS the checkbox, so no trailing control.
             if (!selectionMode) {
@@ -826,6 +875,12 @@ private fun SessionRow(
                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_manage), tint = pal.Slate400)
                 }
             }
+        }
+        if (downloading) {
+            val barMod = Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(2.dp))
+            if (processingFraction > 0f || pal.isEink) LinearProgressIndicator(
+                progress = { processingFraction }, color = pal.Sky, trackColor = pal.Slate700, modifier = barMod,
+            )
         }
         if (processing) {
             val barMod = Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(2.dp))

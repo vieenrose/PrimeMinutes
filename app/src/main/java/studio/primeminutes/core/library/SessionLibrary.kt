@@ -65,6 +65,10 @@ object SessionLibrary {
         val status: Status,
         /** Processed, but no speech was found ([SpeechCheck]): shown as such, never as "Done". */
         val noSpeech: Boolean = false,
+        /** A podcast / YouTube item whose audio is still to be downloaded (or whose download failed). */
+        val download: PendingDownload? = null,
+        /** Downloaded, not processed yet: its audio is the kept source only (no recording.wav). */
+        val sourceOnly: Boolean = false,
     ) {
         val wavFile: File get() = File(dir, WAV_NAME)
         val sessionFile: File get() = File(dir, SESSION_NAME)
@@ -426,6 +430,73 @@ object SessionLibrary {
         updated
     }.onFailure { Log.w(TAG, "could not complete the audio of ${entry.id}", it) }.getOrNull()
 
+    // --- podcast / YouTube item created before its download ---
+    //
+    // The item exists from the moment the link or episode is submitted: `download.json` says what to fetch
+    // (and, once it failed for good, why), the partial file downloads into the entry's own directory, and
+    // the finished file becomes the entry's kept import source. A kill, a lost network or a failure leaves
+    // the item in the library, where it can be resumed, retried or deleted (deleting its directory removes
+    // the partial file too).
+    const val DOWNLOAD = "download.json"
+
+    /** What an item still has to download. [kind]: "podcast" (direct audio URL) or "youtube" (video page URL). */
+    data class PendingDownload(val kind: String, val url: String, val error: String? = null) {
+        fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply { error?.let { put("error", it) } }
+        companion object {
+            const val PODCAST = "podcast"
+            const val YOUTUBE = "youtube"
+            fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null })
+        }
+    }
+
+    /** A new entry for an item to download, titled [title] (null: named once known). Null on failure. */
+    fun createDownloadEntry(context: Context, title: String?, d: PendingDownload, durationSec: Int = 0): Entry? = runCatching {
+        val createdAt = System.currentTimeMillis()
+        val base = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(createdAt))
+        var dir = File(root(context), base)
+        var n = 2
+        while (dir.exists()) dir = File(root(context), "$base-${n++}")
+        dir.mkdirs()
+        File(dir, DOWNLOAD).writeTextAtomic(d.toJson().toString())
+        val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d)
+        writeMeta(entry)
+        entry
+    }.onFailure { Log.w(TAG, "could not create the download item", it) }.getOrNull()
+
+    fun saveDownload(entry: Entry, d: PendingDownload) {
+        runCatching { File(entry.dir, DOWNLOAD).writeTextAtomic(d.toJson().toString()) }
+            .onFailure { Log.w(TAG, "could not save the download state of ${entry.id}", it) }
+    }
+
+    /**
+     * The download of [entry] landed in [file]: it becomes the entry's kept source (what processing
+     * decodes), the pending download is cleared and the listed length follows the file. The updated entry.
+     */
+    fun downloadDone(entry: Entry, file: File, durationSec: Int): Entry? {
+        if (!keepImportSource(entry, file)) return null
+        runCatching { File(entry.dir, DOWNLOAD).delete() }
+        return (if (durationSec > 0) setDuration(entry, durationSec) else null) ?: byId(entry.dir.parentFile!!, entry.id)
+    }
+
+    private fun byId(root: File, id: String): Entry? = readMeta(File(root, id))
+
+    /**
+     * The decoded WAV of a downloaded item's processing (its kept source decoded) moves into the item:
+     * like [promoteRecording], into the existing entry instead of a new one. When [decodedAll], the WAV
+     * holds the whole source, which is then no longer needed. Never throws; null on failure.
+     */
+    fun promoteInto(entry: Entry, wav: File, durationSec: Int, decodedAll: Boolean): Entry? = runCatching {
+        val dest = File(entry.dir, WAV_NAME)
+        if (!wav.renameTo(dest)) { wav.copyTo(dest, overwrite = true); wav.delete() }
+        if (decodedAll) File(entry.dir, IMPORT_SOURCE).delete()
+        synchronized(metaLock) {
+            val cur = readMeta(entry.dir) ?: entry
+            // Stopped mid-decode: the row keeps the source's length (Resume decodes all of it), see InFlightImport.save.
+            cur.copy(durationSec = if (decodedAll || durationSec > cur.durationSec) durationSec else cur.durationSec, status = Status.RECORDED)
+                .also { writeMeta(it) }
+        }.let { readMeta(entry.dir) ?: it }
+    }.onFailure { Log.w(TAG, "could not move the decoded audio into ${entry.id}", it) }.getOrNull()
+
     private fun writeMeta(entry: Entry) = synchronized(metaLock) {
         val o = JSONObject()
             .put("id", entry.id)
@@ -454,6 +525,10 @@ object SessionLibrary {
                 // Meta written before the flag: a silent meeting was a DONE entry titled "No speech detected".
                 noSpeech = if (o.has("noSpeech")) o.getBoolean("noSpeech")
                     else status == Status.DONE && title in SpeechCheck.LEGACY_TITLES,
+                download = File(dir, DOWNLOAD).takeIf { it.isFile }?.let { f ->
+                    runCatching { PendingDownload.fromJson(JSONObject(f.readText())) }.getOrNull()
+                },
+                sourceOnly = status == Status.RECORDED && File(dir, IMPORT_SOURCE).isFile && !File(dir, WAV_NAME).exists(),
             )
         }.onFailure { Log.w(TAG, "corrupt library meta in ${dir.name}", it) }.getOrNull()
     }

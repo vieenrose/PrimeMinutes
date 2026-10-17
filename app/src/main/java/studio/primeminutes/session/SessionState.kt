@@ -98,6 +98,8 @@ data class SessionState(
     val deferStopped: Boolean = false,
     /** The Session screen is a LIVE VIEW of the queue's current item. */
     val watchingQueue: Boolean = false,
+    /** The Session screen shows a podcast / YouTube item still downloading (or failed): its download card. */
+    val downloadEntryId: String? = null,
     val isRecording: Boolean = false,
     /** Mic input level while recording (0..1 in five steps). */
     val micLevel: Float = 0f,

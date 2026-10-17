@@ -88,6 +88,11 @@ internal class ImportPipeline(private val host: PipelineHost) {
         val decodeUri = keptSource?.let(Uri::fromFile) ?: uri
         val streamWav = ownWav && keptSource == null
         if (keptSource != null) Log.i(STOP_TAG, "entry ${existing?.id}: decoding its kept import source")
+        // A downloaded podcast / YouTube item processed from its kept source (it has no recording.wav yet):
+        // the decoded audio goes into that item, not into a new entry.
+        val intoEntry = srcFile?.takeIf { existing == null && it.name == SessionLibrary.IMPORT_SOURCE && it.isFile }
+            ?.parentFile?.let { SessionLibrary.byId(ctx, it.name) }
+        if (intoEntry != null) Log.i(STOP_TAG, "processing the downloaded item ${intoEntry.id}")
         // The import copy a Stop keeps with its entry (InFlightImport): only our own transient files.
         val importCopy = srcFile?.takeIf { !ownWav && it.isFile && it.parentFile?.absolutePath == File(ctx.filesDir, "audio").absolutePath }
         // The decoder reached the end of the source (the work WAV holds all of it).
@@ -172,7 +177,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
         // Only for a foreground import that does not already own a library entry — a re-run of a
         // library capture is durable already, and the queue drain owns its own row.
         if (foreground && existing == null) {
-            inFlight.begin(wav, totalDurationSec.toInt(), importCopy)
+            inFlight.begin(wav, totalDurationSec.toInt(), importCopy, intoEntry)
         } else if (foreground && summarizeAfter && existing != null) {
             // A Resume or re-run of a library entry: the entry is durable already, but what this run
             // transcribes is not — Stop banks its checkpoint into the entry too (InFlightImport.owner).

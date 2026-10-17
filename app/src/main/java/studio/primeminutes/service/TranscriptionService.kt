@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 import studio.primeminutes.core.asr.LiveAsrEngine
 import studio.primeminutes.core.asr.NemoStreamEngine
 import studio.primeminutes.core.audio.AudioDecoder
@@ -711,73 +712,124 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }.getOrDefault(true)
 
+    /**
+     * The podcast / YouTube download loop: every library item with a pending (not failed) download, oldest
+     * first, one at a time, into the item's own directory. A lost network PAUSES the download (the .part
+     * stays): it shows "paused" and continues once a network is back, on Resume, or when the app returns.
+     * A permanent error is saved with the item (Failed · reason, Retry); deleting the item cancels it.
+     * A finished download becomes the item's kept source and the item is handed to the UI to process.
+     */
     private fun runImportDownload() {
-        val req = studio.primeminutes.online.ImportDownloads.pending.also { studio.primeminutes.online.ImportDownloads.pending = null }
-        if (req == null) {
-            satisfyForegroundContract()
-            if (!pipelineBusy() && activeExports == 0) {
-                stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(lastStartId)
-            }
-            return
-        }
         val dl = studio.primeminutes.online.ImportDownloads
+        if (dl.job?.isActive == true) { dl.resumeNow(); satisfyForegroundContract(); return }
         startForegroundTyped(recording = notifRecording, getString(R.string.dl_downloading))
         activeExports++
         dl.job = lifecycleScope.launch(Dispatchers.IO) {
-            var stageRes = R.string.dl_resolving
-            var lastPct = -1
-            var lastP: Float? = null
-            var attempt = 0
-            val result = runCatching {
-                // A lost network PAUSES the download (the .part stays): it shows "paused", and continues once
-                // a network is back, on Resume, or when the app returns; only Cancel or a permanent error ends it.
+            try {
                 while (true) {
-                    try {
-                        return@runCatching req.work(
-                            { res -> stageRes = res; dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, res, lastP)) },
-                            { p ->
-                                val pct = (p * 100).toInt()
-                                lastP = p
-                                if (pct != lastPct) {   // whole-percent throttle, like reportDownload
-                                    lastPct = pct
-                                    dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, stageRes, p))
-                                    updateNotification("${getString(stageRes)} $pct %")
-                                }
-                            },
-                        )
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException || !dl.transient(e)) throw e
-                        attempt++
-                        Log.w("primeminutes-import", "import download paused ($attempt): ${e.message}")
-                        dl.set(studio.primeminutes.online.ImportDownloads.State.Running(req.title, R.string.dl_paused, lastP))
-                        updateNotification(getString(R.string.dl_paused))
-                        while (dl.wake.tryReceive().isSuccess) { /* drop a stale wake */ }
-                        do {
-                            kotlinx.coroutines.withTimeoutOrNull(minOf(60_000L, 2_000L shl minOf(attempt - 1, 5))) { dl.wake.receive() }
-                        } while (!online())
-                        Log.i("primeminutes-import", "import download resumes")
-                    }
+                    val e = SessionLibrary.list(applicationContext)
+                        .filter { it.download != null && it.download.error == null }
+                        .minByOrNull { it.createdAt } ?: break
+                    downloadItem(e)
                 }
-                @Suppress("UNREACHABLE_CODE") error("unreachable")
-            }
-            val e = result.exceptionOrNull()
-            dl.set(
-                when {
-                    e is kotlinx.coroutines.CancellationException -> studio.primeminutes.online.ImportDownloads.State.Idle
-                    e != null -> studio.primeminutes.online.ImportDownloads.State.Failed(
-                        e.message?.takeIf { it.isNotBlank() } ?: getString(R.string.youtube_fetch_failed))
-                    else -> result.getOrThrow().let { (uri, t) -> studio.primeminutes.online.ImportDownloads.State.Ready(uri, t) }
-                },
-            )
-            withContext(NonCancellable + Dispatchers.Main) {
-                activeExports--
-                if (!pipelineBusy() && activeExports == 0) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf(lastStartId)
+            } finally {
+                dl.current = null
+                dl.set(studio.primeminutes.online.ImportDownloads.State.Idle)
+                withContext(NonCancellable + Dispatchers.Main) {
+                    activeExports--
+                    if (!pipelineBusy() && activeExports == 0) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf(lastStartId)
+                    }
                 }
             }
         }
     }
+
+    /** One item's download (see [runImportDownload]); returns once it is done, failed for good, or deleted. */
+    private suspend fun downloadItem(item: SessionLibrary.Entry) {
+        val dl = studio.primeminutes.online.ImportDownloads
+        val d = item.download ?: return
+        var title = item.title
+        var stageRes = if (d.kind == SessionLibrary.PendingDownload.YOUTUBE) R.string.dl_resolving else R.string.dl_downloading
+        var lastPct = -1
+        var lastP: Float? = null
+        var bytes = 0L; var total = 0L
+        fun publish() = dl.set(studio.primeminutes.online.ImportDownloads.State.Running(item.id, title, stageRes, lastP, bytes, total))
+        dl.current = item.id
+        publish(); dl.changed()
+        var attempt = 0
+        // The item's own job: deleting the item cancels it alone ([ImportDownloads.cancel]), the loop goes on.
+        val result = kotlinx.coroutines.coroutineScope { val w = async { runCatching {
+            while (true) {
+                try {
+                    return@runCatching when (d.kind) {
+                        SessionLibrary.PendingDownload.YOUTUBE -> {
+                            stageRes = R.string.dl_resolving; publish()
+                            val audio = studio.primeminutes.online.YouTube.resolve(applicationContext, d.url)
+                            // The title as soon as it is known (a pasted link has none until now).
+                            if (title.isNullOrBlank()) {
+                                title = audio.title
+                                SessionLibrary.rename(applicationContext, item.dir, audio.title); dl.changed()
+                            }
+                            stageRes = R.string.dl_downloading; publish()
+                            studio.primeminutes.online.YouTube.downloadInto(audio, item.dir) { got, all -> progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } } }
+                        }
+                        else -> studio.primeminutes.online.Podcast.downloadInto(d.url, item.dir) { got, all ->
+                            progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } }
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException || !dl.transient(e)) throw e
+                    attempt++
+                    Log.w("primeminutes-import", "import download paused ($attempt): ${e.message}")
+                    stageRes = R.string.dl_paused; publish()
+                    updateNotification(getString(R.string.dl_paused))
+                    while (dl.wake.tryReceive().isSuccess) { /* drop a stale wake */ }
+                    do {
+                        kotlinx.coroutines.withTimeoutOrNull(minOf(60_000L, 2_000L shl minOf(attempt - 1, 5))) { dl.wake.receive() }
+                    } while (!online())
+                    Log.i("primeminutes-import", "import download resumes")
+                }
+            }
+            @Suppress("UNREACHABLE_CODE") error("unreachable")
+        } }
+            dl.itemJob = w
+            try { w.await() } catch (ce: kotlinx.coroutines.CancellationException) { Result.failure(ce) }
+        }
+        dl.itemJob = null
+        dl.current = null
+        val e = result.exceptionOrNull()
+        // Deleted meanwhile (its directory is gone): nothing to record.
+        if (!item.dir.isDirectory) { dl.set(studio.primeminutes.online.ImportDownloads.State.Idle); dl.changed(); return }
+        when {
+            e is kotlinx.coroutines.CancellationException -> { dl.set(studio.primeminutes.online.ImportDownloads.State.Idle); throw e }
+            e != null -> {
+                val why = e.message?.takeIf { it.isNotBlank() } ?: getString(R.string.youtube_fetch_failed)
+                Log.w("primeminutes-import", "import download failed: $why")
+                SessionLibrary.saveDownload(item, d.copy(error = why))
+                // The item says it (Failed · reason, Retry); the screen in front says it once too.
+                dl.failed(why)
+            }
+            else -> {
+                val file = result.getOrThrow()
+                val sec = runCatching {
+                    android.media.MediaMetadataRetriever().run {
+                        try { setDataSource(file.absolutePath); (extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) / 1000 }
+                        finally { release() }
+                    }
+                }.getOrDefault(0L).toInt()
+                if (SessionLibrary.downloadDone(item, file, sec) != null) dl.markReady(item.id)
+                else SessionLibrary.saveDownload(item, d.copy(error = getString(R.string.youtube_fetch_failed)))
+            }
+        }
+        dl.set(studio.primeminutes.online.ImportDownloads.State.Idle)
+        dl.changed()
+    }
+
+    /** Bytes → (bytes, total, fraction or null when the total is unknown). */
+    private inline fun progress(got: Long, all: Long, f: (Long, Long, Float?) -> Unit) =
+        f(got, all, if (all > 0) (got.toFloat() / all).coerceIn(0f, 1f) else null)
 
     /**
      * Write the open session's edits back into its library entry (rebuild session.m4a + meta via

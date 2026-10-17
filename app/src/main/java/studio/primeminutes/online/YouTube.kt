@@ -150,25 +150,13 @@ object YouTube {
             key = info.id?.takeIf { it.isNotBlank() }?.let { "${it}_${best.itag}" })
     }
 
-    /** Stream-download the resolved audio into filesDir/audio and return its file:// Uri. */
-    suspend fun download(ctx: Context, audio: YouTubeAudio, onProgress: (Float) -> Unit): Uri =
-        withContext(Dispatchers.IO) {
-            require(audio.streamUrl.startsWith("https://") || audio.streamUrl.startsWith("http://")) {
-                "Unsupported stream URL"
-            }
-            val dir = File(ctx.filesDir, "audio").apply { mkdirs() }
-            val out = File(dir, fileName(audio.key, audio.streamUrl, audio.ext))
-            resumableDownload(audio.streamUrl, out, USER_AGENT, onProgress = onProgress)
-            enforceRetentionCap(dir, max = 20)
-            Uri.fromFile(out)
-        }
-
-    // Bound ONLY this feature's own downloads (youtube_*) — filesDir/audio also holds pipeline work
-    // WAVs and shared imports the user may still be using; an all-files cap could delete them.
-    private fun enforceRetentionCap(dir: File, max: Int) {
-        val files = dir.listFiles()?.filter { it.isFile && it.name.startsWith("youtube_") }
-            ?.sortedBy { it.lastModified() } ?: return
-        if (files.size > max) files.take(files.size - max).forEach { it.delete() }
+    /** Download the resolved audio into [dir] (a library item's directory, see [Podcast.downloadInto]). */
+    suspend fun downloadInto(audio: YouTubeAudio, dir: File, onBytes: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
+        require(audio.streamUrl.startsWith("https://") || audio.streamUrl.startsWith("http://")) { "Unsupported stream URL" }
+        // Named by video id + itag: the signed stream URL changes on every resolve, the .part must not.
+        val out = File(dir, fileName(audio.key, audio.streamUrl, audio.ext))
+        resumableDownload(audio.streamUrl, out, USER_AGENT, onBytes = onBytes) {}
+        out
     }
 
     /** Minimal NewPipe Downloader over HttpURLConnection (no extra HTTP dependency). */

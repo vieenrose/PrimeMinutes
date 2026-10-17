@@ -246,6 +246,12 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     fun configChanged(cfg: TranscriptionConfig) = apply(SessionReducer.configChanged(now, env, cfg))
     fun languageChanged() = update { SessionReducer.languageChanged(it, env) }
 
+    fun openDownload(e: SessionLibrary.Entry) = apply(SessionReducer.openDownload(now, env, e))
+
+    /** A downloaded podcast / YouTube item: process its kept source, into the item itself (ImportPipeline). */
+    fun processDownloaded(e: SessionLibrary.Entry) =
+        launchAudio(Uri.fromFile(File(e.dir, SessionLibrary.IMPORT_SOURCE)), e.title)
+
     fun watchQueueItem(e: SessionLibrary.Entry) {
         // Summary pass: the ASR pass finished earlier, so its live buffer is empty — show the
         // transcript it left on disk instead of a blank screen.
@@ -547,7 +553,9 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 withContext(Dispatchers.IO) {
                     e.victims.forEach { v ->
                         ProcessingQueue.remove(ctx, v.id)
-                        SessionLibrary.discard(ctx, v.wavFile)
+                        SessionLibrary.discard(ctx, v.wavFile)   // the whole directory: a partial download goes too
+                        // After the discard: the download loop, seeing the directory gone, moves on to the next item.
+                        studio.primeminutes.online.ImportDownloads.cancel(v.id)
                     }
                 }
                 bumpRecents()

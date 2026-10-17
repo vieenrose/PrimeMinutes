@@ -122,7 +122,7 @@ object SessionReducer {
             lastSaveUri = null, coverBitmap = null, coverFromSession = false,
             summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
             sessionGen = s.sessionGen + 1,
-            watchingQueue = false, pendingNextTalk = false, pendingAutoProcess = false,
+            watchingQueue = false, pendingNextTalk = false, pendingAutoProcess = false, downloadEntryId = null,
             // deferStopped must reset here: a ⏹ Stop&save's terminal event goes to the QUEUE, so a
             // stale true would tear a later recording's run down before its summary phase.
             deferStopped = false, exporting = false,
@@ -141,8 +141,11 @@ object SessionReducer {
         emit(SessionEffect.ApplyConfig(s.config))   // apply settings to this run
         clear()
         val dir = env.entryDirOf(uri)   // non-null when re-running a library capture
+        // A downloaded podcast / YouTube item processed from its kept source is an import, not a capture
+        // (no ⏭ Next talk; the queue must not supersede it).
+        val downloaded = uri.lastPathSegment == SessionLibrary.IMPORT_SOURCE
         s = s.copy(
-            libraryDir = dir, recordingRun = dir != null,
+            libraryDir = dir, recordingRun = dir != null && !downloaded,
             screen = Screen.Session,   // watch the import/transcription live
             running = true, transcriptReady = false, progress = 0f, status = str(R.string.status_starting), audioUri = uri,
         )
@@ -242,7 +245,7 @@ object SessionReducer {
     fun leaveToStudio(state: SessionState, env: SessionEnv): Next = tx(state, env) {
         if (s.watchingQueue) s = s.copy(running = false)
         if (s.screen == Screen.Session) persist()
-        s = s.copy(watchingQueue = false, screen = Screen.Studio)
+        s = s.copy(watchingQueue = false, downloadEntryId = null, screen = Screen.Studio)
     }
 
     /**
@@ -267,7 +270,29 @@ object SessionReducer {
             audioUri = Uri.fromFile(entry.wavFile),   // the synced player works while it processes
             transcriptReady = false, running = true, progress = s.queueFraction,
             status = s.queueLabel.ifBlank { str(R.string.status_processing) },
-            watchingQueue = true, screen = Screen.Session,
+            watchingQueue = true, downloadEntryId = null, screen = Screen.Session,
+        )
+    }
+
+    /**
+     * A podcast / YouTube item still downloading (or whose download failed) was opened: its screen shows
+     * the download (state, Resume / Retry / Delete) until the audio is there and processing starts, which
+     * turns it into the live view. Like [watchQueueItem], it does not stop a run of the screen's own.
+     */
+    fun openDownload(state: SessionState, env: SessionEnv, entry: SessionLibrary.Entry): Next = tx(state, env) {
+        if (s.screen == Screen.Session) persist()
+        emit(SessionEffect.ShowPaused)
+        s = s.copy(
+            utterances = emptyList(), speakerNames = emptyMap(), editingIndex = -1, editingSpeakerId = null,
+            editingTitle = false, editingSummary = false, editingActions = false,
+            title = entry.title, summary = null, actionItems = null, meetingNotes = null,
+            searchActive = false, searchQuery = "",
+            coverEnabled = true, coverBitmap = null, coverFromSession = false, lastSaveUri = null,
+            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
+            sessionDirty = false, sessionGen = s.sessionGen + 1,
+            libraryDir = entry.dir, recordingRun = false, audioUri = null,
+            transcriptReady = false, running = false, progress = 0f, status = "",
+            watchingQueue = false, downloadEntryId = entry.id, screen = Screen.Session,
         )
     }
 
@@ -303,7 +328,7 @@ object SessionReducer {
             audioUri = Uri.fromFile(loaded.audio),
             // A reopened library session keeps its entry binding (derived from the SOURCE uri).
             libraryDir = env.entryDirOf(o.source),
-            watchingQueue = false,
+            watchingQueue = false, downloadEntryId = null,
             screen = Screen.Session,
             status = if (loaded.utterances.isEmpty()) ""   // the tabs say "no speech" themselves
                 else env.strings.plural(R.plurals.status_session_loaded, loaded.utterances.size, loaded.utterances.size),
