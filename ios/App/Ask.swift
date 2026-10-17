@@ -103,7 +103,11 @@ import Combine
     /// The card key of the conversation's system prompt: the first question's language (`AskLanguage`).
     var convKey: String?
 
-    func ask(_ sessions: [Session], question: String) {
+    /// Milliseconds the last question's retrieval took (status.log, the latency report).
+    private(set) var lastRetrievalMs = 0
+    /// `meeting`: the in-meeting Ask (docs/design/in-session-search-ask.md) — retrieval over that one meeting,
+    /// no meeting routing, and the answered question kept in its AskHistory.
+    func ask(_ sessions: [Session], question: String, meeting: Session? = nil) {
         task?.cancel()
         if busy() { phase = .busy; return }
         let lang = AppLanguage.current.resolved
@@ -116,8 +120,11 @@ import Combine
         let sys = convKey ?? want
         task = Task { [holder] in
             startedAt = Date(); phase = .retrieving
-            var excerpts = await Task.detached(priority: .userInitiated) { holder.retrieve(sessions, question) }.value
+            let t0 = Date()
+            var excerpts = await Task.detached(priority: .userInitiated) { meeting.map { holder.retrieveIn($0, question) } ?? holder.retrieve(sessions, question) }.value
             if Task.isCancelled { return }
+            lastRetrievalMs = Int(Date().timeIntervalSince(t0) * 1000)
+            StatusLog.add("ask retrieved \(excerpts.count) excerpts in \(lastRetrievalMs) ms (\(meeting != nil ? "this meeting" : "\(sessions.count) meetings"))")
             for i in excerpts.indices { excerpts[i].k = nextK; nextK += 1 }
             let pool = turns.flatMap(\.excerpts) + excerpts
             turns.append(Turn(question: question, answer: "", excerpts: excerpts, done: false, pool: pool))
@@ -164,7 +171,12 @@ import Combine
                 } catch { return .failure(error) }
             }.value
             switch result {
-            case .success(let a): publish(a, done: true); phase = isBusy() && a.isEmpty ? .busy : .idle
+            case .success(let a):
+                publish(a, done: true); phase = isBusy() && a.isEmpty ? .busy : .idle
+                if let m = meeting, !a.isEmpty, !Task.isCancelled, Dev.env["VOX_ASK_NOHISTORY"] == nil {   // DEV: device checks on a real library leave it untouched
+                    let item = AskHistory.Item(q: question.trimmingCharacters(in: .whitespacesAndNewlines), a: a, t: Date().timeIntervalSince1970, x: excerpts.map { [Double($0.sec), $0.at] })
+                    Task.detached { AskHistory.append(m.id, item) }
+                }
             case .failure(let e): publish(turns.last?.answer ?? "", done: true); phase = .failed("\(e)")
             }
         }
@@ -223,12 +235,14 @@ final class AskHolder: @unchecked Sendable {
     private func closeLocked() { session = nil; modelId = nil; engine = nil; tok = nil }
     func close() { lock.lock(); closeLocked(); lock.unlock() }
     private func count(_ text: String) -> Int { ((try? tokenizer())?.encode(text).count) ?? text.count / 3 }
+    func countTokens(_ text: String) -> Int { count(text) }
     #else
     func open() throws -> ReaderLlm { throw ReaderError(description: "reader not built") }
     func cancel() {}
     func reset() {}
     func close() {}
     private func count(_ text: String) -> Int { text.count / 3 }
+    func countTokens(_ text: String) -> Int { count(text) }
     #endif
 
     /// Hybrid retrieval: dense (when the embedder is there) and keyword passages, meeting routing
@@ -260,12 +274,34 @@ final class AskHolder: @unchecked Sendable {
     }
 }
 
+extension AskHolder {
+    /// The in-meeting retrieval (Android AskEngine.retrieveIn): dense (when the meeting is indexed and the embedder is
+    /// there) and keyword passages of `s` only, routeDepth candidates per list (what a routed meeting gets), no routing,
+    /// AskEngine.fuse, then AskSelect.select. A meeting not indexed yet is cut on the fly for the keyword half.
+    func retrieveIn(_ s: Session, _ question: String) -> [AskEngine.Excerpt] {
+        let p = AskEngine.retrieval
+        let depth = max(p.perMeeting, p.routeDepth)
+        let indexed = LibrarySearch.index(s.id) != nil
+        let qv = indexed ? (EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(question)) }) ?? nil) : nil
+        let dense = qv.map { LibrarySearch.dense([s], qv: $0, maxPassages: depth, snippetChars: 1200) } ?? []
+        let keyword = LibrarySearch.keyword([s], query: question, maxPassages: depth, snippetChars: 1200, unindexed: true)
+        let speakers = PeopleStore.meetingsNaming(question, [s])[s.id.uuidString] ?? []
+        let ranked = AskEngine.fuse(dense, keyword, k: p.rrfK) { _, sid in sid.map { speakers.contains($0) } ?? false }
+        let id = s.id.uuidString
+        let items = ranked.map { AskSelect.Item(meeting: id, sec: $0.sec, at: $0.at, text: $0.text, score: $0.score, a: $0.a, b: $0.b) }
+        let chosen = AskSelect.select(items, p, tokens: { self.countTokens($0) }, src: AskTranscripts(byId: [id: s], unindexed: true))
+        return chosen.map { AskEngine.Excerpt(session: s, sec: $0.sec, text: $0.text, score: $0.score, at: $0.at, a: $0.a, b: $0.b) }
+    }
+}
+
 /// The library's transcripts as AskSelect sees them: a meeting's indexed chunks and the text of its utterances.
+/// `unindexed` (the in-meeting Ask): a meeting with no index is chunked on the fly.
 private struct AskTranscripts: AskSelect.Transcripts {
     let byId: [String: Session]
+    var unindexed = false
     func chunks(_ meeting: String) -> [ClosedRange<Int>] {
-        guard let s = byId[meeting], let x = LibrarySearch.index(s.id) else { return [] }
-        return x.vectors.filter { $0.kind == .chunk }.map { Int($0.a)...Int($0.b) }.sorted { $0.lowerBound < $1.lowerBound }
+        guard let s = byId[meeting], let vs = LibrarySearch.index(s.id)?.vectors ?? (unindexed ? LibrarySearch.unindexedVectors(s) : nil) else { return [] }
+        return vs.filter { $0.kind == .chunk }.map { Int($0.a)...Int($0.b) }.sorted { $0.lowerBound < $1.lowerBound }
     }
     func span(_ meeting: String, _ a: Int, _ b: Int) -> AskSelect.Item? {
         guard let s = byId[meeting], s.lines.indices.contains(a), a <= b else { return nil }
@@ -282,7 +318,10 @@ struct AskSheet: View {
     let initial: String
     /// Opens a meeting at a time (the citation tapped).
     let open: (Session, Double) -> Void
+    /// The in-meeting Ask: questions over this meeting only, its earlier questions (AskHistory) shown above.
+    var meeting: Session? = nil
     @State private var followup = ""
+    @State private var history: [AskEngine.Turn] = []
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -290,12 +329,14 @@ struct AskSheet: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(ask.turns) { t in
+                        if !history.isEmpty { Text(L("ask_meeting_earlier")).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
+                        ForEach(history + ask.turns) { t in
+                            if !history.isEmpty, t.id == ask.turns.first?.id { Divider() }
                             Text(t.question).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
                             VStack(alignment: .leading, spacing: 8) {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
                                     if !t.done { phaseRow }
-                                    Text(Self.linked(t.answer, t.pool)).font(.body).textSelection(.enabled)
+                                    Text(Self.linked(t.answer, t.pool, withTitle: meeting == nil)).font(.body).textSelection(.enabled)
                                         .environment(\.openURL, OpenURLAction { u in
                                             if u.scheme == "voxask", let s = t.pool.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.pool.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
                                             return .systemAction })
@@ -308,7 +349,7 @@ struct AskSheet: View {
                                         Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                                Text(x.session.title + " — " + x.text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
+                                                Text(meeting != nil ? x.text : x.session.title + " — " + x.text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                             }
                                         }.buttonStyle(.plain)
                                     }
@@ -325,7 +366,7 @@ struct AskSheet: View {
             .background(Color(.systemGroupedBackground))
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    TextField(L(ask.turns.isEmpty ? "ask_open_hint" : "ask_followup_hint"), text: $followup).submitLabel(.send).onSubmit(send)
+                    TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : meeting != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).submitLabel(.send).onSubmit(send)
                     if ask.phase.working {
                         Button(L("ask_cancel")) { ask.cancel() }
                     } else {
@@ -333,14 +374,28 @@ struct AskSheet: View {
                     }
                 }.padding(12).background(.bar)
             }
-            .navigationTitle(L("ask_title")).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(L(meeting != nil ? "ask_meeting_title" : "ask_title")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { VStack { Text(L("ask_title")).font(.headline); Text(L("ask_experimental")).font(.caption2).foregroundStyle(.secondary) } }
+                ToolbarItem(placement: .principal) { VStack {
+                    Text(L(meeting != nil ? "ask_meeting_title" : "ask_title")).font(.headline)
+                    Text(meeting.map { $0.title + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                } }
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
-                ToolbarItem(placement: .primaryAction) { Button { ask.reset() } label: { Image(systemName: "arrow.counterclockwise") }.accessibilityLabel(L("ask_reset")) }
+                // In-meeting: a new conversation also forgets this meeting's earlier questions.
+                ToolbarItem(placement: .primaryAction) { Button { ask.reset(); if let m = meeting { history = []; AskHistory.clear(m.id) } } label: { Image(systemName: "arrow.counterclockwise") }
+                    .accessibilityLabel(L(meeting != nil ? "ask_meeting_clear" : "ask_reset")) }
             }
         }
-        .onAppear { if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.library.sessions, question: initial) } }
+        .onAppear {
+            if let mt = meeting {
+                history = AskHistory.load(mt.id).map { i in
+                    let xs = i.x.filter { $0.count == 2 }.map { AskEngine.Excerpt(session: mt, sec: Int($0[0]), text: "", score: 0, at: $0[1]) }
+                    return AskEngine.Turn(question: i.q, answer: i.a, excerpts: xs, done: true, pool: xs)
+                }
+            }
+            if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.library.sessions, question: initial, meeting: meeting) }
+            else if meeting != nil, initial.isEmpty { SessionView.preloadEmbedder() }
+        }
         .task {
             // DEV (README animation): VOX_ASK_OPEN=<seconds> taps the source at that second once the answer is in.
             guard let sec = Dev.env["VOX_ASK_OPEN"].flatMap(Int.init) else { return }
@@ -361,7 +416,7 @@ struct AskSheet: View {
                 ProgressView().controlSize(.small)
                 Group {
                     switch ask.phase {
-                    case .retrieving: Text(L("ask_stage_searching", secs))
+                    case .retrieving: Text(L(meeting != nil ? "ask_meeting_stage_searching" : "ask_stage_searching", secs))
                     case .reading(let n): Text(L("ask_stage_reading", n, secs))
                     default: Text(L("ask_stage_answering", secs))
                     }
@@ -371,10 +426,11 @@ struct AskSheet: View {
     }
     private func send() {
         let q = followup.trimmingCharacters(in: .whitespacesAndNewlines); guard !q.isEmpty else { return }
-        followup = ""; ask.ask(m.library.sessions, question: q)
+        followup = ""; ask.ask(m.library.sessions, question: q, meeting: meeting)
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
-    static func linked(_ text: String, _ xs: [AskEngine.Excerpt]) -> AttributedString {
+    /// `withTitle`: the meeting's title in the link; the in-meeting Ask shows the time alone.
+    static func linked(_ text: String, _ xs: [AskEngine.Excerpt], withTitle: Bool = true) -> AttributedString {
         // A tag still being written (streaming) or cut by the token cap is hidden, not shown raw.
         let text = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\[\[[^@\]\n]*\]\]"#, with: "", options: .regularExpression)   // `[[no excerpt]]`
@@ -390,7 +446,7 @@ struct AskSheet: View {
             // of that meeting (a made-up second), else dropped.
             let same = xs.filter { $0.session.id.uuidString == id }
             if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
-                var a = AttributedString(x.session.title + " · " + ReaderProtocol.formatTs(x.sec))
+                var a = AttributedString(withTitle ? x.session.title + " · " + ReaderProtocol.formatTs(x.sec) : "[" + ReaderProtocol.formatTs(x.sec) + "]")
                 a[Attr.Link.self] = URL(string: "voxask://\(id)/\(x.sec)"); a[Attr.Foreground.self] = .accentColor   // Attr: Sendable-safe keys
                 out += a
             }

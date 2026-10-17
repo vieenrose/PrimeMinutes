@@ -566,3 +566,15 @@
 "mail_preview_close" = "关闭";
 "mail_no_app" = "没有可打开邮件的应用，已复制收件人地址。";
 "mail_addresses_copied" = "已复制地址：请粘贴到收件人栏";
+
+/* In-meeting search and Ask (docs/design/in-session-search-ask.md) */
+"ask_meeting_title" = "问这场会议";
+"ask_meeting_hint" = "针对这场会议提问…";
+"ask_meeting_query" = "问这场会议：“%@”";
+"ask_meeting_stage_searching" = "正在搜索这场会议… %1$d 秒";
+"ask_meeting_earlier" = "先前的问题";
+"ask_meeting_clear" = "清除这场会议的问答";
+"search_results_transcript" = "逐字稿";
+"search_results_show" = "显示结果列表";
+"search_results_hide" = "隐藏结果列表";
+"search_results_more" = "前 %d 条结果";

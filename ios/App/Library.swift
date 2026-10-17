@@ -71,7 +71,7 @@ actor LibraryStore {
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         try enc.encode(s).write(to: file(s.id), options: .atomic)   // atomic: a crash never leaves half a file
     }
-    func delete(_ id: UUID) { try? FileManager.default.removeItem(at: file(id)) }
+    func delete(_ id: UUID) { try? FileManager.default.removeItem(at: file(id)); AskHistory.clear(id, root: root) }
 }
 
 /// One speaker → colour mapping for the live capture and the saved session (they differed: speaker 1

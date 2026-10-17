@@ -405,12 +405,14 @@ enum LibrarySearch {
     /// Keyword pass for Ask (Android LibrarySearch.keyword): BM25 (Keywords) over the indexed notes and chunks of
     /// every meeting, folded to one script; `maxPassages` best per meeting. A passage's BM25 doc is kept while its
     /// text is unchanged (folding and term codes are the cost; the passages themselves are cheap to rebuild).
-    static func keyword(_ sessions: [Session], query: String, maxPassages: Int = maxPassages, snippetChars: Int = 200) -> [Hit] {
+    /// `unindexed` (the in-meeting Ask): a meeting with no index is cut on the fly (unindexedVectors) instead of
+    /// skipped, and the other meetings' cached docs are kept.
+    static func keyword(_ sessions: [Session], query: String, maxPassages: Int = maxPassages, snippetChars: Int = 200, unindexed: Bool = false) -> [Hit] {
         let table = OpenCC.simplifiedChars
         var units: [(Session, Passage, Keywords.Doc)] = []
         for s in sessions {
-            guard let x = index(s.id) else { continue }
-            let ps = x.vectors.filter { $0.kind != .meeting }.compactMap { passage(s, $0, 0, snippetChars) }
+            guard let vs = index(s.id)?.vectors ?? (unindexed ? unindexedVectors(s) : nil) else { continue }
+            let ps = vs.filter { $0.kind != .meeting }.compactMap { passage(s, $0, 0, snippetChars) }
             kwLock.lock(); let old = kwCache[s.id] ?? [:]; kwLock.unlock()
             var fresh: [String: Keywords.Doc] = [:]
             for p in ps {
@@ -420,7 +422,7 @@ enum LibrarySearch {
             kwLock.lock(); kwCache[s.id] = fresh; kwLock.unlock()
         }
         let ids = Set(sessions.map(\.id))
-        kwLock.lock(); kwCache = kwCache.filter { ids.contains($0.key) }; kwLock.unlock()
+        if !unindexed { kwLock.lock(); kwCache = kwCache.filter { ids.contains($0.key) }; kwLock.unlock() }
         let scores = Keywords.score(Keywords.fold(query, table), units.map(\.2))
         var per: [UUID: [Int]] = [:]
         for i in units.indices where scores[i] > 0 { per[units[i].0.id, default: []].append(i) }
@@ -430,6 +432,11 @@ enum LibrarySearch {
                 return Passage(kind: p.kind, uttIndex: p.uttIndex, uttEnd: p.uttEnd, timeSec: p.timeSec, speaker: p.speaker, snippet: p.snippet, semanticOnly: false, score: scores[i], speakerId: p.speakerId) }
             return Hit(session: units[ix[0]].0, score: ps[0].score, passages: Array(ps))
         }.sorted { $0.score > $1.score }
+    }
+    /// The units of a meeting with no index yet, cut by the index's own chunker with an estimated token count
+    /// (MeetingSearch.approxTokens), as vectors without a vector (keyword passes only).
+    static func unindexedVectors(_ s: Session) -> [SessionIndex.Vector] {
+        SessionIndex.units(s, tokens: MeetingSearch.approxTokens).map { SessionIndex.Vector(kind: $0.kind, a: $0.a, b: $0.b, textHash: $0.textHash, q: []) }
     }
     nonisolated(unsafe) private static var kwCache: [UUID: [String: Keywords.Doc]] = [:]   // guarded by kwLock
     private static let kwLock = NSLock()

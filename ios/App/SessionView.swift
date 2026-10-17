@@ -135,20 +135,83 @@ struct SessionView: View {
     }
     @State private var semantic = false
     @State private var semIds = Set<UUID>()
+    /// In-meeting search (docs/design/in-session-search-ask.md): this meeting's passages found by meaning (notes and
+    /// chunks), whether the results list under the bar is unfolded, the line a result tap scrolls to.
+    @State private var semPassages: [MeetingSearch.Dense] = []
+    @State private var resultsOpen = true
+    @State private var jumpTo: UUID?
+    /// In-meeting Ask: the question ("" = open on the field); nil = closed. DEV: VOX_ASK_MEETING="…" opens it.
+    @State private var askMeeting: String? = Dev.env["VOX_ASK_MEETING"]
+    /// Needs the AI notes model only (without the search model it uses keywords).
+    private var askMeetingReady: Bool { AskEngine.enabled && Storage.ready(Prefs.reader) && !s.lines.isEmpty }
+    /// The search model's cold load was most of an in-meeting Ask's retrieval (Note10+: ~4–6 s of it, the passes
+    /// 40 ms): load it while the user types.
+    static func preloadEmbedder() { guard EmbedHost.ready else { return }; Task.detached(priority: .utility) { _ = EmbedHost.use(threads: 2) { _ in 0 } } }
+    private var meetingResults: [MeetingSearch.Result] {
+        guard searching else { return [] }
+        return MeetingSearch.results(query, lines: s.lines.map { MeetingSearch.Line(start: $0.start, text: $0.text, speaker: $0.speaker) },
+                                     notes: s.notes.map { MeetingSearch.NoteIn(ts: $0.ts, text: $0.text) }, dense: semantic ? semPassages : [])
+    }
+    /// A result tapped: the list folds, the transcript shows the line, the player is parked there (paused).
+    private func pick(_ r: MeetingSearch.Result) {
+        resultsOpen = false; searchFocus = false
+        guard s.lines.indices.contains(r.line) else { return }
+        let l = s.lines[r.line]
+        if let i = hits.firstIndex(where: { $0.id == l.id }) { match = i }
+        jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id }
+        if player.available { player.seek(r.kind == .line ? l.start : r.timeSec) }
+    }
+    private var resultsList: some View {
+        let rs = meetingResults
+        let notes = rs.filter { $0.kind == .note }, lines = rs.filter { $0.kind == .line }
+        return ScrollView {
+            // A VStack (≤ 50 rows): a LazyVStack nested in the page's own scroll view left rows blank.
+            VStack(alignment: .leading, spacing: 0) {
+                if !notes.isEmpty { resultsHeader(L("ai_notes"), notes.count); ForEach(Array(notes.enumerated()), id: \.offset) { _, r in resultRow(r) } }
+                if !lines.isEmpty { resultsHeader(L("search_results_transcript"), lines.count); ForEach(Array(lines.enumerated()), id: \.offset) { _, r in resultRow(r) } }
+                if rs.count >= MeetingSearch.maxResults { Text(L("search_results_more", MeetingSearch.maxResults)).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.vertical, 4) }
+                if askMeetingReady {
+                    Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: {
+                        Label(L("ask_meeting_query", query.trimmingCharacters(in: .whitespaces)), systemImage: "sparkles").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, 12).padding(.vertical, 10).accessibilityIdentifier("results-ask-meeting")
+                }
+            }
+        }.frame(maxHeight: 280).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("meeting-search-results")
+    }
+    private func resultsHeader(_ t: String, _ n: Int) -> some View {
+        Text("\(t) · \(n)").font(.caption.weight(.bold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 2)
+    }
+    private func resultRow(_ r: MeetingSearch.Result) -> some View {
+        Button { pick(r) } label: {
+            HStack(alignment: .top, spacing: 6) {
+                Text(Export.mmss(r.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(Color.accentColor).frame(width: 48, alignment: .leading)
+                if r.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
+                (r.speaker.map { Text(s.name($0) + "  ").font(.caption.weight(.semibold)).foregroundColor(.secondary) } ?? Text(""))
+                    + Text(Self.marked(MeetingSearch.snippet(r.text, query), query)).font(.caption)
+            }.lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 6).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
     @State private var semTask: Task<Void, Never>?
     private func semSearch() {
-        semTask?.cancel(); semIds = []
+        semTask?.cancel(); semIds = []; semPassages = []
         let q = query.trimmingCharacters(in: .whitespaces); guard semantic, q.count >= 2, EmbedHost.ready else { return }
         let s = self.s
         semTask = Task {
             try? await Task.sleep(nanoseconds: 250_000_000); if Task.isCancelled { return }
-            let ids = await Task.detached(priority: .userInitiated) { () -> Set<UUID> in
-                guard let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(q)) }) ?? nil else { return [] }
-                var out = Set<UUID>()
-                for h in LibrarySearch.dense([s], qv: qv, maxPassages: 5) { for p in h.passages where p.kind == .chunk { for i in p.uttIndex...p.uttEnd where s.lines.indices.contains(i) { out.insert(s.lines[i].id) } } }
-                return out
+            let (ids, ps) = await Task.detached(priority: .userInitiated) { () -> (Set<UUID>, [MeetingSearch.Dense]) in
+                guard let qv = EmbedHost.use(threads: 2, { $0.embed(EmbedPrompts.query(q)) }) ?? nil else { return ([], []) }
+                var out = Set<UUID>(), ps: [MeetingSearch.Dense] = []
+                for h in LibrarySearch.dense([s], qv: qv, maxPassages: MeetingSearch.densePassages, snippetChars: 300) {
+                    for p in h.passages where p.kind != .meeting {
+                        ps.append(MeetingSearch.Dense(note: p.kind == .note, uttIndex: p.uttIndex, uttEnd: p.uttEnd, timeSec: p.timeSec, snippet: p.snippet))
+                        // The stepper keeps walking the 5 best chunks' lines, as before.
+                        if p.kind == .chunk, out.count < 64, ps.filter({ !$0.note }).count <= 5 { for i in p.uttIndex...p.uttEnd where s.lines.indices.contains(i) { out.insert(s.lines[i].id) } }
+                    }
+                }
+                return (out, ps)
             }.value
-            if !Task.isCancelled { semIds = ids; match = 0 }
+            if !Task.isCancelled { semIds = ids; semPassages = ps; match = 0 }
         }
     }
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
@@ -247,7 +310,7 @@ struct SessionView: View {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search)
-                        .onChange(of: query) { _, _ in match = 0; semSearch() }
+                        .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
                     if EmbedHost.ready {
                         Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)) }
                             .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
@@ -257,8 +320,17 @@ struct SessionView: View {
                         Button { stepMatch(-1) } label: { Image(systemName: "chevron.up") }.accessibilityLabel(L("search_prev"))
                         Button { stepMatch(1) } label: { Image(systemName: "chevron.down") }.accessibilityLabel(L("search_next"))
                     }
+                    if !query.isEmpty && !meetingResults.isEmpty {
+                        Button { resultsOpen.toggle() } label: { Image(systemName: resultsOpen ? "chevron.up.square" : "list.bullet") }
+                            .accessibilityLabel(L(resultsOpen ? "search_results_hide" : "search_results_show"))
+                    }
+                    if askMeetingReady {
+                        Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: { Image(systemName: "sparkles") }
+                            .accessibilityLabel(L("ask_meeting_title")).accessibilityIdentifier("search-ask-meeting")
+                    }
                     Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel(L("search_close"))
                 }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                if resultsOpen && !meetingResults.isEmpty { resultsList }
             }
             if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
             ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
@@ -295,12 +367,13 @@ struct SessionView: View {
                 }.padding(.top, 8)
             }
             .background(Color(.systemGroupedBackground))
-            .onAppear { if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
+            .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let l = s.lines.last(where: { $0.start <= t + 0.01 }) ?? s.lines.first { withAnimation { proxy.scrollTo(l.id, anchor: .center) } }; if player.available { player.seek(t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             .onChange(of: current) { _, id in if follow, player.playing, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
             .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
+            .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             .onChange(of: hits.first?.id) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
@@ -315,11 +388,12 @@ struct SessionView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                Button { tab = 1; searching = true; searchFocus = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
+                Button { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(L("rename")) { draft = s.title; renamingTitle = true }
+                    if askMeetingReady { Button { askMeeting = "" } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
                     if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") } }
                     Button(L("export_menu_entry")) { showExport = true }
                     if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) } }
@@ -335,6 +409,16 @@ struct SessionView: View {
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
+        // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
+        .sheet(isPresented: Binding(get: { askMeeting != nil }, set: { if !$0 { askMeeting = nil } })) {
+            AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in
+                askMeeting = nil; tab = 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    if let l = s.lines.last(where: { $0.start <= t + 0.01 }) ?? s.lines.first { jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
+                    if player.available { player.seek(t) }
+                }
+            }, meeting: s)
+        }
         .sheet(isPresented: $mailOpen) {
             EmailParticipantsSheet(session: s, onSend: { r in
                 mailOpen = false

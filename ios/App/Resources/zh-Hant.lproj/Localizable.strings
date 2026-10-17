@@ -566,3 +566,15 @@
 "mail_preview_close" = "關閉";
 "mail_no_app" = "沒有可開啟郵件的 App，已複製收件人地址。";
 "mail_addresses_copied" = "已複製地址：請貼到收件人欄";
+
+/* In-meeting search and Ask (docs/design/in-session-search-ask.md) */
+"ask_meeting_title" = "問這場會議";
+"ask_meeting_hint" = "針對這場會議提問…";
+"ask_meeting_query" = "問這場會議：「%@」";
+"ask_meeting_stage_searching" = "正在搜尋這場會議… %1$d 秒";
+"ask_meeting_earlier" = "先前的問題";
+"ask_meeting_clear" = "清除這場會議的問答";
+"search_results_transcript" = "逐字稿";
+"search_results_show" = "顯示結果清單";
+"search_results_hide" = "隱藏結果清單";
+"search_results_more" = "前 %d 筆結果";

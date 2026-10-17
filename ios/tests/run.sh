@@ -16,3 +16,4 @@ VOX_SPEAKER_CARDS=$D/../App/Resources/speaker_cards $O/voice-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/../App/VoiceGeneration.swift $D/VoiceGenerationTests.swift -o $O/voice-gen-tests && $O/voice-gen-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/MeetingMail.swift $D/MeetingMailTests.swift -o $O/mail-tests
 VOX_MAIL_DIR=$D/../App/Resources/mail $O/mail-tests $D/golden_mail $D/../App/Resources/model_cards/gemma4-meeting-agent-zh.json
+swiftc -parse-as-library -O $D/../App/MeetingSearch.swift $D/MeetingSearchTests.swift -o $O/meeting-search-tests && $O/meeting-search-tests

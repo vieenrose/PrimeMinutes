@@ -566,3 +566,15 @@
 "mail_preview_close" = "Close";
 "mail_no_app" = "No app could open the mail. The addresses were copied.";
 "mail_addresses_copied" = "Addresses copied: paste them in To";
+
+/* In-meeting search and Ask (docs/design/in-session-search-ask.md) */
+"ask_meeting_title" = "Ask this meeting";
+"ask_meeting_hint" = "Ask a question about this meeting…";
+"ask_meeting_query" = "Ask this meeting: “%@”";
+"ask_meeting_stage_searching" = "Searching this meeting… %1$d s";
+"ask_meeting_earlier" = "Earlier";
+"ask_meeting_clear" = "Clear this meeting's questions";
+"search_results_transcript" = "Transcript";
+"search_results_show" = "Show the results list";
+"search_results_hide" = "Hide the results list";
+"search_results_more" = "First %d results";
