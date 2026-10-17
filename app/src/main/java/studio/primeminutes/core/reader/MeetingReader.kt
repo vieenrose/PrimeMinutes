@@ -55,6 +55,9 @@ class MeetingReader(
     private var pieces: Map<String, IntArray> = emptyMap()
     private var offered = 0                        // offer() calls completed (the resume cursor)
     private var digest = 0L                        // running hash of the offered lines (see ReaderCheckpoint.digestOf)
+    /** The journal of the fresh prefix while that prefix waits for the meeting's language, else null. */
+    private var pendingPrefix: String? = null
+    private val held = ArrayList<Pair<String, String>>()   // (text, what) fed while the prefix waits, in order
 
     /** Called after every window's notes are in the journal: what a resume needs, to persist. */
     var onCheckpoint: ((ReaderCheckpoint) -> Unit)? = null
@@ -81,16 +84,24 @@ class MeetingReader(
         offered = cp.offered
         digest = cp.digest
         journal.forEach { events(AgentEvent.NoteKept(it)) }
-        prefillFresh(if (journal.isEmpty()) pc.journalEmpty else pc.compact(journal, count, budget.restartBudget))
+        pendingPrefix = if (journal.isEmpty()) pc.journalEmpty else pc.compact(journal, count, budget.restartBudget)
+        settle(force = false)
         started = true
         events(AgentEvent.State(AgentState.LISTENING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = llm.seqLength(), notes = journal.size))
     }
 
-    /** Prefill the fresh prefix (system + empty journal). */
+    /**
+     * Get ready to read. The fresh prefix (system + empty journal) is prefilled once the meeting's
+     * language is settled ([MeetingLanguage.settled], a few sentences in) or the first window closes,
+     * whichever comes first: the card may extend the system prompt for a language
+     * ([ReaderCard.systemSuffix]), and the system prompt is read once, before every window. What the
+     * first lines feed meanwhile is held and prefilled right after it, in the same pieces, so the
+     * conversation's tokens (and a Chinese meeting's output) are those of an upfront prefill.
+     */
     fun start() {
         initPieces()
         events(AgentEvent.State(AgentState.STARTING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget))
-        prefillFresh(pc.journalEmpty)
+        pendingPrefix = pc.journalEmpty
         started = true
         events(AgentEvent.State(AgentState.LISTENING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, ctxTokens = llm.seqLength()))
     }
@@ -130,6 +141,7 @@ class MeetingReader(
         closedSeg?.let { append(it + "\n", special = false, what = "segment"); closedSeg = null }
         lines += line
         lang.add(line.text)
+        settle(force = false)
         windowLines++
         windowTok += t
         segLines += line.render()
@@ -149,7 +161,9 @@ class MeetingReader(
     }
 
     private fun openWindow(first: Line) {
-        if (llm.seqLength() + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget) restart()
+        // A prefix still waiting counts as prefilled (it is, before this window is read).
+        val seq = pendingPrefix?.let { prefixTokens(it).size } ?: llm.seqLength()
+        if (seq + 2 * budget.windowTokens + pc.readMax + 600 > budget.ctxBudget) restart()
         k++
         windowTok = 0
         segEnd = first.startS + pc.segmentS
@@ -158,6 +172,7 @@ class MeetingReader(
     }
 
     private fun closeWindow() {
+        settle(force = true)
         // The last segment of the window goes in without a trailing newline.
         val last = closedSeg ?: segLines.joinToString("\n")
         closedSeg = null
@@ -241,21 +256,38 @@ class MeetingReader(
         events(AgentEvent.State(AgentState.RESTARTING, windowMax = budget.windowTokens, ctxMax = budget.ctxBudget, window = k, ctxTokens = before, notes = journal.size))
         llm.reset()
         val compacted = pc.compact(journal, count, budget.restartBudget)
-        prefillFresh(compacted)
+        // Before the prefix went in (the first window of a small context): it keeps waiting, now with
+        // this journal; nothing was held, a window opens only after the previous one was read.
+        if (pendingPrefix != null) pendingPrefix = compacted else prefillFresh(compacted)
         restarts++
         events(AgentEvent.Restart(restarts, before, llm.seqLength()))
     }
 
-    private fun prefillFresh(journalText: String) {
-        val suffix = byLanguage(language).systemSuffix.orEmpty()
-        val toks = pieces.getValue("p0") + llm.tokenize(systemPrompt + suffix, false) + pieces.getValue("p1") +
-            llm.tokenize(pc.journalHeader + journalText, false) + pieces.getValue("p2") +
-            llm.tokenize(pc.primer, false) + pieces.getValue("p3")
-        timedAppend(toks, "prefix")
+    /** Prefill the waiting prefix, then what was held behind it — once the language is settled, or
+     *  now ([force]: a window is about to be read). */
+    private fun settle(force: Boolean) {
+        val j = pendingPrefix ?: return
+        if (!force && lang.settled == null) return
+        pendingPrefix = null
+        prefillFresh(j)
+        held.forEach { (text, what) -> append(text, special = false, what = what) }
+        held.clear()
     }
 
-    private fun append(text: String, special: Boolean, what: String) =
+    private fun prefillFresh(journalText: String) = timedAppend(prefixTokens(journalText), "prefix")
+
+    /** System (+ the language's suffix) and journal, the primed turn included. */
+    private fun prefixTokens(journalText: String): IntArray {
+        val suffix = byLanguage(language).systemSuffix.orEmpty()
+        return pieces.getValue("p0") + llm.tokenize(systemPrompt + suffix, false) + pieces.getValue("p1") +
+            llm.tokenize(pc.journalHeader + journalText, false) + pieces.getValue("p2") +
+            llm.tokenize(pc.primer, false) + pieces.getValue("p3")
+    }
+
+    private fun append(text: String, special: Boolean, what: String) {
+        if (pendingPrefix != null) { held += text to what; return }
         timedAppend(llm.tokenize(text, special), what)
+    }
 
     private fun timedAppend(toks: IntArray, what: String) {
         val t0 = clock()

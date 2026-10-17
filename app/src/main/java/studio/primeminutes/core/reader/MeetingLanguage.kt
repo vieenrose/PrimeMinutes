@@ -6,7 +6,10 @@ package studio.primeminutes.core.reader
  * only a transcript where Latin words outnumber CJK characters is `en`. Model-independent: the model
  * card says what (if anything) changes for a language ([studio.primeminutes.core.models.ModelCard.forLanguage]).
  */
-class MeetingLanguage {
+class MeetingLanguage(
+    /** Fewer characters + words than this: too little to tell. A question is short ([QUESTION_UNITS]). */
+    private val minUnits: Int = MIN_UNITS,
+) {
     private var cjk = 0
     private var words = 0
 
@@ -23,21 +26,32 @@ class MeetingLanguage {
         if (inWord >= 2) words++
     }
 
-    /** `zh`, `en`, or null while there is too little text to tell ([MIN_UNITS]). */
+    /** Characters + words counted so far. */
+    val units: Int get() = cjk + words
+
+    /** [code] once [SETTLED_UNITS] were heard: enough to commit something read once per meeting
+     *  (the reader's system prompt), or null before. */
+    val settled: String? get() = if (units >= SETTLED_UNITS) code else null
+
+    /** `zh`, `en`, or null while there is too little text to tell (`minUnits`). */
     val code: String?
         get() = when {
-            cjk + words < MIN_UNITS -> null
+            cjk + words < minUnits -> null
             words > cjk -> "en"
             else -> "zh"
         }
 
     companion object {
         const val MIN_UNITS = 20
+        /** A few sentences: what [settled] waits for. */
+        const val SETTLED_UNITS = 60
+        /** A question: three English words or a few Chinese characters say its language. */
+        const val QUESTION_UNITS = 4
 
         /** Han ideographs and kana (explicit ranges, the same on iOS). */
         fun isCjk(c: Int) = c in 0x3400..0x4DBF || c in 0x4E00..0x9FFF || c in 0xF900..0xFAFF || c in 0x20000..0x2FFFF ||
             c in 0x3040..0x30FF || c in 0x31F0..0x31FF || c in 0xFF66..0xFF9D
 
-        fun detect(texts: Iterable<String>): String? = MeetingLanguage().apply { texts.forEach(::add) }.code
+        fun detect(texts: Iterable<String>, minUnits: Int = MIN_UNITS): String? = MeetingLanguage(minUnits).apply { texts.forEach(::add) }.code
     }
 }

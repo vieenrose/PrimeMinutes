@@ -122,6 +122,11 @@
    "zh-Hans": "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。每个论点后面附上出处标签，格式与摘录开头的标签完全相同，例如 [[2]]。问题的用词可能和摘录不同，请找意思相同的内容。只有在每段摘录都没有相关内容时，才说「会议记录中没有提到」。回答请简短，使用简体中文。",
    "zh-Hant": "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。每個論點後面附上出處標籤，格式與摘錄開頭的標籤完全相同，例如 [[2]]。問題的用詞可能和摘錄不同，請找意思相同的內容。只有在每段摘錄都沒有相關內容時，才說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。",
    "en": "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt, e.g. [[2]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English. Do not add a currency the excerpts do not name."
+  },
+  "answer_in": {
+   "en": "\n\n（請用英文回答；摘錄裡沒有答案時，就說 \"The meetings do not mention it.\"）Answer in English.",
+   "zh-Hant": "\n\n（請用繁體中文回答；摘錄裡沒有答案時，就說「會議記錄中沒有提到」。）",
+   "zh-Hans": "\n\n（请用简体中文回答；摘录里没有答案时，就说「会议记录中没有提到」。）"
   }
  },
  "languages": {
@@ -151,6 +156,8 @@
     ]
    ],
    "section_empty": "- None",
+   "proposal_cue": "(?i)\\b(maybe|perhaps|possibly|we could|could we|should we|shall we|how about|what if|let'?s think about|think about|propos(e|es|ed|ing|al)|suggest(s|ed|ing|ion)?|not sure|unsure|undecided|consider(s|ed|ing)?)\\b|\\?",
+   "decided": "(?i)\\b(agreed|agrees|decided|confirmed|approved|accepted|settled|finali[sz]ed|will go with|going with|chose|chosen)\\b",
    "title": {
     "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nWrite a title for this meeting in English, at most 10 words. Output only the title."
    },

@@ -10,6 +10,8 @@ import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.reader.Line
 import studio.primeminutes.core.reader.MeetingLanguage
 import studio.primeminutes.core.reader.MeetingReader
+import studio.primeminutes.core.reader.Note
+import studio.primeminutes.core.reader.ReaderCard
 import studio.primeminutes.core.reader.ReaderLlm
 
 /** The notes follow the meeting's language (quality eval 2026-10: every AMI meeting was summarized in
@@ -55,10 +57,10 @@ class MeetingLanguageTest {
         override fun reset() { seq.setLength(0) }
     }
 
-    private fun read(texts: List<String>): Pair<Recorder, MeetingReader> {
+    private fun read(texts: List<String>, byLanguage: (String?) -> ReaderCard = { ModelCard.DEFAULT.forLanguage(it).reader }): Pair<Recorder, MeetingReader> {
         val card = ModelCard.DEFAULT
         val llm = Recorder()
-        val r = MeetingReader(llm, "sys", count = { it.length }, budget = card.budget, pc = card.reader, byLanguage = { card.forLanguage(it).reader })
+        val r = MeetingReader(llm, "sys", count = { it.length }, budget = card.budget, pc = card.reader, byLanguage = byLanguage)
         r.start()
         texts.forEachIndexed { i, t -> r.offer(Line(i * 10, "S1", t)) }
         r.finish()
@@ -80,5 +82,51 @@ class MeetingLanguageTest {
         val en = ModelCard.DEFAULT.forLanguage("en").reader.directive!!
         assertTrue(!llm.turns.single().contains(en))
         ModelCard.DEFAULT.forLanguage("zh").reader.directive?.let { assertTrue(llm.turns.single().contains(it)) }
+    }
+
+    /** The system prompt waits for the language: an English meeting's FIRST window is read with the
+     *  card's agreement rule (quality eval §8 "still open"). */
+    @Test fun firstWindowReadsTheLanguagesSystemPrompt() {
+        val (llm, _) = read(List(5) { "OK so we'll go with the yellow casing and the rubber push buttons, agreed" })
+        val suffix = ModelCard.DEFAULT.forLanguage("en").reader.systemSuffix!!
+        val t = ModelCard.DEFAULT.template
+        val first = llm.turns.first()
+        assertTrue(first.startsWith(t.p0 + "sys" + suffix + t.p1))
+        // What the first lines fed while the prefix waited follows it, in order.
+        assertTrue(first.indexOf(ModelCard.DEFAULT.reader.windowHeader(1)) > first.indexOf(ModelCard.DEFAULT.reader.primer))
+        assertTrue(first.indexOf("[0:00] S1:") > first.indexOf(ModelCard.DEFAULT.reader.windowHeader(1)))
+    }
+
+    /** A Chinese meeting's conversation is exactly the card's own, as an upfront prefill fed it. */
+    @Test fun chineseConversationUnchangedByTheWait() {
+        val texts = List(40) { "那我們就決定尾牙定在十二月十九號，地點在台北，大家同意，第${it}點" }
+        val (withLang, _) = read(texts)
+        val (plain, _) = read(texts, byLanguage = { ModelCard.DEFAULT.reader })
+        assertEquals(plain.turns, withLang.turns)
+        val t = ModelCard.DEFAULT.template
+        assertTrue(withLang.turns.first().startsWith(t.p0 + "sys" + t.p1))
+    }
+
+    /** The minutes' proposal guard reads the meeting's language (card `languages.<code>`). */
+    @Test fun proposalGuardFollowsTheLanguage() {
+        fun n(text: String, tag: String = "DECISION") = Note(1, 1, "1:00", tag, text)
+        val en = ModelCard.DEFAULT.forLanguage("en").reader
+        val zh = ModelCard.DEFAULT.forLanguage("zh").reader
+        for (t in listOf("Maybe use rubber push buttons.", "We could use a kinetic battery.", "Should we go for a curved case?",
+            "Let's think about a titanium case.", "S2 proposed a yellow casing.", "Marketing suggested a voice recognizer.",
+            "Not sure about the scroll wheel.", "Use a solar cell?")) {
+            assertEquals(t, "PROPOSAL", en.reclassify(n(t)).tag)
+            assertEquals(t, "PROPOSAL", en.reclassify(n(t, "ACTION")).tag)
+            assertEquals("the Chinese cues do not read English", "DECISION", zh.reclassify(n(t)).tag)
+        }
+        for (t in listOf("Use rubber push buttons and a yellow casing.", "The team agreed on S2's suggestion of a kinetic battery.",
+            "Decided: maybe later, the logo goes inside.", "Ed will email the specs by Friday."))
+            assertEquals(t, "DECISION", en.reclassify(n(t)).tag)
+        assertEquals("ACTION", en.actions(listOf(n("Ed will email the specs by Friday.", "ACTION"))).single().tag)
+        assertTrue(en.actions(listOf(n("Maybe Ed could email the specs?", "ACTION"))).isEmpty())
+        // Chinese keeps upstream's guard.
+        assertEquals("PROPOSAL", zh.reclassify(n("建議採用黃色外殼")).tag)
+        assertEquals("DECISION", zh.reclassify(n("決定採用黃色外殼")).tag)
+        assertTrue(en.minutes(listOf(n("We could use a kinetic battery."))).contains("We could use a kinetic battery"))
     }
 }

@@ -33,6 +33,9 @@ data class ModelCard(
         val systemSuffix: String? = null,
         val sections: List<Pair<String, String>>? = null,
         val sectionEmpty: String? = null,
+        /** The proposal guard's words in this language ([ReaderCard.proposalCue], [ReaderCard.decided]). */
+        val proposalCue: Regex? = null,
+        val decided: Regex? = null,
         val title: OneShot? = null,
         val prose: OneShot? = null,
     )
@@ -44,6 +47,7 @@ data class ModelCard(
             reader = reader.copy(
                 directive = v.directive ?: reader.directive, systemSuffix = v.systemSuffix ?: reader.systemSuffix, sections = v.sections ?: reader.sections,
                 sectionEmpty = v.sectionEmpty ?: reader.sectionEmpty,
+                proposalCue = v.proposalCue ?: reader.proposalCue, decided = v.decided ?: reader.decided,
             ),
             title = v.title ?: title, prose = v.prose ?: prose,
         )
@@ -55,8 +59,10 @@ data class ModelCard(
         fun render(notes: String) = prompt.replace("{notes}", notes)
     }
 
-    /** Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`). */
-    data class AskCard(val answerTokens: Int, val noExcerpts: String, val system: Map<String, String>) {
+    /** Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`).
+     *  [answerIn]: per answer language, read after a question asked in another language than the system
+     *  prompt's (the system prompt stays the interface language's: the conversation's cached prefix). */
+    data class AskCard(val answerTokens: Int, val noExcerpts: String, val system: Map<String, String>, val answerIn: Map<String, String> = emptyMap()) {
         fun system(lang: String): String = system.getValue(lang)
     }
 
@@ -125,7 +131,8 @@ data class ModelCard(
                 ),
                 title = oneShot(j.getJSONObject("title")),
                 prose = oneShot(j.getJSONObject("prose")),
-                ask = AskCard(a.getInt("answer_tokens"), a.getString("no_excerpts"), sys.keys().asSequence().associateWith { sys.getString(it) }),
+                ask = AskCard(a.getInt("answer_tokens"), a.getString("no_excerpts"), sys.keys().asSequence().associateWith { sys.getString(it) },
+                    a.optJSONObject("answer_in")?.let { ai -> ai.keys().asSequence().associateWith { ai.getString(it) } } ?: emptyMap()),
                 languages = j.optJSONObject("languages")?.let { l ->
                     l.keys().asSequence().filter { l.opt(it) is JSONObject }.associateWith { code ->
                         val v = l.getJSONObject(code)
@@ -134,6 +141,8 @@ data class ModelCard(
                             systemSuffix = v.optString("system_suffix").ifEmpty { null },
                             sections = v.optJSONArray("sections")?.pairs(),
                             sectionEmpty = v.optString("section_empty").ifEmpty { null },
+                            proposalCue = v.optString("proposal_cue").ifEmpty { null }?.let(::Regex),
+                            decided = v.optString("decided").ifEmpty { null }?.let(::Regex),
                             title = oneShotOver(v.optJSONObject("title"), j.getJSONObject("title")),
                             prose = oneShotOver(v.optJSONObject("prose"), j.getJSONObject("prose")),
                         )

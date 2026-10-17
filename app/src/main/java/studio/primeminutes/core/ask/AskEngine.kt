@@ -22,7 +22,9 @@ import studio.primeminutes.core.llm.MfaEngine
 import studio.primeminutes.core.llm.MfaSession
 import studio.primeminutes.core.llm.SpTokenizer
 import studio.primeminutes.core.models.LlmRegistry
+import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.models.ModelManager
+import studio.primeminutes.core.reader.MeetingLanguage
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.BuildConfig
 import java.io.File
@@ -265,6 +267,8 @@ object AskEngine {
     private var modelId: String? = null
     private var job: Job? = null
     private var nextK = 1
+    /** The language of the conversation's system prompt: the first question's ([answerLanguage]). */
+    @Volatile private var convLang: String? = null
 
     /** The loaded-model holder: the embedder of the search index must be present. */
     fun available(context: Context): Boolean =
@@ -296,11 +300,16 @@ object AskEngine {
                     s.resume()
                     val sb = StringBuilder()
                     val first = _turns.value.size == 1
+                    val answerLang = answerLanguage(question, uiLanguage)
+                    // The system prompt is the first question's language; a follow-up in another language
+                    // gets the card's word for its own (the conversation's cached prefix stays as it is).
+                    if (first || convLang == null) convLang = answerLang
+                    val sysLang = convLang ?: answerLang
                     val t = s.template
                     val prompt = buildString {
-                        if (first) { append(t.p0); append(system(uiLanguage)); append(t.p1) }
+                        if (first) { append(t.p0); append(system(sysLang)); append(t.p1) }
                         else append(t.p3)
-                        append(render(excerpts, uiLanguage)); append("\n\n"); append(question.trim()); append(t.p2)
+                        append(render(excerpts, answerLang)); append("\n\n"); append(asked(card(), question, uiLanguage, sysLang)); append(t.p2)
                     }
                     val tPrompt = System.nanoTime()
                     val card = card()
@@ -312,7 +321,8 @@ object AskEngine {
                         || s.append(toks) < 0) {
                         Log.i(TAG, "prompt does not fit the conversation (${s.seqLength()} + ${toks.size} + ${card.ask.answerTokens}): fresh conversation")
                         s.reset()
-                        val fresh = t.p0 + system(uiLanguage) + t.p1 + render(excerpts, uiLanguage) + "\n\n" + question.trim() + t.p2
+                        convLang = answerLang
+                        val fresh = t.p0 + system(answerLang) + t.p1 + render(excerpts, answerLang) + "\n\n" + asked(card, question, uiLanguage, answerLang) + t.p2
                         if (s.append(s.tokenize(fresh, special = true)) < 0) error("prompt does not fit")
                     }
                     val pre = engine?.lastStats   // the prompt's prefill (append runs its own generate call)
@@ -330,7 +340,7 @@ object AskEngine {
                         // DEV: the answer and the excerpt tags, so a device run can be checked from logcat.
                         Log.d(TAG, "excerpts: " + excerpts.joinToString(" ") { "[[${it.k}]]=[[${it.entry.id}@${it.sec}]]" })
                         if (System.getProperty("vox.askdump") != null || android.util.Log.isLoggable("primeminutes-askdump", Log.DEBUG))
-                            render(excerpts, uiLanguage).lines().forEach { Log.d("primeminutes-askdump", it) }
+                            render(excerpts, answerLang).lines().forEach { Log.d("primeminutes-askdump", it) }
                         Log.d(TAG, "answer: " + expandTags(sb.toString(), pool).replace("\n", " ⏎ "))
                     }
                     publish(expandTags(sb.toString().trim(), pool), done = true)
@@ -352,7 +362,7 @@ object AskEngine {
     /** Forgets the conversation and frees the reader model (the sheet closed). */
     fun release() {
         cancel()
-        _turns.value = emptyList(); nextK = 1
+        _turns.value = emptyList(); nextK = 1; convLang = null
         _phase.value = Phase.Idle
         scope.launch { mutex.withLock { close() } }
     }
@@ -364,7 +374,7 @@ object AskEngine {
     }
 
     fun reset() {
-        cancel(); _turns.value = emptyList(); nextK = 1; _phase.value = Phase.Idle
+        cancel(); _turns.value = emptyList(); nextK = 1; convLang = null; _phase.value = Phase.Idle
         // Under the lock, after the cancelled answer has left the model: resetting the session from
         // the caller's thread raced the native generate still unwinding on the worker.
         scope.launch { mutex.withLock { session?.reset(); session?.resume() } }
@@ -412,13 +422,36 @@ object AskEngine {
         }
     }
 
-    /** The answer follows the interface language (plan §6), whatever the question's: the card's
-     *  system prompt for Simplified Chinese, Traditional Chinese or English. */
-    private fun system(lang: String): String = card().ask.system(when {
+    /** The card's system prompt for a language tag (Simplified Chinese, Traditional Chinese or English). */
+    private fun system(lang: String): String = card().ask.system(answerKey(lang))
+
+    /** The card's answer-language key (`zh-Hans`, `zh-Hant`, `en`) of a language tag. */
+    internal fun answerKey(lang: String): String = when {
         lang.startsWith("zh") && (lang.contains("Hans") || lang.endsWith("CN") || lang.endsWith("SG")) -> "zh-Hans"
         lang.startsWith("zh") -> "zh-Hant"
         else -> "en"
-    })
+    }
+
+    /** The answer follows the QUESTION's language ([MeetingLanguage] on the question: an English
+     *  question on a Chinese interface is answered in English); a question too short or too mixed to
+     *  tell, or Chinese on a Chinese interface, follows the interface (and its script). */
+    internal fun answerLanguage(question: String, uiLanguage: String): String {
+        val q = MeetingLanguage.detect(listOf(question), MeetingLanguage.QUESTION_UNITS)
+        return when {
+            q == null -> uiLanguage
+            q == "zh" && uiLanguage.startsWith("zh") -> uiLanguage
+            q == "zh" -> "zh-TW"
+            else -> q
+        }
+    }
+
+    /** The question as the model reads it in a conversation whose system prompt is [systemLang]'s:
+     *  followed by the card's word for the answer's language when that differs (`ask.answer_in`). */
+    internal fun asked(card: ModelCard, question: String, uiLanguage: String, systemLang: String): String {
+        val want = answerKey(answerLanguage(question, uiLanguage))
+        val tail = if (want != answerKey(systemLang)) card.ask.answerIn[want].orEmpty() else ""
+        return question.trim() + tail
+    }
 
     /** The card of the model loaded for Ask (else the chosen one). */
     private fun card() = LlmRegistry.byId(modelId ?: studio.primeminutes.core.config.TranscriptionConfig.Holder.config.llmModelId).card
