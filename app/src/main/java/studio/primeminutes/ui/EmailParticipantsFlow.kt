@@ -145,8 +145,9 @@ fun EmailParticipantsFlow(
         input = ::input, sessionBytes = sessionBytes, entryDir = s.libraryDir,
         onSend = { req ->
             scope.launch {
-                val mail = MeetingMail.build(input(), req.lang, req.options.copy(attachments = attachNames(req.attach, title), budget = MeetingMail.COMPOSER_BUDGET))
                 val file = attachment(req.attach)
+                // The "Attached:" line names the file as the mail app shows it.
+                val mail = MeetingMail.build(input(), req.lang, req.options.copy(attachments = listOfNotNull(file?.name), budget = MeetingMail.COMPOSER_BUDGET))
                 if (req.attach != null && file == null) notify(context.getString(R.string.export_share_failed))
                 val uri = file?.let(::uriOf)
                 val send = Intent(Intent.ACTION_SEND).apply {
@@ -161,14 +162,24 @@ fun EmailParticipantsFlow(
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                 }
-                val mailto = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
-                val hasMailApp = context.packageManager.queryIntentActivities(mailto, 0).isNotEmpty()
-                Log.i(TAG, "open mail app: ${req.to.size} recipient(s), ${mail.plain.length} chars, attach=${req.attach}, mailApp=$hasMailApp, truncated=${mail.truncated}")
+                // The e-mail apps are those that answer mailto:; of the ACTION_SEND targets, only theirs are offered.
+                // (A SENDTO selector on ACTION_SEND is refused by some systems: ActivityNotFound on a Note10+.)
+                val pm = context.packageManager
+                val mailApps = pm.queryIntentActivities(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")), 0).map { it.activityInfo.packageName }.toSet()
+                val targets = pm.queryIntentActivities(send, 0)
+                val (mailTargets, others) = targets.partition { it.activityInfo.packageName in mailApps }
+                Log.i(TAG, "open mail app: ${req.to.size} recipient(s), ${mail.plain.length} chars, attach=${req.attach}, mailApps=${mailTargets.size}, truncated=${mail.truncated}")
                 val ok = runCatching {
-                    if (hasMailApp) context.startActivity(send.apply { selector = mailto }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    else {
-                        copyAddresses(context, req.to)
-                        context.startActivity(Intent.createChooser(send, context.getString(R.string.mail_share_other)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    when {
+                        mailTargets.size == 1 -> context.startActivity(Intent(send).setClassName(mailTargets[0].activityInfo.packageName, mailTargets[0].activityInfo.name)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        mailTargets.size > 1 -> context.startActivity(Intent.createChooser(send, context.getString(R.string.mail_open)).apply {
+                            putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, others.map { android.content.ComponentName(it.activityInfo.packageName, it.activityInfo.name) }.toTypedArray())
+                        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        else -> {
+                            copyAddresses(context, req.to)
+                            context.startActivity(Intent.createChooser(send, context.getString(R.string.mail_share_other)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
                     }
                 }.onFailure { Log.w(TAG, "no mail app answered", it) }.isSuccess
                 if (!ok) { copyAddresses(context, req.to); notify(context.getString(R.string.mail_no_app)); return@launch }
