@@ -59,6 +59,9 @@ data class SamplerProfile(val topK: Int, val topP: Float, val temp: Float)
 object LlmRegistry {
     const val E2B_MOBILE_ID = "gemma4-e2b-meeting-agent-zh-mobile-v1"
     const val E4B_MOBILE_ID = "gemma4-e4b-meeting-agent-zh-mobile"
+    /** E4B mobile-v2 (2026-10): fewer contradicted notes than mobile-v1; read with at most 8 notes per
+     *  window (its card), the number it was trained and evaluated with. mobile-v1 E4B stays selectable. */
+    const val E4B_MOBILE_V2_ID = "gemma4-e4b-meeting-agent-zh-mobile-v2"
     /** E2B mobile-v1 on the LiteRT engine; it replaced the llama.cpp v11 GGUF (2026-10-03). */
     const val DEFAULT_ID = E2B_MOBILE_ID
 
@@ -88,7 +91,28 @@ object LlmRegistry {
                 2_260_210_576L to "34858194f4f596fae132470a2e0f2f0f276e540c7af8502e4ef7cca99e871424",
             ),
         ),
+        // mobile-v2 (integration note 05b0d33b §10): a new main graph and system prompt (每段最多 8 則);
+        // the embedders and tokenizer are byte-identical to mobile-v1 E4B (reused on device, no re-download).
+        mobile(
+            id = E4B_MOBILE_V2_ID, displayName = "Gemma-4-E4B meeting agent mobile-v2 (zh)", shortName = "E4B",
+            dirName = "gemma4-meeting-agent-e4b-mobile-v2",
+            repo = "Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT", rev = "389bc2f944f1c5a4d74bc30348e32e13e931d987",
+            dir = "mobile-v2/mfa", prompt = "mobile-v2/system_prompt.txt",
+            sizes = listOf(
+                170_920_584L to "94cf45ffd3d0dd7040d27b22e70845cf1054db90613bf31d8ffc1623d23d4a40",
+                836_778_512L to "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a",
+                2_260_210_576L to "2d346d0e5f4c1a91ae3ab9df7cea2e29992f4d60a7c661ccbc886e964fe618d0",
+            ),
+            promptSha = MOBILE_V2_PROMPT_SHA,
+            card = ModelCard.load("gemma4-meeting-agent-zh-v2"),
+        ),
     )
+
+    /** The large E4B models (offered on 8 GB phones only). */
+    val E4B_IDS = setOf(E4B_MOBILE_ID, E4B_MOBILE_V2_ID)
+
+    private const val MOBILE_V1_PROMPT_SHA = "406040c70270b5b9d47a4222138fcf2177f361dcbfb79fba164ca2559e0ffbf3"
+    private const val MOBILE_V2_PROMPT_SHA = "044150e8e18c05f807c88ca88358953f81fcc74fe85959184d66c65d81fd4843"
 
     /** E4B takes ~3 GB next to the ASR engine: offered on 8 GB phones only (totalMem reads ~7.3 GiB there). */
     const val E4B_MIN_RAM = 7L * 1024 * 1024 * 1024
@@ -97,6 +121,7 @@ object LlmRegistry {
     private fun mobile(
         id: String, displayName: String, shortName: String, dirName: String, repo: String, rev: String,
         dir: String, prompt: String, sizes: List<Pair<Long, String>>,
+        promptSha: String = MOBILE_V1_PROMPT_SHA, card: ModelCard = ModelCard.DEFAULT,
     ) = LlmSpec(
         id = id, displayName = displayName, shortName = shortName, dirName = dirName,
         revision = "https://huggingface.co/$repo/resolve/$rev",
@@ -105,13 +130,13 @@ object LlmRegistry {
             "$dir/Section2_TFLiteModel_tf_lite_embedder.tflite" to sizes[0],
             "$dir/Section3_TFLiteModel_tf_lite_per_layer_embedder.tflite" to sizes[1],
             "$dir/prefill_decode_fused.tflite" to sizes[2],
-            prompt to (1_686L to "406040c70270b5b9d47a4222138fcf2177f361dcbfb79fba164ca2559e0ffbf3"),
+            prompt to (1_686L to promptSha),
         ),
         mainFile = "$dir/prefill_decode_fused.tflite",
         tokenizerFile = "$dir/Section1_SP_Tokenizer.spiece",
         maxCtx = 4096,
         systemPromptFile = prompt,
-        card = ModelCard.DEFAULT,
+        card = card,
     )
 
     fun byId(id: String): LlmSpec =

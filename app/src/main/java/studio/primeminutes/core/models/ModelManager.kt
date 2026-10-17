@@ -287,8 +287,13 @@ class ModelManager(context: Context) {
                 // XNNPACK's packed-weight cache is keyed by buffer index, not content: weights from another
                 // revision would run on the old packed values. Any fetched file invalidates it.
                 File(dir, WEIGHT_CACHE).delete()
-                download("${spec.revision}/$rel", dest, sha) { frac ->
-                    onProgress((done + (frac * bytes).toLong()).toFloat() / total)
+                // The same file in another installed model (mobile-v2 E4B shares mobile-v1's embedders and
+                // tokenizer, byte for byte): copied, checked, and not downloaded again.
+                val local = reuseSource(spec, rel, LlmRegistry.ALL, ::llmDir) { llmReady(it) }
+                if (local == null || !copyVerified(local, dest, sha)) {
+                    download("${spec.revision}/$rel", dest, sha) { frac ->
+                        onProgress((done + (frac * bytes).toLong()).toFloat() / total)
+                    }
                 }
             }
             done += bytes
@@ -445,6 +450,14 @@ class ModelManager(context: Context) {
         }
     }
 
+    /** [src] copied to [dest] through a temporary file, kept only when its sha256 is [sha]. */
+    private fun copyVerified(src: File, dest: File, sha: String): Boolean = runCatching {
+        val tmp = File(dest.path + ".copy")
+        src.copyTo(tmp, overwrite = true)
+        if (sha256Of(tmp) != sha) { tmp.delete(); return false }
+        tmp.renameTo(dest)
+    }.getOrDefault(false)
+
     private fun sha256Of(f: File): String {
         val md = MessageDigest.getInstance("SHA-256")
         f.inputStream().use { ins ->
@@ -469,6 +482,18 @@ class ModelManager(context: Context) {
          * Otherwise the set's [files] (from another revision, or of unknown origin) are deleted
          * before the fetch is marked as begun, so nothing stale can later pass for complete.
          */
+        /**
+         * A complete copy of [spec]'s file [rel] in another model's folder: a file of [all] with the same
+         * size and sha256, in a model that is installed ([ready]: stamped with its revision) and has it
+         * at that size. Null when there is none (download it).
+         */
+        internal fun reuseSource(spec: LlmSpec, rel: String, all: List<LlmSpec>, dirOf: (LlmSpec) -> File, ready: (LlmSpec) -> Boolean): File? {
+            val meta = spec.files[rel] ?: return null
+            return all.asSequence().filter { it.id != spec.id && it.dirName != spec.dirName }.flatMap { o ->
+                o.files.filterValues { it == meta }.keys.asSequence().map { o to File(dirOf(o), it) }
+            }.firstOrNull { (o, f) -> f.length() == meta.first && ready(o) }?.second
+        }
+
         internal fun beginSet(dir: File, revision: String, files: Collection<String>): Boolean {
             fun read(name: String) = runCatching { File(dir, name).readText().trim() }.getOrNull()
             if (read(REVISION_MARKER) == revision || read(FETCHING_MARKER) == revision) return true

@@ -303,15 +303,19 @@ private fun ReaderModelSelector(selected: String, enabled: Boolean, onSelect: (S
         mi.totalMem >= LlmRegistry.E4B_MIN_RAM
     }
     val current = LlmRegistry.byId(selected).id
-    val options = listOf(
+    // E4B mobile-v1 stays selectable (go back to it, re-summarize with it) while it is the choice or its
+    // files are still on the phone; a new choice of E4B gets mobile-v2.
+    val e4bV1 = remember(current) { current == LlmRegistry.E4B_MOBILE_ID || ModelManager(context).llmReady(LlmRegistry.byId(LlmRegistry.E4B_MOBILE_ID)) }
+    val options = listOfNotNull(
         LlmRegistry.E2B_MOBILE_ID to R.string.reader_model_e2b,
-        LlmRegistry.E4B_MOBILE_ID to R.string.reader_model_e4b,
+        LlmRegistry.E4B_MOBILE_V2_ID to R.string.reader_model_e4b,
+        (LlmRegistry.E4B_MOBILE_ID to R.string.reader_model_e4b_v1).takeIf { e4bV1 },
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (id, labelRes) ->
             FilterChip(
                 selected = current == id,
-                enabled = enabled && (id != LlmRegistry.E4B_MOBILE_ID || bigRam),
+                enabled = enabled && (id !in LlmRegistry.E4B_IDS || bigRam),
                 onClick = { onSelect(id) },
                 label = { Text(stringResource(labelRes)) },
                 colors = FilterChipDefaults.filterChipColors(
@@ -326,7 +330,7 @@ private fun ReaderModelSelector(selected: String, enabled: Boolean, onSelect: (S
         stringResource(
             R.string.reader_model_hint,
             SizeFormat.bytes(LlmRegistry.byId(LlmRegistry.E2B_MOBILE_ID).totalBytes),
-            SizeFormat.bytes(LlmRegistry.byId(LlmRegistry.E4B_MOBILE_ID).totalBytes),
+            SizeFormat.bytes(LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).totalBytes),
         ) + if (bigRam) "" else "\n" + stringResource(R.string.reader_model_e4b_ram),
         style = MaterialTheme.typography.bodySmall,
         color = pal.Slate400,
@@ -468,7 +472,8 @@ private fun prettyModelName(name: String): String {
     // A reader model folder: its chip name (行動版 E2B / 行動版 E4B), not the folder.
     when (LlmRegistry.ALL.firstOrNull { it.dirName == name }?.id) {
         LlmRegistry.E2B_MOBILE_ID -> return stringResource(R.string.reader_model_e2b)
-        LlmRegistry.E4B_MOBILE_ID -> return stringResource(R.string.reader_model_e4b)
+        LlmRegistry.E4B_MOBILE_ID -> return stringResource(R.string.reader_model_e4b_v1)
+        LlmRegistry.E4B_MOBILE_V2_ID -> return stringResource(R.string.reader_model_e4b)
     }
     return name.removeSuffix("-gguf")
 }

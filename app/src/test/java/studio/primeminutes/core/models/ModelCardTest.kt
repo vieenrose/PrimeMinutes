@@ -9,7 +9,16 @@ class ModelCardTest {
     private val card = ModelCard.DEFAULT
 
     @Test fun everyShippedModelHasACard() {
-        LlmRegistry.ALL.forEach { assertEquals("gemma4-meeting-agent-zh", it.card.name) }
+        LlmRegistry.ALL.forEach { assert(it.card.name.startsWith("gemma4-meeting-agent-zh")) { it.id } }
+        assertEquals("gemma4-meeting-agent-zh-v2", LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card.name)
+    }
+
+    /** mobile-v2 reads with its trained note cap (8 per window); everything else is mobile-v1's card. */
+    @Test fun mobileV2CardIsTheV1CardWithEightNotes() {
+        val v2 = LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card
+        assertEquals(8, v2.reader.maxNotes)
+        assertEquals(12, card.reader.maxNotes)
+        assertEquals(card.copy(name = v2.name, reader = card.reader.copy(maxNotes = 8)).toString(), v2.toString())
     }
 
     /** Static acceptance check (docs/model-acceptance-checklist.md): every shipped model's card fits the
