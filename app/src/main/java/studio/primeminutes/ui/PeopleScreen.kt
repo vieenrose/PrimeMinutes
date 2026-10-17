@@ -130,7 +130,7 @@ private fun PeopleContent(
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("people-list")) {
                 if (doc.migrationFound > 0) item {
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(pal.PanelSurface, RoundedCornerShape(12.dp)).padding(12.dp)) {
-                        Text(stringResource(R.string.people_migration_card, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
+                        Text(pluralStringResource(R.plurals.people_migration_card, doc.migrationFound, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissMigrationCard(context) } }, modifier = Modifier.align(Alignment.End)) {
                             Text(stringResource(R.string.people_migration_ok))
                         }
@@ -183,7 +183,9 @@ private fun PersonPage(
     var merging by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var splitting by remember { mutableStateOf<PersonMeeting?>(null) }
-    val dateFmt = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
+    // Dates follow the interface language, which can differ from the device's.
+    val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val dateFmt = remember(uiLocale) { DateFormat.getDateInstance(DateFormat.MEDIUM, uiLocale) }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("person-page")) {
         p.note?.let { item { Text(it, color = pal.Slate400, modifier = Modifier.padding(bottom = 8.dp)) } }

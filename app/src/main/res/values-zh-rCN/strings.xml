@@ -484,7 +484,9 @@
     <string name="people_title">说话人名录</string>
     <string name="people_settings_desc">你为说话人取的名字，所有会议共用</string>
     <string name="people_none">还没有任何人。在转写文本中点说话人名称即可命名。</string>
-    <string name="people_migration_card">在你的会议中找到 %d 个名字，已集中到这里。相同的名字已合为一人：请检查，若其实是两个人，可以分开。</string>
+    <plurals name="people_migration_card">
+        <item quantity="other">在你的会议中找到 %d 个名字，已集中到这里。相同的名字已合为一人：请检查，若其实是两个人，可以分开。</item>
+    </plurals>
     <string name="people_migration_ok">知道了</string>
     <string name="people_rename">全部改名</string>
     <string name="people_merge_into">合并至…</string>
