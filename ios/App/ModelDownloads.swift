@@ -49,12 +49,15 @@ import Network
     /// What the speech engine and the chosen AI notes model still need (sizes from the registry).
     var pending: DownloadPlan.Pending {
         if Dev.env["VOX_BASE"] != nil { return DownloadPlan.Pending(speechBytes: 0, readerBytes: 0) }
+        let target = Prefs.readerTarget, ready = Storage.ready(target)
+        // A replaced model still installed (E4B mobile-v1 while mobile-v2 is fetched) keeps the reader working.
         return DownloadPlan.pending(speechReady: Storage.ready(.speech), speechBytes: ReaderModel.speech.totalBytes,
-                                    readerReady: Storage.ready(Prefs.reader), readerBytes: Prefs.reader.totalBytes)
+                                    readerReady: ready, readerBytes: Storage.downloadBytes(target), replacedReady: !ready && Prefs.reader.id != target.id)
     }
 
     /// Network watch + the first-launch prompt (or the prefetch the user already agreed to).
     func start() {
+        Storage.reclaimReplaced()   // a migration that finished (the new model already loads): the old files go
         monitor.pathUpdateHandler = { [weak self] path in
             let un = path.status == .satisfied && !path.isExpensive && !path.isConstrained
             Task { @MainActor in guard let self else { return }; self.unmetered = un; self.maybePrefetch() }
@@ -92,7 +95,7 @@ import Network
         let p = pending
         guard prefetchTask == nil, !cancelledThisRun, DownloadPlan.mayPrefetch(consent, unmetered: unmetered, p) else { return }
         prefetchProgress = 0; prefetchTotal = p.total
-        let reader = Prefs.reader
+        let reader = Prefs.readerTarget
         StatusLog.add("prefetch \(SizeFormat.bytes(p.total))")
         // Speech first, on its own task: a recording started meanwhile waits for these files only, never
         // for the notes model (two downloads of one file would race on its .part).
@@ -157,7 +160,7 @@ import Network
         Task.detached {
             await self.awaitPrefetch(speechOnly: false)
             do {
-                try await self.fetch(Prefs.reader, "reader", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
+                try await self.fetch(Prefs.readerTarget, "reader", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
                 await MainActor.run { self.screen.status = L("reader_ready") }
             } catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }
         }

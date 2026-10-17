@@ -57,7 +57,7 @@ struct SettingsView: View {
                     }.pickerStyle(.inline).labelsHidden()
                     .onChange(of: reader) { Prefs.readerId = reader }
                 } header: { Text(L("settings_reader_model")) } footer: {
-                    Text(L("reader_model_hint", SizeFormat.bytes(ReaderModel.e2b.totalBytes), SizeFormat.bytes(ReaderModel.e4b.totalBytes)) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
+                    Text(L("reader_model_hint", SizeFormat.bytes(ReaderModel.e2b.totalBytes), SizeFormat.bytes(ReaderModel.e4bV2.totalBytes)) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
                 }
                 Section { Toggle(L("settings_hw_monitor"), isOn: $hwMonitor) } footer: { Text(L("settings_hw_monitor_hint")) }
                 Section {
@@ -88,7 +88,7 @@ struct SettingsView: View {
                     Toggle(L("settings_show_actions"), isOn: $showActions)
                 } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint")) }
                 Section {
-                    if !Storage.ready(Prefs.reader) { Text(L("storage_model_pending", SizeFormat.bytes(Prefs.reader.totalBytes))).font(.footnote).foregroundStyle(.secondary) }
+                    if !Storage.ready(Prefs.readerTarget) { Text(L("storage_model_pending", SizeFormat.bytes(Prefs.readerTarget.totalBytes))).font(.footnote).foregroundStyle(.secondary) }
                     if models.isEmpty { Text(L("storage_none")).foregroundStyle(.secondary) }
                     ForEach(models) { i in
                         HStack { VStack(alignment: .leading) { Text(i.label); Text(L(i.kind)).font(.caption2).foregroundStyle(.secondary)

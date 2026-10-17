@@ -90,7 +90,11 @@ enum Prefs {
         get { let v = Dev.env["VOX_READER_ID"] ?? UserDefaults.standard.string(forKey: "reader") ?? "E2B"; return v == "E4B" && e4bAllowed ? v : "E2B" }
         set { UserDefaults.standard.set(newValue, forKey: "reader") }
     }
-    static var reader: ReaderModel { readerId == "E4B" ? .e4b : .e2b }
+    /// The model the choice stands for today (E4B = mobile-v2, Android `LlmRegistry.current`): what is downloaded.
+    static var readerTarget: ReaderModel { .byId(ReaderChoice.current(readerId, replacedBy: ReaderModel.replacements)) }
+    /// The model that reads (Android `LlmRegistry.runnable`): the target when installed, else an installed model it
+    /// replaced (a phone being migrated from E4B mobile-v1 keeps reading), else the target.
+    static var reader: ReaderModel { .byId(ReaderChoice.runnable(readerId, replacedBy: ReaderModel.replacements, ready: { Storage.ready(.byId($0)) })) }
 }
 
 /// Appearance (Android theme: Auto / Light / Dark; no e-ink on iOS).
@@ -117,7 +121,7 @@ enum Storage {
         /// Android prettyModelName: the reader's chip name, the speech pair's model names, caches as "(compile cache)".
         var label: String {
             if let r = name.range(of: ".xnnpack_cache") { return L("storage_compile_cache", String(name[..<r.lowerBound])) }
-            switch name { case "nemo": return "X-ASR + Nemotron-3"; case "E2B": return L("reader_model_e2b"); case "E4B": return L("reader_model_e4b"); case ReaderModel.embedId: return "EmbeddingGemma 2 270M"; default: return name }
+            switch name { case "nemo": return "X-ASR + Nemotron-3"; case "E2B": return L("reader_model_e2b"); case "E4B": return L("reader_model_e4b_v1"); case ReaderModel.e4bV2Id: return L("reader_model_e4b"); case ReaderModel.embedId: return "EmbeddingGemma 2 270M"; default: return name }
         }
         /// The XNNPACK weight cache inside a reader folder (rebuilt on next load when deleted with it).
         var cacheBytes: Int64 { (try? FileManager.default.attributesOfItem(atPath: url.appendingPathComponent(ModelStore.weightCache).path)[.size] as? Int64) ?? 0 }
@@ -132,6 +136,22 @@ enum Storage {
         return d.map { Item(url: $0, bytes: size($0)) }.sorted { $0.name < $1.name }
     }
     static func delete(_ i: Item) { try? FileManager.default.removeItem(at: i.url) }
+    /// Replaced notes models (E4B mobile-v1), deleted once their successor is installed AND has loaded once (its
+    /// weight cache exists): until then the old one keeps reading (Android `ModelManager.reclaimReplacedLlm`).
+    static func reclaimReplaced() {
+        let gone = ReaderChoice.reclaimable(replacedBy: ReaderModel.replacements) { id in
+            ready(.byId(id)) && FileManager.default.fileExists(atPath: modelsRoot.appendingPathComponent(id).appendingPathComponent(ModelStore.weightCache).path)
+        }
+        for id in gone where FileManager.default.fileExists(atPath: modelsRoot.appendingPathComponent(id).path) {
+            StatusLog.add("deleting replaced \(id)"); try? FileManager.default.removeItem(at: modelsRoot.appendingPathComponent(id))
+        }
+    }
+    /// Bytes `m` still has to download: files not in its folder at their size and not lent by an installed model.
+    static func downloadBytes(_ m: ReaderModel) -> Int64 {
+        let fm = FileManager.default
+        func has(_ o: ReaderModel, _ f: ModelFile) -> Bool { (try? fm.attributesOfItem(atPath: modelsRoot.appendingPathComponent(o.id).appendingPathComponent(f.name).path)[.size] as? Int64) == f.size }
+        return m.files.filter { f in !has(m, f) && !ReaderModel.readers.contains { o in o.id != m.id && ready(o) && o.files.contains { $0.sha256 == f.sha256 && $0.size == f.size } } }.reduce(0) { $0 + $1.size }
+    }
     /// The chosen reader's files are all there (synchronous twin of ModelStore.isComplete).
     static func ready(_ m: ReaderModel) -> Bool {
         m.files.allSatisfy { (try? FileManager.default.attributesOfItem(atPath: modelsRoot.appendingPathComponent(m.id).appendingPathComponent($0.name).path)[.size] as? Int64) == $0.size }

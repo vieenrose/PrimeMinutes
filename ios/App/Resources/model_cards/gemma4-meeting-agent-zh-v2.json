@@ -1,0 +1,169 @@
+{
+ "schema": 1,
+ "name": "gemma4-meeting-agent-zh-v2",
+ "about": "The mobile-v2 weights' card (E4B mobile-v2, which replaced E4B mobile-v1 on 2026-10-18): the mobile-v1 card (gemma4-meeting-agent-zh) with a prose budget of 1600 tokens (mobile-v2 writes denser summaries; 600 tokens stopped them at about 70 % of a 40-minute meeting) and at most 12 notes per window like mobile-v1 (8, the number in its training prompt, dropped about 4 notes per meeting and covered fewer key points: docs/model-eval-mobile-v2.md §10). Everything the app must know to drive the Gemma-4 meeting-agent fine-tune: chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
+ "template": {
+  "bos": "<bos>",
+  "bos_id": 2,
+  "system": "<|turn>system\n",
+  "user": "<|turn>user\n",
+  "model": "<|turn>model\n",
+  "end": "<turn|>",
+  "sep": "\n",
+  "stop_ids": [
+   1,
+   50,
+   106
+  ]
+ },
+ "sampler": {
+  "top_k": 40,
+  "top_p": 0.95,
+  "temp": 0.2
+ },
+ "budget": {
+  "window_tokens": 1500,
+  "ctx_budget": 4096,
+  "restart_budget": 1200
+ },
+ "reader": {
+  "read_max": 400,
+  "max_notes": 12,
+  "segment_s": 20,
+  "stop": "\nNEXT",
+  "primer": "NEXT",
+  "dup_lookback": 30,
+  "dup_jaccard": 0.6,
+  "journal_header": "## 筆記本（至今）\n",
+  "journal_empty": "（尚無筆記）",
+  "window_header": "## 逐字稿片段 {k}\n",
+  "omitted": "\n（另有 {n} 則較早的筆記未列出）",
+  "act": "^\\s*(NOTE|REVISE|LOOKBACK|NEXT)\\b(.*)$",
+  "note_act": "NOTE",
+  "note": "^\\s*\\[?(\\d+:\\d{2}(?::\\d{2})?)\\]?\\s*(?:\\((\\w[\\w-]*)\\)\\s*)?(.+)$",
+  "compact_priority": [
+   "DECISION",
+   "OPEN-ISSUE",
+   "ACTION"
+  ],
+  "cap_priority": [
+   [
+    "DECISION",
+    "ACTION"
+   ],
+   [
+    "NUMBER"
+   ],
+   [
+    "OPEN-ISSUE"
+   ]
+  ],
+  "sections": [
+   [
+    "決議事項",
+    "DECISION"
+   ],
+   [
+    "待辦與負責人",
+    "ACTION"
+   ],
+   [
+    "保留與未決",
+    "OPEN-ISSUE"
+   ],
+   [
+    "討論要點",
+    "PROPOSAL"
+   ],
+   [
+    "重要數字",
+    "NUMBER"
+   ]
+  ],
+  "section_empty": "- 無",
+  "proposal_tag": "PROPOSAL",
+  "reclassify_tags": [
+   "DECISION",
+   "ACTION"
+  ],
+  "action_tag": "ACTION",
+  "proposal_cue": "^(建議|提議|可以|可考慮|考慮|希望|應該|應|或許|是否|討論|研議)|建議|提議|可考慮",
+  "decided": "通過|決定|決議|同意|定案",
+  "notes_chars": 3900,
+  "guard": {
+   "about": "Model guardrail (ReaderGuard): per job, the share of non-blank reply lines that are off the protocol above: not a NOTE, a NOTE that does not parse, or a NOTE with a tag outside known_tags. ignore_acts end a turn and are not counted. Above max_off_protocol_rate (with at least min_lines lines) the app logs a warning.",
+   "known_tags": [
+    "DECISION",
+    "ACTION",
+    "NUMBER",
+    "OPEN-ISSUE",
+    "PROPOSAL"
+   ],
+   "ignore_acts": [
+    "NEXT"
+   ],
+   "max_off_protocol_rate": 0.2,
+   "min_lines": 10
+  }
+ },
+ "title": {
+  "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。",
+  "max_tokens": 48,
+  "label": "^(會議|会议|標題|标题|主題|主题|Title|Meeting)\\s*[:：]\\s*"
+ },
+ "prose": {
+  "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。",
+  "max_tokens": 1600
+ },
+ "ask": {
+  "answer_tokens": 320,
+  "no_excerpts": "(no excerpts)",
+  "system": {
+   "zh-Hans": "你是会议助理。只能根据下列会议摘录回答问题，不得加入摘录以外的信息。每个论点后面附上出处标签，格式与摘录开头的标签完全相同，例如 [[2]]。问题的用词可能和摘录不同，请找意思相同的内容。只有在每段摘录都没有相关内容时，才说「会议记录中没有提到」。回答请简短，使用简体中文。",
+   "zh-Hant": "你是會議助理。只能根據下列會議摘錄回答問題，不得加入摘錄以外的資訊。每個論點後面附上出處標籤，格式與摘錄開頭的標籤完全相同，例如 [[2]]。問題的用詞可能和摘錄不同，請找意思相同的內容。只有在每段摘錄都沒有相關內容時，才說「會議記錄中沒有提到」。回答請簡短，使用繁體中文。",
+   "en": "You are a meeting assistant. Answer only from the meeting excerpts below; never add facts that are not in them. After each claim, cite its source tag exactly as it appears at the start of the excerpt, e.g. [[2]]. If the excerpts do not contain the answer, say that the meetings do not mention it. Be brief and answer in English. Do not add a currency the excerpts do not name."
+  },
+  "answer_in": {
+   "en": "\n\n（請用英文回答；摘錄裡沒有答案時，就說 \"The meetings do not mention it.\"）Answer in English.",
+   "zh-Hant": "\n\n（請用繁體中文回答；摘錄裡沒有答案時，就說「會議記錄中沒有提到」。）",
+   "zh-Hans": "\n\n（请用简体中文回答；摘录里没有答案时，就说「会议记录中没有提到」。）"
+  }
+ },
+ "languages": {
+  "en": {
+   "directive": "\n\n（注意：本會議以英文進行。每則 NOTE 的內容一律用英文寫，不要翻譯成中文；NOTE、NEXT、[時間]與類型標籤照舊。）",
+   "system_suffix": "\n\n補充規則：\n- 與會者已明確同意或拍板的做法（例如「好，就這樣」「那就這麼定」「大家都同意」「OK, let's go with…」「so we'll use…」）是 DECISION，不是 PROPOSAL；還在提議、沒有人同意的才是 PROPOSAL。",
+   "sections": [
+    [
+     "Decisions",
+     "DECISION"
+    ],
+    [
+     "Action items and owners",
+     "ACTION"
+    ],
+    [
+     "On hold and open",
+     "OPEN-ISSUE"
+    ],
+    [
+     "Discussion points",
+     "PROPOSAL"
+    ],
+    [
+     "Key figures",
+     "NUMBER"
+    ]
+   ],
+   "section_empty": "- None",
+   "proposal_cue": "(?i)\\b(maybe|perhaps|possibly|we could|could we|should we|shall we|how about|what if|let'?s think about|think about|propos(e|es|ed|ing|al)|suggest(s|ed|ing|ion)?|not sure|unsure|undecided|consider(s|ed|ing)?)\\b|\\?",
+   "decided": "(?i)\\b(agreed|agrees|decided|confirmed|approved|accepted|settled|finali[sz]ed|will go with|going with|chose|chosen)\\b",
+   "title": {
+    "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nWrite a title for this meeting in English, at most 10 words. Output only the title."
+   },
+   "prose": {
+    "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nFrom these notes, write a summary of the meeting in English as connected paragraphs (no bullet points, no headings): what was discussed, what was decided, who will do what, and what is still open. Only write what is in the notes; when you mention something, end the sentence with the note's time, e.g. [1:23]."
+   }
+  }
+ }
+}

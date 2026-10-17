@@ -15,6 +15,9 @@ struct ReaderModel {
     /// How to drive these weights (model_cards/<name>.json): chat template, sampler, budgets, the
     /// reader protocol and the title/prose/Ask prompts.
     var card: ModelCard = .default
+    /// The model that replaces this one (Android `LlmSpec.replacedBy`): not offered any more; it reads on a
+    /// phone that has it until its successor is installed, then its files are deleted.
+    var replacedBy: String? = nil
     var template: ChatTemplate { card.template }
     var budget: ReaderBudget { card.budget }
     /// Bytes to download for the whole model (the registry's sizes; the GPU graph is not part of it).
@@ -40,7 +43,8 @@ struct ReaderModel {
 
     private static let tokSha = "e594c8a90eb08d8bda498ff4747977dc827ae0c3c56b5c0d41a605a22d02ef03"
     private static let promptSha = "406040c70270b5b9d47a4222138fcf2177f361dcbfb79fba164ca2559e0ffbf3"
-    private static func make(_ id: String, _ repo: String, _ rev: String, dir: String, prompt: String, _ g: [(Int64, String)]) -> ReaderModel {
+    private static let promptShaV2 = "044150e8e18c05f807c88ca88358953f81fcc74fe85959184d66c65d81fd4843"
+    private static func make(_ id: String, _ repo: String, _ rev: String, dir: String, prompt: String, promptSha: String = promptSha, _ g: [(Int64, String)]) -> ReaderModel {
         ReaderModel(id: id, repo: repo, rev: rev, files: [
             ModelFile(name: "Section1_SP_Tokenizer.spiece", remote: dir + "/Section1_SP_Tokenizer.spiece", size: 4_689_013, sha256: tokSha),
             ModelFile(name: "Section2_TFLiteModel_tf_lite_embedder.tflite", remote: dir + "/Section2_TFLiteModel_tf_lite_embedder.tflite", size: g[0].0, sha256: g[0].1),
@@ -60,11 +64,33 @@ struct ReaderModel {
             size: 798_240_440, sha256: "a3504d11e97a346ec81b1db4d47aff55d1acf74bb2cd2129fb016e523b36c4ae")
         return m
     }()
-    static let e4b = make("E4B", "Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT", "70e095dc5db8d4edac901578a6e0f04d994ad95e",
-        dir: "mfa", prompt: "system_prompt.txt", [
-        (170_920_584, "94cf45ffd3d0dd7040d27b22e70845cf1054db90613bf31d8ffc1623d23d4a40"),
-        (836_778_512, "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a"),
-        (2_260_210_576, "34858194f4f596fae132470a2e0f2f0f276e540c7af8502e4ef7cca99e871424")])
+    /// E4B mobile-v1: replaced by `e4bV2` (2026-10-18), kept only to migrate phones that have it.
+    static let e4b: ReaderModel = {
+        var m = make("E4B", "Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT", "70e095dc5db8d4edac901578a6e0f04d994ad95e",
+            dir: "mfa", prompt: "system_prompt.txt", [
+            (170_920_584, "94cf45ffd3d0dd7040d27b22e70845cf1054db90613bf31d8ffc1623d23d4a40"),
+            (836_778_512, "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a"),
+            (2_260_210_576, "34858194f4f596fae132470a2e0f2f0f276e540c7af8502e4ef7cca99e871424")])
+        m.replacedBy = e4bV2Id
+        return m
+    }()
+    static let e4bV2Id = "E4B-v2"
+    /// E4B mobile-v2 (Android `gemma4-e4b-meeting-agent-zh-mobile-v2`): a new main graph and system prompt; the
+    /// embedders and tokenizer are byte-identical to mobile-v1 E4B (reused, not downloaded again). Its card sets
+    /// its note cap and prose budget (docs/model-eval-mobile-v2.md). CPU only (no GPU graph).
+    static let e4bV2: ReaderModel = {
+        var m = make(e4bV2Id, "Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT", "389bc2f944f1c5a4d74bc30348e32e13e931d987",
+            dir: "mobile-v2/mfa", prompt: "mobile-v2/system_prompt.txt", promptSha: promptShaV2, [
+            (170_920_584, "94cf45ffd3d0dd7040d27b22e70845cf1054db90613bf31d8ffc1623d23d4a40"),
+            (836_778_512, "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a"),
+            (2_260_210_576, "2d346d0e5f4c1a91ae3ab9df7cea2e29992f4d60a7c661ccbc886e964fe618d0")])
+        m.card = .load("gemma4-meeting-agent-zh-v2")
+        return m
+    }()
+    /// Every notes model the app knows (offered or being migrated away from).
+    static let readers: [ReaderModel] = [.e2b, .e4b, .e4bV2]
+    static var replacements: [String: String] { Dictionary(uniqueKeysWithValues: readers.compactMap { m in m.replacedBy.map { (m.id, $0) } }) }
+    static func byId(_ id: String) -> ReaderModel { readers.first { $0.id == id } ?? .e2b }
 }
 
 enum ModelStoreError: Error { case badStatus(Int), size(String), hash(String) }
@@ -142,6 +168,7 @@ actor ModelStore {
     private func fetch(_ m: ReaderModel, _ f: ModelFile, progress: @escaping @Sendable (Int64) -> Void) async throws {
         let dest = dir(m).appendingPathComponent(f.name), part = dest.appendingPathExtension("part")
         if let s = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64, s == f.size { return }
+        if reuse(m, f, dest) { progress(f.size); return }
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
         var req = URLRequest(url: m.url(f))
         if have > 0 { req.setValue("bytes=\(have)-", forHTTPHeaderField: "Range") }
@@ -158,6 +185,23 @@ actor ModelStore {
         if let want = f.sha256, try Self.sha256(part) != want { try? FileManager.default.removeItem(at: part); throw ModelStoreError.hash(f.name) }
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: part, to: dest)
+    }
+
+    /// The same file (size and sha256) in another installed model's folder (E4B mobile-v2 shares mobile-v1's
+    /// embedders and tokenizer): hard-linked (else copied), checked, kept; false when there is none.
+    private func reuse(_ m: ReaderModel, _ f: ModelFile, _ dest: URL) -> Bool {
+        guard let want = f.sha256 else { return false }
+        let fm = FileManager.default
+        for o in ReaderModel.readers where o.id != m.id && isComplete(o) {
+            guard let src = o.files.first(where: { $0.sha256 == want && $0.size == f.size }) else { continue }
+            let from = dir(o).appendingPathComponent(src.name), tmp = dest.appendingPathExtension("copy")
+            try? fm.removeItem(at: tmp)
+            do { try fm.linkItem(at: from, to: tmp) } catch { do { try fm.copyItem(at: from, to: tmp) } catch { continue } }
+            guard (try? Self.sha256(tmp)) == want else { try? fm.removeItem(at: tmp); continue }
+            try? fm.removeItem(at: dest)
+            if (try? fm.moveItem(at: tmp, to: dest)) != nil { StatusLog.add("reused \(f.name) from \(o.id)"); return true }
+        }
+        return false
     }
 
     static func sha256(_ url: URL) throws -> String {

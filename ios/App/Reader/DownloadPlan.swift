@@ -21,19 +21,47 @@ enum DownloadPlan {
     enum Action { case proceed, ask }
     struct Pending: Equatable {
         let speechBytes: Int64, readerBytes: Int64
+        /// The missing notes model replaces one that is installed and keeps working meanwhile (a model migration).
+        var readerUpgrade = false
         var total: Int64 { speechBytes + readerBytes }
         var any: Bool { total > 0 }
+        /// What a recording or an import has to wait for.
+        var blocking: Int64 { speechBytes + (readerUpgrade ? 0 : readerBytes) }
     }
-    static func pending(speechReady: Bool, speechBytes: Int64, readerReady: Bool, readerBytes: Int64) -> Pending {
-        Pending(speechBytes: speechReady ? 0 : speechBytes, readerBytes: readerReady ? 0 : readerBytes)
+    static func pending(speechReady: Bool, speechBytes: Int64, readerReady: Bool, readerBytes: Int64, replacedReady: Bool = false) -> Pending {
+        Pending(speechBytes: speechReady ? 0 : speechBytes, readerBytes: readerReady ? 0 : readerBytes, readerUpgrade: !readerReady && replacedReady)
     }
+    /// Before a recording or an import: ask only for what it cannot run without.
     static func decide(_ c: Consent, unmetered: Bool, _ p: Pending) -> Action {
-        if !p.any || c == .anyNetwork || (c == .wifiOnly && unmetered) { return .proceed }
+        if p.blocking <= 0 || c == .anyNetwork || (c == .wifiOnly && unmetered) { return .proceed }
         return .ask
     }
-    /// A background prefetch may run: consent given for the current network.
+    /// A background prefetch may run: consent given for the current network. A model upgrade alone (the old
+    /// model still works) waits for Wi-Fi whatever the consent.
     static func mayPrefetch(_ c: Consent, unmetered: Bool, _ p: Pending) -> Bool {
-        p.any && (c == .anyNetwork || (c == .wifiOnly && unmetered))
+        p.any && (c == .anyNetwork || (c == .wifiOnly && unmetered)) && (unmetered || p.blocking > 0)
+    }
+}
+
+/// Which notes model runs for the user's choice (Android `LlmRegistry.current / runnable / reclaimable`), over
+/// model ids and their `replacedBy` links: a replaced model (E4B mobile-v1) is not offered any more, keeps
+/// reading on a phone that has it until its successor is installed, then its files go.
+enum ReaderChoice {
+    /// The model a choice stands for today: `id`, or what replaced it (followed to the end).
+    static func current(_ id: String, replacedBy: [String: String]) -> String {
+        var c = id, n = 0
+        while let r = replacedBy[c], n < 8 { c = r; n += 1 }
+        return c
+    }
+    /// The current model when installed; else an installed model it replaced; else the current one (to download).
+    static func runnable(_ id: String, replacedBy: [String: String], ready: (String) -> Bool) -> String {
+        let want = current(id, replacedBy: replacedBy)
+        if ready(want) { return want }
+        return replacedBy.keys.sorted().first { $0 != want && current($0, replacedBy: replacedBy) == want && ready($0) } ?? want
+    }
+    /// Replaced models whose successor passes `installed`: their files can go.
+    static func reclaimable(replacedBy: [String: String], installed: (String) -> Bool) -> [String] {
+        replacedBy.keys.sorted().filter { let c = current($0, replacedBy: replacedBy); return c != $0 && installed(c) }
     }
 }
 

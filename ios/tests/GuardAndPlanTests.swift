@@ -38,6 +38,24 @@ final class OneReply: ReaderLlm {
         check(DownloadPlan.mayPrefetch(.wifiOnly, unmetered: true, both), true, "prefetch on Wi-Fi")
         check(DownloadPlan.mayPrefetch(.unset, unmetered: true, both), false, "no prefetch without consent")
         check(DownloadPlan.mayPrefetch(.anyNetwork, unmetered: false, none), false, "nothing to prefetch")
+        // A model migration (E4B mobile-v1 installed, mobile-v2 missing): nothing waits, Wi-Fi only
+        let up = DownloadPlan.pending(speechReady: true, speechBytes: 500, readerReady: false, readerBytes: 2000, replacedReady: true)
+        check(up.readerUpgrade, true, "upgrade"); check(up.blocking, 0, "an upgrade blocks nothing")
+        check(DownloadPlan.decide(.unset, unmetered: false, up), .proceed, "a run never waits for an upgrade")
+        check(DownloadPlan.mayPrefetch(.anyNetwork, unmetered: false, up), false, "upgrade waits for Wi-Fi")
+        check(DownloadPlan.mayPrefetch(.wifiOnly, unmetered: true, up), true, "upgrade on Wi-Fi")
+        check(DownloadPlan.pending(speechReady: true, speechBytes: 0, readerReady: false, readerBytes: 2000).readerUpgrade, false, "no old model: not an upgrade")
+
+        // ReaderChoice (Android ModelReuseTest): E4B v1 -> E4B-v2
+        let rep = ["E4B": "E4B-v2"]
+        check(ReaderChoice.current("E4B", replacedBy: rep), "E4B-v2", "choice migrates")
+        check(ReaderChoice.current("E2B", replacedBy: rep), "E2B", "E2B stays")
+        check(ReaderChoice.runnable("E4B", replacedBy: rep, ready: { $0 == "E4B" }), "E4B", "v1 reads until v2 is installed")
+        check(ReaderChoice.runnable("E4B", replacedBy: rep, ready: { _ in true }), "E4B-v2", "both: v2")
+        check(ReaderChoice.runnable("E4B", replacedBy: rep, ready: { _ in false }), "E4B-v2", "none: download v2")
+        check(ReaderChoice.runnable("E2B", replacedBy: rep, ready: { $0 == "E4B" }), "E2B", "E2B unaffected")
+        check(ReaderChoice.reclaimable(replacedBy: rep, installed: { $0 == "E4B" }), [], "v1 kept while v2 missing")
+        check(ReaderChoice.reclaimable(replacedBy: rep, installed: { $0 == "E4B-v2" }), ["E4B"], "v1 goes once v2 is installed")
 
         // SpeechCheck
         check(SpeechCheck.hasSpeech([]), false, "no lines")

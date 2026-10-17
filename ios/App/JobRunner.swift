@@ -151,8 +151,9 @@ final class ReaderWorker: @unchecked Sendable {
             let stored = await self.downloads.store.isComplete(rm) ? await self.downloads.store.dir(rm).path : nil
             let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored)
             let agentUi = self.screen.agent
-            let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: Prefs.reader.budget, card: Prefs.reader.card)
+            let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: rm.budget, card: rm.card)
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.screen.status = L("reader_error", "\(error)") }; return }
+            Storage.reclaimReplaced()   // the chosen model loads: a model it replaced (kept during a migration) can go
             let conv = TextConv(); let lowRam = ProcessInfo.processInfo.physicalMemory < 4_500_000_000   // 3 GB phones cannot hold ASR + diarizer + E2B at once
             let worker = ReaderWorker(reader, paused: lowRam && cached == nil)
             defer { worker.stop() }
@@ -225,14 +226,14 @@ final class ReaderWorker: @unchecked Sendable {
             var readError = worker.failure
             if readError == nil && !silent { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
             // Model guardrail: this job's off-protocol counts, logged (a warning above the card's threshold), shown, saved.
-            let rg = reader.guardCounts, gc = Prefs.reader.card.reader.guardrail, over = rg.exceeds(gc)
+            let rg = reader.guardCounts, gc = rm.card.reader.guardrail, over = rg.exceeds(gc)
             StatusLog.add((over ? "WARNING guard: off-protocol output above \(gc.maxOffProtocolRate): " : "guard: ") + rg.summary)
             await MainActor.run { agentUi.apply(.guardCounts(rg, exceeded: over)) }
             // A failed reading is not an empty meeting: no title or summary from a half-read journal, and the
             // cause on the status line (Android readFailed). The transcript is still archived.
             let journal = readError == nil && !silent ? reader.journal : []
             // Title, prose and the minutes in the meeting's language, as the reader heard it (the card's variant for it).
-            let langCard = Prefs.reader.card.forLanguage(reader.language)
+            let langCard = rm.card.forLanguage(reader.language)
             let sum = ReaderSummarizer(llm: r.llm, card: langCard)
             // No notes at all (a short or off-topic recording): one plain line, not five empty sections (Android summary_no_notes).
             let t = journal.isEmpty ? nil : sum.title(journal), prose = journal.isEmpty ? nil : sum.prose(journal) ?? langCard.reader.minutes(journal)
