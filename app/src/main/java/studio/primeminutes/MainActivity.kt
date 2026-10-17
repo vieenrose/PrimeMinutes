@@ -1322,8 +1322,6 @@ private fun TranscribeScreen(
             val shownAgent = if (s.watchingQueue) queueAgent else agent
             if (shownAgent.active) SectionCard {
                 studio.primeminutes.ui.AgentPanel(shownAgent, anchorSeek)
-                // Hardware status while the reader works; gone once it is done.
-                if (shownAgent.working) studio.primeminutes.ui.HwStatusLine(Modifier.padding(top = 8.dp))
             }
             // Portrait: the title is in the top bar; the card only appears to edit it.
             s.title?.takeIf { twoPane || s.editingTitle }?.let { t ->

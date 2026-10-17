@@ -116,6 +116,12 @@ fun CaptureScreen(
                 color = if (isRecording) PrimeMinutesPalette.Red else pal.Slate200,
                 fontWeight = FontWeight.Bold,
             )
+            // The engines' load, trailing on the header row (page gutter, same as iOS) rather than
+            // floating centered under the timer; only while the mic and the engines run.
+            if (isRecording) {
+                Spacer(Modifier.weight(1f))
+                HwStatusLine(Modifier.padding(end = 4.dp))
+            }
         }
         Spacer(Modifier.height(8.dp))
         if (landscape) {
@@ -124,7 +130,6 @@ fun CaptureScreen(
             Row(Modifier.weight(1f)) {
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-                    HwStatusLine(Modifier.align(Alignment.CenterHorizontally))
                     Spacer(Modifier.height(12.dp))
                     Spacer(Modifier.weight(1f))
                     CaptureButtons(isRecording, onNextTalk, onStop, buttonHeight = 72.dp)
@@ -137,7 +142,6 @@ fun CaptureScreen(
             Spacer(Modifier.height(12.dp))
         } else {
             TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-            HwStatusLine(Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(12.dp))
             // Live transcript: a first-class panel filling everything between the timer and
             // the buttons — the full running transcript, auto-following the newest line.

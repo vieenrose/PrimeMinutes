@@ -154,12 +154,17 @@ fun SessionTopBar(
         }
         if (status.isNotBlank() && statusVisible) {
             val idle = !running && !statusIsError
-            Text(
-                status,
-                style = if (idle) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
-                color = if (idle) pal.Slate400 else statusColor(running, transcriptAvailable, statusIsError),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    status,
+                    style = if (idle) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+                    color = if (idle) pal.Slate400 else statusColor(running, transcriptAvailable, statusIsError),
+                    modifier = Modifier.weight(1f),
+                )
+                // The engines' load while this meeting is transcribed / read: on its status row, trailing,
+                // above the progress bar (iOS: the live view's status row). Not when idle.
+                if (running) studio.primeminutes.ui.HwStatusLine(Modifier.padding(start = 8.dp))
+            }
         } else if (!running && !statusIsError) {
             // The idle line has faded (or there is none): keep its height so the tabs below
             // don't jump between sessions or tabs.
