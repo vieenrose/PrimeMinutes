@@ -1,0 +1,5 @@
+wespeaker_en_voxceleb_CAM++                             budget=10.0 profiles= 53 EER= 36.8% (thr 0.74) within-series EER= 38.2%  same=0.77 diff=0.69/0.71 same_min=0.57 p5=0.60 diff_max=0.95 p99=0.92 top1= 40.6% top3= 59.4% prog top1= 40.5% @thr ok/wrong/none=38/59/3
+wespeaker_en_voxceleb_CAM++                             budget=20.0 profiles= 53 EER= 35.1% (thr 0.79) within-series EER= 38.2%  same=0.82 diff=0.74/0.76 same_min=0.56 p5=0.65 diff_max=0.96 p99=0.93 top1= 37.5% top3= 56.2% prog top1= 45.9% @thr ok/wrong/none=38/62/0
+wespeaker_en_voxceleb_CAM++                             budget=60.0 profiles= 53 EER= 27.7% (thr 0.86) within-series EER= 33.9%  same=0.89 diff=0.80/0.82 same_min=0.67 p5=0.76 diff_max=0.98 p99=0.95 top1= 53.1% top3= 75.0% prog top1= 48.6% @thr ok/wrong/none=53/44/3
+wespeaker_en_voxceleb_CAM++                             budget= all profiles= 53 EER= 26.8% (thr 0.87) within-series EER= 30.9%  same=0.91 diff=0.81/0.83 same_min=0.68 p5=0.81 diff_max=0.98 p99=0.96 top1= 53.1% top3= 84.4% prog top1= 54.1% @thr ok/wrong/none=53/44/3
+wespeaker_en_voxceleb_CAM++: 655.8 s compute for 6589 s of speech, RTF 0.0995 (1 thread, host)

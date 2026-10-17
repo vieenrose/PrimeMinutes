@@ -1,0 +1,6 @@
+diarizer clusters: 63, time-weighted purity 0.986
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced  budget=10.0 profiles= 53 EER=  0.2% (thr 0.55) within-series EER=  2.8%  same=0.77 diff=0.19/0.27 same_min=0.55 p5=0.59 diff_max=0.60 p99=0.48 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced  budget=20.0 profiles= 53 EER=  0.2% (thr 0.57) within-series EER=  1.5%  same=0.81 diff=0.20/0.27 same_min=0.57 p5=0.66 diff_max=0.64 p99=0.49 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced  budget=60.0 profiles= 53 EER=  0.1% (thr 0.60) within-series EER=  1.5%  same=0.86 diff=0.21/0.28 same_min=0.60 p5=0.71 diff_max=0.68 p99=0.51 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced  budget= all profiles= 53 EER=  0.2% (thr 0.60) within-series EER=  1.5%  same=0.88 diff=0.21/0.28 same_min=0.60 p5=0.71 diff_max=0.68 p99=0.51 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced: 226.0 s compute for 6064 s of speech, RTF 0.0373 (1 thread, host)

@@ -1,0 +1,6 @@
+diarizer clusters: 59, time-weighted purity 0.991
+wespeaker_en_voxceleb_CAM++                             budget=10.0 profiles= 52 EER= 30.8% (thr 0.56) within-series EER= 37.1%  same=0.64 diff=0.47/0.53 same_min=0.22 p5=0.29 diff_max=0.92 p99=0.84 top1= 48.4% top3= 77.4% prog top1= 44.4% @thr ok/wrong/none=48/45/6
+wespeaker_en_voxceleb_CAM++                             budget=20.0 profiles= 52 EER= 27.5% (thr 0.65) within-series EER= 32.4%  same=0.74 diff=0.52/0.62 same_min=0.32 p5=0.43 diff_max=0.92 p99=0.87 top1= 54.8% top3= 80.6% prog top1= 66.7% @thr ok/wrong/none=45/32/23
+wespeaker_en_voxceleb_CAM++                             budget=60.0 profiles= 52 EER= 21.4% (thr 0.75) within-series EER= 32.4%  same=0.83 diff=0.60/0.71 same_min=0.58 p5=0.63 diff_max=0.94 p99=0.90 top1= 61.3% top3= 87.1% prog top1= 69.4% @thr ok/wrong/none=58/29/13
+wespeaker_en_voxceleb_CAM++                             budget= all profiles= 52 EER= 23.1% (thr 0.75) within-series EER= 29.2%  same=0.85 diff=0.62/0.73 same_min=0.57 p5=0.69 diff_max=0.96 p99=0.91 top1= 64.5% top3= 90.3% prog top1= 72.2% @thr ok/wrong/none=55/32/13
+wespeaker_en_voxceleb_CAM++: 556.8 s compute for 6193 s of speech, RTF 0.0899 (1 thread, host)

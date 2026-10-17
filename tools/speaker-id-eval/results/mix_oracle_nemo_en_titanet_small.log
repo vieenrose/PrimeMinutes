@@ -1,0 +1,5 @@
+nemo_en_titanet_small                                   budget=10.0 profiles= 53 EER=  0.3% (thr 0.47) within-series EER=  1.5%  same=0.67 diff=0.14/0.17 same_min=0.47 p5=0.49 diff_max=0.57 p99=0.44 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+nemo_en_titanet_small                                   budget=20.0 profiles= 53 EER=  1.1% (thr 0.46) within-series EER=  2.7%  same=0.72 diff=0.13/0.17 same_min=0.46 p5=0.50 diff_max=0.57 p99=0.45 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=97/0/3
+nemo_en_titanet_small                                   budget=60.0 profiles= 53 EER=  1.5% (thr 0.44) within-series EER=  1.8%  same=0.76 diff=0.14/0.17 same_min=0.40 p5=0.53 diff_max=0.59 p99=0.47 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=97/0/3
+nemo_en_titanet_small                                   budget= all profiles= 53 EER=  1.5% (thr 0.45) within-series EER=  2.7%  same=0.77 diff=0.14/0.18 same_min=0.44 p5=0.55 diff_max=0.58 p99=0.47 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=97/0/3
+nemo_en_titanet_small: 448.1 s compute for 6589 s of speech, RTF 0.0680 (1 thread, host)

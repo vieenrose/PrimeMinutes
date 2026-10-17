@@ -1,0 +1,7 @@
+L_R003S02C02.flac 6 speakers
+L_R004S06C01.flac 7 speakers
+M_R003S02C01.flac 6 speakers
+M_R003S05C01.flac 6 speakers
+S_R003S03C01.flac 5 speakers
+S_R004S01C01.flac 5 speakers
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx budget=20.0: same n=25 mean=0.86 min=0.77 p5=0.78 | diff n=122 mean=0.28 p95=0.51 max=0.67 | EER=0.0% at 0.77 | diff>=0.4: 18% same>=0.4: 100% diff>=0.5: 7% same>=0.5: 100% diff>=0.6: 1% same>=0.6: 100%

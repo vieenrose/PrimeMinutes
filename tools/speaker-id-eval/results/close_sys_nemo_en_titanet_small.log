@@ -1,0 +1,6 @@
+diarizer clusters: 59, time-weighted purity 0.991
+nemo_en_titanet_small                                   budget=10.0 profiles= 52 EER=  3.1% (thr 0.39) within-series EER=  4.7%  same=0.74 diff=0.14/0.24 same_min=0.20 p5=0.52 diff_max=0.56 p99=0.47 top1= 96.8% top3= 96.8% prog top1= 97.2% @thr ok/wrong/none=97/3/0
+nemo_en_titanet_small                                   budget=20.0 profiles= 52 EER=  0.0% (thr 0.61) within-series EER=  0.0%  same=0.81 diff=0.15/0.24 same_min=0.61 p5=0.66 diff_max=0.60 p99=0.48 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+nemo_en_titanet_small                                   budget=60.0 profiles= 52 EER=  0.0% (thr 0.61) within-series EER=  0.0%  same=0.86 diff=0.15/0.25 same_min=0.61 p5=0.69 diff_max=0.60 p99=0.48 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+nemo_en_titanet_small                                   budget= all profiles= 52 EER=  0.0% (thr 0.61) within-series EER=  0.0%  same=0.87 diff=0.15/0.25 same_min=0.61 p5=0.72 diff_max=0.60 p99=0.48 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+nemo_en_titanet_small: 425.3 s compute for 6193 s of speech, RTF 0.0687 (1 thread, host)

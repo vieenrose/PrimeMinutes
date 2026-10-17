@@ -1,0 +1,5 @@
+wespeaker_en_voxceleb_resnet34_LM                       budget=10.0 profiles= 53 EER= 22.1% (thr 0.91) within-series EER= 32.2%  same=0.93 diff=0.83/0.87 same_min=0.78 p5=0.84 diff_max=0.98 p99=0.97 top1= 59.4% top3= 75.0% prog top1= 64.9% @thr ok/wrong/none=53/34/12
+wespeaker_en_voxceleb_resnet34_LM                       budget=20.0 profiles= 53 EER= 20.6% (thr 0.91) within-series EER= 31.2%  same=0.94 diff=0.83/0.87 same_min=0.81 p5=0.86 diff_max=0.99 p99=0.97 top1= 53.1% top3= 75.0% prog top1= 59.5% @thr ok/wrong/none=53/34/12
+wespeaker_en_voxceleb_resnet34_LM                       budget=60.0 profiles= 53 EER= 19.2% (thr 0.93) within-series EER= 30.9%  same=0.96 diff=0.84/0.89 same_min=0.83 p5=0.86 diff_max=0.99 p99=0.98 top1= 75.0% top3= 81.2% prog top1= 81.1% @thr ok/wrong/none=69/19/12
+wespeaker_en_voxceleb_resnet34_LM                       budget= all profiles= 53 EER= 17.6% (thr 0.94) within-series EER= 27.9%  same=0.97 diff=0.85/0.90 same_min=0.85 p5=0.91 diff_max=0.99 p99=0.98 top1= 75.0% top3= 84.4% prog top1= 83.8% @thr ok/wrong/none=72/19/9
+wespeaker_en_voxceleb_resnet34_LM: 1814.7 s compute for 6589 s of speech, RTF 0.2754 (1 thread, host)

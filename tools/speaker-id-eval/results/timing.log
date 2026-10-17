@@ -1,0 +1,4 @@
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx 2s: 56 ms | 4s: 111 ms | 8s: 249 ms
+nemo_en_titanet_small.onnx 2s: 139 ms | 4s: 91 ms | 8s: 237 ms
+wespeaker_en_voxceleb_resnet34_LM.onnx 2s: 176 ms | 4s: 374 ms | 8s: 752 ms
+3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx 2s: 450 ms | 4s: 933 ms | 8s: 2092 ms

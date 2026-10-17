@@ -1,0 +1,7 @@
+L_R003S02C02.flac 6 speakers
+L_R004S06C01.flac 7 speakers
+M_R003S02C01.flac 6 speakers
+M_R003S05C01.flac 6 speakers
+S_R003S03C01.flac 5 speakers
+S_R004S01C01.flac 5 speakers
+nemo_en_titanet_small.onnx budget=20.0: same n=25 mean=0.85 min=0.74 p5=0.77 | diff n=122 mean=0.35 p95=0.56 max=0.76 | EER=0.4% at 0.74 | diff>=0.4: 30% same>=0.4: 100% diff>=0.5: 14% same>=0.5: 100% diff>=0.6: 5% same>=0.6: 100%

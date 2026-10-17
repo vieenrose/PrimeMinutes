@@ -1,0 +1,6 @@
+diarizer clusters: 59, time-weighted purity 0.991
+wespeaker_en_voxceleb_resnet34_LM                       budget=10.0 profiles= 52 EER=  6.2% (thr 0.58) within-series EER= 14.1%  same=0.76 diff=0.31/0.36 same_min=0.27 p5=0.55 diff_max=0.82 p99=0.72 top1= 90.3% top3= 96.8% prog top1= 91.7% @thr ok/wrong/none=90/10/0
+wespeaker_en_voxceleb_resnet34_LM                       budget=20.0 profiles= 52 EER=  3.1% (thr 0.63) within-series EER=  6.3%  same=0.83 diff=0.31/0.37 same_min=0.60 p5=0.69 diff_max=0.80 p99=0.69 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=97/0/3
+wespeaker_en_voxceleb_resnet34_LM                       budget=60.0 profiles= 52 EER=  1.8% (thr 0.67) within-series EER=  6.5%  same=0.87 diff=0.31/0.37 same_min=0.60 p5=0.71 diff_max=0.85 p99=0.73 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+wespeaker_en_voxceleb_resnet34_LM                       budget= all profiles= 52 EER=  1.7% (thr 0.68) within-series EER=  7.6%  same=0.88 diff=0.32/0.38 same_min=0.60 p5=0.73 diff_max=0.82 p99=0.75 top1=100.0% top3=100.0% prog top1=100.0% @thr ok/wrong/none=100/0/0
+wespeaker_en_voxceleb_resnet34_LM: 1624.5 s compute for 6193 s of speech, RTF 0.2623 (1 thread, host)
