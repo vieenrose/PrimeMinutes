@@ -26,7 +26,7 @@ data class AsrPin(val file: String, val url: String, val bytes: Long, val sha256
 object AsrRegistry {
     private const val REPO = "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve"
     /** The Luigi/primeminutes-nemo-litert commit holding the four punct graphs and the shared host weights. */
-    const val REV = "PUNCT_REV"
+    const val REV = "7ac87f4bb4239e92cb8d37f64db6c544e8640a06"
 
     private fun pin(file: String, bytes: Long, sha: String) = AsrPin(file, "$REPO/$REV/$file", bytes, sha)
 
@@ -34,9 +34,9 @@ object AsrRegistry {
     val HOST: AsrPin = pin("xasr_punct_host.bin", 16_497_008L, "2fdfc8893a3e4f4308fd2dda5221d9b185e4bd6b3652c72659afa99d4bc69a92")
 
     val ALL: List<AsrVariant> = listOf(
-        AsrVariant(160, pin("xasr_punct_160ms_q8.tflite", 0L, "SHA160"), 300.0),
-        AsrVariant(480, pin("xasr_punct_480ms_q8.tflite", 0L, "SHA480"), 300.0),
-        AsrVariant(960, pin("xasr_punct_960ms_q8.tflite", 0L, "SHA960"), 300.0),
+        AsrVariant(160, pin("xasr_punct_160ms_q8.tflite", 152_257_712L, "2fe0e2c5a7a8601b50e7d9883ba178bb17aa5ba06940c6a0ff7dbe6b039cfc32"), 300.0),
+        AsrVariant(480, pin("xasr_punct_480ms_q8.tflite", 152_697_936L, "311b18d7bdf4741151af8c1ad240108fc5ef9f907c6c3a4da2edd07257f639b2"), 300.0),
+        AsrVariant(960, pin("xasr_punct_960ms_q8.tflite", 153_370_208L, "7ca126a3b832c385eda2f1b23d27154bad3992f24fb7cff304b318a81d9c0883"), 300.0),
         AsrVariant(1920, pin("xasr_punct_1920ms_q8.tflite", 154_783_344L, "cb739c2113e3347aba1761b6c190c9ae6a9e374e77c0519da61c81568db87e55"), 300.0),
     )
 
