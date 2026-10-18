@@ -57,4 +57,33 @@ class SeamStitcherTest {
     @Test fun noEnrollmentWithoutAPrerollGap() {
         assertEquals(0, SeamEnrollment.plan(listOf(u(0, 0.0, 20.0, 0)), offsetSec = 0.0).clips.size)
     }
+
+    @Test fun theWordsRepeatedAcrossTheSeamAreDroppedOnce() {
+        // Seen on the emulator (move meeting, killed at 268 s): the prior line ends "…很好，客戶" and the
+        // resumed run's straddling line restarts with it.
+        val prior = listOf(Utterance(0, "三月十號當天早上生效。很好，客戶", 262.0, 268.0, 0))
+        val fresh = listOf(Utterance(0, "三月十號當天早上生效。", 262.0, 266.5, 0),
+            Utterance(1, "很好，客戶通知信，我希望二月底前寄出", 266.5, 275.0, 1))
+        val (all, _) = SeamStitcher.stitch(prior, 268.0, fresh, 2)
+        assertEquals(listOf("三月十號當天早上生效。很好，客戶", "通知信，我希望二月底前寄出"), all.map { it.text })
+    }
+
+    @Test fun repeatedHeadTrimKeepsTokenTimings() {
+        val f = Utterance(0, "see you on Thursday", 10.0, 12.0, 0,
+            tokens = listOf("see", " you", " on", " Thursday"), tokenTimes = listOf(0.0, 0.3, 0.6, 0.9))
+        val g = SeamStitcher.trimRepeatedHead("we'll see you", f)
+        assertEquals("on Thursday", g.text)
+        assertEquals(10.6, g.startSec, 1e-9)
+        assertEquals(listOf(0.0, 0.3), g.tokenTimes!!.map { Math.round(it * 10) / 10.0 })
+    }
+
+    @Test fun aPartialLatinWordIsNotARepeat() {
+        val f = Utterance(0, "on the table", 1.0, 2.0, 0)
+        assertEquals(f, SeamStitcher.trimRepeatedHead("put it upon", f))
+    }
+
+    @Test fun noRepeatLeavesTheUtteranceAlone() {
+        val f = Utterance(0, "通知信", 1.0, 2.0, 0)
+        assertEquals(f, SeamStitcher.trimRepeatedHead("生效。", f))
+    }
 }
