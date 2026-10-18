@@ -64,12 +64,14 @@ Vendored from [nemo-x-asr-diarizer.cpp](https://github.com/vieenrose/nemo-x-asr-
 (`engine`, `fusion`, `diar_crispasr`), with a push API added (`Engine::begin/push/finish/snapshot`)
 so microphone and file audio both stream through the same loop. Every 100 ms piece goes to the
 Nemotron-3 diarizer first, then to X-ASR; the fusion layer tags each word with the speaker turn
-that covers it. Words appear ~0.4 s after they are spoken; turns commit ~5 s behind, so the
+that covers it. Words appear one recognizer chunk after they are spoken (Settings: 0.16 / 0.48 / 0.96 / 1.92 s,
+default 1.92 s; `core/models/AsrRegistry.kt`: one punct int8 checkpoint exported per chunk size, the engine reads the
+chunk geometry from the graph and the token offset from the registry); turns commit ~5 s behind, so the
 Kotlin side emits replace-all `UtteranceSnapshot`s and the last one (after end of input) is final.
 
 Speakers are always produced: there is no switch to turn diarization off, and re-running it on the
-same audio gives the same tags. The only setting is the *live* speaker delay (5–30 s), which
-changes when the booth freezes a line's speaker, not the saved transcript.
+same audio gives the same tags. The *live* speaker delay (5–30 s) changes when the booth freezes a line's speaker,
+not the saved transcript; the transcription latency changes the words (live and saved).
 
 Two ggml copies share the process (CrispASR's, audio.cpp's). audio.cpp builds as
 `libaudiocpp.so` with its ggml hidden behind a version script; CrispASR and its ggml link
