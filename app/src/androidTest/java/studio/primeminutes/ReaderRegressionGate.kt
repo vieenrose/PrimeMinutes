@@ -124,7 +124,7 @@ class ReaderRegressionGate {
         val leaks = listOf("NOTE", "NEXT", "<|", "[[").filter { prose.orEmpty().contains(it) || title.orEmpty().contains(it) }
 
         val report = JSONObject().put("meeting", name).put("model", spec.id).put("seconds", secs.toInt())
-            .put("recall", recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
+            .put("recall", if (recall.isNaN()) JSONObject.NULL else recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
             .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
             .put("prose_tokens", card.prose.maxTokens).put("prose_seconds", proseSecs.toInt()).put("prose_chars", prose.orEmpty().length)
