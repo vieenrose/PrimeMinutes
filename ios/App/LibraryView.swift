@@ -94,11 +94,17 @@ struct LibraryView: View {
                     HStack(alignment: .top, spacing: 6) {
                         if p.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
                         if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
-                        Text((p.speaker.map { $0 + ": " } ?? "") + p.snippet).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
+                        Text((p.speaker.map { $0 + ": " } ?? "") + snippet(p, s)).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
                     }
                 }.buttonStyle(.plain)
             }
         }
+    }
+    /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
+    private func snippet(_ p: LibrarySearch.Passage, _ s: Session) -> String {
+        if p.kind == .chunk { return p.snippet }
+        let known = Set(s.lines.map(\.speaker))
+        return SpeakerRefs.resolve(p.snippet, label: { s.name($0) }, known: known.isEmpty ? nil : known)
     }
     private func label(_ d: Date) -> String {
         if Calendar.current.isDateInToday(d) { return L("today") }

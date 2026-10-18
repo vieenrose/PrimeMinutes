@@ -153,20 +153,3 @@ struct SeamEnrollment {
     }
 }
 
-enum SeamStitcher {
-    static let preroll = 30.0
-    static func stitch(_ prior: [Utterance], seam: Double, _ fresh: [Utterance], stable: Int) -> ([Utterance], Int) {
-        if prior.isEmpty { return (fresh, stable) }
-        var overlap: [[Int]: Double] = [:]
-        for f in fresh where f.start < seam { for p in prior { let o = min(f.end, p.end) - max(f.start, p.start); if o > 0 { overlap[[f.speaker, p.speaker], default: 0] += o } } }
-        var map: [Int: Int] = [:], taken = Set<Int>()
-        for (k, _) in overlap.sorted(by: { $0.value > $1.value }) where map[k[0]] == nil && !taken.contains(k[1]) { map[k[0]] = k[1]; taken.insert(k[1]) }
-        var next = (prior.map(\.speaker).max() ?? -1) + 1
-        var kept: [Utterance] = [], keptStable = 0
-        for (i, f) in fresh.enumerated() where (f.start + f.end) / 2 >= seam {
-            var u = f; if let m = map[f.speaker] { u.speaker = m } else { map[f.speaker] = next; u.speaker = next; next += 1 }
-            kept.append(u); if i < stable { keptStable += 1 }
-        }
-        return (prior + kept, prior.count + keptStable)
-    }
-}

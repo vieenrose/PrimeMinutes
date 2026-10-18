@@ -440,12 +440,19 @@ struct AskSheet: View {
     /// `withTitle`: the meeting's title in the link; the in-meeting Ask shows the time alone.
     static func linked(_ text: String, _ xs: [AskEngine.Excerpt], withTitle: Bool = true) -> AttributedString {
         // A tag still being written (streaming) or cut by the token cap is hidden, not shown raw.
-        let text = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
+        let cleaned = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\[\[[^@\]\n]*\]\]"#, with: "", options: .regularExpression)   // `[[no excerpt]]`
             .replacingOccurrences(of: #"(?m)^[ \t]*[*-][ \t]+"#, with: "• ", options: .regularExpression)   // Markdown bullets, shown as text
+        let rx = try! NSRegularExpression(pattern: #"\[\[([0-9A-Fa-f-]{36})@(\d+)\]\]"#)
+        // The model names speakers by its S-numbers (from the notes): each as the cited meeting names it (display only).
+        let text = SpeakerRefs.resolveCited(cleaned, cite: rx) { mt in
+            let ns = cleaned as NSString, id = ns.substring(with: mt.range(at: 1)).uppercased()
+            guard let s = xs.first(where: { $0.session.id.uuidString == id })?.session else { return nil }
+            let known = Set(s.lines.map(\.speaker))
+            return SpeakerRefs.Labels(label: { s.name($0) }, known: known.isEmpty ? nil : known)
+        }
         var out = AttributedString()
         let ns = text as NSString
-        let rx = try! NSRegularExpression(pattern: #"\[\[([0-9A-Fa-f-]{36})@(\d+)\]\]"#)
         var last = 0
         for mt in rx.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             out += AttributedString(ns.substring(with: NSRange(location: last, length: mt.range.location - last)))
