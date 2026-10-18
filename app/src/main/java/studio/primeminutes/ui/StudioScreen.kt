@@ -565,7 +565,7 @@ fun StudioScreen(
                             onManage = { actionsFor = e },
                         )
                         if (status == RowStatus.Done) h.passages.forEach { p ->
-                            PassageRow(p) {
+                            PassageRow(p, LibrarySearch.speakers(e)) {
                                 if (p.kind == SessionIndex.Kind.MEETING) onOpen(e) else onOpenAt(e, p.timeSec)
                             }
                         }
@@ -750,7 +750,13 @@ fun StudioScreen(
 /** One search passage under its meeting row: time · speaker · snippet; "≈" marks a passage found
  *  by meaning only. Tapping opens the meeting at that utterance. */
 @Composable
-private fun PassageRow(p: LibrarySearch.Passage, onClick: () -> Unit) {
+private fun PassageRow(
+    p: LibrarySearch.Passage,
+    /** The meeting's custom speaker names and transcript speaker ids ([LibrarySearch.speakers]). */
+    speakers: Pair<Map<Int, String>, Set<Int>>?,
+    onClick: () -> Unit,
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val pal = LocalPrimeMinutesPalette.current
     Row(
         Modifier.fillMaxWidth().padding(start = Gutter + 12.dp, end = Gutter)
@@ -773,7 +779,11 @@ private fun PassageRow(p: LibrarySearch.Passage, onClick: () -> Unit) {
                 speaker?.let { if (isNotEmpty()) append(" · "); append(it) }
             }
             if (head.isNotEmpty()) Text(head, color = pal.Slate400, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(p.snippet, color = pal.Slate200, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // A note names speakers by the reader's S-numbers: show them as the transcript does.
+            val snippet = if (p.kind == SessionIndex.Kind.CHUNK || speakers == null) p.snippet
+                else studio.primeminutes.core.reader.SpeakerRefs.resolve(p.snippet,
+                    { id -> speakers.first[id] ?: ctx.getString(R.string.speaker_n, id + 1) }, speakers.second.ifEmpty { null })
+            Text(snippet, color = pal.Slate200, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

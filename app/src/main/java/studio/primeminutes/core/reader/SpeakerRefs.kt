@@ -32,5 +32,29 @@ object SpeakerRefs {
             (if (glued) "\u0000" else "") + wrap(name) + (if (spaced) " " else "")
         }.replace(" \u0000", "")
 
+    /** A meeting's speakers as [resolve] takes them: label of an id, and the ids present (null: any). */
+    class Labels(val label: (Int) -> String, val known: Set<Int>?)
+
+    /**
+     * [resolve] for text that cites several meetings (an Ask answer): each S-number belongs to the
+     * meeting of the citation that follows it in the text (the last one for a tail after the last
+     * citation). [labels] maps a citation match to its meeting's speakers, or null to leave it as is.
+     */
+    fun resolveCited(text: String, cite: Regex, labels: (MatchResult) -> Labels?): String {
+        val cites = cite.findAll(text).toList()
+        if (cites.isEmpty() || !REF.containsMatchIn(text)) return text
+        val out = StringBuilder()
+        var last = 0
+        for ((i, m) in cites.withIndex()) {
+            out.append(segment(text.substring(last, m.range.first), labels(m)))
+            out.append(m.value)
+            last = m.range.last + 1
+            if (i == cites.lastIndex) out.append(segment(text.substring(last), labels(m)))
+        }
+        return out.toString()
+    }
+
+    private fun segment(t: String, l: Labels?) = if (l == null) t else resolve(t, l.label, l.known)
+
     private fun isHan(c: Char) = Character.UnicodeScript.of(c.code) == Character.UnicodeScript.HAN
 }

@@ -37,4 +37,21 @@ class SpeakerRefsTest {
 
     @Test fun englishLabel() =
         assertEquals("Speaker 3 will call", SpeakerRefs.resolve("S3 will call", { "Speaker ${it + 1}" }))
+
+    private val cite = Regex("""\[\[([A-Za-z0-9_\-]+)@(\d+)]]""")
+
+    @Test fun citedRefsTakeTheMeetingOfTheirCitation() {
+        // Seen on the emulator: "由 S1 負責聯絡 [[b@400]]" — S1 is meeting b's speaker, named Alice there.
+        val labels = mapOf(
+            "a" to SpeakerRefs.Labels(zh, setOf(0, 1)),
+            "b" to SpeakerRefs.Labels({ if (it == 0) "Alice" else "語者 ${it + 1}" }, setOf(0, 1, 2)),
+        )
+        assertEquals("費用一萬二 [[a@239]]，由 Alice 負責聯絡 [[b@400]]，語者 3 同意。",
+            SpeakerRefs.resolveCited("費用一萬二 [[a@239]]，由 S1 負責聯絡 [[b@400]]，S3 同意。", cite) { labels[it.groupValues[1]] })
+    }
+
+    @Test fun uncitedOrUnknownMeetingsLeaveRefsAlone() {
+        assertEquals("S1 說好", SpeakerRefs.resolveCited("S1 說好", cite) { SpeakerRefs.Labels(zh, null) })
+        assertEquals("S1 說好 [[x@1]]", SpeakerRefs.resolveCited("S1 說好 [[x@1]]", cite) { null })
+    }
 }

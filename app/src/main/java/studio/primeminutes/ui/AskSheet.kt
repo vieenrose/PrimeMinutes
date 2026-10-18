@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import studio.primeminutes.R
 import studio.primeminutes.core.ask.AskEngine
+import studio.primeminutes.core.embed.LibrarySearch
+import studio.primeminutes.core.reader.SpeakerRefs
 import studio.primeminutes.core.ask.AskHistory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.testTag
@@ -166,6 +168,7 @@ fun AskSheet(
                     stringResource(R.string.ask_meeting_earlier), style = MaterialTheme.typography.labelSmall,
                     color = pal.Slate400, modifier = Modifier.padding(top = 10.dp),
                 )
+                val ctx = androidx.compose.ui.platform.LocalContext.current
                 // The earlier questions (saved), then this opening's; the saved ones are only shown.
                 (history + turns).forEachIndexed { n, t ->
                     if (n == history.size && history.isNotEmpty()) androidx.compose.material3.HorizontalDivider(
@@ -176,7 +179,8 @@ fun AskSheet(
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
                     if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null),
+                        answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
+                            speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
                         style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
                     )
                     if (t.done && t.excerpts.isNotEmpty()) {
@@ -249,8 +253,16 @@ private fun answerText(
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit,
     /** The meeting's title in the chip; the in-meeting Ask shows the time alone. */
     withTitle: Boolean = true,
+    /** The localized "Speaker N" (1-based) for a speaker without a custom name. */
+    speakerN: ((Int) -> String)? = null,
 ): AnnotatedString = buildAnnotatedString {
-    val raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
+    var raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
+    // The model writes speakers as its S-numbers (from the notes): name them as each cited meeting does.
+    if (speakerN != null) raw = SpeakerRefs.resolveCited(raw, CITE_RE) { m ->
+        val e = AskEngine.cite(m.groupValues[1], m.groupValues[2].toIntOrNull() ?: 0, excerpts)?.entry ?: return@resolveCited null
+        val (names, known) = LibrarySearch.speakers(e) ?: return@resolveCited null
+        SpeakerRefs.Labels({ id -> names[id] ?: speakerN(id + 1) }, known.ifEmpty { null })
+    }
     var last = 0
     for (m in CITE_RE.findAll(raw)) {
         append(raw.substring(last, m.range.first).trimEnd(' '))

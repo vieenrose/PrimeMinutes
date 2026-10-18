@@ -232,6 +232,12 @@ object LibrarySearch {
         (index(e)?.vectors ?: if (unindexed) synchronized(docs) { docs[e.id] }?.let { unindexedUnits(it) } else null)
             ?.filter { it.kind == SessionIndex.Kind.CHUNK }?.map { it.a..it.b }?.sortedBy { it.first } ?: emptyList()
 
+    /** A meeting's custom speaker names and the speaker ids of its transcript, as cached by [refresh]
+     *  (null before it): what the S-numbers of its notes resolve to ([studio.primeminutes.core.reader.SpeakerRefs]). */
+    fun speakers(e: SessionLibrary.Entry): Pair<Map<Int, String>, Set<Int>>? = cached(e)?.let { l ->
+        l.speakerNames.mapValues { it.value.name }.filterValues { it.isNotBlank() } to l.utterances.mapNotNull { it.speaker }.toSet()
+    }
+
     /** A meeting's loaded session as cached by [refresh] (null before it). */
     private fun cached(e: SessionLibrary.Entry): PrimeMinutesSession.Loaded? = synchronized(docs) { docs[e.id]?.loaded }
 
