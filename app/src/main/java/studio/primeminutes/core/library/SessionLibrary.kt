@@ -88,6 +88,14 @@ object SessionLibrary {
         val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "MMMd HHmm")
         return SimpleDateFormat(pattern, locale).format(Date(createdAt))
     }
+    /** A short date ("10月18日" / "Oct 18"), with the time when [withTime], in the interface
+     *  language — DateUtils.formatDateTime follows the device's instead. */
+    fun shortDate(context: Context, ms: Long, withTime: Boolean = false): String {
+        val locale = studio.primeminutes.core.config.AppLanguage.uiLocale(context)
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, if (withTime) "MMMd jmm" else "MMMd")
+        return SimpleDateFormat(pattern, locale).format(Date(ms))
+    }
+
     fun defaultTitle(context: Context, createdAt: Long): String =
         defaultTitle(createdAt, studio.primeminutes.core.config.AppLanguage.uiLocale(context))
 

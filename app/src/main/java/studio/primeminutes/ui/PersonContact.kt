@@ -79,7 +79,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
         if (old != null && old.platform == c.platform && old.key != c.key) replaceAsk = c to chosen
         else scope.launch(Dispatchers.IO) { PeopleStore.linkContact(context, p.id, c, chosen) }
     }
-    val dateFmt = remember { java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT) }
+    val dateFmt = remember { java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT, studio.primeminutes.core.config.AppLanguage.uiLocale(context)) }
 
     // --- the contact link ---
     Card {

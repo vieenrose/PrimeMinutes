@@ -140,7 +140,7 @@ fun EmailParticipantsFlow(
 
     EmailParticipantsSheet(
         title = title,
-        dateLabel = android.text.format.DateUtils.formatDateTime(context, startMs, android.text.format.DateUtils.FORMAT_SHOW_DATE or android.text.format.DateUtils.FORMAT_ABBREV_MONTH),
+        dateLabel = SessionLibrary.shortDate(context, startMs),
         people = people, speakers = speakers, labels = labels, meetingLang = mailLang,
         input = ::input, sessionBytes = sessionBytes, entryDir = s.libraryDir,
         onSend = { req ->

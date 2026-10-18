@@ -263,8 +263,7 @@ fun EmailParticipantsSheet(
                 val who = s.recipients.mapNotNull { r -> r.person?.let { doc.byId(it)?.name } ?: r.address }.joinToString(", ")
                 Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.History, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.mail_last_shared, android.text.format.DateUtils.formatDateTime(context, s.at * 1000,
-                        android.text.format.DateUtils.FORMAT_SHOW_DATE or android.text.format.DateUtils.FORMAT_SHOW_TIME or android.text.format.DateUtils.FORMAT_ABBREV_MONTH), who),
+                    Text(stringResource(R.string.mail_last_shared, studio.primeminutes.core.library.SessionLibrary.shortDate(context, s.at * 1000, withTime = true), who),
                         color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
