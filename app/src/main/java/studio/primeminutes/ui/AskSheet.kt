@@ -191,7 +191,7 @@ fun AskSheet(
                         t.excerpts.distinctBy { it.entry.id to it.sec / 60 }.forEach { x ->
                             Text(
                                 // In-meeting: the time and the passage's first words (the meeting is known; a saved turn has no text).
-                                if (scope != null) ReaderProtocol.formatTs(x.sec) + x.text.trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
+                                if (scope != null) ReaderProtocol.formatTs(x.sec) + named(x, speakerN = { n -> ctx.getString(R.string.speaker_n, n) }).trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
                                 else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
                                 maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -245,6 +245,12 @@ fun AskSheet(
             }
         }
     }
+}
+
+/** An excerpt's text with its S-numbers (a note passage) named as its meeting names them (display only). */
+private fun named(x: AskEngine.Excerpt, speakerN: (Int) -> String): String {
+    val (names, known) = LibrarySearch.speakers(x.entry) ?: return x.text
+    return SpeakerRefs.resolve(x.text, { id -> names[id] ?: speakerN(id + 1) }, known.ifEmpty { null })
 }
 
 /** The answer with `[[id@sec]]` tags turned into superscript "title · m:ss" links. */
