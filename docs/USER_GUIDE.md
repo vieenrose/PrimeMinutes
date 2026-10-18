@@ -354,3 +354,46 @@ scripts/test-on-device.sh <實機序號> -- -e class studio.primeminutes.AddSour
 ```
 
 Compose 介面測試需在實機上執行（x86_64 模擬器上會出現 “Unable to resolve activity”，見腳本開頭說明）。
+
+---
+
+## 附錄 A. 示範影片與更多畫面
+
+示範會議為兩場合成會議：尾牙籌備會議與辦公室搬遷會議（各三位語者，約 7 分半，[`docs/demo`](demo)），在 Galaxy Note10+ 上即時錄製，未加速。
+
+<p><img src="screenshots/agent-live.gif" width="280" alt="錄音中 AI 筆記即時寫下筆記"><br><sub>錄音進行中，AI 筆記讀完一段逐字稿後逐字寫下筆記。</sub></p>
+
+| 語意搜尋 | 向會議提問 |
+|:---:|:---:|
+| <img src="screenshots/search.gif" width="260" alt="語意搜尋"> | <img src="screenshots/ask.gif" width="260" alt="向會議提問"> |
+| 輸入「大家的車要停哪裡」：原話說的是「停車位……月租一個四千五」，用詞不同也找得到；點段落就從 3:50 開始播放。 | 輸入「尾牙頭獎是什麼？」再點「提問」：回答附上出處，點出處就跳到 1:56 的原話。 |
+
+搜尋在輸入時先比對關鍵字，約一秒後補上語意相近的結果；提問在 Note10+ 上約 8 秒完成（E2B），作答時面板顯示目前的階段（搜尋、閱讀 N 段摘錄、回答）與秒數。英文介面的會議內搜尋與提問：[搜尋](screenshots/meeting-search-en.png)、[提問](screenshots/meeting-ask-en.png)。
+
+| 移動分界（中文） | 分界編輯器 | Adjust a boundary (English) |
+|:---:|:---:|:---:|
+| <img src="screenshots/boundary.gif" width="230" alt="拖曳分界並試聽"> | <img src="screenshots/boundary.png" width="230" alt="語者分界"> | <img src="screenshots/boundary-en.gif" width="230" alt="Moving a speaker boundary"> |
+
+<p><img src="screenshots/people-voice-zh.gif" width="220" alt="為語者命名：依聲音建議陳經理"><br><sub>在尾牙示範會議命名「陳經理」後，App 在辦公室搬遷會議依聲音建議他。英文介面（AMI 公開會議）：<a href="screenshots/people-voice-en.gif">為語者命名</a>、<a href="screenshots/people-people-en.png">名錄</a>、<a href="screenshots/people-person-en.png">人物頁</a>、<a href="screenshots/people-voice-explain-en.png">說明</a>。</sub></p>
+
+| 匯出 | 重新處理 | 設定 | 匯入 |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/export.png" width="200" alt="匯出"> | <img src="screenshots/reprocess.png" width="200" alt="重新處理"> | <img src="screenshots/settings.png" width="200" alt="設定"> | <img src="screenshots/import.png" width="200" alt="匯入"> |
+
+## 附錄 B. 運作方式
+
+- **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp) 是單一串流引擎，在同一條時間軸上完成語音辨識（X-ASR）與語者分離（Nemotron-3）；換人的位置會對齊語者分離偵測到的起點（不重疊時）。
+- **AI 筆記與摘要**：[Gemma-4-E2B 會議模型（行動版 v1）](https://huggingface.co/Luigi/gemma-4-E2B-meeting-agent-zh-GGUF/tree/main/mobile-v1) 在 [LiteRT](https://github.com/google-ai-edge/LiteRT) 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)）；RAM 8 GB 以上的手機可改用 [E4B 行動版 v2](https://huggingface.co/Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT/tree/main/mobile-v2)（摘要較完整、與原話不符的筆記較少）。從舊版 E4B 升級時，新版在 Wi‑Fi 下於背景下載（相同的檔案直接沿用），下載完成前繼續使用舊版。
+- **閱讀方式**：錄音時語音辨識優先；AI 筆記在背景把已確定的句子讀進上下文，每累積約 1,500 token（數分鐘的語音）閱讀一次並寫筆記，停止後只剩最後一段要讀，所以摘要很快完成。閱讀協定見 meeting-summarizer 的 [`docs/voxsumdroid-integration.md`](https://github.com/vieenrose/meeting-summarizer/blob/main/docs/voxsumdroid-integration.md)；Prime Minutes 的差異：每窗筆記超過上限時優先保留決議與待辦，錄音停止後直接以即時逐字稿寫摘要。
+- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」先找出最相關的兩場會議，把分數最高的段落交給 AI 筆記模型作答。
+- **辨識聲音**：[CAM++ zh-en](https://huggingface.co/Luigi/primeminutes-speaker-litert)（3D-Speaker）在 CPU 上執行，只在沒有錄音、轉錄或 AI 筆記時於背景計算。
+- **CPU 推論**：首次啟動偵測核心數並做一秒測試選執行緒；GPU 沒有加速，見 [`GPU_NPU.md`](GPU_NPU.md)。
+
+## 附錄 C. 已知限制
+
+- 摘要模型以中文會議訓練：英文會議的筆記、標題與摘要改寫成英文（依逐字稿自動判斷），英文品質只在少數公開會議上量測過；中英夾雜的會議依多數語言決定。
+- 部分會議紀錄內容可能與原話不符（E4B 較少），請點時間核對。
+- 很長的會議：AI 筆記每段只帶著精簡過的前段筆記閱讀，寫標題與摘要時也只取最重要的筆記，早段的細節可能不會出現在摘要裡。
+- 偶爾會多分出發言很少的語者，可用「合併語者」修正；語音辨識漏掉標點時，換人的位置可能落在一個詞的中間。
+- E4B 只能在 RAM 8 GB 以上的手機選用；錄音中同時執行時整個 App 約佔 4 GB 記憶體。
+- 語意搜尋可能列出不相關的句子；「提問」由裝置上的小模型作答，可能漏掉段落中明明有的答案，請以出處為準。
