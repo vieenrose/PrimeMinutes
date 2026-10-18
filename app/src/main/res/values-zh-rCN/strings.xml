@@ -51,6 +51,13 @@
     <string name="settings_speaker_delay">实时说话人标注延迟</string>
     <string name="settings_seconds">%1$d 秒</string>
     <string name="settings_speaker_delay_hint">录音时文字会立即显示；说话人标注则至少在此延迟之后才出现。延迟越长，说话人标注越准确。不影响最后保存的转写文本。</string>
+    <string name="settings_asr_latency">语音转写延迟</string>
+    <string name="settings_asr_latency_value" formatted="false">%1$s 秒 · %2$s</string>
+    <string name="settings_asr_latency_fastest">最快、最不准</string>
+    <string name="settings_asr_latency_fast">快</string>
+    <string name="settings_asr_latency_balanced">平衡</string>
+    <string name="settings_asr_latency_accurate">最准确</string>
+    <string name="settings_asr_latency_hint">说话后文字出现所需的时间。延迟越长，文字越准确（实时显示与保存的转写文本均是）。选择新的延迟会在后台下载对应的语音模型（约 155 MB），下载完成前仍使用当前的模型。</string>
     <string name="lang_auto">跟随系统</string>
     <string name="settings_language_hint">同时决定界面语言，以及转写文本、摘要与笔记使用的字体（繁体或简体）。</string>
     <string name="settings_language">语言</string>

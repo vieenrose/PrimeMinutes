@@ -604,7 +604,11 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                     .putExtra(TranscriptionService.EXTRA_REQUEST, ticket))
             }
             is SessionEffect.ApplyConfig -> TranscriptionConfig.Holder.config = e.config
-            is SessionEffect.SaveConfig -> ConfigStore.save(ctx, e.config)
+            is SessionEffect.SaveConfig -> {
+                ConfigStore.save(ctx, e.config)
+                // A new recognizer latency: fetch it in the background (consent permitting); the installed one keeps working.
+                studio.primeminutes.core.models.ModelPrefetch.maybeStart(ctx)
+            }
             // Durable within ms (the edit journal); the session.m4a is rebuilt once the edits settle.
             is SessionEffect.Persist -> studio.primeminutes.service.EditSaver.submit(ctx, TranscriptionService.PersistRequest(
                 entryId = e.entryId, audioUri = e.audioUri, utterances = e.utterances, speakerNames = e.speakerNames,

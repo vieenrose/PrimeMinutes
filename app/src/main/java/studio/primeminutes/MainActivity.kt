@@ -988,7 +988,7 @@ private fun TranscribeScreen(
         if (devExtras?.getBoolean("vox_dlgate") == true) {
             val mm = ModelManager(context); val llm = LlmRegistry.byId(s.config.llmModelId)
             dlUnmetered = devExtras.getBoolean("vox_dlgate_wifi", false)
-            dlAsk = DownloadPlan.pending(false, mm.asrDownloadBytes(), false, llm.totalBytes) to null
+            dlAsk = DownloadPlan.pending(false, mm.asrDownloadBytes(s.config.asrLatencyMs), false, llm.totalBytes) to null
         } else if (p.any && ModelPrefetch.consent(context) == DownloadPlan.Consent.UNSET && !ModelPrefetch.laterThisRun) {
             dlUnmetered = unmetered; dlAsk = p to null
         } else ModelPrefetch.maybeStart(context)

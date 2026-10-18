@@ -30,11 +30,13 @@ class NemoStreamEngine(
     diarTflite: File? = null,
     /** Pre-encode [512,1024] fp32 matrix, read only when [backend] is "litert_cpu". */
     diarPreF32: File? = null,
+    /** How far a token's emission frame runs behind its audio (model-specific: AsrVariant.tokenOffsetMs). */
+    tokenOffsetMs: Double = 300.0,
 ) : LiveAsrEngine {
 
     private var handle: Long = NemoNative.nativeCreate(
         files.xasr.path, files.diar.path, threads, speakerDelaySec.toDouble(),
-        backend, xasrTflite?.path.orEmpty(), diarTflite?.path.orEmpty(), diarPreF32?.path.orEmpty(),
+        backend, xasrTflite?.path.orEmpty(), diarTflite?.path.orEmpty(), diarPreF32?.path.orEmpty(), tokenOffsetMs,
     )
         .also { check(it != 0L) { "nemo engine failed to load ${files.xasr.name} / ${files.diar.name}" } }
 
@@ -134,7 +136,7 @@ internal object NemoNative {
 
     @JvmStatic external fun nativeCreate(
         xasr: String, diar: String, threads: Int, settleSec: Double,
-        backend: String, xasrTflite: String, diarTflite: String, diarPreF32: String,
+        backend: String, xasrTflite: String, diarTflite: String, diarPreF32: String, tokenOffsetMs: Double,
     ): Long
     @JvmStatic external fun nativePush(handle: Long, pcm: FloatArray, n: Int): Boolean
     @JvmStatic external fun nativeLive(handle: Long): String
@@ -157,3 +159,10 @@ data class AsrStats(
 
 /** LiteRT graphs of the same models (the `.tflite` pair, read by the `litert_cpu` backend). */
 data class NemoLitertFiles(val xasr: File, val diar: File, val preEncode: File? = null)
+
+/** Everything the engine loads for one recognizer: host weights, graphs, the token offset, the provenance id, and the
+ *  registry variant ([variant] null = the pre-variant 480 ms pair still installed). */
+data class AsrEngineFiles(
+    val host: NemoModelFiles, val litert: NemoLitertFiles, val tokenOffsetMs: Double, val modelId: String,
+    val variant: studio.primeminutes.core.models.AsrVariant?,
+)

@@ -978,12 +978,16 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     /** Download the engine's two GGUFs when missing (progress on the current run's bar). */
     private suspend fun ensureEngineModels(models: ModelManager) {
         // Ready → ensureAsrModels only reclaims retired engines' files (cheap, no download).
-        if (models.asrReady()) { models.ensureAsrModels { }; return }
+        // A stand-in recognizer (another latency, or the pre-variant model) runs while the chosen one is fetched in the
+        // background (ModelPrefetch): a recording never waits for a latency switch.
+        val ms = TranscriptionConfig.Holder.config.asrLatencyMs
+        if (models.asrTargetReady(ms)) { models.ensureAsrModels(ms) { }; return }
+        if (models.asrReady(ms)) { studio.primeminutes.core.models.ModelPrefetch.maybeStart(this); return }
         emitDownloadStatus(getString(R.string.svc_downloading_models))
         val gen = currentGen()
-        dlBegin("asr", models.asrDownloadBytes())
+        dlBegin("asr", models.asrDownloadBytes(ms))
         try {
-            models.ensureAsrModels { frac -> reportDownload(gen, "asr", R.string.svc_downloading_models_pct, frac) }
+            models.ensureAsrModels(ms) { frac -> reportDownload(gen, "asr", R.string.svc_downloading_models_pct, frac) }
         } finally { dlEnd("asr"); downloadsDone(gen) }
     }
 
@@ -999,9 +1003,14 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         // not on others (Galaxy Note 10+, Android 12: "create_directories: Permission denied"),
         // where the engine never loaded and nothing was transcribed. Point it at our own cache.
         runCatching { android.system.Os.setenv("TMPDIR", cacheDir.absolutePath, true) }
-        val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
-        return NemoStreamEngine(models.asrFiles(), asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
-            backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode)
+        val target = TranscriptionConfig.Holder.config.asrLatencyMs
+        val f = models.asrEngineFiles(target) ?: error("LiteRT ASR graphs missing")
+        return NemoStreamEngine(f.host, asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
+            backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar, diarPreF32 = f.litert.preEncode,
+            tokenOffsetMs = f.tokenOffsetMs).also {
+            // The chosen recognizer loaded: the others (other latencies, the pre-variant model) can go.
+            if (f.variant?.latencyMs == target) runCatching { models.reclaimOtherAsr(f.variant) }
+        }
     }
 
     // ---- AI notes worker: ReaderWorker (one reader for every meeting, in order) ----------------

@@ -37,7 +37,7 @@ class NemoStreamEngineTest {
     fun streamsTwoSpeakerClip() = runBlocking {
         val inst = InstrumentationRegistry.getInstrumentation()
         val models = ModelManager(inst.targetContext)
-        if (!models.asrReady()) models.ensureAsrModels { }
+        if (!models.asrReady(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)) models.ensureAsrModels(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS) { }
         val pcm = readWav16kMono(inst.context.assets.open("two-speaker.wav").use { it.readBytes() })
         val chunks = flow {
             var i = 0
@@ -48,7 +48,7 @@ class NemoStreamEngineTest {
         var stableDecreased = false
         var last: List<TranscriptEvent.Utterance> = emptyList()
         val t0 = System.nanoTime()
-        val engine = NemoStreamEngine(models.asrFiles(), threads = 4)
+        val engine = NemoStreamEngine(models.asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)!!.host, threads = 4)
         engine.use {
             engine.transcribeLive(chunks).collect { e ->
                 if (e is TranscriptEvent.UtteranceSnapshot) {
@@ -81,9 +81,9 @@ class NemoStreamEngineTest {
     fun streamsTwoSpeakerClipOnLiteRtCpu() = runBlocking {
         val inst = InstrumentationRegistry.getInstrumentation()
         val models = ModelManager(inst.targetContext)
-        if (!models.asrReady()) models.ensureAsrModels { }
-        val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
-        val files = models.asrFiles()
+        if (!models.asrReady(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)) models.ensureAsrModels(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS) { }
+        val lit = models.asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert ?: error("LiteRT ASR graphs missing")
+        val files = models.asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)!!.host
         val pcm = readWav16kMono(inst.context.assets.open("two-speaker.wav").use { it.readBytes() })
         val chunks = flow {
             var i = 0
@@ -123,7 +123,7 @@ class NemoStreamEngineTest {
         org.junit.Assume.assumeTrue("clip/models not pushed", (listOf(xt, dt, clip) + (if (needGguf) listOf(files.xasr, files.diar) else listOf()) + (if ("litert_host" in backends) listOf(hostFiles.xasr, hostFiles.diar) else listOf())).all { it.exists() })
         // -e noPre true: ablation, LiteRT without the pre-encode hook (audio.cpp ggml linear instead).
         val noPre = InstrumentationRegistry.getArguments().getString("noPre") == "true"
-        val pre = if (noPre) null else ModelManager(inst.targetContext).asrLitertFiles()?.preEncode
+        val pre = if (noPre) null else ModelManager(inst.targetContext).asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert?.preEncode
         org.junit.Assume.assumeTrue("pre-encode matrix missing", noPre || pre != null)
         val pcm = readWav16kMono(clip.readBytes())
         suspend fun run(tag: String, backend: String): List<TranscriptEvent.Utterance> {
@@ -168,7 +168,7 @@ class NemoStreamEngineTest {
         val e2b = File(ctx.filesDir, "mfa-e2b")
         val xt = File(dir, "xasr_stream_q8_octav.tflite"); val dt = File(dir, "sortformer_int8_f190.tflite")
         val hostFiles = NemoModelFiles(File(dir, "xasr_host.bin"), File(dir, "diar_host.bin"))
-        val pre = ModelManager(ctx).asrLitertFiles()?.preEncode
+        val pre = ModelManager(ctx).asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert?.preEncode
         org.junit.Assume.assumeTrue("not pushed", listOf(xt, dt, clip, hostFiles.xasr, hostFiles.diar, File(e2b, "prefill_decode_fused.tflite")).all { it.exists() } && pre != null)
         fun mem() = File("/proc/self/status").readLines().filter { it.startsWith("VmHWM") || it.startsWith("RssAnon") || it.startsWith("RssFile") }.joinToString(" ") { it.replace(Regex("\\s+"), " ") }
         val pcm = readWav16kMono(clip.readBytes())
@@ -198,10 +198,10 @@ class NemoStreamEngineTest {
         val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
         val clips = gold.listFiles { f -> f.extension == "wav" }?.sortedBy { it.name }.orEmpty()
         org.junit.Assume.assumeTrue("clips/models not pushed", clips.isNotEmpty() && listOf(xt, dt, files.xasr, files.diar).all { it.exists() })
-        val pre = ModelManager(inst.targetContext).asrLitertFiles()?.preEncode
+        val pre = ModelManager(inst.targetContext).asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert?.preEncode
         // -e backends litert_host (default, ggml-free) | ggml,litert_host ...: the ggml reference is opt-in.
         val backends = (InstrumentationRegistry.getArguments().getString("backends") ?: "litert_host").split(",")
-        val hostFiles = ModelManager(inst.targetContext).asrFiles()
+        val hostFiles = ModelManager(inst.targetContext).asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)!!.host
         for (clip in clips) {
             val pcm = readWav16kMono(clip.readBytes())
             for (backend in backends) {
@@ -246,12 +246,12 @@ class NemoStreamEngineTest {
         val models = ModelManager(inst.targetContext)
         if (InstrumentationRegistry.getArguments().getString("seeded") != "true") models.deleteAsr()   // -e seeded true: files pushed by hand, no download
         val t0 = System.nanoTime()
-        models.ensureAsrModels { }
+        models.ensureAsrModels(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS) { }
         val tDl = (System.nanoTime() - t0) / 1e9
         val t1 = System.nanoTime()
-        models.warmLitertCache(threads = 4)
+        models.warmLitertCache(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS, threads = 4)
         val tWarm = (System.nanoTime() - t1) / 1e9
-        val lit = models.asrLitertFiles()
+        val lit = models.asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert
         Log.i("NemoStreamEngineTest", "APP download %.1fs warm %.1fs litert=%s".format(tDl, tWarm, lit != null))
         org.junit.Assert.assertNotNull("LiteRT files not provisioned", lit)
         val pcm = readWav16kMono(inst.context.assets.open("two-speaker.wav").use { it.readBytes() })
@@ -261,7 +261,7 @@ class NemoStreamEngineTest {
         }
         var last: List<TranscriptEvent.Utterance> = emptyList()
         val t2 = System.nanoTime()
-        NemoStreamEngine(models.asrFiles(), threads = 4, backend = "litert_host", xasrTflite = lit!!.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).use { engine ->
+        NemoStreamEngine(models.asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)!!.host, threads = 4, backend = "litert_host", xasrTflite = lit!!.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).use { engine ->
             engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
             Log.i("NemoStreamEngineTest", "APP litert run %.2fs speakers=%s turns=%d".format((System.nanoTime() - t2) / 1e9, engine.speakerCount, last.size))
         }

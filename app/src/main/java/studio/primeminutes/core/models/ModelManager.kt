@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import studio.primeminutes.core.asr.NemoLitertFiles
+import studio.primeminutes.core.asr.AsrEngineFiles
 import studio.primeminutes.core.embed.EmbedRegistry
 import studio.primeminutes.core.embed.EmbedSpec
 import studio.primeminutes.core.asr.NemoModelFiles
@@ -55,68 +56,102 @@ class ModelManager(context: Context) {
             .forEach { File(modelsDir, it).takeIf(File::exists)?.delete() }
     }
 
-    // --- ASR + diarization: nemo-x-asr-diarizer, two revision-pinned GGUFs. -----------------------
-    //   x-asr-zh-en q8_0     — streaming Zipformer2 transducer, zh + en (Apache-2.0)
-    //   Nemotron-3 diar q8_0 — streaming Sortformer diarization, up to 8 speakers (OpenMDW-1.1)
+    // --- ASR + diarization: nemo-x-asr-diarizer on LiteRT. ---------------------------------------
+    //   X-ASR zh-en punct int8 — streaming Zipformer2 transducer, zh + en, one of four chunk sizes (AsrRegistry, Apache-2.0)
+    //   Nemotron-3 diar int8   — streaming Sortformer diarization, up to 8 speakers (OpenMDW-1.1)
+    // Layout: the diarizer set in nemo/ (stamped NEMO_REVISION), the shared X-ASR host weights in nemo/xasr-punct-host/,
+    // each recognizer variant's graph in nemo/<variant.dirName>/ (each folder stamped with its file's SHA-256).
+    // Installs from before the variants carry the 480 ms non-punct pair in nemo/ (LEGACY_*): it keeps running until
+    // the chosen variant is installed, then it is deleted.
     val nemoDir: File get() = File(modelsDir, NEMO_DIR)
+    private val hostDir: File get() = File(nemoDir, HOST_DIR)
+    fun variantDir(v: AsrVariant): File = File(nemoDir, v.dirName)
 
-    fun asrFiles(): NemoModelFiles =
-        NemoModelFiles(xasr = File(nemoDir, HOST_XASR_FILE), diar = File(nemoDir, HOST_DIAR_FILE))
+    private fun stamped(dir: File, stamp: String) = runCatching { File(dir, REVISION_MARKER).readText().trim() }.getOrNull() == stamp
+    private fun diarReady(): Boolean =
+        DIAR_SET.all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } && stamped(nemoDir, NEMO_REVISION)
+    private fun hostReady(): Boolean =
+        File(hostDir, AsrRegistry.HOST.file).length() == AsrRegistry.HOST.bytes && stamped(hostDir, AsrRegistry.HOST.sha256)
+    /** The variant's graph and the shared host weights are in place (size + the stamp written after the SHA check). */
+    fun variantReady(v: AsrVariant): Boolean =
+        hostReady() && File(variantDir(v), v.tflite.file).length() == v.tflite.bytes && stamped(variantDir(v), v.tflite.sha256)
+    private fun legacyReady(): Boolean =
+        LEGACY_FILES.all { (name, bytes) -> File(nemoDir, name).length() == bytes } && stamped(nemoDir, NEMO_REVISION)
 
-    /** The LiteRT CPU graphs of the same two models (same weights, int8). Null until they are downloaded. */
-    fun asrLitertFiles(): NemoLitertFiles? {
-        val x = File(nemoDir, LITERT_XASR_FILE); val d = File(nemoDir, LITERT_DIAR_FILE)
-        return if (x.length() == LITERT_FILES.getValue(LITERT_XASR_FILE).bytes && d.length() == LITERT_FILES.getValue(LITERT_DIAR_FILE).bytes)
-            NemoLitertFiles(x, d, preEncodeF32()) else null
+    /** The files the engine loads for the chosen latency [targetMs]: that variant once installed, else the installed
+     *  variant closest to it, else the pre-variant 480 ms pair; null when nothing can run yet. */
+    fun asrEngineFiles(targetMs: Int): AsrEngineFiles? {
+        if (!diarReady()) return null
+        val diar = File(nemoDir, LITERT_DIAR_FILE); val pre = preEncodeF32()
+        AsrRegistry.runnable(targetMs, ::variantReady)?.let { v ->
+            return AsrEngineFiles(NemoModelFiles(File(hostDir, AsrRegistry.HOST.file), File(nemoDir, HOST_DIAR_FILE)),
+                NemoLitertFiles(File(variantDir(v), v.tflite.file), diar, pre), v.tokenOffsetMs, v.modelId, v)
+        }
+        if (legacyReady()) return AsrEngineFiles(NemoModelFiles(File(nemoDir, LEGACY_HOST_FILE), File(nemoDir, HOST_DIAR_FILE)),
+            NemoLitertFiles(File(nemoDir, LEGACY_TFLITE_FILE), diar, pre), LEGACY_TOKEN_OFFSET_MS, LEGACY_MODEL_ID, null)
+        return null
     }
 
     /** Builds the LiteRT engine once so XNNPACK writes its weight cache next to the graphs; the next
      *  load maps that cache instead of repacking, which keeps the peak RSS at the ggml level. */
-    fun warmLitertCache(threads: Int) {
-        val lit = asrLitertFiles() ?: return
-        runCatching { NemoStreamEngine(asrFiles(), threads, backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).close() }
+    fun warmLitertCache(targetMs: Int, threads: Int) {
+        val f = asrEngineFiles(targetMs) ?: return
+        runCatching { NemoStreamEngine(f.host, threads, backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar,
+            diarPreF32 = f.litert.preEncode, tokenOffsetMs = f.tokenOffsetMs).close() }
     }
 
-    /** Both GGUFs present at their pinned size and stamped with the pinned revision set. Cheap (no
-     *  hashing): the SHA-256 check happens once, at download. */
-    /** Bytes the speech engine's files weigh — the weight of its share in a combined progress bar. */
-    fun asrDownloadBytes(): Long = (NEMO_FILES + LITERT_FILES).values.sumOf { it.bytes }
+    /** Some recognizer can run (the chosen one or a stand-in): recording and import need nothing more. */
+    fun asrReady(targetMs: Int): Boolean = asrEngineFiles(targetMs) != null
+    /** The chosen variant itself is installed (nothing left to fetch for [targetMs]). */
+    fun asrTargetReady(targetMs: Int): Boolean = diarReady() && variantReady(AsrRegistry.byLatency(targetMs))
 
-    fun asrReady(): Boolean =
-        (NEMO_FILES + LITERT_FILES).all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } &&
-            runCatching { File(nemoDir, REVISION_MARKER).readText().trim() }.getOrNull() == NEMO_REVISION
+    /** Bytes still to fetch for [targetMs]: the diarizer set, the host weights, the variant's graph, as missing. */
+    fun asrDownloadBytes(targetMs: Int): Long {
+        val v = AsrRegistry.byLatency(targetMs)
+        return (if (diarReady()) 0L else DIAR_SET.values.sumOf { it.bytes }) +
+            (if (hostReady()) 0L else AsrRegistry.HOST.bytes) + (if (variantReady(v)) 0L else v.tflite.bytes)
+    }
 
     /** Remove the model directory so the next run re-downloads a clean copy (load failure recovery). */
     fun deleteAsr() {
         nemoDir.takeIf(File::exists)?.deleteRecursively()
     }
 
-    /** Download both GGUFs if missing or from a different pinned revision. */
-    suspend fun ensureAsrModels(onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
-        if (asrReady()) { reclaimRetired(); onProgress(1f); return@withContext }
+    /** Fetch what the chosen variant [targetMs] still misses (diarizer set, host weights, its graph); every file is
+     *  SHA-checked at download and each set stamped once complete, so a pause resumes and a re-pin refetches. */
+    suspend fun ensureAsrModels(targetMs: Int, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        val v = AsrRegistry.byLatency(targetMs)
+        if (asrTargetReady(targetMs)) { reclaimRetired(); onProgress(1f); return@withContext }
         nemoDir.mkdirs()
-        val all = NEMO_FILES + LITERT_FILES
-        // A re-pin that changes only some files (2026-10: X-ASR 480 ms -> 1920 ms punct, diarizer unchanged) keeps
-        // the files whose pinned bytes are already on disk, SHA-checked once, instead of fetching them again.
-        val kept = carriedOver(nemoDir, NEMO_REVISION, all.mapValues { it.value.bytes to it.value.sha256 })
-        val marked = beginSet(nemoDir, NEMO_REVISION, all.keys - kept)
-        val total = all.values.sumOf { it.bytes }
+        val total = asrDownloadBytes(targetMs).coerceAtLeast(1L)
         var done = 0L
-        all.forEach { (name, meta) ->
-            val dest = File(nemoDir, name)
-            if (name !in kept && (dest.length() != meta.bytes || !marked)) {
-                dest.delete()
-                download(meta.url, dest, meta.sha256) { frac ->
-                    onProgress((done + (frac * meta.bytes).toLong()).toFloat() / total)
+        suspend fun fetchSet(dir: File, stamp: String, files: Map<String, Pinned>) {
+            dir.mkdirs()
+            val marked = beginSet(dir, stamp, files.keys)
+            files.forEach { (name, meta) ->
+                val dest = File(dir, name)
+                if (dest.length() != meta.bytes || !marked) {
+                    dest.delete()
+                    download(meta.url, dest, meta.sha256) { frac -> onProgress((done + (frac * meta.bytes).toLong()).toFloat() / total) }
                 }
+                done += meta.bytes
+                onProgress(done.toFloat() / total)
             }
-            done += meta.bytes
-            onProgress(done.toFloat() / total)
+            endSet(dir, stamp)
         }
-        endSet(nemoDir, NEMO_REVISION)
-        check(asrReady()) { "ASR model files missing after provisioning" }
+        if (!diarReady()) fetchSet(nemoDir, NEMO_REVISION, DIAR_SET)
+        if (!hostReady()) AsrRegistry.HOST.let { h -> fetchSet(hostDir, h.sha256, mapOf(h.file to Pinned(h.url, h.bytes, h.sha256))) }
+        if (!variantReady(v)) v.tflite.let { t -> fetchSet(variantDir(v), t.sha256, mapOf(t.file to Pinned(t.url, t.bytes, t.sha256))) }
+        check(asrTargetReady(targetMs)) { "ASR model files missing after provisioning" }
         reclaimRetired()
-        warmLitertCache(threads = 4)
+        warmLitertCache(targetMs, threads = 4)
+    }
+
+    /** Once [running] (the chosen variant) has loaded: every other recognizer is deleted — the other variants and the
+     *  pre-variant 480 ms pair with their XNNPACK caches. Never called with a stand-in, so a working one always remains. */
+    fun reclaimOtherAsr(running: AsrVariant) {
+        AsrRegistry.ALL.filter { it != running }.forEach { variantDir(it).takeIf(File::exists)?.deleteRecursively() }
+        (LEGACY_FILES.keys + LEGACY_FILES.keys.map { "$it.wcache" }).forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
     }
 
     /** Only once the new models verify (also when they were already present — seeded or from an
@@ -126,8 +161,6 @@ class ModelManager(context: Context) {
         DROPPED_FILES.forEach { File(modelsDir, it).takeIf(File::exists)?.delete() }
         // The ggml engine's GGUFs (270 MB), replaced by the packed host weights.
         listOf(XASR_FILE, DIAR_FILE).forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
-        // The 480 ms X-ASR streaming graph, its XNNPACK cache and its host weights, replaced by the 1920 ms punct export.
-        RETIRED_NEMO_FILES.forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
     }
 
     /** Superseded reader models, deleted only once the current one verifies (a failed download
@@ -491,28 +524,16 @@ class ModelManager(context: Context) {
         tmp.renameTo(dest)
     }.getOrDefault(false)
 
+    private fun sha256Of(f: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        f.inputStream().use { ins ->
+            val buf = ByteArray(1 shl 16)
+            while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
     companion object {
-        internal fun sha256Of(f: File): String {
-            val md = MessageDigest.getInstance("SHA-256")
-            f.inputStream().use { ins ->
-                val buf = ByteArray(1 shl 16)
-                while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) }
-            }
-            return md.digest().joinToString("") { "%02x".format(it) }
-        }
-
-        /** Files of a pinned set ([pins]: name -> bytes, sha256) already in [dir] from ANOTHER revision of the set with
-         *  exactly the pinned bytes: a re-pin keeps them (pass them out of [beginSet]) instead of fetching them again.
-         *  Empty when [dir] already belongs to [revision] (beginSet then keeps the set whole). */
-        internal fun carriedOver(dir: File, revision: String, pins: Map<String, Pair<Long, String>>): Set<String> {
-            fun read(name: String) = runCatching { File(dir, name).readText().trim() }.getOrNull()
-            if (read(REVISION_MARKER) == revision || read(FETCHING_MARKER) == revision) return emptySet()
-            return pins.filter { (name, meta) ->
-                val f = File(dir, name)
-                f.length() == meta.first && runCatching { sha256Of(f) }.getOrNull() == meta.second
-            }.keys
-        }
-
         /** Written next to a spec's files, recording the pinned revision they came from. */
         const val REVISION_MARKER = ".revision"
         /** Written while a spec's files are being fetched: the revision the complete ones came from. */
@@ -675,9 +696,6 @@ class ModelManager(context: Context) {
             "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03",
         )
 
-        /** The 480 ms X-ASR set, reclaimed once the 1920 ms set verifies. */
-        internal val RETIRED_NEMO_FILES = listOf("xasr_stream_q8_octav.tflite", "xasr_stream_q8_octav.tflite.wcache", "xasr_host.bin")
-
         private data class Pinned(val url: String, val bytes: Long, val sha256: String)
 
         private const val NEMO_DIR = "nemo"
@@ -685,44 +703,34 @@ class ModelManager(context: Context) {
         private const val DIAR_FILE = "nemotron-3-diarization-q8_0.gguf"
         private const val XASR_REV = "acb1a95eac809719a2c86d1048471f96fc6444ad"
         private const val DIAR_REV = "647d39feaa0e91dca5ce355a95403837b76dff56"
-        /** Stamped into [REVISION_MARKER]: a re-pin of either file forces a fresh fetch. */
+        /** Stamped into nemo/[REVISION_MARKER] when the diarizer set (and, before the variants, the X-ASR pair) verified.
+         *  Kept unchanged so existing installs need no refetch of the diarizer. */
         private const val LITERT_REV = "ec1b218f4d152e09bf30733de0836afc3f6b686b"
-        /** X-ASR streaming 1920 ms chunk, punct (sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05,
-         *  int8 ONNX -> torch -> litert_torch, dynamic wi8 OCTAV: tools/xasr-litert/export_s1920.py). The engine reads the chunk
-         *  geometry (205 fbank frames in, 48 encoder frames out) from the graph. Replaces xasr_stream_q8_octav.tflite (480 ms). */
-        private const val LITERT_XASR_FILE = "xasr_stream1920_punct_q8.tflite"
-        /** TODO before release: upload the two 1920 ms files to Luigi/primeminutes-nemo-litert and pin that commit here (unpublished). */
-        private const val XASR1920_REV = "unpublished-xasr1920"
+        private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
+        private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV"
         private const val LITERT_DIAR_FILE = "sortformer_int8_f190.tflite"
         private const val PRE_ENCODE_F32 = "pre_encode_512x1024.f32"
         private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
-        private val LITERT_FILES = linkedMapOf(
-            LITERT_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$XASR1920_REV/$LITERT_XASR_FILE",
-                154_783_344L, "cb739c2113e3347aba1761b6c190c9ae6a9e374e77c0519da61c81568db87e55",
-            ),
+        private const val HOST_DIAR_FILE = "diar_host.bin"
+        private const val HOST_DIR = "xasr-punct-host"
+        // Host weights of the ggml-free engine (tools/nemo-host/*_pack.py): the Sortformer mel bank + silence embedding;
+        // the neural graph is the .tflite.
+        private val DIAR_SET = linkedMapOf(
             LITERT_DIAR_FILE to Pinned(
                 "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
                 101_279_632L, "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf",
-            ),
-        )
-        // Host weights of the ggml-free engine (tools/nemo-host/*_pack.py): the X-ASR decoder/joiner/tokens/fbank and the
-        // Sortformer mel bank + silence embedding. The neural graphs are the .tflite files above.
-        /** TODO before release: the Luigi/primeminutes-nemo-litert commit that holds the two .bin files (unpublished: not yet pushed). */
-        private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
-        private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV+$XASR1920_REV"
-        /** Decoder / joiner / tokens / fbank of the 1920 ms punct checkpoint (same layout as the 480 ms xasr_host.bin). */
-        private const val HOST_XASR_FILE = "xasr1920_host.bin"
-        private const val HOST_DIAR_FILE = "diar_host.bin"
-        private val NEMO_FILES = linkedMapOf(
-            HOST_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$XASR1920_REV/$HOST_XASR_FILE",
-                16_497_008L, "2fdfc8893a3e4f4308fd2dda5221d9b185e4bd6b3652c72659afa99d4bc69a92",
             ),
             HOST_DIAR_FILE to Pinned(
                 "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
                 133_648L, "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36",
             ),
         )
+        /** The pre-variant recognizer (X-ASR 480 ms, no punct model), never downloaded any more: it runs on installs that
+         *  have it until the chosen variant is installed and has loaded once (then [reclaimOtherAsr]). */
+        private const val LEGACY_TFLITE_FILE = "xasr_stream_q8_octav.tflite"
+        private const val LEGACY_HOST_FILE = "xasr_host.bin"
+        private const val LEGACY_TOKEN_OFFSET_MS = 300.0
+        private const val LEGACY_MODEL_ID = studio.primeminutes.core.config.TranscriptionConfig.ASR_MODEL_ID
+        private val LEGACY_FILES = linkedMapOf(LEGACY_TFLITE_FILE to 152_653_712L, LEGACY_HOST_FILE to 16_497_008L)
     }
 }

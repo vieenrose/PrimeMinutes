@@ -79,7 +79,9 @@ object ModelPrefetch {
         val ready = mm.llmReady(llm)
         // A replaced model still installed (E4B mobile-v1 while mobile-v2 is fetched) keeps the reader working.
         val replacedReady = !ready && mm.readerSpec(llm.id).id != llm.id
-        return DownloadPlan.pending(mm.asrReady(), mm.asrDownloadBytes(), ready, mm.llmDownloadBytes(llm), replacedReady)
+        val asrMs = ConfigStore.load(context).asrLatencyMs
+        return DownloadPlan.pending(mm.asrTargetReady(asrMs), mm.asrDownloadBytes(asrMs), ready, mm.llmDownloadBytes(llm), replacedReady,
+            speechStandIn = mm.asrReady(asrMs))
     }
 
     /** Starts the background prefetch when the user's consent covers the current network. [userAsked]:
@@ -114,7 +116,7 @@ object ModelPrefetch {
                 while (true) {
                     try {
                         if (!asrDone) {
-                            mm.ensureAsrModels { f -> last = agg.update("asr", f).first; report(last, p.total) }
+                            mm.ensureAsrModels(ConfigStore.load(app).asrLatencyMs) { f -> last = agg.update("asr", f).first; report(last, p.total) }
                             agg.end("asr"); asrDone = true
                         }
                         if (p.readerBytes > 0) {

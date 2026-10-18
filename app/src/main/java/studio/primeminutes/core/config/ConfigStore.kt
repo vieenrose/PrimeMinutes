@@ -23,6 +23,9 @@ object ConfigStore {
             asrBackend = p.getString("asrBackend", d.asrBackend) ?: d.asrBackend,
             speakerDelaySec = p.getInt("speakerDelaySec", d.speakerDelaySec)
                 .coerceIn(TranscriptionConfig.SPEAKER_DELAY_MIN, TranscriptionConfig.SPEAKER_DELAY_MAX),
+            asrLatencyMs = studio.primeminutes.core.models.AsrRegistry.byLatency(p.getInt("asrLatencyMs", d.asrLatencyMs)).latencyMs,
+            // Provenance of new sessions: the chosen recognizer (a stand-in may run until it is installed).
+            asrModelId = studio.primeminutes.core.models.AsrRegistry.byLatency(p.getInt("asrLatencyMs", d.asrLatencyMs)).modelId,
             // A replaced model's choice reads as its successor (E4B mobile-v1 -> mobile-v2); until the
             // successor is installed the reader keeps running the old one (LlmRegistry.runnable).
             llmModelId = studio.primeminutes.core.models.LlmRegistry.current(p.getString("llmModelId", d.llmModelId) ?: d.llmModelId).id,
@@ -39,6 +42,7 @@ object ConfigStore {
             putString("asrBackend", c.asrBackend)
             remove("asrModelId")   // provenance constant since the LiteRT backend; a stored GGUF name would win
             putInt("speakerDelaySec", c.speakerDelaySec)
+            putInt("asrLatencyMs", c.asrLatencyMs)
             putString("llmModelId", c.llmModelId)
             putString("summaryScript", c.summaryScript)
             putBoolean("showActionItems", c.showActionItems)

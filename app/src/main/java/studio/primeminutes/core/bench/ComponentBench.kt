@@ -46,9 +46,10 @@ object ComponentBench {
         // The engine's weight cache goes under TMPDIR; point it at our cache (see TranscriptionService.createEngine).
         runCatching { android.system.Os.setenv("TMPDIR", context.cacheDir.absolutePath, true) }
         val models = ModelManager(context)
-        val lit = models.asrLitertFiles() ?: error("LiteRT ASR graphs missing")
-        NemoStreamEngine(models.asrFiles(), HwInfo.threads(context), TranscriptionConfig.Holder.config.speakerDelaySec,
-            backend = "litert_host", xasrTflite = lit.xasr, diarTflite = lit.diar, diarPreF32 = lit.preEncode).use { engine ->
+        val f = models.asrEngineFiles(TranscriptionConfig.Holder.config.asrLatencyMs) ?: error("LiteRT ASR graphs missing")
+        NemoStreamEngine(f.host, HwInfo.threads(context), TranscriptionConfig.Holder.config.speakerDelaySec,
+            backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar, diarPreF32 = f.litert.preEncode,
+            tokenOffsetMs = f.tokenOffsetMs).use { engine ->
             engine.transcribeLive(chunks.asFlow()).collect {}
             engine.stats()
         }

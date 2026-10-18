@@ -19,15 +19,19 @@ object DownloadPlan {
     /** What a first-launch download needs: the parts still missing, in bytes. [readerUpgrade]: the
      *  missing AI notes model replaces one that is installed and keeps working meanwhile (a model
      *  migration), so nothing waits for it. */
-    data class Pending(val speechBytes: Long, val readerBytes: Long, val readerUpgrade: Boolean = false) {
+    data class Pending(val speechBytes: Long, val readerBytes: Long, val readerUpgrade: Boolean = false, val speechUpgrade: Boolean = false) {
         val total: Long get() = speechBytes + readerBytes
         val any: Boolean get() = total > 0L
         /** What a recording or an import has to wait for. */
-        val blocking: Long get() = speechBytes + if (readerUpgrade) 0L else readerBytes
+        val blocking: Long get() = (if (speechUpgrade) 0L else speechBytes) + if (readerUpgrade) 0L else readerBytes
     }
 
-    fun pending(speechReady: Boolean, speechBytes: Long, readerReady: Boolean, readerBytes: Long, replacedReady: Boolean = false) =
-        Pending(if (speechReady) 0L else speechBytes, if (readerReady) 0L else readerBytes, !readerReady && replacedReady)
+    /** [speechStandIn]: the chosen recognizer is missing but another one is installed and runs meanwhile (a latency
+     *  switch, or the move from the pre-variant 480 ms model): its download blocks nothing. */
+    fun pending(speechReady: Boolean, speechBytes: Long, readerReady: Boolean, readerBytes: Long, replacedReady: Boolean = false,
+                speechStandIn: Boolean = false) =
+        Pending(if (speechReady) 0L else speechBytes, if (readerReady) 0L else readerBytes, !readerReady && replacedReady,
+            !speechReady && speechStandIn)
 
     /** Before a recording or an import: ask only for what it cannot run without. */
     fun decide(consent: Consent, unmetered: Boolean, pending: Pending): Action = when {

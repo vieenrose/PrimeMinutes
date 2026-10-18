@@ -22,6 +22,9 @@ data class TranscriptionConfig(
     // 95.8% at 30 s (tools/nemo-eval). Text itself is always shown immediately. The final
     // transcript does not depend on this.
     val speakerDelaySec: Int = 15,
+    /** Speech recognizer chunk (AsrRegistry): 160 / 480 / 960 / 1920 ms. Longer = more accurate words, shown later.
+     *  Affects the saved transcript too (a recording or an import is transcribed with the variant installed then). */
+    val asrLatencyMs: Int = studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS,
     /** Experimental: show the model's action items under the summary (off by default — not reliable enough). */
     val showActionItems: Boolean = false,
     /** Ask — a question over the whole library, answered by the reader model from the passages the

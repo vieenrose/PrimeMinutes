@@ -52,6 +52,13 @@
     <string name="settings_speaker_delay">Live speaker delay</string>
     <string name="settings_seconds">%1$d s</string>
     <string name="settings_speaker_delay_hint">While recording, words appear at once; speaker names follow at least this long after. Longer = more accurate names. The saved transcript is not affected.</string>
+    <string name="settings_asr_latency">Transcription latency</string>
+    <string name="settings_asr_latency_value" formatted="false">%1$s s · %2$s</string>
+    <string name="settings_asr_latency_fastest">fastest, least accurate</string>
+    <string name="settings_asr_latency_fast">fast</string>
+    <string name="settings_asr_latency_balanced">balanced</string>
+    <string name="settings_asr_latency_accurate">most accurate</string>
+    <string name="settings_asr_latency_hint">How long after speech the words appear. Longer = more accurate words, live and in the saved transcript. A new choice downloads its speech model (about 155 MB) in the background; the current one keeps working until it is ready.</string>
     <string name="lang_auto">System default</string>
     <string name="settings_language_hint">Sets the interface and the script of the transcript, summary and notes.</string>
     <string name="settings_language">Language</string>

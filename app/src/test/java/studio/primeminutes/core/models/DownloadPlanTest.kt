@@ -62,4 +62,18 @@ class DownloadPlanTest {
         // No old model: not an upgrade.
         assertFalse(DownloadPlan.pending(true, 0, false, 2_260_000_000).readerUpgrade)
     }
+
+    // A recognizer latency switch (or the move off the pre-variant model): the installed one keeps transcribing.
+    @Test fun aSpeechStandInBlocksNothingAndWaitsForWifi() {
+        val p = DownloadPlan.pending(false, 155_000_000, true, 0, speechStandIn = true)
+        assertTrue(p.speechUpgrade); assertEquals(0L, p.blocking); assertEquals(155_000_000L, p.total)
+        assertEquals(Action.PROCEED, DownloadPlan.decide(Consent.UNSET, false, p))
+        assertFalse(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, false, p))
+        assertTrue(DownloadPlan.mayPrefetch(Consent.ANY_NETWORK, true, p))
+    }
+
+    @Test fun noSpeechInstalledStillBlocks() {
+        val p = DownloadPlan.pending(false, 260_000_000, true, 0, speechStandIn = false)
+        assertFalse(p.speechUpgrade); assertEquals(260_000_000L, p.blocking)
+    }
 }

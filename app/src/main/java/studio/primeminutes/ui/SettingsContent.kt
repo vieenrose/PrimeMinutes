@@ -189,6 +189,9 @@ fun SettingsContent(
             style = MaterialTheme.typography.bodySmall,
             color = pal.Slate400,
         )
+        AsrLatencySlider(config.asrLatencyMs, enabled) { ms ->
+            onChange(config.copy(asrLatencyMs = ms, asrModelId = studio.primeminutes.core.models.AsrRegistry.byLatency(ms).modelId))
+        }
         }
 
         Section(stringResource(R.string.settings_inference)) {
@@ -265,6 +268,33 @@ private fun AppearanceSelector(enabled: Boolean) {
         color = pal.Slate400,
         modifier = Modifier.padding(top = 2.dp),
     )
+}
+
+/** The speech recognizer's chunk (AsrRegistry): four stops from the most responsive to the most accurate. Saved on
+ *  release; the chosen model downloads in the background while the installed one keeps transcribing. */
+@Composable
+private fun AsrLatencySlider(latencyMs: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    val stops = studio.primeminutes.core.models.AsrRegistry.LATENCIES
+    var draft by remember(latencyMs) { mutableFloatStateOf(stops.indexOf(latencyMs).coerceAtLeast(0).toFloat()) }
+    val hints = listOf(R.string.settings_asr_latency_fastest, R.string.settings_asr_latency_fast,
+        R.string.settings_asr_latency_balanced, R.string.settings_asr_latency_accurate)
+    Column(Modifier.padding(top = 8.dp).testTag("settings-asr-latency")) {
+        SliderRow(
+            stringResource(R.string.settings_asr_latency), draft, 0f, (stops.size - 1).toFloat(), enabled,
+            steps = stops.size - 2,
+            format = { i ->
+                val k = i.roundToInt().coerceIn(0, stops.size - 1)
+                stringResource(R.string.settings_asr_latency_value, "%.2f".format(stops[k] / 1000f), stringResource(hints[k]))
+            },
+            onChangeFinished = { stops[draft.roundToInt().coerceIn(0, stops.size - 1)].let { if (it != latencyMs) onSelect(it) } },
+        ) { draft = it }
+        Text(
+            stringResource(R.string.settings_asr_latency_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = pal.Slate400,
+        )
+    }
 }
 
 /** App-wide text size, 85–150 % of the system font size, in 5 % steps; applies live. */

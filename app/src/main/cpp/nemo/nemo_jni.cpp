@@ -67,7 +67,7 @@ extern "C" {
 JNIEXPORT jlong JNICALL
 Java_studio_primeminutes_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, jstring xasr, jstring diar, jint threads,
                                                       jdouble settle_s, jstring backend, jstring xasr_tflite,
-                                                      jstring diar_tflite, jstring diar_pre_f32) {
+                                                      jstring diar_tflite, jstring diar_pre_f32, jdouble token_offset_ms) {
     nemo::Config cfg;
     cfg.xasr_model = from_jstring(env, xasr);
     cfg.diar_model = from_jstring(env, diar);
@@ -78,6 +78,7 @@ Java_studio_primeminutes_core_asr_NemoNative_nativeCreate(JNIEnv* env, jclass, j
     cfg.threads = threads;
     cfg.max_segment_s = 10.0;   // one transcript line per ~10 s sentence group
     cfg.live_settle_s = settle_s;
+    cfg.token_offset_ms = token_offset_ms;   // model-specific, from the app's ASR registry
     auto h = std::make_unique<Handle>();
     h->engine = std::make_unique<nemo::Engine>(cfg);
     std::string err;

@@ -43,30 +43,4 @@ class FileSetTest {
         assertFalse(ModelManager.beginSet(d, "r1", files))
         assertFalse(File(d, "a.bin").exists())
     }
-
-    // A re-pin of part of a set (X-ASR 480 ms -> 1920 ms, diarizer unchanged) keeps the unchanged files.
-    @Test fun aRepinKeepsTheFilesWhosePinnedBytesAreOnDisk() {
-        val d = dir()
-        File(d, "diar.bin").writeText("diar"); File(d, "old.bin").writeText("old")
-        File(d, ModelManager.REVISION_MARKER).writeText("r1")
-        val diarSha = ModelManager.sha256Of(File(d, "diar.bin"))
-        val pins = mapOf("diar.bin" to (4L to diarSha), "new.bin" to (3L to "00"))
-        assertEquals(setOf("diar.bin"), ModelManager.carriedOver(d, "r2", pins))
-        assertFalse(ModelManager.beginSet(d, "r2", pins.keys - setOf("diar.bin")))
-        assertTrue(File(d, "diar.bin").exists())
-    }
-
-    @Test fun aRepinDoesNotKeepAFileWithTheRightSizeButOtherBytes() {
-        val d = dir()
-        File(d, "diar.bin").writeText("DIAR")
-        File(d, ModelManager.REVISION_MARKER).writeText("r1")
-        val pins = mapOf("diar.bin" to (4L to "ff"))
-        assertTrue(ModelManager.carriedOver(d, "r2", pins).isEmpty())
-    }
-
-    @Test fun nothingIsCarriedOverWithinTheSameRevision() {
-        val d = dir()
-        File(d, "a.bin").writeText("a"); File(d, ModelManager.REVISION_MARKER).writeText("r2")
-        assertTrue(ModelManager.carriedOver(d, "r2", mapOf("a.bin" to (1L to ModelManager.sha256Of(File(d, "a.bin"))))).isEmpty())
-    }
 }

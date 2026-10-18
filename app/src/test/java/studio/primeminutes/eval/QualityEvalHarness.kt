@@ -140,6 +140,7 @@ class QualityEvalHarness {
             TranscriptionConfig().speakerDelaySec, backend = "litert_host",
             xasrTflite = File(m.getString("xasr_tflite")), diarTflite = File(m.getString("diar_tflite")),
             diarPreF32 = File(m.getString("pre_f32")),
+            tokenOffsetMs = m.optDouble("token_offset_ms", 300.0),
         )
         val t0 = System.nanoTime()
         var last: List<TranscriptEvent.Utterance> = emptyList()
