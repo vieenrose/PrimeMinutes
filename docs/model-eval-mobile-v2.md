@@ -326,3 +326,76 @@ E2B on the Note10+ (v1 at 12 notes vs v2 at 8 notes, prose 1600, order v1, v2, v
 weiya 0.75 / 0.75, AMI 0.74 / 0.89; reading 166–187 s / 176–180 s; same VmHWM (1.36 GB) and speed
 (138–144 tok/s prefill, 9.7 decode). Ask E2B v1 → v2: zh 0.674 → 0.587, en 0.523 → 0.523 (7 lost, 3 gained).
 E2B stays mobile-v1.
+
+## 11. Long meetings (2026-10-19): summary coverage per time quartile
+
+Question: on meetings over 40 minutes, does the summary (and the summary plus notes list that the user sees)
+cover the end of the meeting as well as the start? Host, QualityEvalHarness (deterministic), CPU.
+
+Meetings (5, 43–85 min): TS3003c (AMI, 43 min, ASR), IB4010 (AMI, 49 min, manual words), EN2001a (AMI,
+85 min, manual words), ZHCAT_A and ZHCAT_B (zh: two AISHELL-4 ASR transcripts back to back, 76 and 75 min;
+synthetic, as no real zh meeting over 40 min is in the corpus). MoneyShow MS-dev (the model developer's
+long set) is not available locally, on training-machine or on public HF, so it is not included.
+
+Reference: 6 key facts per time quartile per meeting (120 facts), written by an Opus agent from the
+transcript before any output was seen. Blind Opus judge per meeting (shuffled labels): each fact scored
+covered 1 / partial 0.5 / absent 0 from the summary alone and from the notes list alone; **end-to-end** =
+the better of the two per fact (what the user sees: summary and notes list); contradictions with the
+transcript counted per summary and per notes list (summed over the 5 meetings).
+
+Configs: **0** = the model's shipped settings (E2B v1: 12 notes/window, prose 600; E2B v2: 8 notes, prose
+1600, as in §10; E4B v2: shipped card, 12 notes, prose 1600); **L** = prose 1600 (E2B v1 only; v2 is
+already there); **S** = segmented prose (segment_tokens 600, segment_max 4; cap per part 600 for v1, 1600
+for v2); **30** = notes cap 30 per window, prose 1600 (a fresh reading).
+
+| config | summary Q1 | Q2 | Q3 | Q4 | summary total | end-to-end Q1 / Q2 / Q3 / Q4 | e2e total | contradictions summary / notes | mean chars | replies at cap |
+|---|---|---|---|---|---|---|---|---|---|---|
+| E2B v1 0 (600) | 0.45 | 0.33 | 0.27 | **0.17** | 0.30 | 0.63 / 0.63 / 0.65 / 0.75 | 0.67 | 8 / 17 | 1712 | 5/5 |
+| E2B v1 L (1600) | 0.47 | 0.35 | 0.40 | 0.53 | 0.44 | 0.63 / 0.63 / 0.65 / 0.75 | 0.67 | 13 / 17 | 2398 | 0/5 (638–1126 tok) |
+| E2B v1 S | 0.60 | 0.63 | 0.63 | 0.72 | 0.65 | 0.63 / 0.63 / 0.65 / 0.75 | 0.67 | 17 / 17 | 4510 | 1 part of 17 |
+| E2B v1 30 | 0.43 | 0.35 | 0.33 | 0.58 | 0.42 | 0.62 / 0.60 / 0.60 / 0.75 | 0.64 | 11 / 20 | 2314 | — |
+| E2B v2 0 (8, 1600) | 0.32 | 0.42 | 0.47 | 0.62 | 0.45 | 0.68 / 0.73 / 0.75 / 0.82 | 0.75 | 12 / 18 | 2579 | 1/5 (ZHCAT_B 1600) |
+| E2B v2 S | 0.67 | 0.72 | 0.75 | 0.80 | 0.73 | 0.68 / 0.73 / 0.75 / 0.82 | 0.75 | 17 / 18 | 6073 | 0 |
+| E2B v2 30 | 0.22 | 0.47 | 0.48 | 0.72 | 0.47 | 0.77 / 0.78 / 0.82 / 0.82 | **0.80** | 7 / 14 | 2887 | — |
+| E4B v2 0 (12, 1600) | 0.22 | 0.62 | 0.55 | 0.87 | 0.56 | 0.80 / 0.78 / 0.77 / 0.88 | 0.81 | 6 / 11 | 2933 | **2/5** (both zh, 1599–1600) |
+| E4B v2 S | **0.80** | **0.78** | **0.77** | **0.88** | **0.81** | 0.80 / 0.78 / 0.77 / 0.88 | 0.81 | 11 / 11 | 5731 | 0 |
+| E4B v2 30 | 0.22 | 0.55 | 0.62 | 0.77 | 0.54 | 0.78 / 0.77 / 0.85 / 0.87 | 0.82 | 8 / 8 | 2923 | — |
+
+(Notes per meeting, E2B v1 / E2B v2 / E4B v2: 32/38/42 on TS3003c, 114/152/128 on EN2001a. Tokens per
+reply at "0": E2B v1 600 on all 5; E2B v2 716–1600; E4B v2 828–1600. "30" summaries come from the
+reading itself, no token count.)
+
+- **The 600 cap confirmed on long meetings**: E2B v1's summary covers Q1 0.45 but Q4 0.17; all 5 replies end
+  at the cap, mid-sentence. Lifting it to 1600 (L) takes Q4 to 0.53 and no reply reaches the cap (638–1126
+  tokens).
+- **One reply at 1600 shifts the problem to the start**: v2 summaries (and v1 L) cover the end well but skip
+  most of the first quartile (E4B v2 Q1 0.22, Q4 0.87): on long journals they read as a list of the later
+  topics and open issues. On the two 75-minute zh meetings E4B v2 hits the 1600 cap (1599, 1600 tokens), and
+  E2B v2 on one: 1600 is no longer enough there.
+- **Segmented prose is the only even coverage**: E4B v2 S 0.80 / 0.78 / 0.77 / 0.88, the summary alone then
+  matching the end-to-end score (0.81); E2B v2 S 0.73, E2B v1 S 0.65 (vs 0.30 shipped). Cost: 2–4× longer
+  text (EN2001a 9–13k chars, i.e. 4 paragraphs of 4 replies; zh 1.7–2.9k chars) and more summary
+  contradictions (E4B 6 → 11, E2B v2 12 → 17), mostly the notes' own errors repeated in more detail.
+- **End-to-end, the notes carry the coverage**: shipped E2B v1 0.67, E2B v2 0.75, E4B v2 0.81; the summary
+  changes nothing here, as the notes list already holds what the summary adds. This agrees with the
+  developer's MoneyShow note coverage (v2 ≈ +10 points, E2B 0.64 → 0.74, E4B 0.65 → 0.76).
+- **Notes cap 30**: only E2B v2 at 8 is limited by the cap (5–12 notes dropped by CAP per meeting); at 30
+  none, and its end-to-end coverage goes 0.75 → 0.80 with fewer contradictions (7/14 vs 12/18). E2B v1 and
+  E4B v2 at 12 never drop a note to the cap in these meetings, so 30 changes nothing for them (0.67 → 0.64,
+  0.81 → 0.82: reading noise). In the app the cap does not bind for these two at 12.
+- Contradictions in the notes (summed, 5 meetings): E4B v2 11 (8 at 30) < E2B v1 17 ≈ E2B v2 18 (14 at 30),
+  i.e. only E4B v2 clearly improves, as in the developer's numbers and §7.
+
+Recommendation (the user decides):
+1. **E2B v1: prose 600 → 1600** (Q4 0.17 → 0.53, no truncation on 85 min); or segmented prose (0.65 total)
+   if the longer summary is acceptable.
+2. **Segmented prose on for long journals, all models**: the only setting whose summary covers the first
+   quarter of a long meeting, and the fix for E4B v2 reaching 1600 on 75-minute zh meetings. With
+   segment_tokens 600 it already turns on for meetings of ~40 minutes and over (TS3003c: 2 parts); a higher
+   threshold (e.g. one part up to the point where a single 1600 reply still ends on its own) would keep
+   shorter meetings as they are. Not measured on a device (prose time ≈ ×2–3).
+3. **Notes cap: no change for E2B v1 / E4B v2 (12 does not bind); E2B v2, if it ever ships, at 12+ rather
+   than 8** (+5 points end-to-end at 30).
+
+Data: ~/voxsum-models/eval-corpora/work/mv2/long/ (in/ inputs, ref/ quartiles + facts.json, r_*/ readings,
+p_*/ prose runs, judge/ packets + scores, judge_keys.json, auto.json, agg.json).
