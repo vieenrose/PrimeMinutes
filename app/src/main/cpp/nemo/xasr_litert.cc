@@ -17,10 +17,14 @@ XasrLiteRT::XasrLiteRT(const std::string & tflite_path, int threads)
     if (graph_->num_inputs() != 1 + kStates || graph_->num_outputs() != 1 + kStates)
         throw std::runtime_error("XasrLiteRT: expected 117 inputs and 117 outputs, got " +
                                  std::to_string(graph_->num_inputs()) + "/" + std::to_string(graph_->num_outputs()));
-    if (graph_->input_bytes(0) != (size_t) (kWindow * kFeatDim * sizeof(float)))
-        throw std::runtime_error("XasrLiteRT: input 0 is not a 61x80 fp32 window");
-    if (graph_->output_bytes(0) != (size_t) (kEncFrames * kEncDim * sizeof(float)))
-        throw std::runtime_error("XasrLiteRT: output 0 is not a 12x512 fp32 encoder output");
+    const size_t in0 = graph_->input_bytes(0), out0 = graph_->output_bytes(0), row_in = kFeatDim * sizeof(float),
+                 row_out = kEncDim * sizeof(float);
+    if (in0 % row_in || out0 % row_out) throw std::runtime_error("XasrLiteRT: input 0 / output 0 are not [T,80] / [T',512] fp32");
+    window_ = (int) (in0 / row_in);
+    enc_frames_ = (int) (out0 / row_out);
+    const int chunk = (window_ - 13) / 2;
+    if (window_ < 15 || (window_ - 13) % 2 || chunk % 2 || enc_frames_ != chunk / 2)
+        throw std::runtime_error("XasrLiteRT: unexpected chunk geometry " + std::to_string(window_) + " -> " + std::to_string(enc_frames_));
     feat_h_ = graph_->alloc_input(0);
     enc_h_ = graph_->alloc_output(0);
     for (int s = 0; s < 2; s++)
@@ -46,14 +50,14 @@ void XasrLiteRT::reset() {
 }
 
 void XasrLiteRT::chunk(const float * feats, int T, int F, float * enc_out, int Eo, int Ed) {
-    if (T != kWindow || F != kFeatDim || Eo != kEncFrames || Ed != kEncDim)
+    if (T != window_ || F != kFeatDim || Eo != enc_frames_ || Ed != kEncDim)
         throw std::runtime_error("XasrLiteRT: unexpected chunk geometry");
-    graph_->write_buffer(feat_h_, feats, (size_t) (kWindow * kFeatDim) * sizeof(float));
+    graph_->write_buffer(feat_h_, feats, (size_t) (window_ * kFeatDim) * sizeof(float));
     std::vector<int> in{feat_h_}, out{enc_h_};
     for (int i = 0; i < kStates; i++) in.push_back(states_[cur_][i]);
     for (int i = 0; i < kStates; i++) out.push_back(states_[1 - cur_][i]);
     graph_->run_bound(in, out);
-    graph_->read_buffer(enc_h_, enc_out, (size_t) (kEncFrames * kEncDim) * sizeof(float));
+    graph_->read_buffer(enc_h_, enc_out, (size_t) (enc_frames_ * kEncDim) * sizeof(float));
     cur_ = 1 - cur_;
 }
 

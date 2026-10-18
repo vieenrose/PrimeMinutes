@@ -96,12 +96,15 @@ class ModelManager(context: Context) {
         if (asrReady()) { reclaimRetired(); onProgress(1f); return@withContext }
         nemoDir.mkdirs()
         val all = NEMO_FILES + LITERT_FILES
-        val marked = beginSet(nemoDir, NEMO_REVISION, all.keys)
+        // A re-pin that changes only some files (2026-10: X-ASR 480 ms -> 1920 ms punct, diarizer unchanged) keeps
+        // the files whose pinned bytes are already on disk, SHA-checked once, instead of fetching them again.
+        val kept = carriedOver(nemoDir, NEMO_REVISION, all.mapValues { it.value.bytes to it.value.sha256 })
+        val marked = beginSet(nemoDir, NEMO_REVISION, all.keys - kept)
         val total = all.values.sumOf { it.bytes }
         var done = 0L
         all.forEach { (name, meta) ->
             val dest = File(nemoDir, name)
-            if (dest.length() != meta.bytes || !marked) {
+            if (name !in kept && (dest.length() != meta.bytes || !marked)) {
                 dest.delete()
                 download(meta.url, dest, meta.sha256) { frac ->
                     onProgress((done + (frac * meta.bytes).toLong()).toFloat() / total)
@@ -123,6 +126,8 @@ class ModelManager(context: Context) {
         DROPPED_FILES.forEach { File(modelsDir, it).takeIf(File::exists)?.delete() }
         // The ggml engine's GGUFs (270 MB), replaced by the packed host weights.
         listOf(XASR_FILE, DIAR_FILE).forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
+        // The 480 ms X-ASR streaming graph, its XNNPACK cache and its host weights, replaced by the 1920 ms punct export.
+        RETIRED_NEMO_FILES.forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
     }
 
     /** Superseded reader models, deleted only once the current one verifies (a failed download
@@ -486,16 +491,28 @@ class ModelManager(context: Context) {
         tmp.renameTo(dest)
     }.getOrDefault(false)
 
-    private fun sha256Of(f: File): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        f.inputStream().use { ins ->
-            val buf = ByteArray(1 shl 16)
-            while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) }
-        }
-        return md.digest().joinToString("") { "%02x".format(it) }
-    }
-
     companion object {
+        internal fun sha256Of(f: File): String {
+            val md = MessageDigest.getInstance("SHA-256")
+            f.inputStream().use { ins ->
+                val buf = ByteArray(1 shl 16)
+                while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+            }
+            return md.digest().joinToString("") { "%02x".format(it) }
+        }
+
+        /** Files of a pinned set ([pins]: name -> bytes, sha256) already in [dir] from ANOTHER revision of the set with
+         *  exactly the pinned bytes: a re-pin keeps them (pass them out of [beginSet]) instead of fetching them again.
+         *  Empty when [dir] already belongs to [revision] (beginSet then keeps the set whole). */
+        internal fun carriedOver(dir: File, revision: String, pins: Map<String, Pair<Long, String>>): Set<String> {
+            fun read(name: String) = runCatching { File(dir, name).readText().trim() }.getOrNull()
+            if (read(REVISION_MARKER) == revision || read(FETCHING_MARKER) == revision) return emptySet()
+            return pins.filter { (name, meta) ->
+                val f = File(dir, name)
+                f.length() == meta.first && runCatching { sha256Of(f) }.getOrNull() == meta.second
+            }.keys
+        }
+
         /** Written next to a spec's files, recording the pinned revision they came from. */
         const val REVISION_MARKER = ".revision"
         /** Written while a spec's files are being fetched: the revision the complete ones came from. */
@@ -658,6 +675,9 @@ class ModelManager(context: Context) {
             "sherpa-onnx-x-asr-zipformer-transducer-zh-en-punct-int8-2026-06-03",
         )
 
+        /** The 480 ms X-ASR set, reclaimed once the 1920 ms set verifies. */
+        internal val RETIRED_NEMO_FILES = listOf("xasr_stream_q8_octav.tflite", "xasr_stream_q8_octav.tflite.wcache", "xasr_host.bin")
+
         private data class Pinned(val url: String, val bytes: Long, val sha256: String)
 
         private const val NEMO_DIR = "nemo"
@@ -667,14 +687,19 @@ class ModelManager(context: Context) {
         private const val DIAR_REV = "647d39feaa0e91dca5ce355a95403837b76dff56"
         /** Stamped into [REVISION_MARKER]: a re-pin of either file forces a fresh fetch. */
         private const val LITERT_REV = "ec1b218f4d152e09bf30733de0836afc3f6b686b"
-        private const val LITERT_XASR_FILE = "xasr_stream_q8_octav.tflite"
+        /** X-ASR streaming 1920 ms chunk, punct (sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05,
+         *  int8 ONNX -> torch -> litert_torch, dynamic wi8 OCTAV: tools/xasr-litert/export_s1920.py). The engine reads the chunk
+         *  geometry (205 fbank frames in, 48 encoder frames out) from the graph. Replaces xasr_stream_q8_octav.tflite (480 ms). */
+        private const val LITERT_XASR_FILE = "xasr_stream1920_punct_q8.tflite"
+        /** TODO before release: upload the two 1920 ms files to Luigi/primeminutes-nemo-litert and pin that commit here (unpublished). */
+        private const val XASR1920_REV = "unpublished-xasr1920"
         private const val LITERT_DIAR_FILE = "sortformer_int8_f190.tflite"
         private const val PRE_ENCODE_F32 = "pre_encode_512x1024.f32"
         private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
         private val LITERT_FILES = linkedMapOf(
             LITERT_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_XASR_FILE",
-                152_653_712L, "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$XASR1920_REV/$LITERT_XASR_FILE",
+                154_783_344L, "cb739c2113e3347aba1761b6c190c9ae6a9e374e77c0519da61c81568db87e55",
             ),
             LITERT_DIAR_FILE to Pinned(
                 "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
@@ -685,13 +710,14 @@ class ModelManager(context: Context) {
         // Sortformer mel bank + silence embedding. The neural graphs are the .tflite files above.
         /** TODO before release: the Luigi/primeminutes-nemo-litert commit that holds the two .bin files (unpublished: not yet pushed). */
         private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
-        private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV"
-        private const val HOST_XASR_FILE = "xasr_host.bin"
+        private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV+$XASR1920_REV"
+        /** Decoder / joiner / tokens / fbank of the 1920 ms punct checkpoint (same layout as the 480 ms xasr_host.bin). */
+        private const val HOST_XASR_FILE = "xasr1920_host.bin"
         private const val HOST_DIAR_FILE = "diar_host.bin"
         private val NEMO_FILES = linkedMapOf(
             HOST_XASR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_XASR_FILE",
-                16_497_008L, "88c79ec952ef16c866880d450eabfa936a9b96a49346a765ebfc33a202d688b2",
+                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$XASR1920_REV/$HOST_XASR_FILE",
+                16_497_008L, "2fdfc8893a3e4f4308fd2dda5221d9b185e4bd6b3652c72659afa99d4bc69a92",
             ),
             HOST_DIAR_FILE to Pinned(
                 "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
