@@ -16,7 +16,7 @@ nemo_handle* nemo_create(const char* xasr_path, const char* diar_path, int threa
 // diar_pre_f32 (litert_cpu only, NULL/"" = audio.cpp ggml linear): the 512x1024 fp32 pre-encode matrix.
 nemo_handle* nemo_create_ex(const char* xasr_path, const char* diar_path, int threads, double settle_s,
                             const char* backend, const char* xasr_tflite, const char* diar_tflite,
-                            const char* diar_pre_f32);
+                            const char* diar_pre_f32, double token_offset_ms);   // token_offset_ms: model-specific (app ASR registry)
 int nemo_push(nemo_handle* h, const float* pcm, int n);                 // 1 = ok
 // Heap string, free with nemo_string_free.
 char* nemo_live(nemo_handle* h);

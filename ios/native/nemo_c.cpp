@@ -42,12 +42,12 @@ char* dup(const std::string& s) {
 extern "C" {
 
 nemo_handle* nemo_create(const char* xasr, const char* diar, int threads, double settle_s) {
-    return nemo_create_ex(xasr, diar, threads, settle_s, "ggml", nullptr, nullptr, nullptr);
+    return nemo_create_ex(xasr, diar, threads, settle_s, "ggml", nullptr, nullptr, nullptr, 300.0);
 }
 
 nemo_handle* nemo_create_ex(const char* xasr, const char* diar, int threads, double settle_s,
                             const char* backend, const char* xasr_tflite, const char* diar_tflite,
-                            const char* diar_pre_f32) {
+                            const char* diar_pre_f32, double token_offset_ms) {
     nemo::Config cfg;
     cfg.backend = backend ? backend : "ggml";
     cfg.xasr_tflite = xasr_tflite ? xasr_tflite : "";
@@ -58,6 +58,7 @@ nemo_handle* nemo_create_ex(const char* xasr, const char* diar, int threads, dou
     cfg.threads = threads;
     cfg.max_segment_s = 10.0;   // one transcript line per ~10 s sentence group (as on Android)
     cfg.live_settle_s = settle_s;
+    cfg.token_offset_ms = token_offset_ms;
     // audio.cpp reserves 1 GiB per ggml context by default (graph arena + weights); a 3 GB iPhone refuses the malloc.
     cfg.diar_session_opts.push_back({"nemotron_3_diar.graph_arena_mb", "128"});
     cfg.diar_session_opts.push_back({"nemotron_3_diar.weight_context_mb", "128"});

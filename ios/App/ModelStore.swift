@@ -24,22 +24,29 @@ struct ReaderModel {
     var totalBytes: Int64 { files.reduce(0) { $0 + $1.size } }
     func url(_ f: ModelFile) -> URL { URL(string: f.remote.hasPrefix("https://") ? f.remote : "https://huggingface.co/\(repo)/resolve/\(rev)/\(f.remote)")! }
 
-    /// Speech engine (ASR + diarization), the two pins of Android `ModelManager.NEMO_FILES`; CPU only.
+    /// Speech engine, diarizer part (Android `ModelManager.DIAR_SET`), in models/nemo; CPU only. The recognizer is one of
+    /// the `asr(_:)` variants (the Settings latency). Installs from before the variants also hold the 480 ms non-punct
+    /// pair in models/nemo (`legacyXasr*`): it transcribes until the chosen variant is installed, then it is deleted.
     static let speech: ReaderModel = {
         let host = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
         return ReaderModel(id: "nemo", repo: "", rev: "", files: [
-            // Host weights of the ggml-free engine (backend litert_host): no GGUF is downloaded any more.
-            ModelFile(name: "xasr_host.bin", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/\(host)/xasr_host.bin",
-                      size: 16_497_008, sha256: "88c79ec952ef16c866880d450eabfa936a9b96a49346a765ebfc33a202d688b2"),
             ModelFile(name: "diar_host.bin", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/\(host)/diar_host.bin",
                       size: 133_648, sha256: "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36"),
-            // LiteRT CPU graphs (the speech engine's backend). Pinned to the Luigi/primeminutes-nemo-litert revision below.
-            ModelFile(name: "xasr_stream_q8_octav.tflite", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/xasr_stream_q8_octav.tflite",
-                      size: 152_653_712, sha256: "2f14afe9e4330a139e790e290541110ca27160f5a73167f1fe1e1eb17ede929c"),
+            // LiteRT CPU graph of the diarizer. Pinned to the Luigi/primeminutes-nemo-litert revision below.
             ModelFile(name: "sortformer_int8_f190.tflite", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/sortformer_int8_f190.tflite",
                       size: 101_279_632, sha256: "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf"),
         ])
     }()
+
+    static let legacyXasrHost = "xasr_host.bin", legacyXasrTflite = "xasr_stream_q8_octav.tflite"
+    static let legacyXasrSizes: [String: Int64] = [legacyXasrHost: 16_497_008, legacyXasrTflite: 152_653_712]
+    /// One recognizer variant (AsrRegistry): the shared host weights + its graph, in models/xasr-punct-<ms>ms.
+    static func asr(_ v: AsrVariant) -> ReaderModel {
+        ReaderModel(id: v.id, repo: "", rev: v.tfliteSha, files: [
+            ModelFile(name: AsrRegistry.hostFile, remote: "\(AsrRegistry.repo)/\(AsrRegistry.rev)/\(AsrRegistry.hostFile)", size: AsrRegistry.hostBytes, sha256: AsrRegistry.hostSha),
+            ModelFile(name: v.tfliteFile, remote: "\(AsrRegistry.repo)/\(AsrRegistry.rev)/\(v.tfliteFile)", size: v.tfliteBytes, sha256: v.tfliteSha),
+        ])
+    }
 
     private static let tokSha = "e594c8a90eb08d8bda498ff4747977dc827ae0c3c56b5c0d41a605a22d02ef03"
     private static let promptSha = "406040c70270b5b9d47a4222138fcf2177f361dcbfb79fba164ca2559e0ffbf3"

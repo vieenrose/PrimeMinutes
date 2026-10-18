@@ -79,6 +79,19 @@ enum Prefs {
         get { let v = UserDefaults.standard.integer(forKey: "speakerDelay"); return v == 0 ? 15 : min(30, max(5, v)) }
         set { UserDefaults.standard.set(newValue, forKey: "speakerDelay") }
     }
+    /// Speech recognizer chunk (Android TranscriptionConfig.asrLatencyMs): 160 / 480 / 960 / 1920 ms, default 1920.
+    static var asrLatency: Int {
+        get { AsrRegistry.byLatency(UserDefaults.standard.object(forKey: "asrLatencyMs") as? Int ?? AsrRegistry.defaultMs).latencyMs }
+        set { UserDefaults.standard.set(newValue, forKey: "asrLatencyMs") }
+    }
+    /// The chosen recognizer (what is downloaded).
+    static var asrTarget: ReaderModel { .asr(AsrRegistry.byLatency(asrLatency)) }
+    /// The variant that transcribes now: the chosen one once installed, else the closest installed one; nil = only the
+    /// pre-variant model (or nothing) is there.
+    static var asrRunnable: AsrVariant? { AsrRegistry.runnable(asrLatency) { Storage.ready(.asr($0)) } }
+    static var legacyAsrReady: Bool {
+        ReaderModel.legacyXasrSizes.allSatisfy { (try? FileManager.default.attributesOfItem(atPath: Storage.modelsRoot.appendingPathComponent("nemo/\($0.key)").path)[.size] as? Int64) == $0.value }
+    }
     /// Text size: 0 follows the system, else a fixed Dynamic Type step.
     static let textSizeLabels = ["text_size_system", "text_size_small", "text_size_normal", "text_size_large", "text_size_xlarge"]
     /// Steps added to the system Dynamic Type size (Android multiplies its scale by the system's
@@ -144,6 +157,15 @@ enum Storage {
         }
         for id in gone where FileManager.default.fileExists(atPath: modelsRoot.appendingPathComponent(id).path) {
             StatusLog.add("deleting replaced \(id)"); try? FileManager.default.removeItem(at: modelsRoot.appendingPathComponent(id))
+        }
+    }
+    /// Once the chosen recognizer `running` has loaded: the other variants and the pre-variant pair (with its XNNPACK
+    /// cache) are deleted (Android ModelManager.reclaimOtherAsr). Never called with a stand-in.
+    static func reclaimOtherAsr(_ running: AsrVariant) {
+        let fm = FileManager.default
+        for v in AsrRegistry.all where v != running { let d = modelsRoot.appendingPathComponent(v.id); if fm.fileExists(atPath: d.path) { StatusLog.add("deleting \(v.id)"); try? fm.removeItem(at: d) } }
+        for n in ReaderModel.legacyXasrSizes.keys.flatMap({ [$0, $0 + ".wcache"] }) {
+            let p = modelsRoot.appendingPathComponent("nemo/\(n)"); if fm.fileExists(atPath: p.path) { StatusLog.add("deleting legacy \(n)"); try? fm.removeItem(at: p) }
         }
     }
     /// Bytes `m` still has to download: files not in its folder at their size and not lent by an installed model.

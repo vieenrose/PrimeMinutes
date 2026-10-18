@@ -209,6 +209,15 @@ bool Engine::init(std::string& err) {
         // 0.389-0.215 on the same model and params), which is exactly the kind of stable, mask-independent
         // penalty I spent a long time misattributing to thread pools and page faults. Always say cpu.
         p.use_gpu = false;
+        // LiteRT: the chunk geometry is the graph's (480 ms or 1920 ms export), so build the encoder first and
+        // take chunk_ms from it; cfg_.chunk_ms then also drives the latency estimate.
+        if (cfg_.backend != "ggml" && cfg_.backend != "litert_gpu" && cfg_.backend != "litert_mixed") {
+            if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
+            try {
+                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
+            } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
+            cfg_.chunk_ms = xasr_litert_->chunk_ms();
+        }
         p.chunk_ms = cfg_.chunk_ms;
         // Bundle support: the loader reads this once from the environment. Set it before init, and always
         // set it (empty included) so a previous bundle run in the same process cannot leak its prefix.
@@ -217,10 +226,6 @@ bool Engine::init(std::string& err) {
         if (!asr_ctx_) { err = "x-asr model failed to load: " + cfg_.xasr_model; return false; }
         if (cfg_.backend == "litert_gpu" || cfg_.backend == "litert_mixed") { err = "LiteRT GPU is not supported: use litert_cpu"; return false; }
         if (cfg_.backend != "ggml") {
-            if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
-            try {
-                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
-            } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
             xasr_set_external_chunk_encoder((xasr_context*)asr_ctx_, nemo::xasr_litert_chunk_cb,
                                             nemo::xasr_litert_reset_cb, xasr_litert_.get());
         }
@@ -349,6 +354,7 @@ bool Engine::init(std::string& err) {
     fusion_.set_gap_fill(cfg_.gap_fill == 1 ? Fusion::GapFill::PREVIOUS : Fusion::GapFill::NEAREST);
     {
         if (const char* e = getenv("NEMO_TURN_SNAP")) cfg_.turn_snap_s = std::atof(e);
+        if (const char* e = getenv("NEMO_TOKEN_OFFSET_MS")) cfg_.token_offset_ms = std::atof(e);   // research: per-model re-derivation
         double pad_frames = 0;      // 10 ms diarizer frames
         for (const auto& kv : cfg_.diar_opts)
             if (kv.first == "speaker_pad_frames") pad_frames = std::atof(kv.second.c_str());
@@ -373,18 +379,37 @@ static bool push_timed_tokens(Fusion& out, xasr_context* ctx, xasr_stream* strea
     int n = 0;
     if (!stream || xasr_stream_token_times(stream, &ids, &frames, &n) != 0 || n <= 0) return false;
     out.clear_text();
-    std::string prev;
+    // Each token owns the characters its cumulative decode (the SAME function that produced the streamed text)
+    // adds to the final text. The cumulative decode is not always append-only: the detokenizer drops the space
+    // before a punctuation token, so "Um, " becomes "Um,'" one token later (punct models, 2026-10: this sent
+    // whole 1920 ms meetings to inferred timing). A token's end is therefore its decode's common prefix with the
+    // final text, never less than the previous token's: the dropped space simply moves to no token.
+    char* fin = xasr_tokens_to_text(ctx, ids, n);
+    const std::string final_text = fin ? fin : "";
+    std::free(fin);
+    size_t prev_end = 0;
     for (int i = 0; i < n; i++) {
-        char* all = xasr_tokens_to_text(ctx, ids, i + 1);      // cumulative decode with the SAME function
-        std::string cur = all ? all : "";                      // that produced the streamed text, so the
-        std::free(all);                                        // two can be compared instead of assumed equal
-        if (cur.size() < prev.size()) return false;            // not append-only -> times cannot be mapped
-        std::string piece = cur.substr(prev.size());
-        prev = cur;
+        char* all = xasr_tokens_to_text(ctx, ids, i + 1);
+        const std::string cur = all ? all : "";
+        std::free(all);
+        // The prefix up to a few bytes before the previous end is shared (it only changes at its tail).
+        size_t k = std::min(prev_end >= 16 ? prev_end - 16 : 0, cur.size());
+        while (k < cur.size() && k < final_text.size() && cur[k] == final_text[k]) k++;
+        const size_t e = std::max(prev_end, k);
+        const std::string piece = final_text.substr(prev_end, e - prev_end);
+        prev_end = e;
         // 40 ms per encoder frame, minus the decision lag the greedy loop introduces (see engine.h).
         const int64_t at = frames[i] * 640 - (int64_t)(offset_ms * 16.0);
         const int64_t next = (i + 1 < n) ? frames[i + 1] * 640 - (int64_t)(offset_ms * 16.0) : at + 40 * 16;
-        out.push_token(piece, std::max<int64_t>(0, at), std::max(next, at + 1));
+        if (!piece.empty()) out.push_token(piece, std::max<int64_t>(0, at), std::max(next, at + 1));
+    }
+    if (prev_end < final_text.size())   // cannot happen (the last decode IS the final text); keep the text whole
+        out.push_token(final_text.substr(prev_end), std::max<int64_t>(0, frames[n - 1] * 640), frames[n - 1] * 640 + 640);
+    if (out.text() != expect && getenv("NEMO_DEBUG_ATTR")) {
+        const std::string& t = out.text();
+        size_t k = 0; while (k < t.size() && k < expect.size() && t[k] == expect[k]) k++;
+        std::fprintf(stderr, "[attrib] token text != stream text at byte %zu (%zu vs %zu): tok ...%s| stream ...%s|\n", k, t.size(),
+                     expect.size(), t.substr(k > 40 ? k - 40 : 0, 80).c_str(), expect.substr(k > 40 ? k - 40 : 0, 80).c_str());
     }
     return out.text() == expect;
 }

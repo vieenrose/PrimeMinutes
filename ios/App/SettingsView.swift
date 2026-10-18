@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage("hwMonitor") private var hwMonitor = true
     @State private var reader = Prefs.readerId
     @State private var delay = Prefs.speakerDelay
+    @State private var asrIndex = Double(AsrRegistry.latencies.firstIndex(of: Prefs.asrLatency) ?? 3)
     @AppStorage("textSize") private var textSize = 0
     @AppStorage("showActions") private var showActions = false
     @AppStorage("askOn") private var askEnabled = true
@@ -41,6 +42,19 @@ struct SettingsView: View {
                     Stepper(value: $delay, in: 5...30, step: 5) { HStack { Text(L("settings_speaker_delay")); Spacer(); Text(L("settings_seconds", delay)).foregroundStyle(.secondary) } }
                         .onChange(of: delay) { Prefs.speakerDelay = delay }
                 } header: { Text(L("settings_recording")) } footer: { Text(L("settings_speaker_delay_hint")) }
+                // Recognizer latency (Android AsrLatencySlider): 4 stops, a new choice is fetched in the background.
+                Section {
+                    VStack(alignment: .leading) {
+                        let ms = AsrRegistry.latencies[Int(asrIndex)]
+                        HStack { Text(L("settings_asr_latency")); Spacer()
+                            Text(L("settings_asr_latency_value", String(format: "%g", Double(ms) / 1000), L(["settings_asr_latency_fastest", "settings_asr_latency_fast", "settings_asr_latency_balanced", "settings_asr_latency_accurate"][Int(asrIndex)])))
+                                .foregroundStyle(.secondary) }
+                        Slider(value: $asrIndex, in: 0...Double(AsrRegistry.latencies.count - 1), step: 1) { editing in
+                            guard !editing else { return }
+                            Prefs.asrLatency = AsrRegistry.latencies[Int(asrIndex)]; m.downloads.maybePrefetchSpeech()
+                        }.accessibilityIdentifier("settings-asr-latency")
+                    }
+                } footer: { Text(L("settings_asr_latency_hint")) }
                 // The people directory (names shared by all meetings; voice recognition will live there too).
                 Section(L("people_title")) {
                     NavigationLink { PeopleScreen(library: m.library, openMeeting: openMeeting) } label: {

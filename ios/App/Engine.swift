@@ -4,15 +4,13 @@ import Foundation
 final class NemoEngine: @unchecked Sendable {
     private let h: OpaquePointer
     /// The LiteRT CPU backend: the X-ASR and Sortformer graphs are the .tflite files; the host parts read xasr_host.bin / diar_host.bin (no ggml).
-    init?(xasr: String, diar: String, xasrTflite: String, diarTflite: String, threads: Int = 4, settle: Double = 5) {
+    /// `xasr` / `diar`: the host weights (xasr host bin, diar_host.bin); `tokenOffsetMs`: the recognizer's token offset (AsrRegistry).
+    init?(xasr: String, diar: String, xasrTflite: String, diarTflite: String, threads: Int = 4, settle: Double = 5, tokenOffsetMs: Double = 300) {
         // The pre-encode matrix ships in the app bundle (Resources/pre_encode_512x1024.f32).
         let pre = Bundle.main.path(forResource: "pre_encode_512x1024", ofType: "f32")
         // DEV-only override (VOX_NEMO_BACKEND=ggml|litert_cpu) for the backend comparison; the shipped path is litert_host.
         let backend = Dev.env["VOX_NEMO_BACKEND"] ?? "litert_host"
-        // litert_host: the ggml-free host parts read their own packed weights (xasr_host.bin / diar_host.bin) in the model dir.
-        let dir = (xasr as NSString).deletingLastPathComponent
-        let (xa, di) = backend == "litert_host" ? ("\(dir)/xasr_host.bin", "\(dir)/diar_host.bin") : (xasr, diar)
-        guard let p = nemo_create_ex(xa, di, Int32(threads), settle, backend, xasrTflite, diarTflite, pre) else { return nil }
+        guard let p = nemo_create_ex(xasr, diar, Int32(threads), settle, backend, xasrTflite, diarTflite, pre, tokenOffsetMs) else { return nil }
         h = p
     }
     private var closed = false

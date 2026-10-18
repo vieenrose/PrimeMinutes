@@ -579,3 +579,12 @@
 "search_results_show" = "Show the results list";
 "search_results_hide" = "Hide the results list";
 "search_results_more" = "First %d results";
+
+/* Settings: speech recognizer latency (AsrRegistry) */
+"settings_asr_latency" = "Transcription latency";
+"settings_asr_latency_value" = "%1$@ s · %2$@";
+"settings_asr_latency_fastest" = "fastest, least accurate";
+"settings_asr_latency_fast" = "fast";
+"settings_asr_latency_balanced" = "balanced";
+"settings_asr_latency_accurate" = "most accurate";
+"settings_asr_latency_hint" = "How long after speech the words appear. Longer = more accurate words, live and in the saved transcript. A new choice downloads its speech model (about 155 MB) in the background; the current one keeps working until it is ready.";

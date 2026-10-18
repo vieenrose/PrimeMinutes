@@ -26,10 +26,14 @@ enum DownloadPlan {
         var total: Int64 { speechBytes + readerBytes }
         var any: Bool { total > 0 }
         /// What a recording or an import has to wait for.
-        var blocking: Int64 { speechBytes + (readerUpgrade ? 0 : readerBytes) }
+        /// The chosen recognizer is missing but another one is installed and transcribes meanwhile (Android speechUpgrade).
+        var speechUpgrade = false
+        var blocking: Int64 { (speechUpgrade ? 0 : speechBytes) + (readerUpgrade ? 0 : readerBytes) }
     }
-    static func pending(speechReady: Bool, speechBytes: Int64, readerReady: Bool, readerBytes: Int64, replacedReady: Bool = false) -> Pending {
-        Pending(speechBytes: speechReady ? 0 : speechBytes, readerBytes: readerReady ? 0 : readerBytes, readerUpgrade: !readerReady && replacedReady)
+    static func pending(speechReady: Bool, speechBytes: Int64, readerReady: Bool, readerBytes: Int64, replacedReady: Bool = false,
+                        speechStandIn: Bool = false) -> Pending {
+        Pending(speechBytes: speechReady ? 0 : speechBytes, readerBytes: readerReady ? 0 : readerBytes, readerUpgrade: !readerReady && replacedReady,
+                speechUpgrade: !speechReady && speechStandIn)
     }
     /// Before a recording or an import: ask only for what it cannot run without.
     static func decide(_ c: Consent, unmetered: Bool, _ p: Pending) -> Action {

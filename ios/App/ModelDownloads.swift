@@ -14,10 +14,24 @@ import Network
         if let b = Dev.env["VOX_BASE"] { return "\(b)/models/\(n)" }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("models/nemo/\(n)").path
     }
-    /// The speech engine (ASR + diarizer) on the downloaded models; nil when they cannot be loaded.
+    /// The speech engine (ASR + diarizer) on the downloaded models; nil when they cannot be loaded. The recognizer is the
+    /// chosen latency once installed, else the closest installed variant, else the pre-variant 480 ms pair.
     nonisolated static func nemoEngine() -> NemoEngine? {
-        NemoEngine(xasr: nemoPath("xasr_host.bin"), diar: nemoPath("diar_host.bin"), xasrTflite: nemoPath("xasr_stream_q8_octav.tflite"), diarTflite: nemoPath("sortformer_int8_f190.tflite"), threads: Prefs.effectiveThreads, settle: Double(Prefs.speakerDelay))
+        let diar = nemoPath("diar_host.bin"), diarT = nemoPath("sortformer_int8_f190.tflite"), th = Prefs.effectiveThreads, settle = Double(Prefs.speakerDelay)
+        if Dev.env["VOX_BASE"] == nil, let v = Prefs.asrRunnable {
+            let d = Storage.modelsRoot.appendingPathComponent(v.id)
+            let e = NemoEngine(xasr: d.appendingPathComponent(AsrRegistry.hostFile).path, diar: diar, xasrTflite: d.appendingPathComponent(v.tfliteFile).path,
+                               diarTflite: diarT, threads: th, settle: settle, tokenOffsetMs: v.tokenOffsetMs)
+            if e != nil, v.latencyMs == Prefs.asrLatency { Storage.reclaimOtherAsr(v) }   // the chosen one loads: the others go
+            return e
+        }
+        return NemoEngine(xasr: nemoPath(ReaderModel.legacyXasrHost), diar: diar, xasrTflite: nemoPath(ReaderModel.legacyXasrTflite), diarTflite: diarT,
+                          threads: th, settle: settle, tokenOffsetMs: 300)
     }
+    /// The speech engine can run now (diarizer + some recognizer), and the chosen recognizer itself is installed.
+    nonisolated static var speechRunnable: Bool { Storage.ready(.speech) && (Prefs.asrRunnable != nil || Prefs.legacyAsrReady) }
+    nonisolated static var speechTargetReady: Bool { Storage.ready(.speech) && Storage.ready(Prefs.asrTarget) }
+    nonisolated static var speechBytes: Int64 { (Storage.ready(.speech) ? 0 : ReaderModel.speech.totalBytes) + Storage.downloadBytes(Prefs.asrTarget) }
 
     // MARK: first-use downloads with the user's say (Android ModelPrefetch / DownloadConsentDialog)
 
@@ -51,8 +65,9 @@ import Network
         if Dev.env["VOX_BASE"] != nil { return DownloadPlan.Pending(speechBytes: 0, readerBytes: 0) }
         let target = Prefs.readerTarget, ready = Storage.ready(target)
         // A replaced model still installed (E4B mobile-v1 while mobile-v2 is fetched) keeps the reader working.
-        return DownloadPlan.pending(speechReady: Storage.ready(.speech), speechBytes: ReaderModel.speech.totalBytes,
-                                    readerReady: ready, readerBytes: Storage.downloadBytes(target), replacedReady: !ready && Prefs.reader.id != target.id)
+        return DownloadPlan.pending(speechReady: Self.speechTargetReady, speechBytes: Self.speechBytes,
+                                    readerReady: ready, readerBytes: Storage.downloadBytes(target), replacedReady: !ready && Prefs.reader.id != target.id,
+                                    speechStandIn: Self.speechRunnable)
     }
 
     /// Network watch + the first-launch prompt (or the prefetch the user already agreed to).
@@ -65,7 +80,7 @@ import Network
         monitor.start(queue: DispatchQueue(label: "net"))
         // DEV: VOX_DLGATE=metered|wifi shows the prompt with the full sizes, models present or not.
         if let g = Dev.env["VOX_DLGATE"] {
-            consentRequest = ConsentRequest(pending: DownloadPlan.pending(speechReady: false, speechBytes: ReaderModel.speech.totalBytes, readerReady: false, readerBytes: Prefs.reader.totalBytes), unmetered: g == "wifi", action: nil)
+            consentRequest = ConsentRequest(pending: DownloadPlan.pending(speechReady: false, speechBytes: ReaderModel.speech.totalBytes + Prefs.asrTarget.totalBytes, readerReady: false, readerBytes: Prefs.reader.totalBytes), unmetered: g == "wifi", action: nil)
             return
         }
         let p = pending
@@ -91,6 +106,8 @@ import Network
         if let a = r.action { a() } else { maybePrefetch() }
     }
 
+    /// A latency switch: fetch the new recognizer in the background (Android SessionViewModel SaveConfig → prefetch).
+    func maybePrefetchSpeech() { maybePrefetch() }
     private func maybePrefetch() {
         let p = pending
         guard prefetchTask == nil, !cancelledThisRun, DownloadPlan.mayPrefetch(consent, unmetered: unmetered, p) else { return }
@@ -101,7 +118,12 @@ import Network
         // for the notes model (two downloads of one file would race on its .part).
         let speech: Task<Bool, Never> = Task.detached { [store] in
             guard p.speechBytes > 0 else { return true }
-            do { try await self.fetch(.speech, "prefetch speech", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }; return true }
+            do {
+                let base = Storage.ready(.speech) ? Int64(0) : ReaderModel.speech.totalBytes
+                try await self.fetch(.speech, "prefetch speech", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }
+                try await self.fetch(Prefs.asrTarget, "prefetch recognizer", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(base + d) / Double(max(1, p.total)) } }
+                return true
+            }
             catch { StatusLog.add("prefetch stopped: \(error)"); return false }   // Cancel or a permanent error: a run fetches what it needs itself
         }
         prefetchSpeech = speech
@@ -137,9 +159,12 @@ import Network
     func downloadSpeech() async -> Bool {
         if Dev.env["VOX_BASE"] != nil { return true }
         await awaitPrefetch(speechOnly: true)
-        if await store.isComplete(.speech) { return true }
+        // A stand-in recognizer (another latency, or the pre-variant model) transcribes while the chosen one is fetched
+        // in the background: a recording never waits for a latency switch.
+        if await store.isComplete(.speech), Self.speechRunnable { if !Self.speechTargetReady { maybePrefetch() }; return true }
         do {
             try await fetch(.speech, "speech", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
+            try await fetch(Prefs.asrTarget, "recognizer", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
             return true
         } catch { screen.status = L("download_failed", "\(error)"); return false }
     }
