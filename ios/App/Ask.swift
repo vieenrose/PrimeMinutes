@@ -352,7 +352,7 @@ struct AskSheet: View {
                                         Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                                Text(meeting != nil ? x.text : x.session.title + " — " + x.text).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
+                                                Text(meeting != nil ? Self.named(x) : x.session.title + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                             }
                                         }.buttonStyle(.plain)
                                     }
@@ -435,6 +435,11 @@ struct AskSheet: View {
     private func send() {
         let q = followup.trimmingCharacters(in: .whitespacesAndNewlines); guard !q.isEmpty else { return }
         followup = ""; ask.ask(m.library.sessions, question: q, meeting: meeting)
+    }
+    /// An excerpt as listed under the sources: its S-numbers (a note passage) named as its meeting names them (display only).
+    static func named(_ x: AskEngine.Excerpt) -> String {
+        let s = x.session, known = Set(s.lines.map(\.speaker))
+        return SpeakerRefs.resolve(x.text, label: { s.name($0) }, known: known.isEmpty ? nil : known)
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
     /// `withTitle`: the meeting's title in the link; the in-meeting Ask shows the time alone.

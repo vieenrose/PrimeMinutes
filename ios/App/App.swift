@@ -106,7 +106,7 @@ struct ContentView: View {
                 let all = await m.library.all()
                 for s in all.prefix(2) { path = [.session(s)]; try? await Task.sleep(nanoseconds: 8_000_000_000); path = []; try? await Task.sleep(nanoseconds: 3_000_000_000) }
                 FileManager.default.createFile(atPath: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("frames/STOP").path, contents: nil)
-            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if Dev.env["VOX_ASRCHECK"] != nil { Task.detached {
+            } }; if Dev.env["VOX_SETTINGS"] != nil { showSettings = true }; if first, let ms = Dev.env["VOX_ASRMS"].flatMap(Int.init) { Prefs.asrLatency = ms; m.downloads.maybePrefetchSpeech(); StatusLog.add("DEV asr latency \(Prefs.asrLatency) ms") }; if Dev.env["VOX_ASRCHECK"] != nil { Task.detached {
                 // DEV: which recognizer runs (target / stand-in / pre-variant), fetch the target if VOX_ASRCHECK=fetch,
                 // then the engine on the bundled sample, written to Documents/asrcheck.txt; no session is saved.
                 func state() -> String { "target=\(Prefs.asrLatency) runnable=\(Prefs.asrRunnable?.latencyMs ?? -1) legacy=\(Prefs.legacyAsrReady) targetReady=\(ModelDownloads.speechTargetReady)" }
