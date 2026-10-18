@@ -311,3 +311,18 @@ installed and has built its weight cache.
 E2B (measured, not switched): v1 vs v2, both at 1600 — coverage 0.641 vs 0.653, summary 3.30 vs 3.40, title
 3.2 vs 3.5, contradicted notes 7/337 (2.1 %) vs 7/397 (1.8 %), 3 meetings better / 3 worse / 4 equal. No
 clear win.
+
+40-minute meeting on the Note10+ (M_R003S05C01, 37.5 min, `-e utts`): v1 32 notes, 746 s reading, prose 161 s
+(748 chars, cites up to 37:12 of 37:27); v2 47 notes, 1064–1075 s, prose 277–279 s (1412 chars, cites the last
+note). The fourth (v1) run had no v1 left: the reclaim had deleted it once v2 had built its cache. Host, 76-min
+synthetic journal (94 notes): one 1600-token reply cites up to 74:12 and ends on its own, so segmented prose
+stays off.
+
+Ask (90 questions, host): E4B v1 → v2 zh 0.717 → 0.630, en 0.523 → 0.523. Lost zh: two false "not mentioned"
+(L_R004S06C01-q4, M_R003S05C01-q3), one ASR homophone copied (M_R003S02C01-q5), one other excerpt
+(S_R004S01C01-q5); none gained. No common cause a card change could fix, so the Ask card is unchanged.
+
+E2B on the Note10+ (v1 at 12 notes vs v2 at 8 notes, prose 1600, order v1, v2, v2, v1): move 0.92 / 0.92,
+weiya 0.75 / 0.75, AMI 0.74 / 0.89; reading 166–187 s / 176–180 s; same VmHWM (1.36 GB) and speed
+(138–144 tok/s prefill, 9.7 decode). Ask E2B v1 → v2: zh 0.674 → 0.587, en 0.523 → 0.523 (7 lost, 3 gained).
+E2B stays mobile-v1.
