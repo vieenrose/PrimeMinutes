@@ -17,3 +17,4 @@ swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/../A
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/MeetingMail.swift $D/MeetingMailTests.swift -o $O/mail-tests
 VOX_MAIL_DIR=$D/../App/Resources/mail $O/mail-tests $D/golden_mail $D/../App/Resources/model_cards/gemma4-meeting-agent-zh.json
 swiftc -parse-as-library -O $D/../App/MeetingSearch.swift $D/MeetingSearchTests.swift -o $O/meeting-search-tests && $O/meeting-search-tests
+swiftc -parse-as-library -O $D/../App/EmbedGate.swift $D/EmbedGateTests.swift -o $O/embed-gate-tests && $O/embed-gate-tests

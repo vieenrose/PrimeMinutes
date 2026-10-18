@@ -67,25 +67,52 @@ enum EmbedHost {
     /// `recording` is the caller's (main-actor) knowledge: under 7 GB the speech engines own the memory while recording.
     static func mayLoad(recording: Bool) -> Bool { !(recording && ProcessInfo.processInfo.physicalMemory < 7 << 30) }
 
-    /// Runs `block` with the loaded embedder (one user at a time); nil when it cannot be loaded.
+    /// One holder at a time; user queries go before the indexer (`useBackground`).
+    static let gate = EmbedGate()
+
+    /// Runs `block` with the loaded embedder (one user at a time, a user query before a waiting
+    /// background build); nil when it cannot be loaded.
     static func use<T>(threads: Int = 2, _ block: (Embedder) -> T) -> T? {
-        lock.lock(); defer { lock.unlock(); touch() }
+        let t0 = Date()
+        return gate.with(foreground: true) {
+            let waited = Date().timeIntervalSince(t0)
+            if waited > 0.05 { StatusLog.add(String(format: "embed query admitted after %.0f ms", waited * 1000)) }
+            guard let e = current(threads: threads) else { return nil }
+            defer { touch() }
+            return block(e)
+        }
+    }
+
+    /// The indexer's entry: `block` gets a `current()` to call before each chunk. It returns the
+    /// embedder for that chunk and, when a query waits, first hands the gate over (the query waits
+    /// one chunk, not the whole meeting). nil from `current()` = the model could not be reloaded.
+    static func useBackground<T>(threads: Int = 2, _ block: (_ current: () -> Embedder?) -> T) -> T? {
+        gate.with(foreground: false) {
+            guard current(threads: threads) != nil else { return nil }
+            defer { touch() }
+            return block { gate.checkpoint(); return current(threads: threads) }
+        }
+    }
+
+    /// The loaded embedder, loading it if needed. Caller holds the gate.
+    private static func current(threads: Int) -> Embedder? {
+        lock.lock(); defer { lock.unlock() }
         if emb == nil {
             guard ready else { return nil }
             let t0 = Date()
             do { emb = try Embedder(dir: dir, threads: threads) } catch { StatusLog.add("embedder load failed: \(error)"); return nil }
             StatusLog.add(String(format: "embedder loaded in %.0f ms", Date().timeIntervalSince(t0) * 1000))
         }
-        return block(emb!)
+        return emb
     }
     private static func touch() {
         lock.lock(); defer { lock.unlock() }
         lastUse = Date(); timer?.cancel()
-        let w = DispatchWorkItem { lock.lock(); if Date().timeIntervalSince(lastUse) >= idle - 1 { emb = nil }; lock.unlock() }
+        let w = DispatchWorkItem { gate.with(foreground: false) { lock.lock(); if Date().timeIntervalSince(lastUse) >= idle - 1 { emb = nil }; lock.unlock() } }
         timer = w
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + idle, execute: w)
     }
-    static func unload() { lock.lock(); emb = nil; timer?.cancel(); lock.unlock() }
+    static func unload() { gate.with(foreground: true) { lock.lock(); emb = nil; timer?.cancel(); lock.unlock() } }
 }
 
 /// Per-session vector index, `sessions/<id>.index.bin` (Android SessionIndex, same bytes).
@@ -334,9 +361,10 @@ final class IndexStop: @unchecked Sendable {
         let fp = SessionIndex.fingerprint(s)
         if SessionIndex.isCurrent(u, modelId: ReaderModel.embedId, fingerprint: fp) { return true }
         let t0 = Date()
-        let built: SessionIndex.Index?? = EmbedHost.use(threads: indexThreads) { e in
-            let units = SessionIndex.units(s) { e.tokens($0) }
-            return SessionIndex.build(modelId: ReaderModel.embedId, fingerprint: fp, units: units, old: SessionIndex.read(u), embed: { stop?.value == true ? nil : e.embed($0) })
+        // One chunk per gate turn: a user query (Ask, search) waiting for the embedder goes first.
+        let built: SessionIndex.Index?? = EmbedHost.useBackground(threads: indexThreads) { current in
+            let units = SessionIndex.units(s) { current()?.tokens($0) ?? 0 }
+            return SessionIndex.build(modelId: ReaderModel.embedId, fingerprint: fp, units: units, old: SessionIndex.read(u), embed: { stop?.value == true ? nil : current()?.embed($0) })
         }
         guard let b = built, let x = b else { return false }
         do { try SessionIndex.write(x, to: u) } catch { return false }
