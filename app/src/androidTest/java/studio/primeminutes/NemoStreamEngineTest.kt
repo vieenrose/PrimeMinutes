@@ -267,4 +267,37 @@ class NemoStreamEngineTest {
         }
         org.junit.Assert.assertTrue("no turns", last.isNotEmpty())
     }
+
+    /** Latency switch on a real install (emulator check, needs the network): the chosen variant ([-e from], default
+     *  1920) is installed; switching to [-e to] keeps it as the stand-in, downloads the new graph from the pinned
+     *  repo, then the new one runs and the old one is reclaimed. */
+    @Test
+    fun latencySwitchDownloadsThenReclaims() = runBlocking {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val a = InstrumentationRegistry.getArguments()
+        val from = a.getString("from")?.toInt() ?: studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS
+        val to = a.getString("to")?.toInt() ?: 480
+        val models = ModelManager(inst.targetContext)
+        org.junit.Assert.assertTrue("from variant not installed", models.asrTargetReady(from))
+        org.junit.Assert.assertEquals("stand-in", from, models.asrEngineFiles(to)?.variant?.latencyMs)
+        val t0 = System.nanoTime()
+        models.ensureAsrModels(to) { }
+        Log.i("NemoStreamEngineTest", "SWITCH %d->%d download %.1fs".format(from, to, (System.nanoTime() - t0) / 1e9))
+        val f = models.asrEngineFiles(to)!!
+        org.junit.Assert.assertEquals(to, f.variant?.latencyMs)
+        val pcm = readWav16kMono(inst.context.assets.open("two-speaker.wav").use { it.readBytes() })
+        val chunks = flow { var i = 0; while (i < pcm.size) { val e = minOf(i + 2048, pcm.size); emit(pcm.copyOfRange(i, e)); i = e } }
+        var last: List<TranscriptEvent.Utterance> = emptyList()
+        val t2 = System.nanoTime()
+        NemoStreamEngine(f.host, threads = 4, backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar,
+            diarPreF32 = f.litert.preEncode, tokenOffsetMs = f.tokenOffsetMs).use { engine ->
+            engine.transcribeLive(chunks).collect { e -> if (e is TranscriptEvent.UtteranceSnapshot) last = e.utterances }
+            Log.i("NemoStreamEngineTest", "SWITCH run %d ms graph %.2fs speakers=%s turns=%d text=%s".format(to, (System.nanoTime() - t2) / 1e9,
+                engine.speakerCount, last.size, last.joinToString(" | ") { it.text }.take(300)))
+        }
+        org.junit.Assert.assertTrue("no turns", last.isNotEmpty())
+        models.reclaimOtherAsr(f.variant!!)
+        org.junit.Assert.assertFalse("old variant kept", models.variantReady(studio.primeminutes.core.models.AsrRegistry.byLatency(from)))
+        org.junit.Assert.assertTrue("new variant gone", models.asrTargetReady(to))
+    }
 }
