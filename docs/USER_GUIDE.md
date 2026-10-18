@@ -271,3 +271,38 @@ flowchart TD
 | 寄給與會者面板 | 收件人勾選規則、缺地址的「新增」、內容與附件選項、語言（會議語言） | ✅ 裝置（中文與英文會議） |
 | 預覽 | 主旨、收件人與固定範本內容（摘要 + 紀要，待辦依負責人分組） | ✅ 裝置；範本內容由主機測試 MeetingMailTests 的黃金檔驗證 |
 | 在郵件 App 中開啟 | 有郵件帳號：系統撰寫視窗（HTML、附件），寄出／存草稿記錄於分享紀錄；無帳號：`mailto:`；都不行：分享表單並複製地址 | ✅ 裝置：此手機無郵件帳號，走 `mailto:`（status.log：mailto ok=true）；撰寫視窗與分享表單 ⬜ |
+
+---
+
+## 附錄 A. 示範影片
+
+| 語意搜尋 | 向會議提問 |
+|:---:|:---:|
+| <img src="screenshots/search.gif" width="260" alt="語意搜尋"> | <img src="screenshots/ask.gif" width="260" alt="向會議提問"> |
+| 輸入「大家的車要停哪裡」：原話說的是「有沒有停車位……月租一個四千五」，用詞不同也找得到；點段落就從 3:50 開始播放。 | 問「尾牙頭獎是什麼？」：回答附上出處；點出處就跳到 1:55 的原話。 |
+
+即時錄製，未加速。搜尋在輸入時先比對關鍵字，一兩秒後補上語意相近的結果；提問約 5 秒完成（E2B），作答時面板顯示目前的階段與秒數。
+
+更多畫面：<img src="screenshots/12-export.png" width="160" alt="匯出"> <img src="screenshots/02-add.png" width="160" alt="加入音訊"> <img src="screenshots/03-settings.png" width="160" alt="設定">
+
+## 附錄 B. 與 Android 版的差異
+
+- 僅以 CPU 推論（Metal GPU 在 iPhone 上沒有明顯加速）。
+- 沒有 App 內更新（由 App Store／TestFlight 負責），也沒有 Android 的電池最佳化設定。iOS 26 以上離開 App 後佇列仍在背景繼續處理（系統顯示進度）；較舊版本由 `BGProcessingTask` 或下次啟動接續。
+- 不提供 YouTube 匯入。
+- 中斷的處理不會跳出詢問：佇列在下次啟動時自動從檢查點接續；錄音開始前就排入佇列，App 被終止也保留音訊。
+- 下載在切換到其他 App 或鎖定螢幕時暫停，回到 App 且有網路時從中斷處接續。
+
+## 附錄 C. 運作方式
+
+- **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp)：語音辨識（X-ASR）與語者分離（Nemotron-3）在同一條時間軸上的串流引擎，以 C 介面接到 Swift；換人的位置會對齊語者分離偵測到的起點（不重疊時）。
+- **AI 筆記與摘要**：Gemma-4-E2B 會議模型（行動版 v1），或 RAM 足夠時 E4B 行動版 v2，在 LiteRT 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)，`CLiteRTLM.xcframework`）。閱讀協定（`MeetingReader`、`ReaderSummarizer`）以 Swift 重寫，與 Android 的黃金測試資料逐位元組一致。從舊版 E4B 升級時，新版在背景下載（相同的檔案直接沿用），下載完成前繼續使用舊版。
+- **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」先找出最相關的兩場會議，把分數最高的段落交給 AI 筆記模型作答。
+- **辨識聲音**：[CAM++ zh-en](https://huggingface.co/Luigi/primeminutes-speaker-litert)（3D-Speaker）在 CPU 上執行（約 8 分鐘的會議約 3 秒），只在沒有錄音、轉錄或 AI 筆記時，且電量高於 20% 或充電中才在背景計算。
+
+## 附錄 D. 已知限制
+
+- 摘要模型以中文會議訓練：英文會議的筆記、標題與摘要改寫成英文（依逐字稿自動判斷），英文品質只在少數公開會議上量測過。
+- 部分會議紀錄內容可能與原話不符，請點時間核對。
+- 偶爾會多分出發言很少的語者，可用「合併語者」修正。
+- 語意搜尋可能列出不相關的句子；「提問」由裝置上的小模型作答，可能漏掉段落中明明有的答案，請以出處為準。
