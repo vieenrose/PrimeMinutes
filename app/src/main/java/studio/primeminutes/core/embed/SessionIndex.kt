@@ -140,7 +140,7 @@ object SessionIndex {
         if (j != null) return j.groupValues[1].trim()
         return raw.trim().trimStart('-', '*', '•', ' ').trim()
     }
-    private val JOURNAL_LINE = Regex("^#\\d+ \\[\\d+:\\d{2}(?::\\d{2})?\\] (?:\\(\\w[\\w-]*\\) )?(.+)$")
+    private val JOURNAL_LINE = Regex("^#\\d+ \\[\\d+:\\d{2}(?::\\d{2})?\\] (?:\\((?:\\w[\\w-]*|-)\\) )?(.+)$")
 
     /**
      * Builds the vectors for [units], reusing those of [old] whose [Unit.textHash] matches, and

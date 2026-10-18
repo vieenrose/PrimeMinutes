@@ -740,4 +740,4 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
 }
 
 /** One saved AI-notes journal line: "#id [ts] (TYPE) text". */
-private val JOURNAL_LINE_RE = Regex("""^#(\d+) \[(\d+:\d{2}(?::\d{2})?)\] (?:\((\w[\w-]*)\) )?(.+)$""")
+private val JOURNAL_LINE_RE = Regex("""^#(\d+) \[(\d+:\d{2}(?::\d{2})?)\] (?:\((\w[\w-]*|-)\) )?(.+)$""")

@@ -60,10 +60,10 @@ class ReaderGuardTest {
 
     @Test fun shippedCardCarriesTheGuard() {
         val g = ModelCard.DEFAULT.reader.guard
-        assertEquals(setOf("DECISION", "ACTION", "NUMBER", "OPEN-ISSUE", "PROPOSAL"), g.knownTags)
+        assertEquals(setOf("DECISION", "ACTION", "NUMBER", "OPEN-ISSUE", "PROPOSAL", "-"), g.knownTags)
         assertEquals(setOf("NEXT"), g.ignoreActs)
         assertEquals(0.2, g.maxOffProtocolRate, 0.0)
-        assertTrue(g.known(null)); assertTrue(g.known("decision")); assertFalse(g.known("TODO"))
+        assertTrue(g.known(null)); assertTrue(g.known("decision")); assertTrue(g.known("-")); assertFalse(g.known("TODO"))
     }
 
     @Test fun cardWithoutGuardFallsBackToDefaults() {

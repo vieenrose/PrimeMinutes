@@ -50,4 +50,17 @@ class NoteCapTest {
         assertEquals(listOf("1:00", "2:00", "3:00", "3:00", "3:00", "3:00"), reader.journal.map { it.ts })
         assertEquals(3, capped.size)
     }
+
+    @Test
+    fun theOtherTypeDashIsATagNotText() {
+        // Seen on the emulator (E4B v2, English meeting): every note read "(-) Next meeting on Thursday".
+        // "-" is the prompt's "other" type; the note pattern took only word tags, so "(-)" leaked into the text.
+        for (card in listOf(studio.primeminutes.core.models.ModelCard.DEFAULT,
+            studio.primeminutes.core.models.ModelCard.load("gemma4-meeting-agent-zh-v2"))) {
+            val reader = MeetingReader(OneReply("NOTE [0:40] (-) Next meeting on Thursday."), "sys", events = {}, pc = card.reader)
+            reader.start(); reader.offer(Line(40, "S1", "see you Thursday")); reader.finish()
+            assertEquals(listOf("-"), reader.journal.map { it.tag })
+            assertEquals(listOf("Next meeting on Thursday."), reader.journal.map { it.text })
+        }
+    }
 }
