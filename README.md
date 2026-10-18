@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/screenshots/app-icon.png" width="96" alt="Prime Minutes" />
+</p>
+
 <h1 align="center">Prime Minutes for iOS</h1>
 
 <p align="center">
@@ -15,47 +19,45 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 
 ## 特色
 
-- **即時逐字稿與語者**：錄音時文字即時上螢幕，同時標註是誰說的。
+- **即時逐字稿與語者**：說話後約兩秒內文字就上螢幕（轉寫延遲可在設定調整，越短越快、越長越準），同時標註是誰說的。
 - **AI 筆記與會議紀要**：錄音中就閱讀逐字稿，寫下決議、待辦、提議、未決事項與數字。
-- **摘要**：停止後自動完成段落式摘要與標題，並發出「場次已就緒」通知；每個時間點一下就從原話播放。
+- **摘要**：停止後自動完成段落式摘要與標題；每個時間點一下就從原話播放。
 - **搜尋與提問**：依語意搜尋整個會議庫（「誰提到預算」）；向會議提問，回答附出處；也可只在這場會議內搜尋與提問。
 - **說話者名錄**：名字跨會議共用；可選的「辨識聲音」在之後的會議中建議名字（只是建議，由你確認）。
-- **聯絡人與寄給與會者**：從系統聯絡人加入電子郵件，以系統郵件 App 寄出摘要與紀要。
+- **聯絡人與寄給與會者**：從系統聯絡人加入電子郵件，以你自己的郵件 App 寄出摘要與紀要。
 - **編輯逐字稿**：修改文字、改派或合併語者，用分界編輯器修正換人的位置，可復原、重做。
 - **匯入、匯出與分享**：匯入「檔案」App 的音訊或 Podcast；匯出 Prime Minutes 場次 `.m4a`（與 Android 互通）、PDF、Markdown、純文字、SRT／VTT／LRC 字幕。
-- **完全在裝置上**：所有模型都在 iPhone 的 CPU 上執行，無帳號、不上傳。
+- **完全在裝置上**：所有模型都在 iPhone CPU 上執行，無帳號、不上傳。
 
-<p align="center">
-<img src="docs/screenshots/10-summary.png" width="200" alt="摘要">
-<img src="docs/screenshots/11-transcript.png" width="200" alt="逐字稿">
-<img src="docs/screenshots/17-process.png" width="200" alt="AI 筆記過程">
-</p>
+| 錄音 | AI 筆記 | 摘要 | 逐字稿 |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/qs-capture.png" width="200" alt="錄音"> | <img src="docs/screenshots/17-process.png" width="200" alt="AI 筆記"> | <img src="docs/screenshots/10-summary.png" width="200" alt="摘要"> | <img src="docs/screenshots/11-transcript.png" width="200" alt="逐字稿"> |
 
 ## 需求
 
 - iOS 17.0 以上的 arm64 iPhone；驗證機型為 iPhone 14 Pro Max（6 GB）。
-- RAM 不足 4.5 GB 的 iPhone 在錄音結束後才閱讀；3 GB 機型（如 iPhone XR）無法可靠執行 E2B。
+- RAM 4.5 GB 以上：AI 筆記在錄音中同步閱讀；RAM 6 GB 以上可選用 E4B；較小的 iPhone 在錄音結束後閱讀，3 GB 機型（如 iPhone XR）無法可靠執行 E2B。
 - 模型在第一次使用時下載（先顯示總量，可選「僅限 Wi‑Fi」）：
 
 | 模型 | 用途 | 下載大小 |
 |---|---|---|
-| X-ASR + Nemotron-3 語者分離 | 語音辨識、語者 | 約 271 MB |
+| X-ASR（含標點）+ Nemotron-3 語者分離 | 語音辨識、語者；設定可選 4 種轉寫延遲（預設 1.92 秒，最準確），每種約 155 MB | 約 273 MB |
 | Gemma-4-E2B 會議模型（行動版 v1） | AI 筆記、摘要、提問（預設） | 約 2.2 GB |
-| Gemma-4-E4B 會議模型（行動版 v2） | 同上，較完整；限 6 GB 以上 RAM 的 iPhone（如 14 Pro／Pro Max 起）；載入時記憶體不足則該次改用 E2B | 約 3.3 GB |
+| Gemma-4-E4B 會議模型（行動版 v2） | 同上，較完整；限 RAM 6 GB 以上的 iPhone，載入時記憶體不足則該次改用 E2B | 約 3.3 GB |
 | EmbeddingGemma 2 270M（選用） | 語意搜尋、提問 | 約 160 MB |
 | CAM++ zh-en（選用） | 辨識聲音 | 約 29 MB |
 
 ## 安裝
 
-iOS 版目前以 TestFlight 發佈給受邀的測試者，沒有公開連結。也可以從原始碼建置（見下方）。
+iOS 版目前以 TestFlight 發佈給受邀的測試者，沒有公開連結；版本更新由 TestFlight 負責。也可以從原始碼建置（見下方）。
 
 ## 快速開始
 
 1. 開啟 App，選擇「立即下載」或「僅限 Wi‑Fi」下載模型。
-2. 按首頁底部的錄音鈕；逐字稿即時出現，AI 筆記卡片顯示閱讀進度。
-3. 停止後場次自動轉錄、摘要並取標題。
+2. 按首頁的錄音鈕開始錄音；逐字稿即時出現，AI 筆記卡片顯示閱讀進度。
+3. 按 **停止並儲存**（或 **下一場** 接著錄下一場）；摘要、筆記與標題自動完成。
 4. 在場次中點時間點核對原話，在逐字稿長按修正，從 **⋯** 匯出或寄給與會者。
-5. 也可用首頁 **＋** 匯入音訊、Podcast 或 `.m4a` 場次，或從其他 App 分享音訊過來。
+5. 也可用首頁 **＋** 匯入「檔案」App 的音訊、Podcast 或 `.m4a` 場次，或從其他 App 分享音訊過來。
 
 每個畫面與操作的說明見 [**使用說明**](docs/USER_GUIDE.md)。
 
