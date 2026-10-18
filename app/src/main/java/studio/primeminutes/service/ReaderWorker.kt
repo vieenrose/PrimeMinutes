@@ -187,6 +187,10 @@ internal class ReaderWorker(private val host: Host) {
     }
 
     private suspend fun readLoop() {
+        // DEBUG builds only (ASR measurements, branch xasr-offline-import): files/dev_hold_reader holds the reader
+        // so an import's time and peak RSS are the ASR engine's alone. Absent = normal behaviour.
+        while (studio.primeminutes.BuildConfig.DEBUG && java.io.File(ctx.filesDir, "dev_hold_reader").exists())
+            kotlinx.coroutines.delay(2000)
         val me = kotlinx.coroutines.currentCoroutineContext()[Job]
         // The loop hands over under readLock: once it finds no task it stops counting as running
         // (readJob = null) in the same critical section, so a task submitted while it winds down

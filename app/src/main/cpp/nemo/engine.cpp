@@ -209,6 +209,15 @@ bool Engine::init(std::string& err) {
         // 0.389-0.215 on the same model and params), which is exactly the kind of stable, mask-independent
         // penalty I spent a long time misattributing to thread pools and page faults. Always say cpu.
         p.use_gpu = false;
+        // LiteRT: the chunk geometry is the graph's (480 ms or 1920 ms export), so build the encoder first and
+        // take chunk_ms from it; cfg_.chunk_ms then also drives the latency estimate.
+        if (cfg_.backend != "ggml" && cfg_.backend != "litert_gpu" && cfg_.backend != "litert_mixed") {
+            if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
+            try {
+                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
+            } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
+            cfg_.chunk_ms = xasr_litert_->chunk_ms();
+        }
         p.chunk_ms = cfg_.chunk_ms;
         // Bundle support: the loader reads this once from the environment. Set it before init, and always
         // set it (empty included) so a previous bundle run in the same process cannot leak its prefix.
@@ -217,10 +226,6 @@ bool Engine::init(std::string& err) {
         if (!asr_ctx_) { err = "x-asr model failed to load: " + cfg_.xasr_model; return false; }
         if (cfg_.backend == "litert_gpu" || cfg_.backend == "litert_mixed") { err = "LiteRT GPU is not supported: use litert_cpu"; return false; }
         if (cfg_.backend != "ggml") {
-            if (cfg_.xasr_tflite.empty()) { err = "xasr_tflite required for backend " + cfg_.backend; return false; }
-            try {
-                xasr_litert_ = std::make_unique<XasrLiteRT>(cfg_.xasr_tflite, cfg_.threads);
-            } catch (const std::exception & e) { err = std::string("xasr litert: ") + e.what(); return false; }
             xasr_set_external_chunk_encoder((xasr_context*)asr_ctx_, nemo::xasr_litert_chunk_cb,
                                             nemo::xasr_litert_reset_cb, xasr_litert_.get());
         }
@@ -349,6 +354,7 @@ bool Engine::init(std::string& err) {
     fusion_.set_gap_fill(cfg_.gap_fill == 1 ? Fusion::GapFill::PREVIOUS : Fusion::GapFill::NEAREST);
     {
         if (const char* e = getenv("NEMO_TURN_SNAP")) cfg_.turn_snap_s = std::atof(e);
+        if (const char* e = getenv("NEMO_TOKEN_OFFSET_MS")) cfg_.token_offset_ms = std::atof(e);   // research: per-model re-derivation
         double pad_frames = 0;      // 10 ms diarizer frames
         for (const auto& kv : cfg_.diar_opts)
             if (kv.first == "speaker_pad_frames") pad_frames = std::atof(kv.second.c_str());

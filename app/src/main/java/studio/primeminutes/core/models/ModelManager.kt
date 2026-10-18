@@ -61,13 +61,22 @@ class ModelManager(context: Context) {
     val nemoDir: File get() = File(modelsDir, NEMO_DIR)
 
     fun asrFiles(): NemoModelFiles =
-        NemoModelFiles(xasr = File(nemoDir, HOST_XASR_FILE), diar = File(nemoDir, HOST_DIAR_FILE))
+        NemoModelFiles(xasr = devAsrOverride()?.second ?: File(nemoDir, HOST_XASR_FILE), diar = File(nemoDir, HOST_DIAR_FILE))
+
+    /** DEBUG builds only (prototype, branch xasr-offline-import): another X-ASR streaming checkpoint pushed to
+     *  nemo/asr_override/ as xasr_stream.tflite + xasr_host.bin (e.g. the 1920 ms punct export). The engine
+     *  reads the chunk geometry from the graph. Null when absent, so release behaviour is unchanged. */
+    private fun devAsrOverride(): Pair<File, File>? {
+        if (!studio.primeminutes.BuildConfig.DEBUG) return null
+        val d = File(nemoDir, "asr_override"); val t = File(d, "xasr_stream.tflite"); val b = File(d, "xasr_host.bin")
+        return if (t.isFile && b.isFile) t to b else null
+    }
 
     /** The LiteRT CPU graphs of the same two models (same weights, int8). Null until they are downloaded. */
     fun asrLitertFiles(): NemoLitertFiles? {
         val x = File(nemoDir, LITERT_XASR_FILE); val d = File(nemoDir, LITERT_DIAR_FILE)
         return if (x.length() == LITERT_FILES.getValue(LITERT_XASR_FILE).bytes && d.length() == LITERT_FILES.getValue(LITERT_DIAR_FILE).bytes)
-            NemoLitertFiles(x, d, preEncodeF32()) else null
+            NemoLitertFiles(devAsrOverride()?.first ?: x, d, preEncodeF32()) else null
     }
 
     /** Builds the LiteRT engine once so XNNPACK writes its weight cache next to the graphs; the next

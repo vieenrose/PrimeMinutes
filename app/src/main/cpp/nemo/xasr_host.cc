@@ -211,8 +211,14 @@ std::string detok(const Model& m, const int32_t* toks, int n) {
 
 char* dup_str(const std::string& s) { char* r = (char*)malloc(s.size() + 1); std::memcpy(r, s.c_str(), s.size() + 1); return r; }
 
-// Chunk geometry of the shipped 480 ms export: window of 61 fbank frames shifted by 48, 12 encoder frames out.
-constexpr int kWindow = 61, kShift = 48, kEncFrames = 12;
+// Chunk geometry from chunk_ms (icefall Zipformer2 streaming export): chunk = chunk_ms / 20 encoder_embed frames,
+// a window of 2*chunk + 13 fbank frames shifted by 2*chunk, chunk/2 encoder frames out (480 ms: 61/48/12;
+// 1920 ms: 205/192/48).
+struct Geometry { int window, shift, enc_frames; };
+Geometry geometry(int chunk_ms) {
+    const int chunk = (chunk_ms > 0 ? chunk_ms : 480) / 20;
+    return {2 * chunk + 13, 2 * chunk, chunk / 2};
+}
 
 core_kaldi::FbankParams fbank_params(int F) {
     core_kaldi::FbankParams p;   // sherpa-onnx FeatureExtractorConfig
@@ -224,7 +230,8 @@ core_kaldi::FbankParams fbank_params(int F) {
 
 struct xasr_context {
     Model m;
-    int tail_pad_ms = kWindow * 10 + 1000;
+    Geometry g = geometry(480);
+    int tail_pad_ms = g.window * 10 + 1000;
     xasr_chunk_fn ext_fn = nullptr;
     xasr_reset_fn ext_reset = nullptr;
     void* ext_user = nullptr;
@@ -301,9 +308,10 @@ bool stream_accept(xasr_stream* s, const float* pcm, int n, bool flush) {
     }
     if (!s->c->ext_fn) { fprintf(stderr, "xasr_host: no chunk encoder set\n"); return false; }
     const int F = s->c->m.F, Ed = s->c->m.J;
-    std::vector<float> enc, step((size_t)kEncFrames * Ed);
-    for (; s->pos + kWindow < s->n_frames; s->pos += kShift) {
-        if (!s->c->ext_fn(s->c->ext_user, s->feats.data() + (size_t)(s->pos - s->feat_base) * F, kWindow, F, step.data(), kEncFrames, Ed)) {
+    const Geometry g = s->c->g;
+    std::vector<float> enc, step((size_t)g.enc_frames * Ed);
+    for (; s->pos + g.window < s->n_frames; s->pos += g.shift) {
+        if (!s->c->ext_fn(s->c->ext_user, s->feats.data() + (size_t)(s->pos - s->feat_base) * F, g.window, F, step.data(), g.enc_frames, Ed)) {
             fprintf(stderr, "xasr: external chunk encoder failed\n");
             return false;
         }
@@ -336,7 +344,8 @@ extern "C" struct xasr_context_params xasr_context_default_params(void) {
 extern "C" struct xasr_context* xasr_init_from_file(const char* path, struct xasr_context_params params) {
     auto* c = new xasr_context();
     if (!load(c->m, path)) { fprintf(stderr, "xasr_host: cannot read '%s'\n", path); delete c; return nullptr; }
-    if (params.tail_pad_ms >= 0) c->tail_pad_ms = params.tail_pad_ms;
+    c->g = geometry(params.chunk_ms);
+    c->tail_pad_ms = params.tail_pad_ms >= 0 ? params.tail_pad_ms : c->g.window * 10 + 1000;
     return c;
 }
 extern "C" void xasr_free(struct xasr_context* c) { delete c; }
