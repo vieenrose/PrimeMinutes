@@ -213,13 +213,13 @@ final class AskHolder: @unchecked Sendable {
     private var engine: MfaEngine?, tok: SpTokenizer?, session: MfaSession?, modelId: String?
     func tokenizer() throws -> SpTokenizer {
         if let tok { return tok }
-        let t = try SpTokenizer(path: Storage.modelsRoot.appendingPathComponent(Prefs.reader.id).appendingPathComponent("Section1_SP_Tokenizer.spiece").path)
+        let t = try SpTokenizer(path: Storage.modelsRoot.appendingPathComponent(modelId ?? Prefs.reader.id).appendingPathComponent("Section1_SP_Tokenizer.spiece").path)
         tok = t; return t
     }
     func open() throws -> MfaSession {
         lock.lock(); defer { lock.unlock() }
-        let m = Prefs.reader
-        if let session, modelId == m.id { return session }
+        if let session, let modelId, modelId == Prefs.reader.id || ReaderModel.byId(Prefs.reader.id).fallback == modelId { return session }
+        let m = Prefs.readerForLoad()
         closeLocked()
         guard Storage.ready(m) else { throw ReaderError(description: L("ask_no_model")) }
         let dir = Storage.modelsRoot.appendingPathComponent(m.id).path

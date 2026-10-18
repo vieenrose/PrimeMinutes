@@ -18,6 +18,12 @@ struct ReaderModel {
     /// The model that replaces this one (Android `LlmSpec.replacedBy`): not offered any more; it reads on a
     /// phone that has it until its successor is installed, then its files are deleted.
     var replacedBy: String? = nil
+    /// RAM a phone must report (`physicalMemory`) for the model to be offered; 0 = every phone.
+    var minPhysicalBytes: UInt64 = 0
+    /// Memory the app must still be allowed (`os_proc_available_memory`) when the model loads, else `fallback`
+    /// reads that run (ReaderGate.forLoad); 0 = no check.
+    var minAvailableBytes: UInt64 = 0
+    var fallback: String? = nil
     var template: ChatTemplate { card.template }
     var budget: ReaderBudget { card.budget }
     /// Bytes to download for the whole model (the registry's sizes; the GPU graph is not part of it).
@@ -79,9 +85,14 @@ struct ReaderModel {
             (836_778_512, "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a"),
             (2_260_210_576, "34858194f4f596fae132470a2e0f2f0f276e540c7af8502e4ef7cca99e871424")])
         m.replacedBy = e4bV2Id
+        m.minPhysicalBytes = e4bMinPhysical; m.minAvailableBytes = e4bMinAvailable; m.fallback = "E2B"
         return m
     }()
     static let e4bV2Id = "E4B-v2"
+    /// E4B on the 6 GB class of iPhone and up (a 6 GB 14 Pro Max reports 5637 MB, 4 GB phones about 3.6 GiB: 5 GiB keeps a margin).
+    /// Measured 2026-10-18 on a 14 Pro Max 6 GB, E4B mobile-v2: peak footprint 1.14 GB, at least 3.3 GB still
+    /// available with the increased-memory-limit entitlement; below 2.5 GB available the run reads with E2B.
+    static let e4bMinPhysical: UInt64 = 5 << 30, e4bMinAvailable: UInt64 = 2_500_000_000
     /// E4B mobile-v2 (Android `gemma4-e4b-meeting-agent-zh-mobile-v2`): a new main graph and system prompt; the
     /// embedders and tokenizer are byte-identical to mobile-v1 E4B (reused, not downloaded again). Its card sets
     /// its note cap and prose budget (docs/model-eval-mobile-v2.md). CPU only (no GPU graph).
@@ -92,6 +103,7 @@ struct ReaderModel {
             (836_778_512, "d35fe41db89fa0128f5da9530886a12581cee715369e1b9ed9a3644e43d16a6a"),
             (2_260_210_576, "2d346d0e5f4c1a91ae3ab9df7cea2e29992f4d60a7c661ccbc886e964fe618d0")])
         m.card = .load("gemma4-meeting-agent-zh-v2")
+        m.minPhysicalBytes = e4bMinPhysical; m.minAvailableBytes = e4bMinAvailable; m.fallback = "E2B"
         return m
     }()
     /// Every notes model the app knows (offered or being migrated away from).

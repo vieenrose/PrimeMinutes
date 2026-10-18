@@ -142,14 +142,14 @@ final class ReaderWorker: @unchecked Sendable {
             guard speechReady else { await MainActor.run { self.screen.status = L("load_failed") }; return }
             let eng = cached != nil ? nil : ModelDownloads.nemoEngine()
             if cached == nil && eng == nil { await MainActor.run { self.screen.status = L("load_failed") }; return }
-            let rm = Prefs.reader
+            let rm = Prefs.readerForLoad()
             if Dev.env["VOX_READER_DIR"] == nil { await self.downloads.awaitPrefetch(speechOnly: false) }
             if Dev.env["VOX_READER_DIR"] == nil, !(await self.downloads.store.isComplete(rm)) {   // like Android: the notes model downloads on first use
                 do { try await self.downloads.fetch(rm, "reader", onPause: { self.downloads.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } } }
                 catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }
             }
             let stored = await self.downloads.store.isComplete(rm) ? await self.downloads.store.dir(rm).path : nil
-            let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored)
+            let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored, model: rm)
             let agentUi = self.screen.agent
             let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: rm.budget, card: rm.card)
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.screen.status = L("reader_error", "\(error)") }; return }

@@ -223,7 +223,7 @@ flowchart TD
 | 外觀 | 自動、淺色、深色、電子紙 | ✅ 手動 |
 | 文字大小 | 整個 App 的文字縮放 | ⬜ |
 | 語者標註延遲 | 5–30 秒（預設 15） | ⬜ |
-| AI 筆記模型 | E2B（預設）或 E4B | ✅ 手動 |
+| AI 筆記模型 | E2B（預設）或 E4B（6 GB 以上 RAM 的 iPhone；載入時可用記憶體低於 2.5 GB 則該次改用 E2B） | ✅ 手動 |
 | 硬體狀態列 | 錄音時在錄音室標題列右側、處理時在即時畫面的狀態列右側顯示 CPU、記憶體、電池；首頁不顯示 | ✅ 手動（iPhone 14 Pro Max） |
 | 推論執行緒 | 自動（首次一秒測試）或手動；載入失敗時自動降低 | ✅ 手動 |
 | 顯示待辦事項 | 摘要分頁多一張待辦卡 | ✅ 手動 |
@@ -296,7 +296,7 @@ flowchart TD
 ## 附錄 C. 運作方式
 
 - **聽寫**：[nemo-x-asr-diarizer](https://github.com/vieenrose/nemo-x-asr-diarizer.cpp)：語音辨識（X-ASR）與語者分離（Nemotron-3）在同一條時間軸上的串流引擎，以 C 介面接到 Swift；換人的位置會對齊語者分離偵測到的起點（不重疊時）。
-- **AI 筆記與摘要**：Gemma-4-E2B 會議模型（行動版 v1），或 RAM 足夠時 E4B 行動版 v2，在 LiteRT 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)，`CLiteRTLM.xcframework`）。閱讀協定（`MeetingReader`、`ReaderSummarizer`）以 Swift 重寫，與 Android 的黃金測試資料逐位元組一致。從舊版 E4B 升級時，新版在背景下載（相同的檔案直接沿用），下載完成前繼續使用舊版。
+- **AI 筆記與摘要**：Gemma-4-E2B 會議模型（行動版 v1），或 6 GB 以上 RAM 的 iPhone 上 E4B 行動版 v2（載入時 `os_proc_available_memory` 低於 2.5 GB 則該次改用 E2B，見 `ReaderGate`），在 LiteRT 上執行（[自訂引擎](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)，`CLiteRTLM.xcframework`）。閱讀協定（`MeetingReader`、`ReaderSummarizer`）以 Swift 重寫，與 Android 的黃金測試資料逐位元組一致。從舊版 E4B 升級時，新版在背景下載（相同的檔案直接沿用），下載完成前繼續使用舊版。
 - **搜尋與提問**：[EmbeddingGemma 2 270M](https://huggingface.co/Luigi/primeminutes-embed-litert)（LiteRT，動態 int8）把每段逐字稿、每則筆記與摘要轉成向量，查詢時與關鍵字比對的結果融合（RRF）；「提問」先找出最相關的兩場會議，把分數最高的段落交給 AI 筆記模型作答。
 - **辨識聲音**：[CAM++ zh-en](https://huggingface.co/Luigi/primeminutes-speaker-litert)（3D-Speaker）在 CPU 上執行（約 8 分鐘的會議約 3 秒），只在沒有錄音、轉錄或 AI 筆記時，且電量高於 20% 或充電中才在背景計算。
 

@@ -97,8 +97,8 @@ enum Prefs {
     /// Steps added to the system Dynamic Type size (Android multiplies its scale by the system's
     /// the same way): a fixed size threw away a larger system setting. nil = follow the system.
     static func typeSizeSteps(_ i: Int) -> Int? { [nil, -2, 0, 2, 4][min(max(i, 0), 4)] }
-    /// E4B needs the 8 GB class of phone, as on Android.
-    static var e4bAllowed: Bool { ProcessInfo.processInfo.physicalMemory >= 7 << 30 }
+    /// E4B is offered from the 6 GB class of phone up (the registry's `minPhysicalBytes`).
+    static var e4bAllowed: Bool { ReaderGate.offered(physical: ProcessInfo.processInfo.physicalMemory, minPhysical: ReaderModel.e4bV2.minPhysicalBytes) }
     static var readerId: String {
         get { let v = Dev.env["VOX_READER_ID"] ?? UserDefaults.standard.string(forKey: "reader") ?? "E2B"; return v == "E4B" && e4bAllowed ? v : "E2B" }
         set { UserDefaults.standard.set(newValue, forKey: "reader") }
@@ -108,6 +108,15 @@ enum Prefs {
     /// The model that reads (Android `LlmRegistry.runnable`): the target when installed, else an installed model it
     /// replaced (a phone being migrated from E4B mobile-v1 keeps reading), else the target.
     static var reader: ReaderModel { .byId(ReaderChoice.runnable(readerId, replacedBy: ReaderModel.replacements, ready: { Storage.ready(.byId($0)) })) }
+    /// The model to load now (a reading or Ask): `reader`, or its fallback when too little memory is left for it
+    /// this time (ReaderGate.forLoad); logged, never fatal.
+    static func readerForLoad() -> ReaderModel {
+        let m = reader, avail = UInt64(os_proc_available_memory())
+        let id = ReaderGate.forLoad(chosen: m.id, available: avail, minAvailable: m.minAvailableBytes, fallback: m.fallback, fallbackReady: m.fallback.map { Storage.ready(.byId($0)) } ?? false)
+        if id != m.id { StatusLog.add("trace reader \(m.id) needs \(m.minAvailableBytes / 1_048_576) MB free, \(avail / 1_048_576) MB left: \(id) reads this time") }
+        else if m.minAvailableBytes > 0 { StatusLog.add("trace reader \(m.id) loads, \(avail / 1_048_576) MB free, phys \(ProcessInfo.processInfo.physicalMemory / 1_048_576) MB") }
+        return .byId(id)
+    }
 }
 
 /// Appearance (Android theme: Auto / Light / Dark; no e-ink on iOS).

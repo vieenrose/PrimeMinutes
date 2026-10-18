@@ -165,7 +165,7 @@
 "reader_model_e2b" = "行動版 E2B";
 "reader_model_e4b" = "行動版 E4B";
 "reader_model_e4b_v1" = "行動版 E4B v1";
-"reader_model_e4b_ram" = "E4B 需要 8 GB 記憶體的手機。";
+"reader_model_e4b_ram" = "E4B 需要 6 GB 以上記憶體的手機。";
 "reader_model_hint" = "行動版模型使用更快的引擎，記憶範圍較短。E2B：下載 %1$@，約佔 1.3 GB 記憶體。E4B：%2$@，約 3 GB 記憶體，錯誤較少。";
 "model_kind_asr" = "轉錄模型";
 "model_kind_llm" = "AI 筆記模型";

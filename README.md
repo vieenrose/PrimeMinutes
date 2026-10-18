@@ -41,7 +41,7 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 |---|---|---|
 | X-ASR + Nemotron-3 語者分離 | 語音辨識、語者 | 約 271 MB |
 | Gemma-4-E2B 會議模型（行動版 v1） | AI 筆記、摘要、提問（預設） | 約 2.2 GB |
-| Gemma-4-E4B 會議模型（行動版 v2） | 同上，較完整；限 RAM 足夠的 iPhone | 約 3.3 GB |
+| Gemma-4-E4B 會議模型（行動版 v2） | 同上，較完整；限 6 GB 以上 RAM 的 iPhone（如 14 Pro／Pro Max 起）；載入時記憶體不足則該次改用 E2B | 約 3.3 GB |
 | EmbeddingGemma 2 270M（選用） | 語意搜尋、提問 | 約 160 MB |
 | CAM++ zh-en（選用） | 辨識聲音 | 約 29 MB |
 
