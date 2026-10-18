@@ -82,9 +82,13 @@ final class OneReply: ReaderLlm {
         check(ReaderGuard(lines: 10, nonNote: 3).exceeds(card), true, "above")
         check(ReaderGuard(lines: 10, nonNote: 2).exceeds(card), false, "at the threshold")
         let g = ModelCard.default.reader.guardrail
-        check(g.knownTags, ["DECISION", "ACTION", "NUMBER", "OPEN-ISSUE", "PROPOSAL"], "shipped known tags")
+        check(g.knownTags, ["DECISION", "ACTION", "NUMBER", "OPEN-ISSUE", "PROPOSAL", "-"], "shipped known tags")
         check(g.ignoreActs, ["NEXT"], "shipped ignore acts"); check(g.maxOffProtocolRate, 0.2, "shipped rate")
-        check(g.known(nil) && g.known("decision") && !g.known("TODO"), true, "known()")
+        check(g.known(nil) && g.known("decision") && g.known("-") && !g.known("TODO"), true, "known()")
+        // Android 20b9615c: "(-)" (the prompt's "other" type) is the tag, not part of the note text.
+        let nl = "[0:40] (-) Next meeting on Thursday.", nr = ModelCard.default.reader.note
+        let nm = nr.firstMatch(in: nl, range: NSRange(nl.startIndex..., in: nl))!
+        check(Range(nm.range(at: 2), in: nl).map { String(nl[$0]) } == "-" && Range(nm.range(at: 3), in: nl).map { String(nl[$0]) } == "Next meeting on Thursday.", true, "(-) tag")
         let json = try! JSONEncoder().encode(ReaderGuard(lines: 3, notes: 1, nonNote: 2))
         check(try! JSONDecoder().decode(ReaderGuard.self, from: json), ReaderGuard(lines: 3, notes: 1, nonNote: 2), "guard round trip")
 

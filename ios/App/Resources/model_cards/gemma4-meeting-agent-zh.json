@@ -40,7 +40,7 @@
   "omitted": "\n（另有 {n} 則較早的筆記未列出）",
   "act": "^\\s*(NOTE|REVISE|LOOKBACK|NEXT)\\b(.*)$",
   "note_act": "NOTE",
-  "note": "^\\s*\\[?(\\d+:\\d{2}(?::\\d{2})?)\\]?\\s*(?:\\((\\w[\\w-]*)\\)\\s*)?(.+)$",
+  "note": "^\\s*\\[?(\\d+:\\d{2}(?::\\d{2})?)\\]?\\s*(?:\\((\\w[\\w-]*|-)\\)\\s*)?(.+)$",
   "compact_priority": [
    "DECISION",
    "OPEN-ISSUE",
@@ -97,7 +97,8 @@
     "ACTION",
     "NUMBER",
     "OPEN-ISSUE",
-    "PROPOSAL"
+    "PROPOSAL",
+    "-"
    ],
    "ignore_acts": [
     "NEXT"
