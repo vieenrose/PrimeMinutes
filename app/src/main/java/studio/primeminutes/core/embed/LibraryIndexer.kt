@@ -158,9 +158,10 @@ object LibraryIndexer {
         if (SessionIndex.isCurrent(entry.dir, spec.id, fp)) return false
         val old = SessionIndex.read(entry.dir)
         val t0 = System.nanoTime()
-        val built = EmbedHost.use(app, indexThreads()) { emb ->
-            val units = SessionIndex.units(loaded) { emb.tokens(it) }
-            SessionIndex.build(spec.id, fp, units, old, { if (cancelled()) throw CatchUpCancelled(); emb.embed(it) })
+        // One chunk per gate turn: a user query (Ask, search) waiting for the embedder goes first.
+        val built = EmbedHost.useBackground(app, indexThreads()) { current ->
+            val units = SessionIndex.units(loaded) { current().tokens(it) }
+            SessionIndex.build(spec.id, fp, units, old, { if (cancelled()) throw CatchUpCancelled(); current().embed(it) })
         } ?: run { Log.i(TAG, "${entry.id}: embedder unavailable, tried again later"); return false }   // model absent or a live capture on a small device
         SessionLibrary.withBuildLock(entry.id) {
             // The meeting may have been deleted or rewritten meanwhile.

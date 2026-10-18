@@ -10,8 +10,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import studio.primeminutes.core.models.ModelManager
 
 /**
@@ -27,7 +25,8 @@ object EmbedHost {
     private const val SMALL_DEVICE_RAM = 7L * 1024 * 1024 * 1024
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val mutex = Mutex()
+    /** Serializes the calls; user queries (Ask, search) go before the indexer ([useBackground]). */
+    internal val gate = EmbedGate()
     @Volatile private var embedder: Embedder? = null
     @Volatile private var lastUse = 0L
     private var idleJob: Job? = null
@@ -53,22 +52,39 @@ object EmbedHost {
 
     /**
      * Runs [block] with the loaded embedder (loading it with [threads] if needed). Returns null
-     * when the model is not downloaded or [mayLoad] is false. Serialized: one call at a time.
+     * when the model is not downloaded or [mayLoad] is false. Serialized: one call at a time, and
+     * a user query is admitted before any waiting background build.
      * Always off the main thread: the search box calls it from a composition effect, and the load
      * (0.8 s warm, 5 s with a cold page cache) froze the UI there.
      */
-    suspend fun <T> use(context: Context, threads: Int, block: (Embedder) -> T): T? = withContext(Dispatchers.IO) {
+    suspend fun <T> use(context: Context, threads: Int, block: (Embedder) -> T): T? =
+        runGated(context, threads, foreground = true) { block(it()) }
+
+    /**
+     * The indexer's entry: [block] gets a `current()` function to call before each chunk. It
+     * returns the embedder to use for that chunk and, when a query waits, first hands the gate
+     * over to it (so the query waits one chunk, not the whole meeting). The embedder may have been
+     * unloaded during the handover: `current()` then loads it again.
+     */
+    suspend fun <T> useBackground(context: Context, threads: Int, block: (current: () -> Embedder) -> T): T? =
+        runGated(context, threads, foreground = false) { cur -> block { gate.checkpoint(); cur() } }
+
+    private suspend fun <T> runGated(context: Context, threads: Int, foreground: Boolean, block: (() -> Embedder) -> T): T? = withContext(Dispatchers.IO) {
         val spec = EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID)
         val mm = ModelManager(context)
         if (!mm.embedReady(spec) || !mayLoad(context)) return@withContext null
-        mutex.withLock {
-            val e = embedder ?: run {
+        val current = {
+            embedder ?: run {
                 val t0 = System.nanoTime()
                 val loaded = Embedder.load(mm.embedDir(spec), threads)
                 Log.i(TAG, "embedder loaded in ${(System.nanoTime() - t0) / 1_000_000} ms, threads=$threads")
                 embedder = loaded; loaded
             }
-            try { block(e).also { calls.incrementAndGet() } } finally { touch() }
+        }
+        val t0 = System.nanoTime()
+        gate.with(foreground) {
+            if (foreground) Log.i(TAG, "query admitted after ${(System.nanoTime() - t0) / 1_000_000} ms")
+            try { block(current).also { calls.incrementAndGet() } } finally { touch() }
         }
     }
 
@@ -80,13 +96,13 @@ object EmbedHost {
         idleJob?.cancel()
         idleJob = scope.launch {
             delay(IDLE_MS)
-            mutex.withLock {
+            gate.with(false) {
                 if (System.currentTimeMillis() - lastUse >= IDLE_MS - 50) { embedder?.close(); embedder = null; Log.i(TAG, "embedder unloaded (idle)") }
             }
         }
     }
 
     /** Frees the model now (a recording starts on a small device, tests). Waits for a running call. */
-    suspend fun unload() { mutex.withLock { embedder?.let { it.close(); Log.i(TAG, "embedder unloaded") }; embedder = null; idleJob?.cancel() } }
+    suspend fun unload() = withContext(Dispatchers.IO) { gate.with(true) { embedder?.let { it.close(); Log.i(TAG, "embedder unloaded") }; embedder = null; idleJob?.cancel() } }
     fun unloadAsync() { scope.launch { unload() } }
 }
