@@ -276,6 +276,7 @@ class QualityEvalHarness {
                 File(out, "$name.$tag.json").writeText(JSONObject().put("meeting", name).put("model", spec.id).put("threads", threads)
                     .put("reader", item.getString("reader")).put("language", lang ?: JSONObject.NULL).put("card", card.name)
                     .put("notes_count", journal.size).put("parts", parts).put("prose_sec", secs)
+                    .put("journal_tokens", journal.sumOf { tok.encode(studio.primeminutes.core.reader.ReaderProtocol.render(it) + "\n").size })
                     .put("summary", prose ?: JSONObject.NULL).put("title", title ?: r.opt("title"))
                     .put("prose_raw", raw ?: JSONObject.NULL)
                     .put("raw_tokens", JSONArray(raws.map { tok.encode(it).size })).put("max_tokens", card.forLanguage(lang).prose.maxTokens)

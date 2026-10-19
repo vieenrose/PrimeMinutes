@@ -13,17 +13,32 @@ class ModelCardTest {
         assertEquals("gemma4-meeting-agent-zh-v2", LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card.name)
     }
 
-    /** mobile-v2 writes its prose summary with a 1600-token budget (the whole meeting, not its first 70 %);
-     *  everything else, the note cap of 12 included, is mobile-v1's card (docs/model-eval-mobile-v2.md §10). */
-    @Test fun mobileV2CardIsTheV1CardWithALongerSummary() {
+    /** Since 2026-10-19 the mobile-v2 card has mobile-v1's values (prose budget 1600, 12 notes per window,
+     *  segmented prose for long journals: docs/model-eval-mobile-v2.md §10, §11); only its name differs. */
+    @Test fun mobileV2CardIsTheV1Card() {
         val v2 = LlmRegistry.byId(LlmRegistry.E4B_MOBILE_V2_ID).card
         assertEquals(12, v2.reader.maxNotes)
         assertEquals(12, card.reader.maxNotes)
         assertEquals(1600, v2.prose.maxTokens)
         assertEquals(1600, v2.forLanguage("en").prose.maxTokens)
-        val expected = card.copy(name = v2.name, prose = card.prose.copy(maxTokens = 1600),
-            languages = card.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(maxTokens = 1600)) })
-        assertEquals(expected.toString(), v2.toString())
+        assertEquals(card.copy(name = v2.name).toString(), v2.toString())
+    }
+
+    /** Every shipped model: one prose reply of 1600 tokens up to a 2000-token journal, then parts of about
+     *  600 tokens of notes (at most 4), with a segment prompt in each prompt language (§11). */
+    @Test fun shippedCardsSegmentLongJournals() {
+        LlmRegistry.ALL.forEach { spec ->
+            for (lang in listOf("zh", "en")) {
+                val p = spec.card.forLanguage(lang).prose
+                assertEquals(spec.id, 1600, p.maxTokens)
+                assertEquals(spec.id, 2000, p.segmentAbove)
+                assertEquals(spec.id, 600, p.segmentTokens)
+                assertEquals(spec.id, 4, p.segmentMax)
+                assertNotNull(spec.id, p.segmentPrompt)
+                assert(p.segmentPrompt!!.contains("{notes}") && p.segmentPrompt.contains("{from}") && p.segmentPrompt.contains("{to}"))
+            }
+            assert(spec.card.forLanguage("en").prose.segmentPrompt!!.startsWith("Here are"))
+        }
     }
 
     /** Static acceptance check (docs/model-acceptance-checklist.md): every shipped model's card fits the
@@ -54,7 +69,7 @@ class ModelCardTest {
         assertEquals("\n（另有 2 則較早的筆記未列出）", card.reader.omitted(2))
         assertEquals("以下是一場會議的筆記：\n\nN\n\n為這場會議寫一個標題，不超過 20 個字。只輸出標題。", card.title.render("N"))
         assertEquals(48, card.title.maxTokens)
-        assertEquals(600, card.prose.maxTokens)
+        assertEquals(1600, card.prose.maxTokens)
         assertEquals(320, card.ask.answerTokens)
         assertEquals(setOf("zh-Hans", "zh-Hant", "en"), card.ask.system.keys)
         assertNotNull(card.title.label)

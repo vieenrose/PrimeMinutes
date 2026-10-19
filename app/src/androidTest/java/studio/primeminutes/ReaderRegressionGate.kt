@@ -66,7 +66,16 @@ class ReaderRegressionGate {
             args.getString("prose_tokens")?.toIntOrNull()?.let { n ->
                 c.copy(prose = c.prose.copy(maxTokens = n), languages = c.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(maxTokens = n)) })
             } ?: c
+        }.let { c ->
+            // -e segment_above N: the journal size over which the prose summary is written in parts (all languages).
+            args.getString("segment_above")?.toIntOrNull()?.let { n ->
+                c.copy(prose = c.prose.copy(segmentAbove = n), languages = c.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(segmentAbove = n)) })
+            } ?: c
         }
+        // -e compare_single 1: the summary also written as one reply (segmenting off), timed (prose_single_*).
+        val single = if (args.getString("compare_single") == "1") card.copy(prose = card.prose.copy(segmentTokens = 0),
+            languages = card.languages.mapValues { (_, l) -> l.copy(prose = l.prose?.copy(segmentTokens = 0)) }) else null
+        var proseParts = 0; var singleSecs = 0.0; var singleProse: String? = null
         val mm = ModelManager(ctx)
         assumeTrue("model ${spec.id} not installed", mm.llmReady(spec))
         val utFile = args.getString("utts")
@@ -95,7 +104,14 @@ class ReaderRegressionGate {
                 val p0 = System.nanoTime()
                 val p = runCatching { lane.prose(r.journal) }.getOrNull()
                 proseSecs = (System.nanoTime() - p0) / 1e9
+                proseParts = lane.lastProseParts
                 Triple(r, p, runCatching { lane.title(r.journal) }.getOrNull())
+            }.also { (r, _, _) ->
+                if (single != null) ReaderLane(probe, File(dir, spec.systemPromptFile).readText(), single) {}.use { lane ->
+                    val s0 = System.nanoTime()
+                    singleProse = runCatching { lane.prose(r.journal, MeetingLanguage.detect(r.journal.map { it.text })) }.getOrNull()
+                    singleSecs = (System.nanoTime() - s0) / 1e9
+                }
             }
         } finally { engine.close(); tok.close() }
         val secs = (System.nanoTime() - t0) / 1e9
@@ -127,12 +143,13 @@ class ReaderRegressionGate {
             .put("recall", if (recall.isNaN()) JSONObject.NULL else recall).put("missed", JSONArray(missed)).put("notes", res.journal.size)
             .put("actions", res.actions.size).put("leaks", JSONArray(leaks)).put("title", title)
             .put("max_notes", card.reader.maxNotes).put("window_tokens", card.budget.windowTokens).put("dropped", JSONObject(drops as Map<*, *>))
-            .put("prose_tokens", card.prose.maxTokens).put("prose_seconds", proseSecs.toInt()).put("prose_chars", prose.orEmpty().length)
+            .put("prose_tokens", card.prose.maxTokens).put("prose_seconds", proseSecs.toInt()).put("prose_parts", proseParts)
+            .put("prose_single_seconds", if (single != null) singleSecs.toInt() else JSONObject.NULL).put("prose_single", singleProse ?: JSONObject.NULL).put("prose_chars", prose.orEmpty().length)
             .put("prose_cited_s", cited).put("last_note_s", lastNote).put("vm_hwm_mb", vmHwmKb / 1024)
             .put("turns", probe.turns).put("prose", prose).put("journal", notes).put("lang", lang).put("notes_lang", notesLang).put("prose_lang", proseLang)
         File(ctx.filesDir, "reader_gate").apply { mkdirs() }.resolve("$label-${spec.id}-n${card.reader.maxNotes}-w${card.budget.windowTokens}.json").writeText(report.toString(1))
-        android.util.Log.i("ReaderGate", "$label ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s, prose %ds %d chars cites %d/%d s, VmHWM %d MB"
-            .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks, proseSecs.toInt(), prose.orEmpty().length, cited, lastNote, vmHwmKb / 1024))
+        android.util.Log.i("ReaderGate", "$label ${spec.id} notes≤${card.reader.maxNotes}/win${card.budget.windowTokens}: recall %.2f (missed %s), %d notes, dropped %s, %d actions, title \"%s\", %ds, leaks %s, prose %ds (%d part(s); one reply %ds) %d chars cites %d/%d s, VmHWM %d MB"
+            .format(recall, missed, res.journal.size, drops, res.actions.size, title, secs.toInt(), leaks, proseSecs.toInt(), proseParts, singleSecs.toInt(), prose.orEmpty().length, cited, lastNote, vmHwmKb / 1024))
 
         for (i in 0 until probe.turns.length()) android.util.Log.i("ReaderGate", "TURN $label ${spec.id} ${probe.turns.getJSONObject(i)}")
 
