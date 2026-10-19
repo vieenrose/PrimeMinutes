@@ -568,12 +568,13 @@ object SessionLibrary {
     // the partial file too).
     const val DOWNLOAD = "download.json"
 
-    /** What an item still has to download. [kind]: "podcast" (direct audio URL) or "youtube" (video page URL). */
+    /** What an item still has to download. [kind]: "podcast" (direct audio URL), "youtube" or "peertube" (video page URL). */
     data class PendingDownload(val kind: String, val url: String, val error: String? = null) {
         fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply { error?.let { put("error", it) } }
         companion object {
             const val PODCAST = "podcast"
             const val YOUTUBE = "youtube"
+            const val PEERTUBE = "peertube"
             fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null })
         }
     }

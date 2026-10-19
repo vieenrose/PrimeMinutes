@@ -70,7 +70,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
     // dismissing the sheet no longer cancels it, and MainActivity picks the file up when it is ready.
     fun transcribe(url: String, title: String? = null) {
         error = null
-        ImportDownloads.submit(context, title, studio.primeminutes.core.library.SessionLibrary.PendingDownload.YOUTUBE, url)
+        ImportDownloads.submit(context, title, if (studio.primeminutes.online.PeerTube.looksLike(url)) studio.primeminutes.core.library.SessionLibrary.PendingDownload.PEERTUBE else studio.primeminutes.core.library.SessionLibrary.PendingDownload.YOUTUBE, url)
         onDismiss()
     }
     fun go() {

@@ -727,7 +727,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val dl = studio.primeminutes.online.ImportDownloads
         val d = item.download ?: return
         var title = item.title
-        var stageRes = if (d.kind == SessionLibrary.PendingDownload.YOUTUBE) R.string.dl_resolving else R.string.dl_downloading
+        var stageRes = if (d.kind == SessionLibrary.PendingDownload.YOUTUBE || d.kind == SessionLibrary.PendingDownload.PEERTUBE) R.string.dl_resolving else R.string.dl_downloading
         var lastPct = -1
         var lastP: Float? = null
         var bytes = 0L; var total = 0L
@@ -750,6 +750,18 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                             }
                             stageRes = R.string.dl_downloading; publish()
                             studio.primeminutes.online.YouTube.downloadInto(audio, item.dir) { got, all -> progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } } }
+                        }
+                        SessionLibrary.PendingDownload.PEERTUBE -> {
+                            stageRes = R.string.dl_resolving; publish()
+                            val v = studio.primeminutes.online.PeerTube.resolve(d.url)
+                            if (title.isNullOrBlank() && v.title.isNotBlank()) {
+                                title = v.title
+                                SessionLibrary.rename(applicationContext, item.dir, v.title); dl.changed()
+                            }
+                            stageRes = R.string.dl_downloading; publish()
+                            studio.primeminutes.online.Podcast.downloadInto(v.fileUrl, item.dir) { got, all ->
+                                progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } }
+                            }
                         }
                         else -> studio.primeminutes.online.Podcast.downloadInto(d.url, item.dir) { got, all ->
                             progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } }
