@@ -1429,7 +1429,7 @@ private fun TranscribeScreen(
                 speakerNames = s.speakerNames,
                 // The name is given in the people picker (a sheet), not inline any more.
                 editingSpeakerId = null,
-                onSeek = { sec -> resumeOrRecover((sec * 1000).toInt()) },
+                onSeek = { sec -> lastUserScrollNanos = 0L; resumeOrRecover((sec * 1000).toInt()) },
                 onBeginEdit = { vm.beginLineEdit(idx) },
                 onSaveText = { newText -> vm.saveLineText(idx, newText) },
                 onCancelEdit = { vm.cancelLineEdit() },
@@ -1770,6 +1770,7 @@ private fun TranscribeScreen(
             // bottom while the transcript scrolls above.
             if (player != null) {
                 fun doSeek(ms: Int) {
+                    lastUserScrollNanos = 0L   // an explicit jump: the highlight is followed again at once
                     positionMs = ms.coerceIn(0, durationMs)
                     resumeOrRecover(positionMs)
                 }
