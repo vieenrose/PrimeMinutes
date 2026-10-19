@@ -97,7 +97,10 @@ internal class FakePipelineHost(
     /** Called at the top of every pipeline run (its model check): throw here to fail that run. */
     @Volatile var onEnsureModels: () -> Unit = {}
 
-    override suspend fun emitEvent(e: TranscriptEvent) { events += e }
+    /** Called for every event after it is recorded (e.g. the UI reacting to RecordingSaved). */
+    @Volatile var onEvent: (TranscriptEvent) -> Unit = {}
+
+    override suspend fun emitEvent(e: TranscriptEvent) { events += e; onEvent(e) }
     override fun updateNotification(text: String) {}
     override fun startForegroundTyped(recording: Boolean, text: String) { foreground += recording }
     override fun transcriptFingerprint(cfg: TranscriptionConfig) = FP

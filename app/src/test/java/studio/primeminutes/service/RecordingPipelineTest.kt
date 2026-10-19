@@ -125,4 +125,35 @@ class RecordingPipelineTest {
         assertTrue("no terminal events after a cancel", host.of<TranscriptEvent.Complete>().isEmpty())
         assertFalse(RunRegistry.recordingActive)
     }
+
+    /**
+     * ⏭ Next talk: the screen answers RecordingSaved by starting the next recording, and the
+     * service's start cancels the previous run (previousJob.cancel()). That cancel used to land
+     * in the sidecar write that followed RecordingSaved, before the talk was handed to the reader:
+     * the run's teardown (closeLive) then aborted the reading of a finished meeting, which stayed
+     * RECORDED until some later drain (Note10+, 2026-10-19). The hand-over must precede the
+     * announcement and survive the cancel.
+     */
+    @Test fun nextTalksCancelRightAfterRecordingSavedStillHandsTheTalkOver() = runBlocking {
+        val host = FakePipelineHost(ctx, scope)
+        val p = pipeline(host)
+        val run = scope.async(RunGen(7), start = kotlinx.coroutines.CoroutineStart.LAZY) { p.run() }
+        host.onEvent = { if (it is TranscriptEvent.RecordingSaved) run.cancel() }
+        run.start()
+        withTimeout(20_000) {
+            while (host.of<TranscriptEvent.UtteranceSnapshot>().size < 3) delay(20)
+            p.requestStop(defer = true, queueOnSave = true)
+            runCatching { run.await() }
+        }
+        // What the service does after every run: drop a live task that was never handed over.
+        host.reader.closeLive(host.reader.liveReader)
+        val entry = SessionLibrary.list(ctx).single()
+        val task = host.reader.readTasks.single()
+        assertFalse("the finished talk's reading was aborted", task.aborted)
+        assertTrue(task.final.isCompleted)
+        assertTrue(task.final.getCompleted().isNotEmpty())
+        assertEquals(entry.id, task.entry?.id)
+        assertTrue(SessionLibrary.loadPendingTranscript(entry, FakePipelineHost.FP)!!.isNotEmpty())
+        assertEquals(listOf(entry.id), studio.primeminutes.core.library.ProcessingQueue.ids(ctx))
+    }
 }
