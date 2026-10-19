@@ -19,5 +19,7 @@ swiftc -parse-as-library -O $D/../App/People.swift $D/../App/MeetingMail.swift $
 VOX_MAIL_DIR=$D/../App/Resources/mail $O/mail-tests $D/golden_mail $D/../App/Resources/model_cards/gemma4-meeting-agent-zh.json
 swiftc -parse-as-library -O $D/../App/MeetingSearch.swift $D/MeetingSearchTests.swift -o $O/meeting-search-tests && $O/meeting-search-tests
 swiftc -parse-as-library -O $D/../App/EmbedGate.swift $D/EmbedGateTests.swift -o $O/embed-gate-tests && $O/embed-gate-tests
+swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $R/ReaderSummarizer.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/ProseTests.swift -o $O/prose-tests
+VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/prose-tests $D/golden
 swiftc -parse-as-library -O $R/ReaderGate.swift $D/ReaderGateTests.swift -o $O/reader-gate-tests && $O/reader-gate-tests
 swiftc -parse-as-library -O $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/../App/SeamStitcher.swift $D/../App/SpeakerRefs.swift $D/SeamAndRefsTests.swift -o $O/seam-refs-tests && $O/seam-refs-tests

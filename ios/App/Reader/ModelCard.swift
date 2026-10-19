@@ -45,9 +45,20 @@ struct ModelCard {
 
     /// A one-shot instruction over the notes; `prompt` has a `{notes}` slot. `label` strips a label the
     /// model puts before its answer ("標題：…").
+    ///
+    /// Segmented (the prose summary, Android `ModelCard.OneShot`): a journal longer than `segmentAbove` tokens
+    /// (`segmentTokens` when 0) is written in about total / `segmentTokens` parts, at least 2 and at most
+    /// `segmentMax`, each one fresh conversation with its own `maxTokens` budget, joined as paragraphs. The first
+    /// part reads `prompt`, the next ones `segmentPrompt` (`{notes}`, `{from}`, `{to}`: the part's first and
+    /// last note times), or `prompt` when there is none. `segmentTokens` 0 = one part.
     struct OneShot {
         let prompt: String, maxTokens: Int, label: NSRegularExpression?
+        var segmentTokens = 0, segmentMax = 1, segmentPrompt: String? = nil, segmentAbove = 0
         func render(_ notes: String) -> String { prompt.replacingOccurrences(of: "{notes}", with: notes) }
+        func renderSegment(_ notes: String, from: String, to: String) -> String {
+            (segmentPrompt ?? prompt).replacingOccurrences(of: "{notes}", with: notes)
+                .replacingOccurrences(of: "{from}", with: from).replacingOccurrences(of: "{to}", with: to)
+        }
     }
 
     /// Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`).
@@ -87,10 +98,11 @@ struct ModelCard {
                 case proposal_cue, decided, notes_chars, directive, system_suffix, guard_ = "guard"
             }
         }
-        struct O: Decodable { let prompt: String, max_tokens: Int, label: String? }
+        struct O: Decodable { let prompt: String, max_tokens: Int, label: String?, segment_tokens: Int?, segment_max: Int?, segment_prompt: String?, segment_above: Int? }
         struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String], answer_in: [String: String]? }
-        /// A language's prompt keeps the base budget and label unless it gives its own.
-        struct LO: Decodable { let prompt: String, max_tokens: Int?, label: String? }
+        /// A language's prompt keeps the base budget, label and segmenting unless it gives its own; a segment
+        /// prompt is in the language's words, so it is never inherited.
+        struct LO: Decodable { let prompt: String, max_tokens: Int?, label: String?, segment_tokens: Int?, segment_max: Int?, segment_prompt: String?, segment_above: Int? }
         struct L: Decodable {
             let directive: String?, system_suffix: String?, sections: [[String]]?, section_empty: String?
             let proposal_cue: String?, decided: String?
@@ -104,9 +116,15 @@ struct ModelCard {
         let j = try JSONDecoder().decode(Raw.self, from: data)
         guard j.schema == schema else { throw ReaderError(description: "model card schema \(j.schema), expected \(schema)") }
         let t = j.template, r = j.reader
-        func one(_ o: Raw.O) -> OneShot { OneShot(prompt: o.prompt, maxTokens: o.max_tokens, label: o.label.map(rx)) }
+        func one(_ o: Raw.O) -> OneShot {
+            OneShot(prompt: o.prompt, maxTokens: o.max_tokens, label: o.label.map(rx), segmentTokens: o.segment_tokens ?? 0,
+                    segmentMax: o.segment_max ?? 1, segmentPrompt: o.segment_prompt.flatMap { $0.isEmpty ? nil : $0 }, segmentAbove: o.segment_above ?? 0)
+        }
         func over(_ o: Raw.LO?, _ base: Raw.O) -> OneShot? {
-            o.map { OneShot(prompt: $0.prompt, maxTokens: $0.max_tokens ?? base.max_tokens, label: ($0.label ?? base.label).map(rx)) }
+            o.map { OneShot(prompt: $0.prompt, maxTokens: $0.max_tokens ?? base.max_tokens, label: ($0.label ?? base.label).map(rx),
+                            segmentTokens: $0.segment_tokens ?? base.segment_tokens ?? 0, segmentMax: $0.segment_max ?? base.segment_max ?? 1,
+                            segmentPrompt: $0.segment_prompt.flatMap { $0.isEmpty ? nil : $0 },
+                            segmentAbove: $0.segment_above ?? base.segment_above ?? 0) }
         }
         return ModelCard(
             name: j.name,

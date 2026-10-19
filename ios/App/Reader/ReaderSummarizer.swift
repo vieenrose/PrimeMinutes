@@ -31,13 +31,52 @@ struct ReaderSummarizer {
 
     /// The summary as prose. Every `[ts]` it cites must be a journal time (a near miss is snapped onto one, anything else stripped).
     /// Nil when the journal is empty or the reply is unusable; callers fall back to the grouped minutes.
+    ///
+    /// A journal longer than the card's prose `segment_above` tokens (`segment_tokens` when 0) is summarized in parts of
+    /// consecutive notes (`proseParts`), one fresh conversation and one full budget each, and the parts' paragraphs are
+    /// joined in order: a single reply under one budget ends long before a long meeting does (Android `ReaderLane.prose`).
     func prose(_ journal: [Note]) -> String? {
         guard !journal.isEmpty else { return nil }
-        llm.reset()
-        let toks = fitting(journal, card.prose.maxTokens, card.prose.render)
-        guard llm.append(toks) >= 0 else { return nil }
-        let raw = llm.generateContinue(maxTokens: card.prose.maxTokens, stop: llm.template.end, temp: card.sampler.temp) { _ in }
-        return Self.cleanProse(raw, known: Set(journal.map(\.ts)), turnEnd: llm.template.end)
+        let p = card.prose
+        let known = Set(journal.map(\.ts))
+        let sizes = p.segmentTokens > 0 ? journal.map { llm.tokenize(ReaderProtocol.render($0) + "\n", special: false).count } : []
+        var parts = Self.proseParts(sizes, segmentTokens: p.segmentTokens, segmentMax: p.segmentMax, segmentAbove: p.segmentAbove)
+        if parts.isEmpty { parts = [0...(journal.count - 1)] }
+        var texts: [String] = []
+        for (i, range) in parts.enumerated() {
+            let part = Array(journal[range])
+            llm.reset()
+            let prompt: (String) -> String = i == 0 ? p.render : { p.renderSegment($0, from: part.first!.ts, to: part.last!.ts) }
+            let toks = fitting(part, p.maxTokens, prompt)
+            guard llm.append(toks) >= 0 else { continue }
+            let raw = llm.generateContinue(maxTokens: p.maxTokens, stop: llm.template.end, temp: card.sampler.temp) { _ in }
+            if let t = Self.cleanProse(raw, known: known, turnEnd: llm.template.end) { texts.append(t) }
+        }
+        let out = texts.joined(separator: "\n\n")
+        return out.isEmpty ? nil : out
+    }
+
+    /// The prose summary's parts (Android `ReaderLane.proseParts`): consecutive note ranges of a journal whose notes take
+    /// `sizes` tokens each. One part (the whole journal) when its total is at most `segmentAbove` tokens (`segmentTokens`
+    /// when 0) or segmenting is off (`segmentTokens` 0); else ceil(total / `segmentTokens`) parts, at least 2 and at most
+    /// `segmentMax`, cut where the running total crosses each equal share. Empty for no notes.
+    static func proseParts(_ sizes: [Int], segmentTokens: Int, segmentMax: Int, segmentAbove: Int = 0) -> [ClosedRange<Int>] {
+        if sizes.isEmpty { return [] }
+        let total = sizes.reduce(0, +)
+        let above = segmentAbove > 0 ? segmentAbove : segmentTokens
+        let k = segmentTokens <= 0 || total <= above ? 1
+            : min(max(2, (total + segmentTokens - 1) / segmentTokens), max(1, min(segmentMax, sizes.count)))
+        if k == 1 { return [0...(sizes.count - 1)] }
+        var out: [ClosedRange<Int>] = []
+        var start = 0, run = 0
+        for i in sizes.indices {
+            run += sizes[i]
+            let left = sizes.count - 1 - i, partsLeft = k - out.count - 1
+            // Close here once this part's share is reached, keeping a note for each part still to come.
+            if partsLeft > 0 && left >= partsLeft && (left == partsLeft || run * k >= total * (out.count + 1)) { out.append(start...i); start = i + 1 }
+        }
+        out.append(start...(sizes.count - 1))
+        return out
     }
 
     /// A title kept short: 40 characters, or 60 cut at a word end for a spaced (English) one (Android `ReaderLane.cutTitle`).
