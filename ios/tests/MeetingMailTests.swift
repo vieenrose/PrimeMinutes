@@ -65,6 +65,13 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
         check(MeetingMail.model(input("is1009c"), lang: "en", cut).1, "truncated")
         same(plain("is1009c", "en", cut), body("is1009c.en.mailto.txt"), "mailto txt")
         same(plain("move", "zh-Hant", MeetingMail.Options(summary: false), chat: true), body("move.zh-TW.chat.txt"), "chat")
+        // An import whose file has no creation date: no time line, the rest as before (Android unknownStartLeavesOutTheTime).
+        var noTime = input("move"); noTime.timeKnown = false
+        let tpl = MeetingMail.Templates.shipped
+        let withTime = plain("move", "zh-Hant", .init()).components(separatedBy: "\n")
+        let without = MeetingMail.plain(MeetingMail.model(noTime, lang: "zh-Hant", .init()).0, tpl.txt).components(separatedBy: "\n")
+        let timeLine = withTime.filter { $0.contains("時間") && $0.contains("–") }
+        check(timeLine.count == 1 && withTime.filter { $0 != timeLine[0] } == without, "unknown start: no time line")
         let m = MeetingMail.build(input("move"), lang: "zh-Hans", .init())
         check(m.subject.hasPrefix("会议纪要｜") && m.plain.contains("注意：本纪要由 AI 根据录音自动生成"), "zh-Hans frame \(m.subject)")
         check(MeetingMail.resolveRefs("S2 需請法務", [1: "林雅婷"]) == "林雅婷需請法務", "refs han")

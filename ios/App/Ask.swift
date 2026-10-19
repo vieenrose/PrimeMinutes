@@ -23,7 +23,8 @@ import Combine
     /// (115 for a line starting at 115.4 s opened the line before).
     /// `k` is the short tag the model sees (`[[k]]`), unique across the conversation.
     /// `a`...`b`: the transcript utterances a passage covers (-1 for a note), so neighbours can widen it.
-    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var k = 0; var a = -1, b = -1
+    /// `prompt`: the text as the model reads it (each utterance with its speaker, AskHolder.speakerText), nil: `text`.
+    struct Excerpt: Identifiable { let session: Session, sec: Int, text: String, score: Float, at: Double; var k = 0; var a = -1, b = -1; var prompt: String? = nil
         var id: String { session.id.uuidString + "@\(sec)" } }
     /// Retrieval knobs (AskSelect.Retrieval; Android AskEngine.retrieval).
     nonisolated static let retrieval = AskSelect.Retrieval()
@@ -196,7 +197,7 @@ import Combine
     nonisolated static func render(_ xs: [Excerpt], _ zh: Bool, _ card: ModelCard) -> String {
         if xs.isEmpty { return card.ask.noExcerpts + "\n" }
         return xs.map { x in
-            let t = x.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let t = (x.prompt ?? x.text).trimmingCharacters(in: .whitespacesAndNewlines)
             return "[[\(x.k)]] \(x.session.title) · \(ReaderProtocol.formatTs(x.sec))\n\(zh ? t : ChineseAmounts.toDigits(t))\n\n"
         }.joined()
     }
@@ -267,10 +268,29 @@ final class AskHolder: @unchecked Sendable {
         let ranked = fused.filter { routed.contains($0.session.id.uuidString) } + fused.filter { !routed.contains($0.session.id.uuidString) }
         let byId = Dictionary(sessions.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { a, _ in a })
         let items = ranked.map { AskSelect.Item(meeting: $0.session.id.uuidString, sec: $0.sec, at: $0.at, text: $0.text, score: $0.score, a: $0.a, b: $0.b) }
-        let chosen = AskSelect.select(items, p, tokens: { self.count($0) }, src: AskTranscripts(byId: byId))
+        let card = Prefs.reader.card
+        func speak(_ x: AskSelect.Item) -> String { byId[x.meeting].map { Self.speakerText($0, x.a, x.b, x.text, card) } ?? x.text }
+        let chosen = AskSelect.select(items, p, tokens: { self.count($0) }, src: AskTranscripts(byId: byId), prompt: speak)
         return chosen.compactMap { x in
-            byId[x.meeting].map { AskEngine.Excerpt(session: $0, sec: x.sec, text: x.text, score: x.score, at: x.at, a: x.a, b: x.b) }
+            byId[x.meeting].map { AskEngine.Excerpt(session: $0, sec: x.sec, text: x.text, score: x.score, at: x.at, a: x.a, b: x.b, prompt: speak(x)) }
         }
+    }
+
+    /// An excerpt's text as the model reads it when the card asks for speakers (Android AskEngine.speakerText): a
+    /// transcript excerpt line by line, each utterance with its speaker as the meeting shows it (the user's name, else
+    /// "語者 N" / "Speaker N" in the interface language); a note's S-numbers resolved the same way.
+    nonisolated static func speakerText(_ s: Session, _ a: Int, _ b: Int, _ text: String, _ card: ModelCard) -> String {
+        guard card.ask.speakerLine != nil else { return text }
+        if a < 0 { return SpeakerRefs.resolve(text, label: { s.name($0) }, known: Set(s.lines.map(\.speaker))) }
+        guard s.lines.indices.contains(a) else { return text }
+        // One line per speaker turn: consecutive utterances of the same speaker are joined under one label.
+        var out: [String] = [], cur: Int? = nil, buf = ""
+        for l in s.lines[a...min(max(b, a), s.lines.count - 1)] {
+            if !buf.isEmpty && l.speaker != cur { out.append(card.ask.line(s.name(cur!), buf)); buf = "" }
+            buf += (buf.isEmpty ? "" : " ") + l.text; cur = l.speaker
+        }
+        if !buf.isEmpty, let c = cur { out.append(card.ask.line(s.name(c), buf)) }
+        return out.joined(separator: "\n")
     }
 }
 
@@ -292,8 +312,10 @@ extension AskHolder {
         let ranked = AskEngine.fuse(dense, keyword, k: p.rrfK) { _, sid in sid.map { speakers.contains($0) } ?? false }
         let id = s.id.uuidString
         let items = ranked.map { AskSelect.Item(meeting: id, sec: $0.sec, at: $0.at, text: $0.text, score: $0.score, a: $0.a, b: $0.b) }
-        let chosen = AskSelect.select(items, p, tokens: { self.countTokens($0) }, src: AskTranscripts(byId: [id: s], unindexed: true))
-        return chosen.map { AskEngine.Excerpt(session: s, sec: $0.sec, text: $0.text, score: $0.score, at: $0.at, a: $0.a, b: $0.b) }
+        let card = Prefs.reader.card
+        func speak(_ x: AskSelect.Item) -> String { Self.speakerText(s, x.a, x.b, x.text, card) }
+        let chosen = AskSelect.select(items, p, tokens: { self.countTokens($0) }, src: AskTranscripts(byId: [id: s], unindexed: true), prompt: speak)
+        return chosen.map { AskEngine.Excerpt(session: s, sec: $0.sec, text: $0.text, score: $0.score, at: $0.at, a: $0.a, b: $0.b, prompt: speak($0)) }
     }
 }
 

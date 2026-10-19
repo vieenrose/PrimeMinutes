@@ -11,6 +11,9 @@ struct Job: Codable, Identifiable, Equatable {
     /// A podcast episode not downloaded yet (Android download.json): the item exists from the pick on, shows its
     /// download, survives a kill (it resumes from its `.part`) and is processed once `audio` is on disk.
     var download: JobDownload? = nil
+    /// When the meeting was captured, epoch seconds (Session.captureStart): the recording's start, an import's media
+    /// creation date, -1 when the file has none.
+    var captureStart: Double? = nil
 }
 
 struct JobDownload: Codable, Equatable {

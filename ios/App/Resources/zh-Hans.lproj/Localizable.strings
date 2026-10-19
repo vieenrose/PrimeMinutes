@@ -173,6 +173,11 @@
 "studio_processing_banner" = "%@（点按即时查看）";
 "source_process_all" = "处理待办（%d）";
 "agent_listening" = "阅读逐字稿 · 已写 %d 条笔记";
+"agent_first_eta_one" = "第一次阅读约在 %d 分钟后";
+"agent_first_eta" = "第一次阅读约在 %d 分钟后";
+"agent_first_soon" = "第一次阅读不到 1 分钟后开始";
+"agent_first_pending" = "进度条满时开始第一次阅读";
+"agent_first_short" = "提早停止录音的话，会在停止后写笔记";
 "lic_nemo" = "nemo-x-asr-diarizer（流式语音识别与说话人分离）";
 "lic_crispasr" = "CrispASR（X-ASR 运行环境）";
 "lic_audiocpp" = "audio.cpp（Nemotron-3 说话人分离运行环境）";

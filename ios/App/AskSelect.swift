@@ -30,9 +30,10 @@ enum AskSelect {
         func span(_ meeting: String, _ a: Int, _ b: Int) -> Item?
     }
 
-    static func select(_ ranked: [Item], _ p: Retrieval, tokens: (String) -> Int, src: Transcripts?) -> [Item] {
+    /// `prompt`: the text the model reads for an item (speaker labels included): what the budget counts.
+    static func select(_ ranked: [Item], _ p: Retrieval, tokens: (String) -> Int, src: Transcripts?, prompt: (Item) -> String = { $0.text }) -> [Item] {
         var out: [Item] = [], cost: [Int] = [], used = 0
-        func price(_ x: Item) -> Int { tokens(x.text) + headerTokens }
+        func price(_ x: Item) -> Int { tokens(prompt(x)) + headerTokens }
         /// Puts `x` in place of the items at `olds` (indices into out), if the budget allows.
         func replace(_ olds: [Int], _ x: Item) -> Bool {
             let n = price(x), freed = olds.reduce(0) { $0 + cost[$1] }

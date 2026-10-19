@@ -38,7 +38,8 @@ import AVFoundation
             screen.status = L("loading_models"); screen.clear()
             elapsed = 0
             let r = Recorder(); recorder = r; recording = true; startingRecord = false; UIApplication.shared.isIdleTimerDisabled = true
-            let job = Job(audio: UUID().uuidString + ".wav")
+            var job = Job(audio: UUID().uuidString + ".wav")
+            job.captureStart = job.date.timeIntervalSince1970   // the mail's meeting time: the recording's start
             guard let wav = try? WavWriter(JobQueue.url(job)) else { recording = false; return }
             recordingJob = job.id
             await runner.queue.add(job)       // on the list before the first sample: a kill mid-recording keeps the audio

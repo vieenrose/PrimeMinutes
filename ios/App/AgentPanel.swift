@@ -30,11 +30,18 @@ import SwiftUI
     @Published var guardCounts: ReaderGuard?
     @Published var guardExceeded = false
     var wholeTranscript = true
+    /// When this reading started listening, for the first reading's estimate (Android AgentUiState.listenSince).
+    private var listenSince: Date?
+    /// Minutes until the first reading at the transcript's pace so far (0: under a minute), nil: too early to tell.
+    @Published var firstEtaMin: Int?
+    /// Listening and no window read yet: the recording's card says when the first reading comes.
+    var beforeFirstReading: Bool { state == .listening && notes.isEmpty && !steps.contains { !$0.restart && ($0.done || $0.reading) } }
 
     var working: Bool { state != nil && state != .done }
     var windowsRead: Int { steps.filter { !$0.restart && $0.done }.count }
 
-    func reset() { state = nil; reply = ""; ctxTokens = 0; notesSoFar = 0; notes = []; steps = []; log = []; guardCounts = nil; guardExceeded = false }
+    func reset() { state = nil; reply = ""; ctxTokens = 0; notesSoFar = 0; notes = []; steps = []; log = []; guardCounts = nil; guardExceeded = false
+        listenSince = nil; firstEtaMin = nil }
 
     func apply(_ e: AgentEvent) {
         switch e {
@@ -43,6 +50,7 @@ import SwiftUI
             if ctx > 0 { ctxTokens = ctx }
             if wMax > 0 { windowMax = wMax }
             if cMax > 0 { ctxMax = cMax }
+            if listenSince == nil { listenSince = Date() }
             if window > 0 && !steps.contains(where: { !$0.restart && $0.window == window }) { steps.append(Step(window: window)) }
             if s == .reading { reply = ""; edit { $0.reading = true } }
             notesSoFar = n; state = s
@@ -50,6 +58,10 @@ import SwiftUI
             if window > 0 && !steps.contains(where: { !$0.restart && $0.window == window }) { steps.append(Step(window: window)) }
             ctxTokens = ctx
             if what == "segment" { edit { $0.tokens += tokens } }
+            if listenSince == nil { listenSince = Date() }
+            if what == "segment", beforeFirstReading, let t0 = listenSince {
+                firstEtaMin = FirstReading.etaMinutes(steps.last { !$0.restart }?.tokens ?? 0, windowMax, elapsedMs: Int(Date().timeIntervalSince(t0) * 1000))
+            }
             add("▸", "\(what) · \(tokens) tok · \(String(format: "%.1f", Double(ms) / 1000)) s · ctx \(ctx)")
         case let .turnToken(_, piece): reply += piece
         case let .turnDone(window, _, kept, ms):
@@ -71,6 +83,23 @@ import SwiftUI
     private func edit(_ f: (inout Step) -> Void) { if let i = steps.lastIndex(where: { !$0.restart }) { f(&steps[i]) } }
     private func add(_ p: String, _ t: String, dropped: Bool = false) {
         log.append(LogLine(prefix: p, text: t, dropped: dropped)); if log.count > 200 { log.removeFirst(log.count - 200) }
+    }
+}
+
+/// The first reading's estimate (Android FirstReading): the window of `windowMax` tokens fills at the pace so far.
+enum FirstReading {
+    /// Under this much listening the pace is not known yet (the first lines arrive in a burst).
+    static let minElapsedMs = 45_000
+    /// Whole minutes (rounded up) until `tokens` reach `windowMax`; 0 = under a minute; nil = too early.
+    static func etaMinutes(_ tokens: Int, _ windowMax: Int, elapsedMs: Int) -> Int? {
+        guard elapsedMs >= minElapsedMs, tokens > 0, windowMax > 0 else { return nil }
+        let sec = Double(max(windowMax - tokens, 0)) * (Double(elapsedMs) / 1000) / Double(tokens)
+        return sec < 60 ? 0 : Int((sec / 60).rounded(.up))
+    }
+    /// The card's line: when the first reading comes.
+    @MainActor static func line(_ agent: AgentUi) -> String {
+        guard let eta = agent.firstEtaMin else { return L("agent_first_pending") }
+        return eta <= 0 ? L("agent_first_soon") : L(eta == 1 ? "agent_first_eta_one" : "agent_first_eta", eta)
     }
 }
 
@@ -295,6 +324,12 @@ struct AgentStrip: View {
                     HStack(spacing: 8) {
                         Text(n.ts).font(.caption2.monospaced()).foregroundStyle(.blue)
                         Text(refs(n.text)).font(.caption).lineLimit(1)
+                    }
+                } else if agent.beforeFirstReading {
+                    // Not "0 notes" for minutes: when the first reading comes, and that a shorter recording gets its notes after Stop.
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(FirstReading.line(agent)).font(.caption)
+                        Text(L("agent_first_short")).font(.caption2).foregroundStyle(.secondary)
                     }
                 } else { Text(p.line(st)).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }

@@ -53,7 +53,15 @@ struct ModelCard {
     /// Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`).
     /// `answerIn`: per answer language, read after a question asked in another language than the system
     /// prompt's (the system prompt stays the interface language's: the conversation's cached prefix).
-    struct AskCard { let answerTokens: Int, noExcerpts: String, system: [String: String]; var answerIn: [String: String] = [:] }
+    /// `speakerLine`: how a transcript excerpt's utterance reads with its speaker (`{speaker}` the name the meeting shows —
+    /// the user's name, else the interface's "Speaker N" —, `{text}` the words); nil: excerpts as indexed (Android AskCard).
+    struct AskCard { let answerTokens: Int, noExcerpts: String, system: [String: String]; var answerIn: [String: String] = [:]; var speakerLine: String? = nil
+        /// One utterance of an excerpt as the model reads it; a line with no speaker stays bare.
+        func line(_ speaker: String?, _ text: String) -> String {
+            guard let f = speakerLine, let speaker, !speaker.isEmpty else { return text }
+            return f.replacingOccurrences(of: "{speaker}", with: speaker).replacingOccurrences(of: "{text}", with: text)
+        }
+    }
 
     static let schema = 1
 
@@ -88,7 +96,7 @@ struct ModelCard {
             }
         }
         struct O: Decodable { let prompt: String, max_tokens: Int, label: String? }
-        struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String], answer_in: [String: String]? }
+        struct A: Decodable { let answer_tokens: Int, no_excerpts: String, system: [String: String], answer_in: [String: String]?, speaker_line: String? }
         /// A language's prompt keeps the base budget and label unless it gives its own.
         struct LO: Decodable { let prompt: String, max_tokens: Int?, label: String? }
         struct L: Decodable {
@@ -124,7 +132,7 @@ struct ModelCard {
                                                      maxOffProtocolRate: g.max_off_protocol_rate ?? 0.2, minLines: g.min_lines ?? 10) } ?? GuardCard(),
                 directive: r.directive, systemSuffix: r.system_suffix),
             title: one(j.title), prose: one(j.prose),
-            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system, answerIn: j.ask.answer_in ?? [:]),
+            ask: AskCard(answerTokens: j.ask.answer_tokens, noExcerpts: j.ask.no_excerpts, system: j.ask.system, answerIn: j.ask.answer_in ?? [:], speakerLine: j.ask.speaker_line),
             languages: (j.languages ?? [:]).mapValues { v in
                 LanguageVariant(directive: v.directive, systemSuffix: v.system_suffix, sections: v.sections?.map { ($0[0], $0[1]) }, sectionEmpty: v.section_empty,
                                 proposalCue: v.proposal_cue.map(rx), decided: v.decided.map(rx),

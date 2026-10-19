@@ -105,6 +105,8 @@ enum MeetingMail {
         var start: Date
         var timeZone: TimeZone
         var durationSec: Double
+        /// False when the meeting's start is unknown (an import whose file has no date): no time line.
+        var timeKnown = true
     }
 
     struct Options: Equatable {
@@ -244,12 +246,12 @@ enum MeetingMail {
         let parts = input.participants + (input.unnamed > 0 ? [fill(str("unnamed"), [("n", input.unnamed)])] : [])
         let hm = DateFormatter(); hm.locale = Locale(identifier: "en_US_POSIX"); hm.timeZone = input.timeZone; hm.dateFormat = "HH:mm"
         let end = input.start.addingTimeInterval(input.durationSec)
-        let facts: [[String: Any]] = [
+        let facts: [[String: Any]] = ([
             ["label": str("label_date"), "value": dateLong],
-            ["label": str("label_time"), "value": "\(hm.string(from: input.start))–\(hm.string(from: end))"],
+            input.timeKnown ? ["label": str("label_time"), "value": "\(hm.string(from: input.start))–\(hm.string(from: end))"] : nil,
             ["label": str("label_duration"), "value": duration],
             ["label": str("label_participants"), "value": parts.joined(separator: str("list_sep"))],
-        ]
+        ] as [[String: Any]?]).compactMap { $0 }
         let names = input.names
         func refs(_ t: String) -> String { resolveRefs(t, names) }
         var model: [String: Any] = [

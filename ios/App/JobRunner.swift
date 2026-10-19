@@ -78,7 +78,7 @@ final class ReaderWorker: @unchecked Sendable {
         // Android: removing from the queue keeps the recording in the library (unprocessed), so it can be transcribed later
         if FileManager.default.fileExists(atPath: JobQueue.url(j).path), !(await library.all()).contains(where: { $0.id == j.id }) {
             var s = Session(title: j.title ?? L("meeting"), summary: "", seconds: AudioDecode.duration(JobQueue.url(j)) ?? 0, lines: [], notes: [])
-            s.id = j.id; s.date = j.date; s.audio = j.audio
+            s.id = j.id; s.date = j.date; s.audio = j.audio; s.captureStart = j.captureStart
             try? await library.store.save(s); await library.refresh()
         }
         await syncQueue()
@@ -91,7 +91,7 @@ final class ReaderWorker: @unchecked Sendable {
         if silent && !recording { screen.status = L("status_no_speech") }
         let fallback = lines.first.map { String($0.text.prefix(20)) } ?? L("meeting")
         var s = Session(title: silent ? L("status_no_speech") : title.isEmpty ? fallback : title, summary: summary, seconds: seconds, lines: lines, notes: silent ? [] : notes)
-        if let job { s.id = job.id; s.date = job.date; s.audio = job.audio; if let t = job.title, !t.isEmpty { s.title = t } }
+        if let job { s.id = job.id; s.date = job.date; s.audio = job.audio; s.captureStart = job.captureStart; if let t = job.title, !t.isEmpty { s.title = t } }
         if !summary.isEmpty && !silent { s.reader = Prefs.readerId }
         s.readerGuard = readerGuard
         let old = resummarized.removeValue(forKey: s.id)
@@ -265,7 +265,8 @@ final class ReaderWorker: @unchecked Sendable {
     /// Android re-transcribe / re-summarize: re-queues the session's saved audio under the same id (summarize reuses the stored transcript, so only the reader runs).
     func rerun(_ s: Session, transcribe: Bool) {
         guard let a = s.audio else { StatusLog.add("trace rerun: no audio"); return }
-        let j = Job(id: s.id, date: s.date, audio: a, title: RerunTitle.kept(s.title, placeholders: [L("meeting"), L("status_no_speech")], firstLine: s.lines.first?.text))
+        var j = Job(id: s.id, date: s.date, audio: a, title: RerunTitle.kept(s.title, placeholders: [L("meeting"), L("status_no_speech")], firstLine: s.lines.first?.text))
+        j.captureStart = s.captureStart
         guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { StatusLog.add("trace rerun: audio file missing"); return }
         Task { guard !(await queue.contains(s.id)) else { return }   // already queued (double tap): one row, one run
         if transcribe { Checkpoint.remove(s.id); resummarized[s.id] = nil } else { Checkpoint.save(s.lines, s.id); resummarized[s.id] = s }

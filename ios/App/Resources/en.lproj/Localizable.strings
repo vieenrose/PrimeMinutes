@@ -173,6 +173,11 @@
 "studio_processing_banner" = "%@ (tap to watch live)";
 "source_process_all" = "Process pending (%d)";
 "agent_listening" = "Reading transcript · %d notes written";
+"agent_first_eta_one" = "First reading in about %d minute";
+"agent_first_eta" = "First reading in about %d minutes";
+"agent_first_soon" = "First reading in under a minute";
+"agent_first_pending" = "First reading when the bar fills";
+"agent_first_short" = "Stopping sooner? The notes are written after you stop.";
 "lic_nemo" = "nemo-x-asr-diarizer (streaming ASR + diarization)";
 "lic_crispasr" = "CrispASR (X-ASR runtime)";
 "lic_audiocpp" = "audio.cpp (Nemotron-3 diarization runtime)";

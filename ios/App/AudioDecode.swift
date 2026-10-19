@@ -33,3 +33,16 @@ enum AudioDecode {
         }
     }
 }
+
+/// An imported file's creation date from its own metadata (Android MediaDate): the meeting's start for the "Email
+/// participants" time line. Never the file's modified time or the import time; nil when the file has no date, or an
+/// implausible one (an MP4 creation_time left at zero, a date in the future).
+enum MediaDate {
+    static func captureStart(_ url: URL, now: Date = Date()) -> Date? {
+        plausible(AVURLAsset(url: url).creationDate?.dateValue, now: now)
+    }
+    static func plausible(_ d: Date?, now: Date) -> Date? {
+        guard let d, d.timeIntervalSince1970 >= 946_684_800, d <= now.addingTimeInterval(86_400) else { return nil }
+        return d
+    }
+}

@@ -48,7 +48,10 @@ private enum MailDefaults {
         return MeetingMail.Input(title: title(s), summary: summary.isEmpty || summary.hasPrefix("【") ? nil : s.summary, sections: sections,
                                  names: Dictionary(uniqueKeysWithValues: speakers.map { ($0, s.name($0)) }),
                                  participants: participants, unnamed: speakers.count - named.count,
-                                 start: s.date, timeZone: .current, durationSec: s.lines.map(\.end).max() ?? 0)
+                                 start: s.meetingStart ?? s.date, timeZone: .current,
+                                 // A known capture runs start → start + the recording's length (the transcript can end before the audio).
+                                 durationSec: max(s.lines.map(\.end).max() ?? 0, s.captureStart.map { $0 >= 0 ? s.seconds : 0 } ?? 0),
+                                 timeKnown: s.meetingStart != nil)
     }
     /// The file names the mail's "Attached:" line lists (the preview; the mail itself names the real file).
     static func attachNames(_ attach: String?, _ title: String) -> [String] {

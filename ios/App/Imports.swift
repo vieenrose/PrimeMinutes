@@ -23,6 +23,7 @@ import AVFoundation
 
     func addEpisode(_ ep: Episode) {
         var j = Job(audio: UUID().uuidString + "." + Podcast.ext(ep.audioUrl), title: ep.title)
+        j.captureStart = -1   // a podcast episode: no meeting time to show
         j.download = JobDownload(url: ep.audioUrl)
         StatusLog.add("podcast item \(j.id): \(ep.title)")
         Task { await runner.queue.add(j); await runner.syncQueue(); kick() }
@@ -105,6 +106,8 @@ import AVFoundation
             if let t = AVURLAsset(url: JobQueue.url(j)).duration.seconds as Double?, t.isFinite, t > s.seconds { s.seconds = t }
             library.update(s); return
         }
+        // When the meeting took place: the file's own creation date, never the import time (none: the time is left out).
+        var j = j; j.captureStart = MediaDate.captureStart(JobQueue.url(j))?.timeIntervalSince1970 ?? -1
         Task { await runner.queue.add(j); runner.drain() }
     }
 }
