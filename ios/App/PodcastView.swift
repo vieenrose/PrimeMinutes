@@ -51,3 +51,39 @@ struct PodcastView: View {
         Task { defer { busy = false }; do { episodes = try await Podcast.episodes(s.feedUrl) } catch { self.error = L("status_error", error.localizedDescription) } }
     }
 }
+
+/// A PeerTube video link (any instance): resolved to its smallest file, then queued like a podcast episode.
+struct PeerTubeView: View {
+    let pick: (Episode) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var link = ""
+    @State private var busy = false
+    @State private var error: String?
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField(L("source_peertube_desc"), text: $link).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .onSubmit { go() }
+                if let error { Text(error).foregroundStyle(.red) }
+                if busy { HStack(spacing: 8) { ProgressView(); Text(L("dl_searching")).font(.footnote).foregroundStyle(.secondary) } }
+            }
+            .navigationTitle(L("source_peertube"))
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button(L("peertube_add")) { go() }.disabled(busy || link.trimmingCharacters(in: .whitespaces).isEmpty) }
+                ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
+            }
+        }
+    }
+    private func go() {
+        guard !busy else { return }
+        busy = true; error = nil
+        Task {
+            defer { busy = false }
+            do {
+                let v = try await PeerTube.resolve(link)
+                pick(Episode(title: v.title, audioUrl: v.fileUrl, published: "", duration: Podcast.formatDuration(String(v.seconds))))
+                dismiss()
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+}

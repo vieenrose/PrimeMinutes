@@ -326,6 +326,7 @@ struct LibraryView: View {
 struct AddSourceSheet: View {
     let onFile: () -> Void
     let onPodcast: () -> Void
+    let onPeerTube: () -> Void
     let onSession: () -> Void
     @Environment(\.dismiss) private var dismiss
     private func row(_ icon: String, _ title: String, _ desc: String, _ action: @escaping () -> Void) -> some View {
@@ -345,9 +346,10 @@ struct AddSourceSheet: View {
             Text(L("add_audio")).font(.title3.bold()).padding(.bottom, 8)
             row("folder", L("source_audio_file"), L("source_audio_file_desc"), onFile)
             row("dot.radiowaves.left.and.right", L("source_podcast"), L("source_podcast_desc"), onPodcast)
+            row("play.rectangle", L("source_peertube"), L("source_peertube_desc"), onPeerTube)
             row("doc.badge.arrow.up", L("source_session"), L("source_session_desc"), onSession)
             Spacer(minLength: 0)
-        }.padding(.horizontal, 20).padding(.top, 24).presentationDetents([.height(380)])
+        }.padding(.horizontal, 20).padding(.top, 24).presentationDetents([.height(450)])
     }
 }
 

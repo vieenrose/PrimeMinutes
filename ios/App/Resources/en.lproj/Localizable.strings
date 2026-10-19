@@ -593,3 +593,9 @@
 "settings_asr_latency_balanced" = "balanced";
 "settings_asr_latency_accurate" = "most accurate";
 "settings_asr_latency_hint" = "How long after speech the words appear. Longer = more accurate words, live and in the saved transcript. A new choice downloads its speech model (about 155 MB) in the background; the current one keeps working until it is ready.";
+"source_peertube" = "PeerTube";
+"source_peertube_desc" = "Paste a video link";
+"peertube_bad_link" = "Not a PeerTube video link";
+"peertube_live" = "Live streams cannot be imported";
+"peertube_no_file" = "This video offers no downloadable file";
+"peertube_add" = "Add";
