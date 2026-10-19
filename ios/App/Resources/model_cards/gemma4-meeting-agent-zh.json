@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "name": "gemma4-meeting-agent-zh",
- "about": "Everything the app must know to drive the Gemma-4 meeting-agent fine-tune (E2B and E4B share it): chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
+ "about": "Everything the app must know to drive the Gemma-4 meeting-agent fine-tune (E2B and E4B share it): chat template, sampler, budgets, the reader protocol it was trained on, and the plain-instruction prompts (title, prose, Ask). A model with another template or protocol ships its own card; the app code stays the same. The reader's system prompt is not here: it ships next to the weights (system_prompt.txt). Prose summary: one reply of at most 1600 tokens; a journal over 2000 tokens (segment_above: about 40–75 minutes of meeting, where one reply starts to skip the first quarter or to reach its cap and the journal no longer fits the prompt uncut) is summarized in parts of about 600 tokens of notes (segment_tokens, at most segment_max 4), each one fresh reply, the later ones reading segment_prompt, joined as paragraphs (docs/model-eval-mobile-v2.md §11). Per meeting language (languages.<code>, the app detects zh/en from the transcript's script): a directive read after each transcript window and a suffix to the reader's system prompt (reader.directive / reader.system_suffix are the defaults, none in this card), the minutes' section headers, and the title/prose prompts (their max_tokens and label are the base ones unless given).",
  "template": {
   "bos": "<bos>",
   "bos_id": 2,
@@ -114,7 +114,11 @@
  },
  "prose": {
   "prompt": "以下是一場會議的筆記：\n\n{notes}\n\n根據這些筆記，用連貫的段落寫一份會議摘要（不要條列、不要標題），說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。",
-  "max_tokens": 600
+  "max_tokens": 1600,
+  "segment_above": 2000,
+  "segment_tokens": 600,
+  "segment_max": 4,
+  "segment_prompt": "以下是一場會議中 {from} 到 {to} 這段時間的筆記：\n\n{notes}\n\n根據這些筆記，用連貫的段落接著寫這段時間的會議摘要（不要條列、不要標題、不要再介紹這場會議），說明討論了什麼、決定了什麼、誰要做什麼、還有什麼沒解決。只寫筆記裡有的內容；提到某件事時在句尾附上筆記的時間，例如 [1:23]。"
  },
  "ask": {
   "answer_tokens": 320,
@@ -164,7 +168,8 @@
     "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nWrite a title for this meeting in English, at most 10 words. Output only the title."
    },
    "prose": {
-    "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nFrom these notes, write a summary of the meeting in English as connected paragraphs (no bullet points, no headings): what was discussed, what was decided, who will do what, and what is still open. Only write what is in the notes; when you mention something, end the sentence with the note's time, e.g. [1:23]."
+    "prompt": "Here are the notes of a meeting:\n\n{notes}\n\nFrom these notes, write a summary of the meeting in English as connected paragraphs (no bullet points, no headings): what was discussed, what was decided, who will do what, and what is still open. Only write what is in the notes; when you mention something, end the sentence with the note's time, e.g. [1:23].",
+    "segment_prompt": "Here are the notes of a meeting from {from} to {to}:\n\n{notes}\n\nFrom these notes, continue the summary of the meeting for this part, in English, as connected paragraphs (no bullet points, no headings, do not introduce the meeting again): what was discussed, what was decided, who will do what, and what is still open. Only write what is in the notes; when you mention something, end the sentence with the note's time, e.g. [1:23]."
    }
   }
  }
