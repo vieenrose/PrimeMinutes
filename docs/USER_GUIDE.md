@@ -127,6 +127,8 @@ flowchart TD
 
 錄音前就把錄音排入佇列，App 被終止也保留音訊。錄音時套用自動增益（只放大小聲的語音），逐字稿即時出現；語者在設定的延遲後標上顏色。AI 筆記每讀滿一段逐字稿（約 1,500 個詞元）才寫一批：第一次閱讀前，卡片顯示「進度條滿時開始第一次閱讀」，錄音約一分鐘後改為「第一次閱讀約在 N 分鐘後」（依目前的說話速度），並提示提早停止錄音的話筆記在停止後才寫。RAM 不足 4.5 GB 時，AI 筆記在錄音結束後才閱讀。
 
+<p><img src="screenshots/qs-capture.png" width="200" alt="錄音室"> <img src="guide/24c-first-reading.png" width="200" alt="第一次閱讀約在 9 分鐘後"></p>
+
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
 | 計時與即時逐字稿 | 逐字稿隨說話更新 | ✅ 手動 |
@@ -169,9 +171,9 @@ flowchart TD
 
 ### 6b. 在這場會議內搜尋與提問
 
-<p><img src="screenshots/meeting-search-zh.png" width="200" alt="搜尋這場會議：AI 筆記與逐字稿的結果清單"> <img src="screenshots/meeting-ask-zh.png" width="200" alt="問這場會議：先前的問題與新的回答"></p>
+<p><img src="screenshots/meeting-search-zh.png" width="200" alt="搜尋這場會議：AI 筆記與逐字稿的結果清單"> <img src="screenshots/meeting-ask-zh.png" width="200" alt="問這場會議：先前的問題與新的回答"> <img src="screenshots/meeting-search-ask.gif" width="200" alt="搜尋「紙箱什麼時候發」後按 ✦ 提問"></p>
 
-搜尋列下方列出這場會議符合的 **AI 筆記** 與 **逐字稿** 句子（各依時間排序，標示 **≈** 的是依語意找到的）；點一筆就捲到那句並把播放位置停在那裡。**✦**（搜尋列、結果清單最後一列、⋯ 選單的「問這場會議」）只拿這場會議的段落作答；出處只顯示時間。設計與預設值：[docs/design/in-session-search-ask.md](design/in-session-search-ask.md)。錄音／處理中的即時畫面沒有逐字稿搜尋（與先前相同），請在會議完成後從會議畫面使用。
+搜尋列下方列出這場會議符合的 **AI 筆記** 與 **逐字稿** 句子（各依時間排序，標示 **≈** 的是依語意找到的）；點一筆就捲到那句並把播放位置停在那裡。**✦**（搜尋列、結果清單最後一列、⋯ 選單的「問這場會議」）只拿這場會議的段落作答；出處只顯示時間；摘錄以說話者名字交給模型，所以「誰負責…」的問題能回答人名。設計與預設值：[docs/design/in-session-search-ask.md](design/in-session-search-ask.md)。錄音／處理中的即時畫面沒有逐字稿搜尋（與先前相同），請在會議完成後從會議畫面使用。
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -291,6 +293,8 @@ flowchart TD
 | 輸入「大家的車要停哪裡」：原話說的是「有沒有停車位……月租一個四千五」，用詞不同也找得到；點段落就從 3:50 開始播放。 | 問「尾牙頭獎是什麼？」：回答附上出處；點出處就跳到 1:55 的原話。 |
 
 即時錄製，未加速。搜尋在輸入時先比對關鍵字，一兩秒後補上語意相近的結果；提問約 5 秒完成（E2B），作答時面板顯示目前的階段與秒數。
+
+<p><img src="screenshots/agent-live.gif" width="280" alt="錄音中 AI 筆記即時寫下筆記"><br><sub>錄音進行中（約第 5 分鐘起），AI 筆記讀完一段逐字稿後寫下筆記（×2，iPhone 17e，E4B 行動版 v2）。會議內搜尋與提問（上方 6b 節的動畫）為即時錄製，提問約 10 秒完成。</sub></p>
 
 更多畫面：<img src="screenshots/12-export.png" width="160" alt="匯出"> <img src="screenshots/02-add.png" width="160" alt="加入音訊"> <img src="screenshots/03-settings.png" width="160" alt="設定">
 
