@@ -113,7 +113,7 @@ struct AgentPanel: View {
     @State private var detailed = Dev.env["VOX_DETAIL"] != nil
     @State private var showLog = false
     @State private var opened: Set<Int> = []
-    @State private var expandedOverride: Bool?
+    @State private var expandedOverride: Bool? = Dev.env["VOX_NOTES"] != nil ? true : nil   // DEV: guide shots 17/18 with the notes list open
 
     fileprivate func color(_ s: AgentState) -> Color {
         switch s { case .starting: return .gray; case .listening: return .blue; case .reading, .summarizing: return .orange; case .restarting: return .secondary; case .done: return .green }

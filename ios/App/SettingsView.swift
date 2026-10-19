@@ -27,7 +27,7 @@ struct SettingsView: View {
     @ObservedObject private var people = PeopleStore.shared
     @State private var showPeople = Dev.env["VOX_PEOPLE"] != nil
     var body: some View {
-        NavigationStack {
+        NavigationStack { ScrollViewReader { proxy in
             Form {
                 ModelDownloadSection(downloads: m.downloads)   // the first-use download in progress, with Cancel
                 Section {
@@ -70,6 +70,7 @@ struct SettingsView: View {
                         if Prefs.e4bAllowed { Text(L("reader_model_e4b") + " · 3.3 GB").tag("E4B") }
                     }.pickerStyle(.inline).labelsHidden()
                     .onChange(of: reader) { Prefs.readerId = reader }
+                    .id("readerModel")
                 } header: { Text(L("settings_reader_model")) } footer: {
                     Text(L("reader_model_hint", SizeFormat.bytes(ReaderModel.e2b.totalBytes), SizeFormat.bytes(ReaderModel.e4bV2.totalBytes)) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
                 }
@@ -117,6 +118,9 @@ struct SettingsView: View {
                         ForEach(["lic_nemo", "lic_crispasr", "lic_audiocpp", "lic_ggml", "lic_xasr", "lic_nemotron", "lic_opencc"], id: \.self) { Text(L($0)).font(.footnote) }
                     }
                 }
+            }
+            // DEV (guide shot 03b): VOX_SETSCROLL scrolls to the AI notes model picker.
+            .onAppear { if Dev.env["VOX_SETSCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo("readerModel", anchor: .center) } } }
             }
             .confirmationDialog(L("storage_delete_title"), isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
                 Button(L("storage_delete"), role: .destructive) { if let i = toDelete { Storage.delete(i); models = Storage.models() } }
