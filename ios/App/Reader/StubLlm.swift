@@ -21,4 +21,8 @@ final class StubLlm: ReaderLlm {
     }
     var seqLength: Int { seq.count }
     func reset() { seq.removeAll() }
+    func resume() {}
+    func cancel() {}
+    var context: Int { 8192 }
+    var lastStats: [Double] { [0, 0, 0, 0, 0] }
 }

@@ -238,7 +238,7 @@ final class AskHolder: @unchecked Sendable {
     private func count(_ text: String) -> Int { ((try? tokenizer())?.encode(text).count) ?? text.count / 3 }
     func countTokens(_ text: String) -> Int { count(text) }
     #else
-    func open() throws -> ReaderLlm { throw ReaderError(description: "reader not built") }
+    func open() throws -> StubLlm { throw ReaderError(description: "reader not built") }
     func cancel() {}
     func reset() {}
     func close() {}
