@@ -241,6 +241,11 @@ object LibrarySearch {
     /** A meeting's loaded session as cached by [refresh] (null before it). */
     private fun cached(e: SessionLibrary.Entry): PrimeMinutesSession.Loaded? = synchronized(docs) { docs[e.id]?.loaded }
 
+    /** A meeting's custom speaker names and its utterances, as loaded by [refresh] / [load] (null before): Ask labels
+     *  each excerpt line with its speaker. */
+    fun speakerLines(e: SessionLibrary.Entry): Pair<Map<Int, String>, List<studio.primeminutes.core.events.TranscriptEvent.Utterance>>? =
+        cached(e)?.let { s -> s.speakerNames.mapValues { it.value.name } to s.utterances }
+
     /** The utterances [a]..[b] of a meeting as one passage, joined like a chunk's snippet (Ask's widened
      *  excerpts; the meeting's text as loaded by [refresh]). */
     fun span(e: SessionLibrary.Entry, a: Int, b: Int): Passage? {

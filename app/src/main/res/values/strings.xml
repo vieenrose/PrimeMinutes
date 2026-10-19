@@ -417,6 +417,13 @@
     <string name="ask_disclaimer">Answers come from a small on-device model and can be wrong — tap a citation to check.</string>
     <string name="agent_view_detailed">Show details</string>
     <string name="agent_view_simple">Simple view</string>
+    <plurals name="agent_first_eta">
+        <item quantity="one">First reading in about %d minute</item>
+        <item quantity="other">First reading in about %d minutes</item>
+    </plurals>
+    <string name="agent_first_soon">First reading in under a minute</string>
+    <string name="agent_first_pending">First reading when the bar fills</string>
+    <string name="agent_first_short">Stopping sooner? The notes are written after you stop.</string>
     <string name="agent_simple_listening">Reading the transcript — notes are written when the bar fills</string>
     <string name="settings_reader_model">AI notes model</string>
     <string name="reader_model_e2b">Mobile E2B</string>

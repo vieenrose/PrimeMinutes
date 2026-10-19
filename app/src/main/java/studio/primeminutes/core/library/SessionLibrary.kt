@@ -70,6 +70,10 @@ object SessionLibrary {
         val download: PendingDownload? = null,
         /** Downloaded, not processed yet: its audio is the kept source only (no recording.wav). */
         val sourceOnly: Boolean = false,
+        /** When the meeting was captured (epoch ms): the live recording's start, an import's media creation date.
+         *  [UNKNOWN_START]: an import whose file carries no date (the mail then omits the time). Null: an entry saved
+         *  before the field, read as [createdAt] (its save time) as before. Separate from [createdAt], which ids derive from. */
+        val captureStart: Long? = null,
     ) {
         val wavFile: File get() = File(dir, WAV_NAME)
         val sessionFile: File get() = File(dir, SESSION_NAME)
@@ -79,6 +83,17 @@ object SessionLibrary {
     }
 
     fun root(context: Context) = File(context.filesDir, "library")
+
+    /** [Entry.captureStart] of an import whose file has no creation date. */
+    const val UNKNOWN_START = -1L
+
+    /** The meeting's start for display (the mail's date and time): the capture start, the save time of an entry
+     *  older than the field, null when unknown (an import without a media date). */
+    fun meetingStart(e: Entry): Long? = when (val c = e.captureStart) {
+        null -> e.createdAt
+        UNKNOWN_START -> null
+        else -> c
+    }
 
     /** Display title for an untitled entry — capture date + time. Replaced by the LLM title or a
      *  user rename when one arrives. Formatted for [locale]: the interface language, which can
@@ -129,7 +144,7 @@ object SessionLibrary {
      * copy only across filesystems, which can't happen from filesDir/audio) and never throw.
      * Returns null on failure, leaving [wav] where it was (the caller keeps using its path).
      */
-    fun promoteRecording(context: Context, wav: File, durationSec: Int): Entry? = runCatching {
+    fun promoteRecording(context: Context, wav: File, durationSec: Int, captureStart: Long? = null): Entry? = runCatching {
         val createdAt = System.currentTimeMillis()
         val base = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(createdAt))
         var dir = File(root(context), base)
@@ -141,7 +156,11 @@ object SessionLibrary {
             wav.copyTo(dest, overwrite = true)
             wav.delete()
         }
-        val entry = Entry(dir.name, dir, title = null, createdAt = createdAt, durationSec = durationSec, status = Status.RECORDED)
+        // A capture saved as it stops (or recovered after a kill) began when its file was named (recording_<ms>.wav),
+        // else durationSec before now, unless the caller knows better.
+        val start = captureStart ?: Regex("""^recording_(\d{12,})\.wav$""").find(wav.name)?.groupValues?.get(1)?.toLongOrNull()
+            ?: (createdAt - durationSec * 1000L)
+        val entry = Entry(dir.name, dir, title = null, createdAt = createdAt, durationSec = durationSec, status = Status.RECORDED, captureStart = start)
         writeMeta(entry)
         // Discoverable immediately: a home-screen row that re-opens (→ transcribes) the raw capture.
         RecentSessions.add(context, Uri.fromFile(dest).toString(), defaultTitle(context, createdAt), createdAt)
@@ -568,7 +587,8 @@ object SessionLibrary {
         while (dir.exists()) dir = File(root(context), "$base-${n++}")
         dir.mkdirs()
         File(dir, DOWNLOAD).writeTextAtomic(d.toJson().toString())
-        val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d)
+        // A podcast / YouTube item: no meeting time to show.
+        val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d, captureStart = UNKNOWN_START)
         writeMeta(entry)
         entry
     }.onFailure { Log.w(TAG, "could not create the download item", it) }.getOrNull()
@@ -615,6 +635,7 @@ object SessionLibrary {
             .put("status", entry.status.name)
             .put("noSpeech", entry.noSpeech)
         entry.title?.let { o.put("title", it) }
+        entry.captureStart?.let { o.put("captureStart", it) }
         File(entry.dir, META).writeTextAtomic(o.toString())
     }
 
@@ -639,6 +660,7 @@ object SessionLibrary {
                     runCatching { PendingDownload.fromJson(JSONObject(f.readText())) }.getOrNull()
                 },
                 sourceOnly = status == Status.RECORDED && File(dir, IMPORT_SOURCE).isFile && !File(dir, WAV_NAME).exists(),
+                captureStart = if (o.has("captureStart")) o.getLong("captureStart") else null,
             )
         }.onFailure { Log.w(TAG, "corrupt library meta in ${dir.name}", it) }.getOrNull()
     }

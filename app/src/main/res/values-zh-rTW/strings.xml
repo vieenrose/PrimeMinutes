@@ -409,6 +409,12 @@
     <string name="ask_disclaimer">回答由裝置上的小模型產生，可能有誤——點出處即可核對。</string>
     <string name="agent_view_detailed">顯示詳細過程</string>
     <string name="agent_view_simple">簡化顯示</string>
+    <plurals name="agent_first_eta">
+        <item quantity="other">第一次閱讀約在 %d 分鐘後</item>
+    </plurals>
+    <string name="agent_first_soon">第一次閱讀不到 1 分鐘後開始</string>
+    <string name="agent_first_pending">進度條滿時開始第一次閱讀</string>
+    <string name="agent_first_short">提早停止錄音的話，會在停止後寫筆記</string>
     <string name="agent_simple_listening">閱讀逐字稿中——進度條滿時整理下一批筆記</string>
     <string name="settings_reader_model">AI 筆記模型</string>
     <string name="reader_model_e2b">行動版 E2B</string>

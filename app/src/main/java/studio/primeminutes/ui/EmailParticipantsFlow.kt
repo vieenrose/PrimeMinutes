@@ -77,7 +77,9 @@ fun EmailParticipantsFlow(
         else -> MeetingMail.defaultLang(meetingLang, uiLocale)
     }
     val title = refs(s.title)?.takeIf { it.isNotBlank() } ?: entry?.let { SessionLibrary.defaultTitle(context, it.createdAt) } ?: context.getString(R.string.app_name)
-    val startMs = entry?.createdAt ?: System.currentTimeMillis()
+    // The capture's start (an older entry: its save time); null for an import whose file has no date.
+    val knownStart = entry?.let(SessionLibrary::meetingStart)
+    val startMs = knownStart ?: entry?.createdAt ?: System.currentTimeMillis()
 
     fun input(): MeetingMail.Input {
         val card = ModelCard.DEFAULT.forLanguage(meetingLang).reader
@@ -100,7 +102,9 @@ fun EmailParticipantsFlow(
             participants = named.toSortedMap().values.map { it.name }.distinct(),
             unnamed = speakers.count { it !in named },
             start = Instant.ofEpochMilli(startMs).atZone(ZoneId.systemDefault()),
-            durationSec = s.utterances.maxOfOrNull { it.endSec } ?: 0.0,
+            // A known capture runs start → start + the recording's length (the transcript can end before the audio).
+            durationSec = maxOf(s.utterances.maxOfOrNull { it.endSec } ?: 0.0, entry?.takeIf { it.captureStart != null }?.durationSec?.toDouble() ?: 0.0),
+            timeKnown = entry == null || knownStart != null,
         )
     }
 

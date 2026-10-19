@@ -73,6 +73,16 @@ class MeetingMailTest {
         assertEquals(body("is1009c.en.mailto.txt"), plain("is1009c", "en", o))
     }
 
+    /** An import whose file has no creation date: no time line, the rest as before. */
+    @Test fun unknownStartLeavesOutTheTime() {
+        val tpl = MeetingMail.Templates.SHIPPED
+        val withTime = plain("move", "zh-Hant", MeetingMail.Options())
+        val without = MeetingMail.plain(MeetingMail.model(input("move").copy(timeKnown = false), "zh-Hant", MeetingMail.Options(), tpl).first, tpl.txt)
+        val timeLine = withTime.lines().single { it.contains("時間") && it.contains("–") }
+        assertFalse(without.contains(timeLine))
+        assertEquals(withTime.lines().filterNot { it == timeLine }, without.lines())
+    }
+
     @Test fun chatVariant() {
         assertEquals(body("move.zh-TW.chat.txt"), plain("move", "zh-Hant", MeetingMail.Options(summary = false), chat = true))
     }

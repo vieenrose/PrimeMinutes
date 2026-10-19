@@ -33,6 +33,8 @@ object MeetingMail {
         val unnamed: Int,
         val start: ZonedDateTime,
         val durationSec: Double,
+        /** False when the meeting's start time is unknown (an import whose file has no date): no time line. */
+        val timeKnown: Boolean = true,
     )
 
     data class Options(
@@ -155,9 +157,9 @@ object MeetingMail {
         val duration = if (minutes >= 60) fill(str("duration_hm"), "h" to minutes / 60, "m" to minutes % 60) else fill(str("duration_m"), "m" to minutes)
         val parts = input.participants + (if (input.unnamed > 0) listOf(fill(str("unnamed"), "n" to input.unnamed)) else emptyList())
         val hm = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
-        val facts = listOf(
+        val facts = listOfNotNull(
             mapOf("label" to str("label_date"), "value" to dateLong),
-            mapOf("label" to str("label_time"), "value" to "${start.format(hm)}–${end.format(hm)}"),
+            if (input.timeKnown) mapOf("label" to str("label_time"), "value" to "${start.format(hm)}–${end.format(hm)}") else null,
             mapOf("label" to str("label_duration"), "value" to duration),
             mapOf("label" to str("label_participants"), "value" to parts.joinToString(str("list_sep"))),
         )

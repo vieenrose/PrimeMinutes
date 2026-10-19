@@ -98,6 +98,10 @@ class ModelManager(context: Context) {
         val f = asrEngineFiles(targetMs) ?: return
         runCatching { NemoStreamEngine(f.host, threads, backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar,
             diarPreF32 = f.litert.preEncode, tokenOffsetMs = f.tokenOffsetMs).close() }
+            // The chosen variant just loaded (a latency switch's download ends here): the others go now, not at the
+            // next recording or import (they stayed on disk until then, ~155 MB each). A stand-in still running has
+            // its files open: unlinking them does not disturb it.
+            .onSuccess { if (f.variant?.latencyMs == targetMs) runCatching { reclaimOtherAsr(f.variant) } }
     }
 
     /** Some recognizer can run (the chosen one or a stand-in): recording and import need nothing more. */

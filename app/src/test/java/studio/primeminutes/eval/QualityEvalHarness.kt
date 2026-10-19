@@ -385,9 +385,7 @@ class QualityEvalHarness {
         TranscriptionConfig.Holder.config = TranscriptionConfig.Holder.config.copy(llmModelId = llm)
         check(ModelManager(ctx).llmReady(LlmRegistry.byId(llm))) { "reader model not in place" }
         SessionLibrary.root(ctx).deleteRecursively()
-        val encode = PrimeMinutesSession::class.java.getDeclaredMethod("encodeSession", List::class.java, Map::class.java,
-            String::class.java, String::class.java, String::class.java, String::class.java, String::class.java, String::class.java, String::class.java)
-            .apply { isAccessible = true }
+        val encode = PrimeMinutesSession::class.java.getDeclaredMethod("encodeSession", JSONObject::class.java).apply { isAccessible = true }
         val m4a = File(cfg.getString("m4a"))
         val ids = LinkedHashMap<String, String>()   // meeting name -> entry id
         for (item in items()) {
@@ -397,8 +395,11 @@ class QualityEvalHarness {
             val title = r.optString("title").ifBlank { name }
             val wav = File(ctx.cacheDir, "$name.wav").apply { parentFile?.mkdirs(); writeBytes(ByteArray(44)) }
             val e = SessionLibrary.promoteRecording(ctx, wav, utts.lastOrNull()?.endSec?.toInt() ?: 0)!!
-            val blob = encode.invoke(PrimeMinutesSession, utts, emptyMap<Int, SpeakerName>(), r.optString("summary"),
-                r.optString("actions"), title, r.optString("notes").ifBlank { null }, "x-asr", "nemo", llm) as String
+            // Optional "names": {"<speaker id>": "<name>"} — speakers the user named (the rest stay unnamed).
+            val names = item.optJSONObject("names")?.let { o -> o.keys().asSequence().associate { k -> k.toInt() to SpeakerName(o.getString(k)) } }
+                ?: emptyMap<Int, SpeakerName>()
+            val blob = encode.invoke(PrimeMinutesSession, PrimeMinutesSession.manifest(utts, names, r.optString("summary"),
+                r.optString("actions"), title, r.optString("notes").ifBlank { null }, "x-asr", "nemo", llm)) as String
             check(Mp4Tags.write(m4a, e.sessionFile, blob, title, null, null)) { "session write failed" }
             SessionLibrary.rename(ctx, e.dir, title)
             check(LibraryIndexer.index(ctx, SessionLibrary.byId(ctx, e.id)!!)) { "$name not indexed" }

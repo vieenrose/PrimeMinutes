@@ -78,7 +78,9 @@ internal class RecordingPipeline(
         val txtConverter = host.transcriptConverter()
         val snapConv = SnapshotConverter(txtConverter?.let { c -> c::convert })
         val recorder = newRecorder()
-        val wav = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "recording_${System.currentTimeMillis()}.wav")
+        // The capture's start (the mail's meeting time); the file is named after it too.
+        val startedAt = System.currentTimeMillis()
+        val wav = File(File(ctx.filesDir, "audio").apply { mkdirs() }, "recording_$startedAt.wav")
         val utterances = ArrayList<TranscriptEvent.Utterance>()
         var diarized: Pair<List<TranscriptEvent.Utterance>, Int>? = null
         var libEntry: SessionLibrary.Entry? = null
@@ -203,7 +205,7 @@ internal class RecordingPipeline(
             // safe on a cancelled coroutine.
             if (wav.exists() && wav.length() > WavIo.HEADER + WavIo.SAMPLE_RATE * 2L) {
                 libEntry = SessionLibrary.promoteRecording(
-                    ctx, wav, (recorder.totalSamples / AsrEngine.SAMPLE_RATE).toInt(),
+                    ctx, wav, (recorder.totalSamples / AsrEngine.SAMPLE_RATE).toInt(), captureStart = startedAt,
                 )
                 // Cancelled (ACTION_STOP) before the live ASR finished: the capture is saved, so also keep
                 // the frozen transcript so far — Resume continues ASR from its end instead of from zero.

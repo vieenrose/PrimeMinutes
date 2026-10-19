@@ -75,9 +75,10 @@ object AskEngine {
      *  (115 for a line starting at 115.4 s opened the line before). */
     /** [k] is the short tag the model sees (`[[k]]`), unique across the conversation. */
     /** [a]..[b]: the transcript utterances a CHUNK excerpt covers (-1 for a note), so neighbours can widen it. */
+    /** [prompt]: the text as the model reads it (each utterance with its speaker, [speakerText]), null: [text]. */
     data class Excerpt(
         val entry: SessionLibrary.Entry, val sec: Int, val text: String, val score: Float, val at: Double = sec.toDouble(), val k: Int = 0,
-        val a: Int = -1, val b: Int = -1,
+        val a: Int = -1, val b: Int = -1, val prompt: String? = null,
     )
 
     /**
@@ -184,11 +185,12 @@ object AskEngine {
      * overlapping transcript passages merged, then widening by neighbour chunks while the budget lasts.
      * [tokens] counts an excerpt's text.
      */
-    fun select(ranked: List<Excerpt>, p: Retrieval, tokens: (String) -> Int, src: Transcripts?): List<Excerpt> {
+    fun select(ranked: List<Excerpt>, p: Retrieval, tokens: (String) -> Int, src: Transcripts?, prompt: (Excerpt) -> String = { it.text }): List<Excerpt> {
         val out = ArrayList<Excerpt>()
         val cost = HashMap<Excerpt, Int>()
         var used = 0
-        fun price(x: Excerpt) = tokens(x.text) + HEADER_TOKENS
+        // The budget counts the text the model reads ([prompt]: speaker labels included).
+        fun price(x: Excerpt) = tokens(prompt(x)) + HEADER_TOKENS
         /** Puts [x] (a widened or merged excerpt) in place of [olds], if the budget allows. */
         fun replace(olds: List<Excerpt>, x: Excerpt): Boolean {
             val n = price(x); val freed = olds.sumOf { cost.getValue(it) }
@@ -307,7 +309,7 @@ object AskEngine {
                 _startedAt.value = android.os.SystemClock.elapsedRealtime()
                 _phase.value = Phase.Retrieving
                 val tRetrieve = System.nanoTime()
-                val excerpts = (if (meeting != null) retrieveIn(app, meeting, question) else retrieve(app, entries, question)).map { it.copy(k = nextK++) }
+                val excerpts = (if (meeting != null) retrieveIn(app, meeting, question, uiLanguage) else retrieve(app, entries, question, uiLanguage)).map { it.copy(k = nextK++) }
                 lastRetrievalMs = (System.nanoTime() - tRetrieve) / 1_000_000
                 Log.i(TAG, "retrieved ${excerpts.size} excerpts in $lastRetrievalMs ms (${if (meeting != null) "this meeting" else "${entries.size} meetings"})")
                 val pool = _turns.value.flatMap { it.excerpts } + excerpts
@@ -415,7 +417,7 @@ object AskEngine {
 
     /** Hybrid retrieval: dense (when the embedder is there) and keyword passages, meeting routing
      *  ([routeMeetings]), [fuse], then [select] with [retrieval]. */
-    internal suspend fun retrieve(app: Context, entries: List<SessionLibrary.Entry>, question: String): List<Excerpt> {
+    internal suspend fun retrieve(app: Context, entries: List<SessionLibrary.Entry>, question: String, uiLanguage: String = "en"): List<Excerpt> {
         val p = retrieval
         LibrarySearch.refresh(app, entries)
         val depth = if (p.routeMeetings > 0) maxOf(p.perMeeting, p.routeDepth) else p.perMeeting
@@ -446,7 +448,8 @@ object AskEngine {
             }
         }
         if (routed.isNotEmpty()) Log.d(TAG, "routed to ${routed.joinToString()}" + if (named.isNotEmpty()) " (people ${named.size})" else "")
-        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
+        val speak = speakerText(app, uiLanguage)
+        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src, speak).map { it.copy(prompt = speak(it)) } }
     }
 
     /**
@@ -455,7 +458,7 @@ object AskEngine {
      * gets in [retrieve]), no routing, [fuse], then [select]. A meeting not indexed yet is cut on the fly
      * for the keyword half (the index is requested meanwhile).
      */
-    internal suspend fun retrieveIn(app: Context, e: SessionLibrary.Entry, question: String): List<Excerpt> {
+    internal suspend fun retrieveIn(app: Context, e: SessionLibrary.Entry, question: String, uiLanguage: String = "en"): List<Excerpt> {
         val p = retrieval
         LibrarySearch.load(app, e)
         val depth = maxOf(p.perMeeting, p.routeDepth)
@@ -479,7 +482,40 @@ object AskEngine {
                 Excerpt(e, x.timeSec.toInt(), x.snippet, 0f, x.timeSec, a = x.uttIndex, b = x.uttEnd)
             }
         }
-        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src) }
+        val speak = speakerText(app, uiLanguage)
+        return withContext(Dispatchers.Default) { select(ranked, p, { t.encode(it).size }, src, speak).map { it.copy(prompt = speak(it)) } }
+    }
+
+    /**
+     * An excerpt's text as the model reads it, when the card asks for speakers ([ModelCard.AskCard.speakerLine]):
+     * a transcript excerpt line by line, each utterance with its speaker as the meeting shows it (the user's name,
+     * else the interface's "語者 N" / "Speaker N"); a note's S-numbers resolved the same way. Without the card's
+     * format, or the meeting not loaded, the text as indexed.
+     */
+    private fun speakerText(app: Context, uiLanguage: String): (Excerpt) -> String {
+        val c = card().ask
+        if (c.speakerLine == null) return { it.text }
+        val res = runCatching {
+            val conf = android.content.res.Configuration(app.resources.configuration).apply { setLocale(java.util.Locale.forLanguageTag(uiLanguage)) }
+            app.createConfigurationContext(conf).resources
+        }.getOrDefault(app.resources)
+        val unnamed = HashMap<Int, String>()
+        fun unnamedLabel(id: Int) = unnamed.getOrPut(id) { res.getString(studio.primeminutes.R.string.speaker_n, id + 1) }
+        return { x -> speakerTextOf(x, c, ::unnamedLabel) ?: x.text }
+    }
+
+    /** [speakerText] for one excerpt over the meeting [LibrarySearch] holds; null when it is not loaded. */
+    internal fun speakerTextOf(x: Excerpt, c: ModelCard.AskCard, unnamed: (Int) -> String): String? {
+        val (names, utts) = LibrarySearch.speakerLines(x.entry) ?: return null
+        fun label(id: Int) = names[id]?.takeIf { it.isNotBlank() } ?: unnamed(id)
+        if (x.a < 0) return studio.primeminutes.core.reader.SpeakerRefs.resolve(x.text, ::label, utts.mapNotNull { it.speaker }.toSet())
+        val us = utts.subList(x.a.coerceAtMost(utts.size), (x.b + 1).coerceIn(x.a.coerceAtMost(utts.size), utts.size))
+        // One line per speaker turn: consecutive utterances of the same speaker are joined under one label.
+        val out = ArrayList<String>(); var cur: Int? = null; val sb = StringBuilder()
+        fun flush() { if (sb.isNotEmpty()) out += c.line(cur?.let(::label), sb.toString()); sb.setLength(0) }
+        for (u in us) { if (sb.isNotEmpty() && u.speaker != cur) flush(); if (sb.isNotEmpty()) sb.append(' '); sb.append(u.text); cur = u.speaker }
+        flush()
+        return out.joinToString("\n").ifEmpty { null }
     }
 
     /** The excerpts as the reader sees them. Outside Chinese, amounts are written in digits (ChineseAmounts). */
@@ -487,7 +523,7 @@ object AskEngine {
         if (xs.isEmpty()) { append(card().ask.noExcerpts + "\n"); return@buildString }
         xs.forEachIndexed { i, x ->
             append("[[${x.k}]] "); append(x.entry.title ?: ""); append(" · "); append(ReaderProtocol.formatTs(x.sec))
-            append('\n'); append(x.text.trim().let { if (lang.startsWith("zh")) it else ChineseAmounts.toDigits(it) }); append("\n\n")
+            append('\n'); append((x.prompt ?: x.text).trim().let { if (lang.startsWith("zh")) it else ChineseAmounts.toDigits(it) }); append("\n\n")
         }
     }
 

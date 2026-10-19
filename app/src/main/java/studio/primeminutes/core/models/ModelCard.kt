@@ -73,8 +73,14 @@ data class ModelCard(
     /** Ask's answer budget and its system prompt per answer language (`zh-Hans`, `zh-Hant`, `en`).
      *  [answerIn]: per answer language, read after a question asked in another language than the system
      *  prompt's (the system prompt stays the interface language's: the conversation's cached prefix). */
-    data class AskCard(val answerTokens: Int, val noExcerpts: String, val system: Map<String, String>, val answerIn: Map<String, String> = emptyMap()) {
+    /** [speakerLine]: how a transcript excerpt's utterance reads with its speaker (`{speaker}` the name the meeting
+     *  shows — the user's name, else the interface's "Speaker N" —, `{text}` the words); null: excerpts as indexed. */
+    data class AskCard(val answerTokens: Int, val noExcerpts: String, val system: Map<String, String>, val answerIn: Map<String, String> = emptyMap(),
+                       val speakerLine: String? = null) {
         fun system(lang: String): String = system.getValue(lang)
+        /** One utterance of an excerpt as the model reads it ([speakerLine]); a line with no speaker stays bare. */
+        fun line(speaker: String?, text: String): String =
+            if (speakerLine == null || speaker.isNullOrBlank()) text else speakerLine.replace("{speaker}", speaker).replace("{text}", text)
     }
 
     companion object {
@@ -147,7 +153,8 @@ data class ModelCard(
                 title = oneShot(j.getJSONObject("title")),
                 prose = oneShot(j.getJSONObject("prose")),
                 ask = AskCard(a.getInt("answer_tokens"), a.getString("no_excerpts"), sys.keys().asSequence().associateWith { sys.getString(it) },
-                    a.optJSONObject("answer_in")?.let { ai -> ai.keys().asSequence().associateWith { ai.getString(it) } } ?: emptyMap()),
+                    a.optJSONObject("answer_in")?.let { ai -> ai.keys().asSequence().associateWith { ai.getString(it) } } ?: emptyMap(),
+                    speakerLine = a.optString("speaker_line").ifEmpty { null }),
                 languages = j.optJSONObject("languages")?.let { l ->
                     l.keys().asSequence().filter { l.opt(it) is JSONObject }.associateWith { code ->
                         val v = l.getJSONObject(code)

@@ -37,7 +37,10 @@ internal class ImportPipeline(private val host: PipelineHost) {
     private val ctx: Context get() = host.context
 
     /** The foreground import in flight (work WAV, checkpoint, banked entry). */
-    val inFlight = InFlightImport { wav, sec -> SessionLibrary.promoteRecording(host.context, wav, sec) }
+    val inFlight = InFlightImport { wav, sec -> SessionLibrary.promoteRecording(host.context, wav, sec, importStart) }
+
+    /** The import in flight's capture start ([SessionLibrary.Entry.captureStart]): its media creation date, else unknown. */
+    @Volatile private var importStart: Long = SessionLibrary.UNKNOWN_START
 
     /**
      * Decode (MediaCodec) -> ASR (Phase 1) -> summarization (Phase 2). The ASR models are
@@ -100,6 +103,11 @@ internal class ImportPipeline(private val host: PipelineHost) {
         // Total audio length (a cheap metadata read) so the recognition phase can report REAL progress
         // as each utterance's end time advances through the file. 0 when unknown → no ASR bar, still fine.
         val totalDurationSec = host.probeDurationSec(decodeUri)
+        // When the meeting took place, for an import that becomes a new entry: the file's own creation date (a live
+        // capture left in audio/ is named after its start), never the import time.
+        if (existing == null && intoEntry == null) importStart = srcFile?.takeIf { ownWav }?.name
+            ?.let { Regex("""^recording_(\d{12,})\.wav$""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
+            ?: studio.primeminutes.core.audio.MediaDate.captureStartMs(ctx, decodeUri) ?: SessionLibrary.UNKNOWN_START
 
         // Resume (UI "Resume" on a stopped library capture): keep the saved frozen transcript and
         // transcribe only the audio after it. Anything else that re-runs the entry supersedes the

@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -110,6 +111,14 @@ class AgentUiState {
     var guardExceeded by mutableStateOf(false)
     val notes = mutableStateListOf<Note>()
     val steps = mutableStateListOf<Step>()
+    /** When this reading started listening (SystemClock.elapsedRealtime), for the first reading's estimate. */
+    private var listenSince = 0L
+    /** Minutes until the first reading at the transcript's pace so far (0: under a minute), null: too early to tell. */
+    var firstEtaMin by mutableStateOf<Int?>(null)
+        private set
+    /** Keeping up with a recording and no window read yet: the card says when the first reading comes. */
+    val beforeFirstReading: Boolean get() = state?.state == AgentState.LISTENING && !wholeTranscript &&
+        notes.isEmpty() && steps.none { !it.restart && (it.done || it.reading) }
     val log = mutableStateListOf<LogLine>()
 
     /** A window the agent listened to and read, or a context restart between windows. */
@@ -137,6 +146,7 @@ class AgentUiState {
 
     fun reset() {
         state = null; reply = ""; ctxTokens = 0; notes.clear(); steps.clear(); log.clear(); guard = null; guardExceeded = false
+        listenSince = 0L; firstEtaMin = null
     }
 
     /** Journal text as saved with a session ("#id [ts] (TYPE) text" per line). */
@@ -165,6 +175,7 @@ class AgentUiState {
                 if (e.ctxTokens > 0) ctxTokens = e.ctxTokens
                 if (e.windowMax > 0) windowMax = e.windowMax
                 if (e.ctxMax > 0) ctxMax = e.ctxMax
+                if (listenSince == 0L) listenSince = android.os.SystemClock.elapsedRealtime()
                 if (e.window > 0 && steps.none { !it.restart && it.window == e.window }) steps += Step(e.window)
                 if (e.state == AgentState.READING) {
                     reply = ""
@@ -178,6 +189,11 @@ class AgentUiState {
                 if (e.window > 0 && steps.none { !it.restart && it.window == e.window }) steps += Step(e.window)
                 ctxTokens = e.ctxTokens
                 if (e.what == "segment") edit { it.copy(tokens = it.tokens + e.tokens) }
+                if (listenSince == 0L) listenSince = android.os.SystemClock.elapsedRealtime()
+                if (e.what == "segment" && beforeFirstReading) {
+                    val fed = steps.lastOrNull { !it.restart }?.tokens ?: 0
+                    firstEtaMin = FirstReading.etaMinutes(fed, windowMax, android.os.SystemClock.elapsedRealtime() - listenSince)
+                }
                 add(Kind.FED, "${e.what} · ${e.tokens} tok · %.1f s · ctx ${e.ctxTokens}".format(e.ms / 1000.0))
             }
             is AgentEvent.TurnToken -> reply += e.piece
@@ -331,7 +347,8 @@ private fun SimpleBody(agent: AgentUiState, st: AgentEvent.State, onSeek: ((Int)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (st.state) {
             AgentState.LISTENING -> {
-                Text(stringResource(if (agent.wholeTranscript) R.string.agent_simple_reading_all else R.string.agent_simple_listening), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
+                if (agent.beforeFirstReading) FirstReadingText(agent, MaterialTheme.typography.bodyMedium)
+                else Text(stringResource(if (agent.wholeTranscript) R.string.agent_simple_reading_all else R.string.agent_simple_listening), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
                 LinearProgressIndicator(
                     progress = { ((cur?.tokens ?: 0).toFloat() / agent.windowMax).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
@@ -399,7 +416,8 @@ private fun Timeline(agent: AgentUiState, st: AgentEvent.State, onSeek: ((Int) -
     val steps = agent.steps
     if (steps.isEmpty()) {
         TimelineRow(color = stateColor(st.state), pulsing = agent.working, last = true) {
-            Text(statusLine(st), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
+            if (agent.beforeFirstReading) FirstReadingText(agent, MaterialTheme.typography.bodyMedium)
+            else Text(statusLine(st), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
         }
         return
     }
@@ -586,6 +604,41 @@ private fun tagColor(tag: String): Color = when (fullTag(tag)) {
     else -> PrimeMinutesPalette.Neutral
 }
 
+/**
+ * Before the first reading of a recording: when it should come (the window fills at the transcript's pace so far),
+ * and that a recording stopped sooner gets its notes after Stop — not "0 notes so far" for minutes.
+ */
+@Composable
+private fun FirstReadingText(agent: AgentUiState, style: androidx.compose.ui.text.TextStyle) {
+    val pal = LocalPrimeMinutesPalette.current
+    val eta = agent.firstEtaMin
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            when {
+                eta == null -> stringResource(R.string.agent_first_pending)
+                eta <= 0 -> stringResource(R.string.agent_first_soon)
+                else -> pluralStringResource(R.plurals.agent_first_eta, eta, eta)
+            },
+            style = style, color = pal.Slate200,
+        )
+        Text(stringResource(R.string.agent_first_short), style = MaterialTheme.typography.labelSmall, color = pal.Slate400)
+    }
+}
+
+/** The first reading's estimate (pure, unit-tested): the window of [windowMax] tokens fills at the pace so far. */
+object FirstReading {
+    /** Under this much listening the pace is not known yet (the first lines arrive in a burst). */
+    const val MIN_ELAPSED_MS = 45_000L
+
+    /** Whole minutes (rounded up) until [tokens] reach [windowMax] at tokens/[elapsedMs]; 0 = under a minute; null = too early. */
+    fun etaMinutes(tokens: Int, windowMax: Int, elapsedMs: Long): Int? {
+        if (elapsedMs < MIN_ELAPSED_MS || tokens <= 0 || windowMax <= 0) return null
+        val left = (windowMax - tokens).coerceAtLeast(0)
+        val sec = left * (elapsedMs / 1000.0) / tokens
+        return if (sec < 60) 0 else kotlin.math.ceil(sec / 60).toInt()
+    }
+}
+
 @Composable
 private fun statusLine(s: AgentEvent.State): String = when (s.state) {
     AgentState.STARTING -> stringResource(R.string.agent_starting)
@@ -734,6 +787,7 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 )
             }
+            agent.beforeFirstReading -> FirstReadingText(agent, MaterialTheme.typography.labelMedium)
             else -> Text(statusLine(st), style = MaterialTheme.typography.labelMedium, color = pal.Slate400, maxLines = 1)
         }
     }
