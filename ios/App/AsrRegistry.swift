@@ -42,4 +42,11 @@ enum AsrRegistry {
             return da != db ? da < db : a.latencyMs > b.latencyMs
         }
     }
+
+    /// A load of `loaded` that succeeded makes the other variants (and the pre-variant model) removable only when it is
+    /// the chosen `target`: a stand-in that loads keeps them (the target may still be downloading).
+    static func reclaimsOthers(loaded: AsrVariant?, ok: Bool, target: Int) -> Bool {
+        guard ok, let loaded else { return false }
+        return loaded.latencyMs == byLatency(target).latencyMs
+    }
 }

@@ -22,11 +22,19 @@ import Network
             let d = Storage.modelsRoot.appendingPathComponent(v.id)
             let e = NemoEngine(xasr: d.appendingPathComponent(AsrRegistry.hostFile).path, diar: diar, xasrTflite: d.appendingPathComponent(v.tfliteFile).path,
                                diarTflite: diarT, threads: th, settle: settle, tokenOffsetMs: v.tokenOffsetMs)
-            if e != nil, v.latencyMs == Prefs.asrLatency { Storage.reclaimOtherAsr(v) }   // the chosen one loads: the others go
+            if AsrRegistry.reclaimsOthers(loaded: v, ok: e != nil, target: Prefs.asrLatency) { Storage.reclaimOtherAsr(v) }   // the chosen one loads: the others go
             return e
         }
         return NemoEngine(xasr: nemoPath(ReaderModel.legacyXasrHost), diar: diar, xasrTflite: nemoPath(ReaderModel.legacyXasrTflite), diarTflite: diarT,
                           threads: th, settle: settle, tokenOffsetMs: 300)
+    }
+    /// Right after the chosen recognizer's download (a latency switch): load it once, so a successful load deletes the
+    /// other variants now rather than at the next recording or import (Android ModelManager.warmLitertCache). A stand-in
+    /// still running keeps its open files: unlinking them does not disturb it.
+    nonisolated static func warmChosenAsr() {
+        guard Dev.env["VOX_BASE"] == nil, speechTargetReady else { return }
+        StatusLog.add("warm load of the chosen recognizer")
+        _ = nemoEngine()
     }
     /// The speech engine can run now (diarizer + some recognizer), and the chosen recognizer itself is installed.
     nonisolated static var speechRunnable: Bool { Storage.ready(.speech) && (Prefs.asrRunnable != nil || Prefs.legacyAsrReady) }
@@ -122,6 +130,7 @@ import Network
                 let base = Storage.ready(.speech) ? Int64(0) : ReaderModel.speech.totalBytes
                 try await self.fetch(.speech, "prefetch speech", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }
                 try await self.fetch(Prefs.asrTarget, "prefetch recognizer", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(base + d) / Double(max(1, p.total)) } }
+                Self.warmChosenAsr()
                 return true
             }
             catch { StatusLog.add("prefetch stopped: \(error)"); return false }   // Cancel or a permanent error: a run fetches what it needs itself

@@ -14,6 +14,12 @@ import Foundation
         check(AsrRegistry.runnable(1920, installed: only([480]))?.latencyMs == 480, "stand-in while the target downloads")
         check(AsrRegistry.runnable(480, installed: only([160, 960]))?.latencyMs == 960, "tie goes to the more accurate")
         check(AsrRegistry.runnable(960, installed: only([])) == nil, "nothing installed")
+        let v = { (ms: Int) in AsrRegistry.byLatency(ms) }
+        check(AsrRegistry.reclaimsOthers(loaded: v(960), ok: true, target: 960), "chosen variant loaded: the others go at once")
+        check(!AsrRegistry.reclaimsOthers(loaded: v(480), ok: true, target: 960), "a stand-in load keeps the others")
+        check(!AsrRegistry.reclaimsOthers(loaded: v(960), ok: false, target: 960), "a failed load keeps the others")
+        check(!AsrRegistry.reclaimsOthers(loaded: nil, ok: true, target: 960), "pre-variant engine keeps the others")
+        check(AsrRegistry.reclaimsOthers(loaded: v(1920), ok: true, target: 1234), "unknown setting reads as the default")
         print(failures == 0 ? "asr-registry: ok" : "asr-registry: \(failures) failed")
         exit(failures == 0 ? 0 : 1)
     }
