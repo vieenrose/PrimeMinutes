@@ -150,6 +150,7 @@ flowchart TD
 
 <img src="guide/27-podcast-episodes.png" width="270" alt="Podcast 單集">
 | YouTube → 搜尋或貼上連結 | ＋ → YouTube | 搜尋結果或直接前往影片；首頁立刻出現這部影片（取得影片標題後即顯示），下載音訊後轉錄；直播顯示「直播無法轉錄，請選擇一般影片。」 | ✅ 手動、✅ 自動（SourceSheetsTest，搜尋） |
+| PeerTube → 貼上連結 | ＋ → YouTube（同一個輸入框） → 貼上任一站台的 PeerTube 影片連結（`/w/…`、`/videos/watch/…`） | 以該站台的公開 API 取得最小的檔案（有純音訊檔就用它），像 Podcast 單集一樣下載後轉錄；直播無法匯入 | ✅ 手動（Note 10+：英文影片下載並轉錄；法文影片因語言模型不支援，逐字稿無法使用） |
 | 開啟場次（.ogg / .m4a） | ＋ → 開啟場次 | 開啟先前匯出的 Prime Minutes 檔，含逐字稿與摘要 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
 | 從其他 App 分享 | 其他 App → 分享 → Prime Minutes | 閒置時直接轉錄；處理中時詢問「匯入這個檔案？」（匯入會中斷處理） | ✅ 手動 |
 | Podcast／YouTube 下載中斷線 | 下載單集或影片音訊時網路中斷 | 不當成失敗：該列與場次畫面顯示「下載已暫停 · 會自動繼續」；網路恢復、回到 App 或按「立即繼續」後從中斷處接續，下載完成後照常轉錄 | ✅ 手動（Note 10+，Podcast：下載中切斷 Wi‑Fi 與行動數據 → 暫停、已下載部分保留 → 恢復後接續；YouTube 未實機確認） |
