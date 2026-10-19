@@ -56,14 +56,14 @@ data class ModelCard(
     /** A one-shot instruction over the notes; [prompt] has a `{notes}` slot. [label] strips a label
      *  the model puts before its answer ("標題：…"), or null.
      *
-     *  Segmented (the prose summary): a journal longer than [segmentTokens] is written in up to
-     *  [segmentMax] parts of consecutive notes, each one fresh conversation with its own [maxTokens]
+     *  Segmented (the prose summary): a journal longer than [segmentAbove] tokens ([segmentTokens]
+     *  when 0) is written in about total / [segmentTokens] parts, at least 2 and at most [segmentMax] of consecutive notes, each one fresh conversation with its own [maxTokens]
      *  budget, joined as paragraphs: one reply under one budget stops before the end of a long meeting.
      *  The first part reads [prompt], the next ones [segmentPrompt] (`{notes}`, `{from}`, `{to}`: the
      *  part's first and last note times), or [prompt] when there is none. [segmentTokens] 0 = one part. */
     data class OneShot(
         val prompt: String, val maxTokens: Int, val label: Regex? = null,
-        val segmentTokens: Int = 0, val segmentMax: Int = 1, val segmentPrompt: String? = null,
+        val segmentTokens: Int = 0, val segmentMax: Int = 1, val segmentPrompt: String? = null, val segmentAbove: Int = 0,
     ) {
         fun render(notes: String) = prompt.replace("{notes}", notes)
         fun renderSegment(notes: String, from: String, to: String) =
@@ -105,14 +105,14 @@ data class ModelCard(
             val a = j.getJSONObject("ask")
             fun JSONArray.strings() = (0 until length()).map { getString(it) }
             fun oneShot(o: JSONObject) = OneShot(o.getString("prompt"), o.getInt("max_tokens"), o.optString("label").ifEmpty { null }?.let(::Regex),
-                o.optInt("segment_tokens", 0), o.optInt("segment_max", 1), o.optString("segment_prompt").ifEmpty { null })
+                o.optInt("segment_tokens", 0), o.optInt("segment_max", 1), o.optString("segment_prompt").ifEmpty { null }, o.optInt("segment_above", 0))
             // A language's prompt keeps the base budget, label and segmenting unless it gives its own; a
             // segment prompt is in the language's words, so it is never inherited.
             fun oneShotOver(o: JSONObject?, base: JSONObject) = o?.let {
                 OneShot(it.getString("prompt"), it.optInt("max_tokens", base.getInt("max_tokens")),
                     (it.optString("label").ifEmpty { null } ?: base.optString("label").ifEmpty { null })?.let(::Regex),
                     it.optInt("segment_tokens", base.optInt("segment_tokens", 0)), it.optInt("segment_max", base.optInt("segment_max", 1)),
-                    it.optString("segment_prompt").ifEmpty { null })
+                    it.optString("segment_prompt").ifEmpty { null }, it.optInt("segment_above", base.optInt("segment_above", 0)))
             }
             fun JSONArray.pairs() = (0 until length()).map { getJSONArray(it).getString(0) to getJSONArray(it).getString(1) }
             val sys = a.getJSONObject("system")

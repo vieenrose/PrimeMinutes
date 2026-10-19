@@ -31,6 +31,24 @@ class SegmentedProseTest {
         assertEquals(listOf(0..2, 3..4), q)
     }
 
+    /** Shared with iOS (ios/tests/golden/prose_parts.json): the same parts for the same sizes and card numbers. */
+    @Test fun partsMatchTheSharedGolden() {
+        val g = org.json.JSONObject(javaClass.getResourceAsStream("/prose_parts.json")!!.readBytes().toString(Charsets.UTF_8)).getJSONArray("cases")
+        for (i in 0 until g.length()) {
+            val c = g.getJSONObject(i)
+            val sizes = c.getJSONArray("sizes").let { a -> (0 until a.length()).map { a.getInt(it) } }
+            val want = c.getJSONArray("parts").let { a -> (0 until a.length()).map { a.getJSONArray(it).getInt(0)..a.getJSONArray(it).getInt(1) } }
+            assertEquals("case $i", want, ReaderLane.proseParts(sizes, c.getInt("segment_tokens"), c.getInt("segment_max"), c.getInt("segment_above")))
+        }
+    }
+
+    /** A threshold above the part size: a journal up to it stays one reply, one past it is cut in parts. */
+    @Test fun segmentAboveKeepsShortJournalsWhole() {
+        assertEquals(1, ReaderLane.proseParts(List(66) { 30 }, 600, 4, 2000).size)     // 1980 tokens
+        assertEquals(4, ReaderLane.proseParts(List(67) { 30 }, 600, 4, 2000).size)     // 2010: ceil(2010 / 600)
+        assertEquals(2, ReaderLane.proseParts(List(14) { 100 }, 1000, 4, 1000).size)   // never one part past it
+    }
+
     /** Replies in order; records each prompt. */
     private class Llm(val replies: ArrayDeque<String>) : ReaderLlm {
         val prompts = ArrayList<String>()
@@ -46,7 +64,7 @@ class SegmentedProseTest {
     }
 
     private fun card(segmentTokens: Int) = ModelCard.DEFAULT.let { c ->
-        c.copy(prose = c.prose.copy(segmentTokens = segmentTokens, segmentMax = 4, segmentPrompt = "PART {from}-{to}\n{notes}"))
+        c.copy(prose = c.prose.copy(segmentTokens = segmentTokens, segmentMax = 4, segmentPrompt = "PART {from}-{to}\n{notes}", segmentAbove = 0))
     }
 
     private val journal = (1..6).map { Note(it, 1, "${it}:00", "DECISION", "決定第${it}件事") }
@@ -75,11 +93,16 @@ class SegmentedProseTest {
 
     @Test fun cardParsesSegmentingAndLanguagesInheritTheNumbersNotThePrompt() {
         val c = ModelCard.parse(ModelCard::class.java.getResourceAsStream("/model_cards/gemma4-meeting-agent-zh.json")!!.readBytes().toString(Charsets.UTF_8)
-            .replace("\"max_tokens\": 600", "\"max_tokens\": 600, \"segment_tokens\": 700, \"segment_max\": 3, \"segment_prompt\": \"S {notes}\""))
-        assertEquals(700, c.prose.segmentTokens); assertEquals(3, c.prose.segmentMax)
-        assertEquals("S n", c.prose.renderSegment("n", "1:00", "2:00"))
+            .replace("\"segment_above\": 2000", "\"segment_above\": 2500").replace("\"segment_tokens\": 600", "\"segment_tokens\": 700")
+            .replace("\"segment_max\": 4", "\"segment_max\": 3"))
+        assertEquals(2500, c.prose.segmentAbove); assertEquals(700, c.prose.segmentTokens); assertEquals(3, c.prose.segmentMax)
+        assertEquals("以下是一場會議中 1:00 到 2:00 這段時間的筆記：\n\nn", c.prose.renderSegment("n", "1:00", "2:00").substringBefore("\n\n根據"))
         val en = c.forLanguage("en").prose
-        assertEquals(700, en.segmentTokens); assertEquals(3, en.segmentMax)
-        assertEquals(en.render("n"), en.renderSegment("n", "1:00", "2:00"))   // no English segment prompt: its own prompt
+        assertEquals(2500, en.segmentAbove); assertEquals(700, en.segmentTokens); assertEquals(3, en.segmentMax)
+        assertTrue(en.renderSegment("n", "1:00", "2:00").startsWith("Here are the notes of a meeting from 1:00 to 2:00:\n\nn\n\n"))   // its own words
+        // A language without its own segment prompt reads its own prompt, never the base language's words.
+        val noEn = ModelCard.parse(ModelCard::class.java.getResourceAsStream("/model_cards/gemma4-meeting-agent-zh.json")!!.readBytes().toString(Charsets.UTF_8)
+            .replace(Regex(""",\n    "segment_prompt": "Here are[^\n]*"""), ""))
+        assertEquals(noEn.forLanguage("en").prose.render("n"), noEn.forLanguage("en").prose.renderSegment("n", "1:00", "2:00"))
     }
 }

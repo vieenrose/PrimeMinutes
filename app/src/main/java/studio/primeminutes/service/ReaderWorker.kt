@@ -355,8 +355,10 @@ internal class ReaderWorker(private val host: Host) {
         (task.entry ?: task.notesEntry)?.let { SessionLibrary.saveReaderGuard(it.dir, res.guard, TranscriptionConfig.Holder.config.llmModelId) }
         val conv: (String) -> String = { task.converter?.convert(it) ?: it }
         // The summary is prose written from the notes; the grouped minutes are the fallback.
+        val proseT0 = android.os.SystemClock.elapsedRealtime()
         val prose = runCatching { lane.prose(res.journal) }
             .onFailure { Log.w("primeminutes-reader", "prose summary failed; using minutes", it) }.getOrNull()
+        Log.i("primeminutes-reader", "prose: ${res.journal.size} notes, ${lane.lastProseParts} part(s), ${android.os.SystemClock.elapsedRealtime() - proseT0} ms")
         // No notes at all (a short or off-topic recording): one plain line, not five empty sections.
         val minutes = if (res.journal.isEmpty()) ctx.getString(R.string.summary_no_notes) else conv(prose ?: res.minutes)
         val actions = conv(res.actions.joinToString("\n") { "- ${it.text.trimEnd('。')} [${it.ts}]" }.ifEmpty { "-" })

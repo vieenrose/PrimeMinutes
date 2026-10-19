@@ -399,3 +399,59 @@ Recommendation (the user decides):
 
 Data: ~/voxsum-models/eval-corpora/work/mv2/long/ (in/ inputs, ref/ quartiles + facts.json, r_*/ readings,
 p_*/ prose runs, judge/ packets + scores, judge_keys.json, auto.json, agg.json).
+
+### 11b. Shipped (2026-10-19): prose 1600 on E2B v1, segmented prose above a 2000-token journal
+
+Decision (user, from recommendations 1 and 2): E2B v1's prose budget 600 → 1600 (now both cards hold the same
+values), and segmented prose on for long journals on every shipped model (E2B v1, E4B v2). New card field
+`prose.segment_above` = 2000: a journal of at most 2000 tokens is one reply as before; above it, parts of about
+`segment_tokens` 600 (ceil(total / 600), at least 2, at most `segment_max` 4), the later parts reading
+`segment_prompt` (zh and en, in the cards). All numbers are in the cards; the code only reads them.
+
+**Why a journal threshold, and why 2000.** The split is decided on what the summary reads (the journal, tokenized
+by the model), not on the transcript: a re-summarized meeting has no transcript at hand, and transcript size says
+little about the summary's load (zh 75 min ≈ 16.6k transcript characters, en 85 min ≈ 83k, while their journals
+are 1.6–4.6k tokens). Journal tokens per meeting (Gemma tokenizer, notes as rendered):
+
+| meeting (audio) | E2B v1 | E2B v2 | E4B v2 | one reply at 1600: summary Q1 (E2B v1 L / E4B v2 0) |
+|---|---|---|---|---|
+| 29–39 min AMI / AISHELL-4 (12 readings, §10) | 756–1137 | 984–1444 | 1056–1624 | (short set: single reply, §10) |
+| TS3003c (43) | 856 | 984 | 1177 | 0.67 / 0.58, segmented no better |
+| ZHCAT_A (76) | 1644 | 2431 | 2505 | 0.67 / **0.17** |
+| ZHCAT_B (75) | 1869 | 2376 | 2568 | 0.50 / **0.08** |
+| IB4010 (49) | 2293 | 2899 | 2552 | 0.33 / **0.00** |
+| EN2001a (85) | 3465 | 4603 | 3983 | 0.17 / 0.25 |
+
+Every journal up to 1869 tokens kept the first quarter in one reply (differences with segmented under 0.1, i.e.
+within the ~0.07 run-to-run spread the model developer measured: no conclusion drawn from them); every journal
+from 2293 lost it (Q1 0.00–0.33 against 0.58–0.92 segmented, far beyond the spread) or reached the 1600 cap
+(E4B v2 on both ZHCAT). 2000 sits between the two groups, and below the point where a 4096-token context with a
+1600-token reply no longer holds the journal uncut (prompt room ≈ 2300 tokens: past it, `fitting` compacts the
+notes, and the first ones go). In time this is about 40 min of a dense meeting (IB4010: 52 journal tokens per
+minute on E4B v2) to 75 min of a sparse one (ZHCAT: 33/min); all short meetings of §10 (max 1624) stay one reply,
+which also keeps v2's measured loss on short sparse meetings (ali20, −5 to −7.5 points with more text) out of play.
+
+**Host harness, shipped cards** (QualityEvalHarness prose mode, 4 threads; same journals as above):
+
+| | parts | tokens per reply | time | vs §11 |
+|---|---|---|---|---|
+| E4B v2 TS3003c | 1 | 828 | 147 s | = "0" (149 s), same text |
+| E4B v2 IB4010 | 4 | 485/421/488/471 | 320 s | "S" 324 s; later parts now read the English segment prompt (the §11 E4B run read the plain prompt): text differs, coverage not re-judged blind (an unblinded check scores it like "S": Q1 0.83) |
+| E2B v1 TS3003c | 1 | 638 | 62 s | = "L" (57 s), same text |
+| E2B v1 IB4010 | 4 | 492/439/422/406 | 157 s | = "S" (147 s), same text, so the same coverage (0.58/0.58/0.75/0.75) |
+
+**Device time (the number §11 lacked)**, emulator pm-test (x86_64, CPU, ≈ Note10+ speed), ReaderRegressionGate
+`file` on IB4010 (49 min, the AMI transcript), `-e compare_single 1` writing the same journal both ways:
+
+| model | journal | segmented (4 parts) | one reply | ratio | reading itself |
+|---|---|---|---|---|---|
+| E4B v2 | 81 notes | **187 s** | 78 s | ×2.4 | 1231 s |
+| E2B v1 | 84 notes | **82 s** | 26 s | ×3.2 | 450 s |
+
+The one reply is short because its prompt is compacted to fit (the cause of the lost first quarter); the parts
+read every note. Added to a long meeting's wait after stop: +1.8 min (E4B) / +1 min (E2B), against readings of
+7.5–20 min done mostly during the recording.
+
+In the app (same emulator, test app built from this change, E4B v2, import of an audio file): a 76-minute English
+meeting (AMI ES2004b + ES2004d back to back) → 100 notes, prose in **4 parts, 225 s** (log `prose: 100 notes, 4
+part(s)`), whole import 29 min; a short meeting (9 notes) → **1 part, 31 s**, single reply as before.

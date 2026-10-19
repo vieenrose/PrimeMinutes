@@ -161,7 +161,7 @@ class ReaderLane(
      * (anything else is stripped), so the summary's timestamps stay tap-to-play and grounded. Null
      * when the journal is empty or the reply is unusable; callers fall back to the grouped minutes.
      *
-     * A journal longer than the card's prose `segment_tokens` is summarized in parts of consecutive
+     * A journal longer than the card's prose `segment_above` tokens (`segment_tokens` when 0) is summarized in parts of consecutive
      * notes ([proseParts]), one fresh conversation and one full budget each, and the parts' paragraphs
      * are joined in order: a single reply under one budget ends long before a long meeting does.
      */
@@ -170,7 +170,7 @@ class ReaderLane(
         val c = langCard(lang)
         val known = journal.map { it.ts }.toSet()
         val sizes = if (c.prose.segmentTokens > 0) journal.map { llm.tokenize(ReaderProtocol.render(it) + "\n", false).size } else emptyList()
-        val parts = proseParts(sizes, c.prose.segmentTokens, c.prose.segmentMax).ifEmpty { listOf(journal.indices) }
+        val parts = proseParts(sizes, c.prose.segmentTokens, c.prose.segmentMax, c.prose.segmentAbove).ifEmpty { listOf(journal.indices) }
         val raws = ArrayList<String>()
         val texts = ArrayList<String>()
         for ((i, range) in parts.withIndex()) {
@@ -245,13 +245,16 @@ class ReaderLane(
         }
 
         /** The prose summary's parts: consecutive note ranges of a journal whose notes take [sizes]
-         *  tokens each. One part (the whole journal) when it fits [segmentTokens] or segmenting is off
-         *  (0); else ceil(total / [segmentTokens]) parts, at most [segmentMax], cut where the running
-         *  total crosses each equal share, so the parts are about the same size. Empty for no notes. */
-        fun proseParts(sizes: List<Int>, segmentTokens: Int, segmentMax: Int): List<IntRange> {
+         *  tokens each. One part (the whole journal) when its total is at most [segmentAbove] tokens
+         *  ([segmentTokens] when 0) or segmenting is off ([segmentTokens] 0); else ceil(total /
+         *  [segmentTokens]) parts, at least 2 and at most [segmentMax], cut where the running total
+         *  crosses each equal share, so the parts are about the same size. Empty for no notes. */
+        fun proseParts(sizes: List<Int>, segmentTokens: Int, segmentMax: Int, segmentAbove: Int = 0): List<IntRange> {
             if (sizes.isEmpty()) return emptyList()
             val total = sizes.sum()
-            val k = if (segmentTokens <= 0) 1 else ((total + segmentTokens - 1) / segmentTokens).coerceIn(1, maxOf(1, minOf(segmentMax, sizes.size)))
+            val above = if (segmentAbove > 0) segmentAbove else segmentTokens
+            val k = if (segmentTokens <= 0 || total <= above) 1
+                else ((total + segmentTokens - 1) / segmentTokens).coerceAtLeast(2).coerceAtMost(maxOf(1, minOf(segmentMax, sizes.size)))
             if (k == 1) return listOf(sizes.indices)
             val out = ArrayList<IntRange>()
             var start = 0; var run = 0
