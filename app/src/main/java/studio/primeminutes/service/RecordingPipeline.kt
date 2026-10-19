@@ -224,39 +224,48 @@ internal class RecordingPipeline(
         host.startForegroundTyped(recording = false, text = ctx.getString(R.string.svc_processing))
         if (recorder.totalSamples == 0L) { if (!captureFailed.get()) host.emitEvent(TranscriptEvent.Failed(ctx.getString(R.string.svc_no_audio_recorded))); return }
         val savedWav = libEntry?.wavFile ?: wav
-        // The capture is safe: queue it as a safety net (the worker finishes it below; the service
-        // resumes the queue afterwards and drops the item if it is DONE by then).
-        if (queueIt) libEntry?.let { e -> withContext(Dispatchers.IO) { ProcessingQueue.enqueue(ctx, listOf(e.id)) } }
-        host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(savedWav).toString()))
-
-        // The live pass already transcribed and tagged this talk with the same engine the queue
-        // would run; keep it as the item's pending transcript so the queue skips re-recognition
-        // (the costliest step, ~ the talk's own length) and only reads + summarizes — also when the
-        // live recognizer missed a little audio (see the hand-over below).
-        val entry = libEntry
-        if (entry != null && utterances.isNotEmpty() && !captureFailed.get()) {
-            if (liveDropped.get()) Log.w("primeminutes-rec", "live recognizer missed audio; keeping its transcript")
-            withContext(Dispatchers.IO) {
-                SessionLibrary.savePendingTranscript(entry, utterances.toList(), host.transcriptFingerprint(cfg))
-            }
-        }
-
-        // Hand the talk over to the AI notes worker and return at once: the mic and the speech
-        // engine are free for the next talk, and the worker finishes THIS meeting first — notes,
-        // summary, title, library save (it emits on this run's gen, so an open session sees it).
-        // "Next talk" and "Stop & save" differ only in the UI. When the live recognizer missed
-        // audio (it fell behind, e.g. during a model download) the summary is still written now
-        // from what it heard: a full re-transcription first made a 7-minute meeting wait ~20 min
-        // for its summary. The WAV is complete, so "Re-transcribe" can redo it on request.
+        // From here on the talk is finished: queue it, keep its transcript and hand it to the AI
+        // notes worker BEFORE saying it is saved, and do all of it NonCancellable. RecordingSaved is
+        // what makes the screen roll into the next talk (⏭), and that start cancels this run
+        // (previousJob.cancel()). When the announcement came first, the cancel landed in the
+        // sidecar write below, the hand-over never ran, and the run's teardown (closeLive) aborted
+        // the reading of a finished meeting: it stayed RECORDED, unread, until some later drain or
+        // an app restart (Note10+, 2026-10-19).
         val tagged = diarized?.first ?: utterances
-        host.emitEvent(TranscriptEvent.Complete(tagged, if (deferred) null else diarized?.second))
-        if (live != null) {
-            if (captureFailed.get()) host.reader.closeLive(live)
-            else {
-                libEntry?.let(live::attachEntry) ?: run { live.entry = libEntry }
-                live.complete(tagged.toList())
-                if (host.reader.liveReader === live) host.reader.liveReader = null
+        withContext(NonCancellable) {
+            // The capture is safe: queue it as a safety net (the worker finishes it below; the service
+            // resumes the queue afterwards and drops the item if it is DONE by then).
+            if (queueIt) libEntry?.let { e -> withContext(Dispatchers.IO) { ProcessingQueue.enqueue(ctx, listOf(e.id)) } }
+
+            // The live pass already transcribed and tagged this talk with the same engine the queue
+            // would run; keep it as the item's pending transcript so the queue skips re-recognition
+            // (the costliest step, ~ the talk's own length) and only reads + summarizes — also when the
+            // live recognizer missed a little audio (see the hand-over below).
+            val entry = libEntry
+            if (entry != null && utterances.isNotEmpty() && !captureFailed.get()) {
+                if (liveDropped.get()) Log.w("primeminutes-rec", "live recognizer missed audio; keeping its transcript")
+                withContext(Dispatchers.IO) {
+                    SessionLibrary.savePendingTranscript(entry, utterances.toList(), host.transcriptFingerprint(cfg))
+                }
             }
+
+            // Hand the talk over to the AI notes worker: the mic and the speech engine are free for
+            // the next talk, and the worker finishes THIS meeting first — notes, summary, title,
+            // library save (it emits on this run's gen, so an open session sees it). "Next talk" and
+            // "Stop & save" differ only in the UI. When the live recognizer missed audio (it fell
+            // behind, e.g. during a model download) the summary is still written now from what it
+            // heard: a full re-transcription first made a 7-minute meeting wait ~20 min for its
+            // summary. The WAV is complete, so "Re-transcribe" can redo it on request.
+            if (live != null) {
+                if (captureFailed.get()) host.reader.closeLive(live)
+                else {
+                    libEntry?.let(live::attachEntry) ?: run { live.entry = libEntry }
+                    live.complete(tagged.toList())
+                    if (host.reader.liveReader === live) host.reader.liveReader = null
+                }
+            }
+            host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(savedWav).toString()))
+            host.emitEvent(TranscriptEvent.Complete(tagged, if (deferred) null else diarized?.second))
         }
     }
 
