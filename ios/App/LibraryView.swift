@@ -426,7 +426,7 @@ struct LiveJobView: View {
     private static let palette = speakerPalette
     /// The line being played (SessionView.current): highlighted, and followed while playing, as in a finished meeting.
     private var current: UUID? {
-        guard player.playing || player.time > 0 else { return nil }
+        guard player.engaged else { return nil }
         return m.screen.lines.last(where: { $0.start <= player.time })?.id
     }
 
@@ -469,7 +469,7 @@ struct LiveJobView: View {
                 .padding(.vertical, 3).padding(.horizontal, 6)
                 .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                 .id(l.id).contentShape(Rectangle())
-                .onTapGesture { if player.available { player.seek(l.start) } }
+                .onTapGesture { if player.available { player.seekPlay(l.start) } }
             }
         }
     }
@@ -489,9 +489,9 @@ struct LiveJobView: View {
                     }
                 }.padding(16)
             }
-            .onChange(of: m.screen.lines.count) { _, _ in if showsRun, tab == 1, !player.playing, player.time == 0, let l = m.screen.lines.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } } }
+            .onChange(of: m.screen.lines.count) { _, _ in if showsRun, tab == 1, !player.engaged, let l = m.screen.lines.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } } }
             // While playing, the played line is followed instead of the newest one.
-            .onChange(of: current) { _, id in if showsRun, tab == 1, player.playing, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
+            .onChange(of: current) { _, id in if showsRun, tab == 1, player.engaged, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
         }
         .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
             SpeakerRefs.resolve(t, label: { L("speaker_n", $0 + 1) }, known: known.isEmpty ? nil : known) })

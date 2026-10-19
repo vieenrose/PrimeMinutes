@@ -5,6 +5,8 @@ import AVFoundation
 @MainActor final class Player: ObservableObject {
     @Published var time = 0.0
     @Published var playing = false
+    /// True once the user played or seeked: the line under the cursor is highlighted and followed (also at 0:00 and when paused).
+    @Published var engaged = false
     private(set) var duration = 0.0
     private var p: AVAudioPlayer?
     private var timer: Timer?
@@ -20,7 +22,7 @@ import AVFoundation
         guard let p else { return }
         if p.isPlaying { p.pause(); playing = false; timer?.invalidate(); return }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default); try? AVAudioSession.sharedInstance().setActive(true)   // the recorder left .measurement, which plays very quietly
-        p.play(); playing = true
+        p.play(); playing = true; engaged = true
         timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let p = self.p else { return }
@@ -32,7 +34,9 @@ import AVFoundation
     /// Android volume popup: mute toggle + level, applied to this player only.
     @Published var volume: Float = 1 { didSet { p?.volume = muted ? 0 : volume } }
     @Published var muted = false { didSet { p?.volume = muted ? 0 : volume } }
-    func seek(_ t: Double) { p?.currentTime = max(0, min(t, duration)); time = p?.currentTime ?? 0 }
+    func seek(_ t: Double) { p?.currentTime = max(0, min(t, duration)); time = p?.currentTime ?? 0; engaged = true }
+    /// A tap on a line or the end of a slider drag: the cursor moves there and playback starts from it.
+    func seekPlay(_ t: Double) { seek(t); if !playing { toggle() } }
     func stop() { previewStop?.cancel(); previewStop = nil; p?.stop(); timer?.invalidate(); playing = false }
     func pause() { guard let p, p.isPlaying else { return }; p.pause(); playing = false; timer?.invalidate() }
     /// Speaker-boundary editor preview: play [from, to] once, then pause (a newer preview cancels the older stop).
@@ -110,7 +114,7 @@ struct SessionView: View {
     }
     private var shown: [Utterance] { s.lines }
     private var current: UUID? {
-        guard player.playing || player.time > 0 else { return nil }
+        guard player.engaged else { return nil }
         return s.lines.last(where: { (l: Utterance) -> Bool in l.start <= player.time })?.id
     }
 
@@ -351,7 +355,7 @@ struct SessionView: View {
                 .id(l.id).padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Color.yellow.opacity(0.22) : Color(.secondarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
-                .onTapGesture { if player.available { player.seek(l.start) } }
+                .onTapGesture { if player.available { player.seekPlay(l.start) } }
                 .contextMenu { lineMenu(l) }
                 .accessibilityAction(named: L("cd_line_actions")) { editingLine = l.id; draft = l.text }
             }
@@ -371,7 +375,7 @@ struct SessionView: View {
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
-            .onChange(of: current) { _, id in if follow, player.playing, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
+            .onChange(of: current) { _, id in if follow, player.engaged, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
             .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
             .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
@@ -862,7 +866,7 @@ struct PlayerBar: View {
     @ObservedObject var player: Player
     var body: some View {
         VStack(spacing: 6) {
-            Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration))
+            Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration)) { editing in if !editing, !player.playing { player.toggle() } }
             HStack {
                 // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
                 Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
