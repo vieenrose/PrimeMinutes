@@ -368,7 +368,7 @@ struct SessionView: View {
                 }.padding(.top, 8)
             }
             .background(Color(.systemGroupedBackground))
-            .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
+            .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             .onChange(of: current) { _, id in if follow, player.playing, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
