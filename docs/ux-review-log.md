@@ -12,6 +12,54 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (2) — Android pass 2 (branch `android`, commit `253cb2c9`)
+
+The previous entry's skipped list, minus item 5 (library no-match dead end). Audit items 7, 8, 9
+and the copy half of 10. Worktree `/tmp/pm-ux2`; no `MainActivity.kt` / `TranscriptSearch.kt`
+touch, so nothing collides with the search work.
+
+### 1. Destructive actions firing on the first tap (HIGH)
+
+| Severity | Finding | Change |
+|---|---|---|
+| High | Two merge paths ran with no confirm — the contact card's `contact_merge` button (`PersonContact.kt:112` via `PeopleScreen.kt:203`) and picking a target in the "Merge into…" dialog: a person record loses its name, note, contact link and voice samples and cannot be un-merged | both paths now set `mergeTarget` and open a confirm dialog (`people_merge_pick` + `people_merge_text`, both already localized); the merge runs from its confirm button only |
+| High | Download item's screen: Delete → `vm.deleteEntries(...)` on the first tap, while the library row's delete of the same entry confirms first (`delete_confirm`) | `ItemDownloadCard` now opens the same dialog (`action_delete` / `delete_confirm` / `cancel`) |
+| High | Mail sheet's one-off recipient: its `Checkbox(checked = true, onCheckedChange = { extras.remove(...) })` deleted the recipient when un-ticked — a control that reads as a selection | row ends with a labelled `Remove` icon button (`email_remove`, 44 dp box); the address is only dropped by pressing it |
+
+### 2. Long-press with no screen-reader label (MED)
+
+Long-press on a library row is the only entry to selection mode, and `combinedClickable` was
+called without `onLongClickLabel`, so TalkBack announced the row and nothing about the second
+gesture. `SessionRow` now passes `onLongClickLabel = cd_start_selection` ("Select this meeting" /
+「選取此會議」/「选取此会议」) — one place covers both call sites.
+
+### 3. Keyboard over the input field (MED)
+
+`YouTubeSheet` and `PodcastSheet` (its field lives in `PodcastPanel`) built their sheet `Column`
+without `.imePadding()`; Ask / Mail / PersonPicker already had it. Both now pad for the IME.
+
+### 4. Copy (MED)
+
+zh-TW (and zh-CN) `voice_me_script` ended with a full English sentence after the Chinese one;
+`about_license` read 「自由開放原始碼 · GPL-3.0」 on the settings page and `about_components`
+「開放原始碼元件」. Both now match the wording iOS shipped the same day: 「錄音與文字只留在這支手機」
+/「授權元件」 (en: "Your recordings and text stay on this device" / "Licensed components").
+A scan of `values-zh-rTW/strings.xml` for runs of English words is now clean.
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` → `BUILD
+SUCCESSFUL in 24s`; no new warnings on the 6 touched Kotlin files. All three string catalogs
+parse as XML with 587 keys and identical key sets (new key added to all three). Pushed
+`253cb2c9` onto `origin/android` after rebase (already up to date). No on-device pass: the
+confirm dialogs, the long-press label under TalkBack, and the IME insets in both sheets are owed
+a device check.
+
+**Skipped this tick:** item 5 (no-match dead end — the other agent's `search_no_matches` area),
+disabled-state ink on `pal.Sky`, e-ink speaker hues, `AiBenchmark` English literals,
+`PersonPicker.kt:153` clear-search icon labelled 「取消」, and the library-row long-press
+*discovery* problem behind item 8 (nothing visible hints that long-press selects).
+
+---
+
 ## 2026-10-21 — Android pass (branch `android`, commit `12563607`)
 
 Implements audit items 1, 2, 3, 4 and 6 from the list below (in a detached worktree at
@@ -125,7 +173,7 @@ lines. No iOS build run (no Swift toolchain on this machine); no device/emulator
   outer `more`); duplicate `navigationTitle` + `.principal` in the Ask sheet.
 - Chip rows (filter/people/speaker chips ~30 pt) — M3 chip spec matches; left as designed.
 
-## Open Android findings (audited 2026-10-20; items 1–4 and 6 implemented 2026-10-21)
+## Open Android findings (audited 2026-10-20; items 1–4, 6–9 implemented 2026-10-21)
 
 Highest-value, from the Compose audit (files on branch `android`). Struck items are fixed,
 numbering kept so the entries refer to them.
@@ -141,11 +189,14 @@ numbering kept so the entries refer to them.
 6. ~~High — `Color.White` ink on `pal.Sky` (filter chip, export format, selection tick, mail chip)
    needs an `OnSky` token (dark theme accent ≈ 2.6:1).~~ **Done 2026-10-21** (`12563607`,
    `OnSky = Slate900`).
-7. High — destructive without confirm: delete downloaded model (`ItemDownload.kt:83`), people merge
-   (`PeopleScreen.kt:203,261`); un-ticking a mail recipient deletes it silently
-   (`EmailParticipantsSheet.kt:192`).
-8. Med — library row long-press (the only entry to selection mode) has no `onLongClickLabel`.
-9. Med — `YouTubeSheet.kt:94`, `PodcastSheet.kt:26` missing `.imePadding()` (keyboard covers the field).
-10. Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English (iOS side fixed today);
-    `about_license` GPL line on the settings page (iOS side fixed today); `PersonPicker.kt:153`
-    clear-search icon labelled "取消".
+7. ~~High — destructive without confirm: delete downloaded model (`ItemDownload.kt:83`), people
+   merge (`PeopleScreen.kt:203,261`); un-ticking a mail recipient deletes it silently
+   (`EmailParticipantsSheet.kt:192`).~~ **Done 2026-10-21 pass 2** (`253cb2c9`) — confirm dialogs
+   on both merge paths and the download delete, labelled Remove button for the mail recipient.
+8. ~~Med — library row long-press (the only entry to selection mode) has no `onLongClickLabel`.~~
+   **Done 2026-10-21 pass 2** (`253cb2c9`, `cd_start_selection`).
+9. ~~Med — `YouTubeSheet.kt:94`, `PodcastSheet.kt:26` missing `.imePadding()` (keyboard covers the
+   field).~~ **Done 2026-10-21 pass 2** (`253cb2c9`).
+10. Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
+    on the settings page — **done 2026-10-21 pass 2** (`253cb2c9`, both catalogs, matching iOS).
+    Still open: `PersonPicker.kt:153` clear-search icon labelled "取消".
