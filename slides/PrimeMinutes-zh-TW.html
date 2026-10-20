@@ -4,45 +4,87 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prime Minutes — 會議錄音 → 逐字稿 → AI 筆記與摘要，全程離線</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root { --ink:#1c2733; --sub:#5b6b7b; --accent:#0a7a52; --accent2:#0e86c8; --bg:#f7f9fb; --card:#fff; --line:#e3e9ef; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  html,body { height:100%; }
-  body { font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei","Helvetica Neue",Arial,sans-serif; background:#0d1420; color:var(--ink); overflow:hidden; }
-  #stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
-  .slide { display:none; width:min(96vw, calc(96vh * 16 / 9)); aspect-ratio:16/9; background:var(--bg); border-radius:14px; padding:40px 52px; position:absolute; flex-direction:column; overflow:hidden; font-size:clamp(17px, 1.75vw, 27px); }
-  .slide.on { display:flex; }
-  .slide h1 { font-size:2.3em; line-height:1.3; }
-  .slide h2 { font-size:1.5em; color:var(--accent); margin-bottom:.45em; }
-  .lede { font-size:1.3em; color:var(--sub); margin-top:.55em; }
-  .kicker { font-size:.95em; font-weight:700; color:var(--accent2); letter-spacing:.22em; margin-bottom:.7em; }
-  .cols { display:flex; gap:22px; flex:1; min-height:0; margin-top:10px; }
-  .col { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
-  .shot { flex:1; min-height:0; position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; }
-  .shot img { position:absolute; left:8px; top:8px; width:calc(100% - 16px); height:calc(100% - 16px); object-fit:contain; border-radius:8px; }
-  .cap { font-size:.95em; color:var(--sub); text-align:center; }
-  ul.big { list-style:none; display:flex; flex-direction:column; gap:.7em; margin-top:.3em; }
-  ul.big li { font-size:1.2em; padding-left:1.1em; position:relative; }
-  ul.big li:before { content:"▸"; position:absolute; left:0; color:var(--accent); }
-  table.t { border-collapse:collapse; width:100%; margin-top:10px; font-size:1.05em; }
-  table.t th { background:var(--accent); color:#fff; padding:10px 12px; text-align:left; }
-  table.t td { border:1px solid var(--line); padding:9px 12px; background:var(--card); }
-  .foot { position:absolute; left:52px; right:52px; bottom:14px; display:flex; justify-content:space-between; font-size:.75em; color:#93a1af; }
-  .brandrow { display:flex; align-items:center; gap:22px; }
-  .brandrow img { width:110px; height:110px; border-radius:22px; }
-  .center { align-items:center; justify-content:center; text-align:center; }
-  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:1fr; gap:18px; flex:1; margin-top:14px; min-height:0; }
-  .pill { display:inline-block; background:#e8f4ef; color:var(--accent); border-radius:999px; padding:4px 14px; font-size:.85em; margin:4px 6px 0 0; }
-  #bar { position:fixed; left:0; bottom:0; height:3px; background:var(--accent2); width:0; transition:width .18s; z-index:10; }
-  .flow { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:14px; }
-  .flow .step { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:.95em; }
-  .flow .step b { color:var(--accent); }
-  .flow .arr { color:var(--accent2); font-size:1.3em; font-weight:700; }
-  .demo ol { font-size:1.22em; line-height:1.9; margin-top:.4em; padding-left:1.4em; }
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   Include this ENTIRE file in every presentation.
+   Slides are authored at 1920×1080 and scaled as a whole.
+   =========================================== */
+html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--stage-bg,#000); }
+.deck-viewport { position:fixed; inset:0; overflow:hidden; background:var(--stage-bg,#000); }
+.deck-stage { position:absolute; left:0; top:0; width:1920px; height:1080px; overflow:hidden; transform-origin:0 0; background:var(--slide-bg,#fff); }
+.slide { position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; display:block; visibility:hidden; opacity:0; pointer-events:none; background:var(--slide-bg,#fff); }
+.slide.active, .slide.visible { visibility:visible; opacity:1; pointer-events:auto; z-index:1; }
+img, video, canvas, svg { max-width:100%; max-height:100%; }
+.deck-controls { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:1000; }
+@media print {
+  html, body { width:1920px; height:auto; overflow:visible; background:#fff; }
+  .deck-viewport { position:static; overflow:visible; background:#fff; }
+  .deck-stage { position:static; width:auto; height:auto; transform:none !important; background:none; }
+  .slide { position:relative; display:block !important; visibility:visible !important; opacity:1 !important; pointer-events:auto !important; width:1920px; height:1080px; break-after:page; page-break-after:always; }
+  .slide:last-child { break-after:auto; page-break-after:auto; }
+  .deck-controls { display:none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.2s !important; }
+}
+
+/* === THEME: ink & jade editorial (Noto Serif TC display) === */
+:root { --ink:#1c2733; --sub:#5b6b7b; --accent:#0a7a52; --accent2:#0e86c8; --bg:#f7f9fb; --card:#fff; --line:#e3e9ef; --stage-bg:#0d1420; --slide-bg:#f7f9fb; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif; color:var(--ink); }
+h1,h2 { font-family:"Noto Serif TC","Songti TC",serif; }
+/* === SLIDE CANVAS (authored at 1920x1080) === */
+.slide { padding:66px 88px 96px; flex-direction:column; font-size:27px; }
+.slide.visible { display:flex; }
+.slide h1 { font-size:2.5em; line-height:1.3; }
+.slide h2 { font-size:1.55em; color:var(--accent); margin-bottom:.45em; }
+.lede { font-size:1.3em; color:var(--sub); margin-top:.55em; }
+.kicker { font-size:.95em; font-weight:700; color:var(--accent2); letter-spacing:.22em; margin-bottom:.7em; }
+.cols { display:flex; gap:24px; flex:1; min-height:0; margin-top:12px; }
+.col { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; }
+.shot { flex:1; min-height:0; position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; }
+.shot img { position:absolute; left:10px; top:10px; width:calc(100% - 20px); height:calc(100% - 20px); object-fit:contain; border-radius:8px; }
+.cap { font-size:.95em; color:var(--sub); text-align:center; }
+ul.big { list-style:none; display:flex; flex-direction:column; gap:.7em; margin-top:.3em; }
+ul.big li { font-size:1.2em; line-height:1.55; padding-left:1.15em; position:relative; }
+ul.big li:before { content:"▸"; position:absolute; left:0; color:var(--accent); }
+table.t { border-collapse:collapse; width:100%; margin-top:10px; font-size:1.05em; }
+table.t th { background:var(--accent); color:#fff; padding:12px 14px; text-align:left; }
+table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--card); }
+.foot { position:absolute; left:88px; right:88px; bottom:26px; display:flex; justify-content:space-between; font-size:.78em; color:#93a1af; }
+.foot .ft-t { color:#5b6b7b; }
+.brandrow { display:flex; align-items:center; gap:26px; }
+.brandrow img { width:132px; height:132px; border-radius:26px; }
+.center { align-items:center; justify-content:center; text-align:center; }
+.grid4 { display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:1fr; gap:20px; flex:1; margin-top:16px; min-height:0; }
+.pill { display:inline-block; background:#e8f4ef; color:var(--accent); border-radius:999px; padding:6px 18px; font-size:.85em; margin:6px 8px 0 0; }
+.flow { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:16px; }
+.flow .step { background:var(--card); border:1px solid var(--line); border-left:5px solid var(--accent); border-radius:10px; padding:14px 18px; font-size:.95em; }
+.flow .step b { color:var(--accent); }
+.flow .arr { color:var(--accent2); font-size:1.3em; font-weight:700; }
+.demo ol { font-size:1.22em; line-height:1.9; margin-top:.4em; padding-left:1.4em; }
+/* === PRESENTER CHROME (outside the stage) === */
+#bar { position:fixed; left:0; bottom:0; height:4px; background:var(--accent2); width:0; transition:width .18s; z-index:20; }
+#hint { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#0d1420cc; color:#cfe3f5; border:1px solid #29405a; border-radius:999px; padding:9px 22px; font-size:15px; z-index:25; transition:opacity 1s; }
+#timer { position:fixed; right:16px; top:12px; background:#0d1420cc; color:#cfe3f5; border-radius:8px; padding:6px 13px; font-size:16px; z-index:25; display:none; font-variant-numeric:tabular-nums; }
+/* === OVERVIEW GRID (O) === */
+#ov { position:fixed; inset:0; z-index:30; background:#0d1420; display:none; grid-template-columns:repeat(3,1fr); gap:14px; padding:24px; overflow:auto; }
+#ov.on { display:grid; }
+.ovcell { position:relative; aspect-ratio:16/9; overflow:hidden; border-radius:10px; cursor:pointer; border:1px solid #29405a; }
+.ovcell .slide { display:flex; transform-origin:0 0; transform:scale(var(--k,.13)); visibility:visible; opacity:1; pointer-events:none; }
+.ovcell .lbl { position:absolute; bottom:5px; right:9px; color:#93a1af; font-size:14px; z-index:2; }
+/* === REVEAL ANIMATIONS === */
+@keyframes fadeUp { from { opacity:0; transform:translateY(26px); } to { opacity:1; transform:none; } }
+.slide .anim { opacity:0; }
+.slide.visible .anim { animation:fadeUp .55s cubic-bezier(.2,.7,.2,1) both; animation-delay:var(--d,0ms); }
 </style>
 </head>
 <body>
-<div id="stage">
+<div class="deck-viewport">
+<div class="deck-stage" id="stage">
 <!-- 1 標題 -->
 <section class="slide center">
   <div class="brandrow"><img src="img/app-icon.png" alt="Prime Minutes">
@@ -339,19 +381,60 @@
 </section>
 </div>
 <div id="bar"></div>
+<div id="ov"></div>
 <script>
-  const slides=[...document.querySelectorAll('.slide')];let i=0;
-  const go=n=>{i=Math.max(0,Math.min(slides.length-1,n));slides.forEach((s,k)=>s.classList.toggle('on',k===i));
-    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';location.hash=i+1;};
-  addEventListener('keydown',e=>{
-    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(i+1);}
-    else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();go(i-1);}
-    else if(e.key==='Home')go(0);else if(e.key==='End')go(slides.length-1);});
-  addEventListener('click',e=>{go(i+(e.clientX>innerWidth/2?1:-1));});
-  addEventListener('wheel',(()=>{let t=0;return e=>{const n=Date.now();if(n-t<350)return;t=n;go(i+(e.deltaY>0?1:-1));}}),{passive:true});
-  slides.forEach((s,n)=>{const f=document.createElement('div');f.className='foot';
-    f.innerHTML='<span>Prime Minutes · 全程離線</span><span>'+(n+1)+' / '+slides.length+'</span>';s.appendChild(f);});
-  go(parseInt(location.hash.slice(1))-1||0);
+/* === FIXED-STAGE SCALING: uniform fit of the 1920x1080 canvas === */
+const V=1920,H=1080,stage=document.getElementById('stage');
+function fit(){const s=Math.min(innerWidth/V,innerHeight/H);
+  stage.style.transform='translate('+((innerWidth-V*s)/2)+'px,'+((innerHeight-H*s)/2)+'px) scale('+s+')';}
+addEventListener('resize',fit);fit();
+
+/* === NAVIGATION === */
+const slides=[...document.querySelectorAll('.slide')];let i=0;
+slides.forEach(s=>{[...s.children].forEach((c,k)=>{c.classList.add('anim');c.style.setProperty('--d',(k*85)+'ms');});});
+const go=n=>{i=Math.max(0,Math.min(slides.length-1,n));
+  slides.forEach((s,k)=>s.classList.toggle('visible',k===i));
+  const c=slides[i];c.querySelectorAll('.anim').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation='';});
+  document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';location.hash=i+1;};
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+  if(k==='o'){toggleOv();return;}
+  if(k==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();return;}
+  if(k==='t'){toggleTimer();return;}
+  if(k==='h'){hint.style.opacity=1;clearTimeout(ht);ht=setTimeout(()=>hint.style.opacity=0,7000);return;}
+  if(k==='escape'){ov.classList.remove('on');return;}
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(i+1);}
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();go(i-1);}
+  else if(e.key==='Home')go(0);else if(e.key==='End')go(slides.length-1);});
+addEventListener('click',e=>{if(ov.classList.contains('on'))return;go(i+(e.clientX>innerWidth/2?1:-1));});
+addEventListener('wheel',(()=>{let t=0;return e=>{if(ov.classList.contains('on'))return;const n=Date.now();if(n-t<350)return;t=n;go(i+(e.deltaY>0?1:-1));}}),{passive:true});
+
+/* === FOOTERS + PRESENTER CHROME === */
+slides.forEach((s,n)=>{const f=document.createElement('div');f.className='foot';
+  const t=s.querySelector('h1,h2');
+  f.innerHTML='<span>Prime Minutes · 全程離線</span><span class="ft-t">'+(t?t.textContent.trim():'')+'</span><span>'+(n+1)+' / '+slides.length+'</span>';
+  f.classList.add('anim');s.appendChild(f);});
+const hint=document.createElement('div');hint.id='hint';
+hint.textContent='← → 換頁 · O 總覽 · F 全螢幕 · T 計時 · H 說明';document.body.appendChild(hint);
+let ht=setTimeout(()=>hint.style.opacity=0,7000);
+const timer=document.createElement('div');timer.id='timer';document.body.appendChild(timer);
+let t0=null,tk=null;
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+function toggleTimer(){if(tk){clearInterval(tk);tk=null;timer.style.display='none';return;}
+  t0=t0??Date.now();timer.style.display='block';
+  tk=setInterval(()=>timer.textContent='簡報 '+fmt(Math.floor((Date.now()-t0)/1000)),1000);}
+
+/* === OVERVIEW GRID === */
+const ov=document.getElementById('ov');let ovBuilt=false;
+function buildOv(){slides.forEach((s,n)=>{const cell=document.createElement('div');cell.className='ovcell';
+  const c=s.cloneNode(true);c.classList.remove('visible');c.querySelectorAll('.anim').forEach(el=>el.style.animation='none');
+  const lbl=document.createElement('span');lbl.className='lbl';lbl.textContent=(n+1)+' · '+(s.querySelector('h1,h2')?s.querySelector('h1,h2').textContent.trim():'');
+  cell.appendChild(c);cell.appendChild(lbl);cell.addEventListener('click',ev=>{ev.stopPropagation();ov.classList.remove('on');go(n);});
+  ov.appendChild(cell);});ovBuilt=true;}
+function ovfit(){const cell=ov.querySelector('.ovcell');if(!cell)return;ov.style.setProperty('--k',(cell.clientWidth-2)/V);}
+function toggleOv(){if(!ovBuilt)buildOv();ov.classList.add('on');ovfit();}
+addEventListener('resize',()=>{if(ov.classList.contains('on'))ovfit();});
+
+go(parseInt(location.hash.slice(1))-1||0);
 </script>
 </body>
 </html>
