@@ -12,6 +12,34 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (9) — iOS pass 5 (branch `ios`, commit `edc14bce`)
+
+Lean scan of the README-facing chain — capture → summary → export — plus Ask and People, looking for
+label noise, glyph-only state and copy nits. Two found, both in the same species as pass 2's SF
+Symbol noise (SF Symbols ship their own VoiceOver names, so a decorative glyph is announced out loud).
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `SessionView.swift` `SpeakerStats` | the talk-time row is a tap target for the per-speaker legend, and VoiceOver read「3 位語者 … Chevron Up」— the glyph's name was pure noise, and the chevron's real message (a tap does something, and what) had no audio equivalent | glyph `.accessibilityHidden(true)`; the element gained `.accessibilityValue(L(legend ? "show_less" : "show_more"))`, so it reads「3 位語者，顯示更多，按鈕」(existing keys, no new copy) |
+| Low | `CaptureView.swift:31` | the live screen's empty state announced「Microphone 聆聽中…」— the mic glyph is decoration under the「聆聽中…」line | `.accessibilityHidden(true)` |
+
+**Verification:** tree-sitter Swift parse — `SessionView.swift` and `CaptureView.swift` both clean (no
+ERROR nodes; the repo-wide baseline of 14 false positives sits in `LibraryView.swift`, untouched). No
+new strings, so no catalog change (589 keys per catalog unchanged). No simulator, no Mac build: the
+two VoiceOver phrasings are owed a device pass.
+
+**Scanned, nothing to change:** `Ask.swift` (send / cancel / clear / reset all labelled), `Export.swift`
+and `ExportSheet` (text-labelled format buttons, copy path already haptic + toast), the session toolbar
+(search, More menu, ShareLink), `PeopleViews.swift` (play-sample, clear ✕, picker, merge/delete alerts,
+row glyph already hidden), `CaptureView`'s two control buttons (both `Label` + `cd_next_talk`).
+
+**Open Android finding (new, 1):** `SpeakerStatsPanel.kt` has the same row — its chevron is already
+`contentDescription = null`, but the `clickable { showLegend = !showLegend }` Column carries no state,
+so TalkBack cannot say what the tap does. Candidate fix mirrors iOS: `.semantics` value naming
+show-more / show-less (or `onLongClickLabel`-style labelling), next Android round.
+
+---
+
 ## 2026-10-21 (8) — Android pass 5, final (branch `android`, commit `7b5a9393`)
 
 All open lists were closed, so this pass was a targeted polish scan only: `contentDescription`
@@ -365,7 +393,7 @@ lines. No iOS build run (no Swift toolchain on this machine); no device/emulator
   outer `more`); duplicate `navigationTitle` + `.principal` in the Ask sheet.
 - Chip rows (filter/people/speaker chips ~30 pt) — M3 chip spec matches; left as designed.
 
-## Open Android findings (audited 2026-10-20; all ten implemented 2026-10-21)
+## Open Android findings (audited 2026-10-20; the ten implemented 2026-10-21, item 11 added 2026-10-21 iOS pass 5)
 
 Highest-value, from the Compose audit (files on branch `android`). Struck items are fixed,
 numbering kept so the entries refer to them.
@@ -393,6 +421,10 @@ numbering kept so the entries refer to them.
 10. ~~Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
     on the settings page; `PersonPicker.kt:153` clear-search icon labelled "取消".~~ **Done
     2026-10-21 passes 2–3** (`253cb2c9` copy, `034ce829` `cd_clear_search`).
+11. Med — `SpeakerStatsPanel.kt:66` the tap that opens the per-speaker legend carries no state: the
+    chevron is `contentDescription = null` (correct) and the count is read, but nothing names what the
+    double-tap does. iOS shipped the equivalent in `edc14bce` — a `semantics` value naming
+    show-more / show-less.
 
 ---
 
