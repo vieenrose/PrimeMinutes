@@ -161,6 +161,8 @@
 /* VoiceOver value of the mail recipients' checkboxes (the state is a glyph alone) */
 "a11y_checked" = "Checked";
 "a11y_unchecked" = "Not checked";
+"a11y_unavailable" = "Not available";
+"a11y_elapsed" = "Elapsed %@";
 "cd_exit_selection" = "Exit selection";
 "cd_status_queued" = "Queued";
 "action_remove_from_queue" = "Remove from queue";

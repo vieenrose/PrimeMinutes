@@ -14,7 +14,10 @@ struct CaptureView: View {
                 // The engines' load, on the header row (trailing, page gutter) rather than floating under the timer.
                 HwStatusLine()
             }.padding(.horizontal, 20).padding(.top, 16)
+            // The 76 pt display face is the point of this row (it is meant to be read from across a
+            // table), so it stays fixed — but VoiceOver gets the elapsed time as words, not as digits.
             Text(Export.mmss(Double(m.capture.elapsed))).font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
+                .accessibilityLabel(L("a11y_elapsed", Export.mmss(Double(m.capture.elapsed))))
                 .padding(.vertical, 12)
             // The summarizing agent works alongside ASR + diarization: its status stays pinned on top (Android LivePanel).
             AgentStrip(agent: m.screen.agent).padding(.horizontal, 20).padding(.bottom, 6)

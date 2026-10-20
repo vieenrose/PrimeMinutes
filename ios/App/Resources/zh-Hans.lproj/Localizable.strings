@@ -161,6 +161,8 @@
 /* VoiceOver 读取邮件收件人复选框的状态（图标本身没有语音） */
 "a11y_checked" = "已勾选";
 "a11y_unchecked" = "未勾选";
+"a11y_unavailable" = "无法选用";
+"a11y_elapsed" = "已录 %@";
 "cd_exit_selection" = "结束选择";
 "cd_status_queued" = "排入队列";
 "action_remove_from_queue" = "从队列移除";

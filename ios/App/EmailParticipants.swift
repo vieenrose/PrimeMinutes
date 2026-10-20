@@ -260,9 +260,10 @@ struct EmailParticipantsSheet: View {
                 Button { checked[r.person.id] = !r.checked } label: {
                     Image(systemName: r.checked ? "checkmark.square.fill" : "square").foregroundStyle(r.address == nil ? Color.secondary : Color.accentColor)
                 }.buttonStyle(.borderless).disabled(r.address == nil)
-                // The state is carried by the glyph alone: VoiceOver has to say who and whether.
+                // The state is carried by the glyph alone, and "no address" by the box going grey:
+                // VoiceOver has to say who, whether, and that this one cannot be picked at all.
                 .accessibilityLabel(r.person.name)
-                .accessibilityValue(r.checked ? L("a11y_checked") : L("a11y_unchecked"))
+                .accessibilityValue(r.address == nil ? L("a11y_unavailable") : (r.checked ? L("a11y_checked") : L("a11y_unchecked")))
                 avatar(r.person.name)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
