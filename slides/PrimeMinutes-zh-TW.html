@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prime Minutes — 會議錄音 → 逐字稿 → AI 筆記與摘要，全程離線</title>
+<style>
+  :root { --ink:#1c2733; --sub:#5b6b7b; --accent:#0a7a52; --accent2:#0e86c8; --bg:#f7f9fb; --card:#fff; --line:#e3e9ef; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; }
+  body { font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei","Helvetica Neue",Arial,sans-serif; background:#0d1420; color:var(--ink); overflow:hidden; }
+  #stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  .slide { display:none; width:min(96vw, calc(96vh * 16 / 9)); aspect-ratio:16/9; background:var(--bg); border-radius:14px; padding:40px 52px; position:absolute; flex-direction:column; overflow:hidden; font-size:clamp(17px, 1.75vw, 27px); }
+  .slide.on { display:flex; }
+  .slide h1 { font-size:2.3em; line-height:1.3; }
+  .slide h2 { font-size:1.5em; color:var(--accent); margin-bottom:.45em; }
+  .lede { font-size:1.3em; color:var(--sub); margin-top:.55em; }
+  .kicker { font-size:.95em; font-weight:700; color:var(--accent2); letter-spacing:.22em; margin-bottom:.7em; }
+  .cols { display:flex; gap:22px; flex:1; min-height:0; margin-top:10px; }
+  .col { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+  .shot { flex:1; min-height:0; position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .shot img { position:absolute; left:8px; top:8px; width:calc(100% - 16px); height:calc(100% - 16px); object-fit:contain; border-radius:8px; }
+  .cap { font-size:.95em; color:var(--sub); text-align:center; }
+  ul.big { list-style:none; display:flex; flex-direction:column; gap:.7em; margin-top:.3em; }
+  ul.big li { font-size:1.2em; padding-left:1.1em; position:relative; }
+  ul.big li:before { content:"▸"; position:absolute; left:0; color:var(--accent); }
+  table.t { border-collapse:collapse; width:100%; margin-top:10px; font-size:1.05em; }
+  table.t th { background:var(--accent); color:#fff; padding:10px 12px; text-align:left; }
+  table.t td { border:1px solid var(--line); padding:9px 12px; background:var(--card); }
+  .foot { position:absolute; left:52px; right:52px; bottom:14px; display:flex; justify-content:space-between; font-size:.75em; color:#93a1af; }
+  .brandrow { display:flex; align-items:center; gap:22px; }
+  .brandrow img { width:110px; height:110px; border-radius:22px; }
+  .center { align-items:center; justify-content:center; text-align:center; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:1fr; gap:18px; flex:1; margin-top:14px; min-height:0; }
+  .pill { display:inline-block; background:#e8f4ef; color:var(--accent); border-radius:999px; padding:4px 14px; font-size:.85em; margin:4px 6px 0 0; }
+  #bar { position:fixed; left:0; bottom:0; height:3px; background:var(--accent2); width:0; transition:width .18s; z-index:10; }
+  .flow { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:14px; }
+  .flow .step { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:.95em; }
+  .flow .step b { color:var(--accent); }
+  .flow .arr { color:var(--accent2); font-size:1.3em; font-weight:700; }
+  .demo ol { font-size:1.22em; line-height:1.9; margin-top:.4em; padding-left:1.4em; }
+</style>
+</head>
+<body>
+<div id="stage">
+<!-- 1 標題 -->
+<section class="slide center">
+  <div class="brandrow"><img src="img/app-icon.png" alt="Prime Minutes">
+  <div style="text-align:left"><h1>Prime Minutes</h1>
+  <div class="lede">會議錄音 → 標註語者的逐字稿 → AI 筆記與摘要<br><b style="color:var(--accent)">全程在手機上完成，完全離線</b></div></div></div>
+  <p style="margin-top:26px; color:var(--sub); font-size:.95em">iOS 與 Android 開源 App · GPL-3.0 · 20–30 分鐘說明＋示範</p>
+</section>
+
+<!-- 2 問題 -->
+<section class="slide">
+  <div class="kicker">為什麼需要它</div><h2>會議紀錄的三個痛點</h2>
+  <ul class="big">
+    <li><b>隱私</b>——會議內容上傳到雲端服務，交給第三者處理。</li>
+    <li><b>成本與依賴</b>——訂閱制、按分鐘計費、需要網路；服務改版就失效。</li>
+    <li><b>耗時</b>——會後人工聽錄重建逐字稿、歸納筆記，一場會花掉一小時以上。</li>
+  </ul>
+  <p class="lede">Prime Minutes 的答案：這些工作全部由你自己手機上的模型完成，資料不出手機。</p>
+</section>
+
+<!-- 3 主視覺 -->
+<section class="slide">
+  <div class="kicker">一頁看懂</div><h2>錄完，筆記就寫好了</h2>
+  <div class="cols">
+    <div class="col" style="flex:1.15"><div class="shot"><img src="img/demo-studio.gif" alt="錄音室示範"></div>
+    <div class="cap">Galaxy Note10+ 實機：連錄兩場會議，背景整理筆記</div></div>
+    <div class="col"><ul class="big">
+      <li>錄音中<b>即時逐字稿</b>，約兩秒上螢幕，同時標註誰在說話。</li>
+      <li>錄音中 AI 就在<b>閱讀逐字稿</b>：決議、待辦、提議、未決事項與數字。</li>
+      <li>停止後自動完成<b>段落式摘要與標題</b>。</li>
+      <li>8 GB 以上的手機<b>錄音中同步閱讀</b>；卡片預告第一次閱讀約幾分鐘後開始。</li>
+      <li>之後可搜尋、提問、匯出、寄給與會者。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 4 四大特色 -->
+<section class="slide">
+  <div class="kicker">特色總覽</div><h2>錄音 · AI 筆記 · 摘要 · 逐字稿</h2>
+  <div class="grid4">
+    <div class="col"><div class="shot"><img src="img/qs-capture.png"></div><div class="cap">錄音：邊錄邊出文字</div></div>
+    <div class="col"><div class="shot"><img src="img/05-agent.png"></div><div class="cap">AI 筆記：決議與待辦逐條列出</div></div>
+    <div class="col"><div class="shot"><img src="img/04-summary.png"></div><div class="cap">摘要：自動成段＋標題</div></div>
+    <div class="col"><div class="shot"><img src="img/03-transcript.png"></div><div class="cap">逐字稿：標註語者、可點播</div></div>
+  </div>
+</section>
+
+<!-- 5 即時逐字稿 -->
+<section class="slide">
+  <div class="kicker">錄音現場</div><h2>說話後約兩秒，文字上螢幕</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/24b-capture-live.png"></div><div class="cap">錄音中：逐字稿即時增長，每行標註語者</div></div>
+    <div class="col"><div class="shot"><img src="img/agent-live.gif"></div><div class="cap">AI 筆記卡片即時顯示閱讀進度</div></div>
+    <div class="col"><ul class="big">
+      <li>轉寫延遲<b>可在設定調整</b>：越短越快、越長越準（預設 1.92 秒）。</li>
+      <li>語者分離由 Nemotron-3 聲紋模型完成，<b>錄音中即標註</b>。</li>
+      <li>「下一場」按钮：連續錄多場，前一場的背景筆記接續整理。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 6 摘要與播放器 -->
+<section class="slide">
+  <div class="kicker">會後成果</div><h2>摘要、筆記，每個時間點可核對原話</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/04-summary.png"></div><div class="cap">段落式摘要＋自動標題</div></div>
+    <div class="col"><div class="shot"><img src="img/10b-long-summary.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
+    <div class="col"><div class="shot"><img src="img/18-transcript.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖進度列跟著highlight</div></div>
+  </div>
+</section>
+
+<!-- 7 語者 -->
+<section class="slide">
+  <div class="kicker">誰說了什麼</div><h2>語者辨識、名錄與分界編輯</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/12-speaker-legend.png"></div><div class="cap">語者圖例與顏色，一眼分人</div></div>
+    <div class="col"><div class="shot"><img src="img/people-voice-zh.gif"></div><div class="cap">「辨識聲音」：之後的會議自動<b>建議</b>名字，由你確認</div></div>
+    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做</div></div>
+  </div>
+  <p class="lede">名字跨會議共用（人錄），從系統聯絡人加入電子郵件。</p>
+</section>
+<!-- 8 搜尋 -->
+<section class="slide">
+  <div class="kicker">會議庫</div><h2>用語意搜尋整個會議庫</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/meeting-search-zh.png"></div><div class="cap">會議內搜尋：命中段落直接跳原話時間點</div></div>
+    <div class="col"><div class="shot"><img src="img/search.gif"></div><div class="cap">首頁搜尋：詞彙＋語意雙路，「誰提到預算」也能找到</div></div>
+    <div class="col"><ul class="big">
+      <li>語意搜尋由 <b>EmbeddingGemma 2 270M</b>（約 160 MB）在手機上完成。</li>
+      <li>詞彙搜尋不需模型，安裝即可用。</li>
+      <li>依日期分組，支援篩選chip與「依人」過濾。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 9 Ask -->
+<section class="slide">
+  <div class="kicker">向會議提問</div><h2>Ask：回答附出處，可點回原話</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/meeting-ask-zh.png"></div><div class="cap">會議內提問：答案引用時間點與語者</div></div>
+    <div class="col"><div class="shot"><img src="img/ask.gif"></div><div class="cap">跨會議提問：引用多個場次</div></div>
+    <div class="col"><ul class="big">
+      <li>三階段：搜尋會議 → 閱讀摘錄 → 作答，面板顯示每階段秒數（約 6–14 秒）。</li>
+      <li>出處列「會議 · 時間」，點出處直接從該時間播放原話。</li>
+      <li>回答跟隨<b>提問的語言</b>；可帶著前一輪連續追問。</li>
+      <li>摘錄標有語者，所以能回答「誰負責什麼、期限何時」。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 10 匯入 -->
+<section class="slide">
+  <div class="kicker">不只錄音</div><h2>匯入音訊檔 · Podcast · YouTube · PeerTube</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/07-add-source.png"></div><div class="cap">首頁「＋」：檔案 / Podcast / 影音連結</div></div>
+    <div class="col"><div class="shot"><img src="img/08-podcast.png"></div><div class="cap">Podcast 單集：貼上 RSS 集數連結，自動下載轉寫</div></div>
+    <div class="col"><ul class="big">
+      <li>音訊檔（mp3／wav／m4a…）直接匯入；YouTube、PeerTube 貼連結即可（PeerTube 自動選最小檔案）。</li>
+      <li>下載可<b>暫停／續傳</b>，中斷不視為失敗；省電模式自動配合。</li>
+      <li>匯入走同一條管線：逐字稿、筆記、摘要、搜尋、提問全部可用，成果與錄音場次完全相同。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 11 匯出與分享 -->
+<section class="slide">
+  <div class="kicker">成果帶走</div><h2>匯出與「寄給與會者」</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/export.png"></div><div class="cap">匯出：PDF · Markdown · 純文字 · SRT／VTT／LRC 字幕 · 場次 .m4a</div></div>
+    <div class="col"><div class="shot"><img src="img/mail-participants.png"></div><div class="cap">寄給與會者：摘要＋紀要＋會議時間，用你自己的郵件 App</div></div>
+    <div class="col"><ul class="big">
+      <li>場次 .m4a 內含音訊＋逐字稿＋筆記＋摘要，可在另一台裝置還原。</li>
+      <li>字幕檔直接供剪輯軟體使用。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 12 合併/分割 -->
+<section class="slide">
+  <div class="kicker">場次整理</div><h2>合併與分割，可復原</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/35-merge-confirm.png"></div><div class="cap">合併多場：確認摘要與語者對照</div></div>
+    <div class="col"><div class="shot"><img src="img/36-merge-undo.png"></div><div class="cap">復原列：一鍵還原合併</div></div>
+    <div class="col"><ul class="big">
+      <li>一次會議錄成多場 → 合併成一場完整紀錄。</li>
+      <li>長錄音 → 在時間點分割成多個場次。</li>
+      <li>逐字稿可改文字、改派語者，長按即改。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 13 模型 -->
+<section class="slide">
+  <div class="kicker">怎麼做到的</div><h2>全部模型都在手機 CPU 上跑</h2>
+  <table class="t">
+    <tr><th>模型</th><th>用途</th><th>大小</th></tr>
+    <tr><td>X-ASR（含標點）＋ Nemotron-3 語者分離</td><td>語音辨識、語者標註（4 種轉寫延遲可選）</td><td>約 273 MB</td></tr>
+    <tr><td>Gemma-4-E2B 會議模型（行動版 v1）</td><td>AI 筆記、摘要、提問（預設）</td><td>約 2.2 GB</td></tr>
+    <tr><td>Gemma-4-E4B 會議模型（行動版 v2）</td><td>同上，較完整；限 RAM 8 GB 以上</td><td>約 3.3 GB</td></tr>
+    <tr><td>EmbeddingGemma 2 270M（選用）</td><td>語意搜尋、提問檢索</td><td>約 160 MB</td></tr>
+    <tr><td>CAM++ zh-en（選用）</td><td>辨識聲音（建議名字）</td><td>約 29 MB</td></tr>
+  </table>
+  <p class="lede">首次使用顯示總量、選「僅限 Wi‑Fi」下載（語音模型 273 MB 約 1 分鐘完成）；Android 8.0+（ARMv8.2 dotprod）、iOS 17+。</p>
+</section>
+
+<!-- 13b pipeline -->
+<section class="slide">
+  <div class="kicker">運作方式</div><h2>一條管線，全程在手機上</h2>
+  <div class="flow">
+    <div class="step"><b>麥克風</b></div><span class="arr">→</span>
+    <div class="step">串流語音辨識 <b>X-ASR</b>＋標點</div><span class="arr">→</span>
+    <div class="step">聲紋分離 <b>Nemotron</b>：逐句標註語者</div><span class="arr">→</span>
+    <div class="step">場次檔 <b>.m4a</b>：音訊＋逐字稿＋筆記＋摘要同檔</div>
+  </div>
+  <div class="flow">
+    <div class="step">AI 筆記 <b>Gemma E2B/E4B</b>：每讀滿約 1,500 詞元寫一批</div><span class="arr">→</span>
+    <div class="step">停止後：<b>段落摘要＋標題</b>；長會議分段補齊</div><span class="arr">→</span>
+    <div class="step"><b>EmbeddingGemma</b> 索引</div><span class="arr">→</span>
+    <div class="step">搜尋 · 提問 · 匯出 · 寄給與會者</div>
+  </div>
+  <p class="lede">錄音與整理互不阻塞：按「下一場」立刻錄下一場，前一場在背景接續整理。場次檔可在另一台裝置還原全部內容。</p>
+</section>
+
+<!-- 14 效能 -->
+<section class="slide">
+  <div class="kicker">效能與品質</div><h2>延遲、準確度與資源</h2>
+  <div class="cols">
+    <div class="col" style="flex:1.4"><div class="shot"><img src="img/latency_accuracy.png"></div><div class="cap">轉寫延遲 × 準確度：四種 int8 變體（預設 1.92 秒最準）</div></div>
+    <div class="col"><ul class="big">
+      <li>Note10+（Snapdragon 855）整夜实测：21–28 分鐘連續錄音，轉寫穩定，記憶體約 1.1 GB 峰值。</li>
+      <li>Ask 提問回應 6–14 秒（E2B，含檢索）。</li>
+      <li>App 中斷／被系統终止後：<b>自動恢復繼續</b>，不損壞場次。</li>
+      <li>純 CPU 推理：不搶 GPU／NPU，溫控正常。</li>
+      <li>錄音畫面上方即時顯示 <b>CPU／記憶體／電池</b>，數值過高轉紅。</li>
+    </ul></div>
+  </div>
+</section>
+<!-- 15 隱私 -->
+<section class="slide">
+  <div class="kicker">隱私設計</div><h2>資料不出手機</h2>
+  <ul class="big">
+    <li>無帳號、無伺服器、無上傳——音訊與逐字稿只存在你的手機。</li>
+    <li>完全離線可用：飛航模式也能錄音、筆記、摘要、提問。</li>
+    <li>唯一的網路連線：下載模型、匯入 Podcast／YouTube／PeerTube，以及每日一次新版檢查。</li>
+    <li>模型開源可查（Apache-2.0 為主），App 為 GPL-3.0 開源。</li>
+    <li>聯絡人郵件走你裝置上既有的郵件 App，App 不經手內容。</li>
+    <li>App 資料不入備份（會議隱私優先）。</li>
+  </ul>
+  <p class="lede">適合：法律、醫療、專利、併購、內部評審等高敏感會議。</p>
+</section>
+
+<!-- 16 設定 -->
+<section class="slide">
+  <div class="kicker">調校空間</div><h2>設定：延遲、模型與下載</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">轉寫延遲四段可選（速度／準確度取捨）</div></div>
+    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">模型管理：E2B／E4B 切換、選用模型上下架、僅限 Wi‑Fi</div></div>
+  </div>
+</section>
+
+<!-- 17 韌性 -->
+<section class="slide">
+  <div class="kicker">可靠性</div><h2>中斷不是事故</h2>
+  <div class="cols">
+    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的錄音：開 App 即提示续錄</div></div>
+    <div class="col"><ul class="big">
+      <li>錄音中被系統终止 → 重開自動接回，已錄內容不丟。</li>
+      <li>背景模型下載可暫停／續傳，電量與網路自動配合。</li>
+      <li>整夜 4 小時連續壓力測試：場次全數可解析、無損壞。</li>
+      <li>App 更新後資料保留（Releases 覆蓋安裝）。</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 18 平台 -->
+<section class="slide">
+  <div class="kicker">平台</div><h2>Android 與 iOS 同步推進</h2>
+  <div class="cols">
+    <div class="col"><ul class="big">
+      <li><b>Android</b>：GitHub Releases 直接安裝 APK，App 內每日檢查新版。</li>
+      <li><b>iOS</b>：TestFlight 測試版（iPhone 17+ 建議；6 GB 記憶體裝置亦支援 E4B）。</li>
+      <li>雙平台行為對齊：搜尋、提問、播放同步、逐字稿編輯。</li>
+      <li>開源：github.com/vieenrose/PrimeMinutes</li>
+    </ul></div>
+    <div class="col"><div class="shot"><img src="img/reprocess.png"></div><div class="cap">換模型後可整場重跑：筆記與摘要重新生成</div></div>
+  </div>
+</section>
+
+<!-- 18b 限制 -->
+<section class="slide">
+  <div class="kicker">坦白講</div><h2>限制與取捨</h2>
+  <ul class="big">
+    <li><b>E4B 需要 8 GB 記憶體</b>；較小的手機用 E2B，筆記在錄音結束後閱讀（較慢出現，結果相同）。</li>
+    <li>重疊說話時語者分離可能延後標註（淺灰句子）——可用分界編輯器修正，可復原。</li>
+    <li>提問（Ask）為<b>實驗性</b>：答案一律附出處，請點回原話核對。</li>
+    <li>第一次進行長時間工作時，App 說明一次「電池最佳化」的影響並詢問是否豁免。</li>
+    <li>超長會議：摘要分段逐段補齊，時間與會議長度成正比。</li>
+  </ul>
+</section>
+
+<!-- 19 現場示範 -->
+<section class="slide demo">
+  <div class="kicker">現場示範（實機）</div><h2>八分鐘走完一場會議</h2>
+  <ol>
+    <li>首頁按<b>錄音</b>——邊講邊出逐字稿，語者即時標註（約 2 分鐘）。</li>
+    <li>按<b>停止並儲存</b>——AI 筆記卡片顯示閱讀進度。</li>
+    <li>開場次：<b>摘要＋筆記＋標題</b>；點任一摘要句子播放原話。</li>
+    <li><b>提問</b>：「誰負責什麼、期限何時？」——答案附出處，點出處跳原話。</li>
+    <li><b>搜尋</b>整個會議庫，按人過濾。</li>
+    <li><b>匯出 PDF</b>／寄給與會者（示範用 demo 會議：尾牙與產品上線）。</li>
+  </ol>
+</section>
+
+<!-- 20 Roadmap -->
+<section class="slide">
+  <div class="kicker">正在進行</div><h2>接下來</h2>
+  <ul class="big">
+    <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每節目只取最新集；自動檢查列 v2（設計已完成：docs/design/podcast-series.md）。</li>
+    <li>長會議摘要再強化：分段散文式摘要與新摘要模型。</li>
+    <li>語者功能延伸：分界編輯器與人名錄持續打磨。</li>
+    <li>模型管線與 Ask 延遲持續優化。</li>
+  </ul>
+</section>
+
+<!-- 21 結尾 -->
+<section class="slide center">
+  <div class="brandrow" style="justify-content:center"><img src="img/app-icon.png" alt="">
+  <div style="text-align:left"><h1>Prime Minutes</h1>
+  <div class="lede">你的會議，留在你的手機。</div></div></div>
+  <div style="margin-top:30px">
+    <span class="pill">GitHub Releases 下載 APK</span>
+    <span class="pill">iOS TestFlight</span>
+    <span class="pill">github.com/vieenrose/PrimeMinutes</span>
+  </div>
+  <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
+</section>
+</div>
+<div id="bar"></div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];let i=0;
+  const go=n=>{i=Math.max(0,Math.min(slides.length-1,n));slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+    document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';location.hash=i+1;};
+  addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(i+1);}
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();go(i-1);}
+    else if(e.key==='Home')go(0);else if(e.key==='End')go(slides.length-1);});
+  addEventListener('click',e=>{go(i+(e.clientX>innerWidth/2?1:-1));});
+  addEventListener('wheel',(()=>{let t=0;return e=>{const n=Date.now();if(n-t<350)return;t=n;go(i+(e.deltaY>0?1:-1));}}),{passive:true});
+  slides.forEach((s,n)=>{const f=document.createElement('div');f.className='foot';
+    f.innerHTML='<span>Prime Minutes · 全程離線</span><span>'+(n+1)+' / '+slides.length+'</span>';s.appendChild(f);});
+  go(parseInt(location.hash.slice(1))-1||0);
+</script>
+</body>
+</html>
