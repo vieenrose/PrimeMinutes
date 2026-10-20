@@ -12,6 +12,37 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (6) — Android pass 4 (branch `android`, commit `a88539a1`)
+
+Fresh review pass over Studio / Session / People / Settings / Import after the audit list closed.
+Every finding this tick was the same species: **a control in a dense row under the 48 dp touch
+minimum** — the first three passes fixed the `IconButton` boxes, these are the hand-sized rows.
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| High | `BoundaryEditor.kt:88` `SpeakerSeam` | the seam is the only entry to the boundary editor and sat at `height(28.dp)` in a scrolling transcript — a 28 dp band a thumb lands on by luck | `height(44.dp)` (iOS `SpeakerSeam` is 44 pt) |
+| High | `TranscriptSearch.kt` ×6 | the in-meeting search bar's ≈, prev, next, results-toggle, Ask and close were all `size(32.dp)` | `size(40.dp)`; the text field is `weight(1f)`, so the extra 40 dp is absorbed by the field — no overflow, the row has no fixed height |
+| Med | `StudioScreen.kt:409` Ask capsule | the library's Ask capsule (primary action under the search field) `heightIn(min = 32.dp)` | `min = 44.dp` — matches the iOS Ask capsule's 44 pt |
+| Med | `StudioScreen.kt:980` `FilterChip` | the status and person filter chips `heightIn(min = 32.dp)`, the main filter affordance of the library | `min = 44.dp` (48 dp Material minimum; 44 chosen so the two chip rows keep their shape) |
+| Med | `UpdateBanner.kt:74` | banner dismiss ✕ at `size(28.dp)` | size override dropped → `IconButton`'s 48 dp box |
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` (laptop) → `BUILD
+SUCCESSFUL in 39s`, no new warnings. Worktree `/tmp/pm-ux4` rebased onto `origin/android` (already
+current), pushed `a88539a1`, removed. No emulator run: the seam's density in a long transcript, the
+search bar's fit at 360 dp width, and the two chip rows' height are owed a device pass.
+
+**Scanned, nothing to fix:** hardcoded UI literals (only `name@example.com` placeholders),
+`contentDescription = null` on icons (every hit is an icon inside a labelled row — the label
+carries it; the icon-only controls all have labels), zh-TW catalogs (no English runs, no
+license wording), `.imePadding()` (all text-field sheets padded), destructive confirms (all covered
+in pass 2).
+
+**Noted, not changed:** `GradientButton` disabled = Slate400 on Slate700 (≈ 3.7:1 with bold text,
+disabled states exempt); e-ink speaker-hue separation; `AiBenchmark`'s English output lines
+(`BuildConfig.DEBUG` only, not shipped copy).
+
+---
+
 ## 2026-10-21 (5) — iOS pass 3 (branch `ios`, commit `91653aac`)
 
 Closes iOS open items 1, 4 and 5 — the parity items the Android passes left behind.
