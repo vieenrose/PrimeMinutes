@@ -85,7 +85,9 @@ fun SpeakerSeam(colorA: Color, colorB: Color, labelA: String, labelB: String, on
     val pal = LocalPrimeMinutesPalette.current
     val cd = stringResource(R.string.cd_boundary_handle, labelA, labelB)
     Box(
-        Modifier.fillMaxWidth().height(28.dp)
+        // 44 dp: the seam is the only entry to the boundary editor, and a 28 dp band in a
+        // scrolling transcript is a hard target for a thumb (iOS SpeakerSeam: same 44 pt).
+        Modifier.fillMaxWidth().height(44.dp)
             .semantics { contentDescription = cd }
             .clickable(onClickLabel = cd, onClick = onOpen),
         contentAlignment = Alignment.CenterStart,

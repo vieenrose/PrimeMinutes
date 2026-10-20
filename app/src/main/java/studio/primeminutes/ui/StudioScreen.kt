@@ -406,7 +406,7 @@ fun StudioScreen(
                         modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.Sky.copy(alpha = 0.14f))
                             .clickable { onAsk(query) }
                             .semantics(mergeDescendants = true) { role = Role.Button }
-                            .heightIn(min = 32.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+                            .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Icon(Icons.Filled.QuestionAnswer, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -977,7 +977,7 @@ private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
             .border(1.dp, if (on) pal.Sky else pal.Hairline, RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .semantics { selected = on; role = Role.Tab }   // announce the chip's selected state
-            .heightIn(min = 32.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 12.dp),
+            .heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 12.dp),
     )
 }
 

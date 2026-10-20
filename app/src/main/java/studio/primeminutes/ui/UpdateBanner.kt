@@ -71,7 +71,7 @@ fun UpdateBanner(
                     modifier = Modifier.weight(1f),
                 )
                 if (progress == null) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    IconButton(onClick = onDismiss) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.update_later),
                             tint = pal.Slate400, modifier = Modifier.size(18.dp))
                     }
