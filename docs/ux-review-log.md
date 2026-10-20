@@ -12,6 +12,48 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (4) — Android pass 3 (branch `android`, commit `034ce829`)
+
+Closes open item 5 (the library no-match dead end) and the two affordance items the earlier passes
+listed as skipped.
+
+### 1. No-match was a dead end (HIGH)
+
+A search plus filters that matches nothing showed only「沒有符合搜尋的會議。」— the way out was
+deleting the query by hand and hunting the filter chips behind an empty list. The empty state now
+offers「清除搜尋與篩選」(`studio_clear_filters`, `testTag("studio-clear-filters")`) whenever a query,
+the status filter, or a person filter is active; it resets all three. (The indexing-in-progress and
+searching states keep their own copy and show no button.)
+
+### 2. Selection mode was long-press only (MED)
+
+`onLongClickLabel` named the gesture for TalkBack, but nothing visible advertises a long-press, and
+a mouse/stylus has no long-press path at all. The row's action sheet (Manage) now starts with
+「選取」(`action_select`), which enters selection mode with that row picked.
+
+### 3. A clear button labelled "Cancel" (MED)
+
+`PersonPicker.kt:153`'s trailing ✕ in the people search field was announced as 「取消」; it is now
+`cd_clear_search`「清除搜尋」. (iOS `PeopleViews.swift:83` has the identical label bug — logged as
+open on the iOS side.)
+
+**New copy:** `studio_clear_filters`, `action_select`, `cd_clear_search` added to en / zh-TW / zh-CN
+in one pass — 590 keys per catalog, XML-valid, identical key sets. zh-TW stays traditional-only; no
+license/open-source wording touched.
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` (laptop) → `BUILD
+SUCCESSFUL in 47s`, no new warnings on the touched files (only the pre-existing `PlaylistPlay`
+deprecations). Worktree `/tmp/pm-ux3` rebased onto `origin/android` (already current), pushed
+`034ce829`, removed. No emulator run: the new button, the action-sheet entry, and the TalkBack
+label are owed a device pass.
+
+**Skipped this tick:** `AiBenchmark`'s English output lines (debug-only panel, `BuildConfig.DEBUG`,
+not shipped copy); disabled ink on the accent (`GradientButton` disabled = Slate400 on Slate700
+≈ 3.7:1 with bold text — exempt, not worth a token); e-ink speaker-hue legibility; iOS merge-confirm
+parity (iOS round).
+
+---
+
 ## 2026-10-21 (3) — iOS pass 2 (branch `ios`, commit `37920031`)
 
 Audited `ios/App` for what the Android passes exposed: the copy-to-clipboard paths, glyph-only
@@ -206,7 +248,7 @@ lines. No iOS build run (no Swift toolchain on this machine); no device/emulator
   outer `more`); duplicate `navigationTitle` + `.principal` in the Ask sheet.
 - Chip rows (filter/people/speaker chips ~30 pt) — M3 chip spec matches; left as designed.
 
-## Open Android findings (audited 2026-10-20; items 1–4, 6–9 implemented 2026-10-21)
+## Open Android findings (audited 2026-10-20; all ten implemented 2026-10-21)
 
 Highest-value, from the Compose audit (files on branch `android`). Struck items are fixed,
 numbering kept so the entries refer to them.
@@ -218,7 +260,8 @@ numbering kept so the entries refer to them.
    the white light/e-ink card ground → invisible.~~ **Done 2026-10-21** (`12563607`).
 4. ~~High — `SessionComponents.kt:984-989` speaker chip `lineHeight = 12.sp` frozen while glyph size
    scales → CJK clipping at large text sizes.~~ **Done 2026-10-21** (`12563607`).
-5. High — library no-match state is a dead end (no "clear filters / clear search" affordance).
+5. ~~High — library no-match state is a dead end (no "clear filters / clear search" affordance).~~
+   **Done 2026-10-21 pass 3** (`034ce829`, `studio_clear_filters`).
 6. ~~High — `Color.White` ink on `pal.Sky` (filter chip, export format, selection tick, mail chip)
    needs an `OnSky` token (dark theme accent ≈ 2.6:1).~~ **Done 2026-10-21** (`12563607`,
    `OnSky = Slate900`).
@@ -230,9 +273,9 @@ numbering kept so the entries refer to them.
    **Done 2026-10-21 pass 2** (`253cb2c9`, `cd_start_selection`).
 9. ~~Med — `YouTubeSheet.kt:94`, `PodcastSheet.kt:26` missing `.imePadding()` (keyboard covers the
    field).~~ **Done 2026-10-21 pass 2** (`253cb2c9`).
-10. Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
-    on the settings page — **done 2026-10-21 pass 2** (`253cb2c9`, both catalogs, matching iOS).
-    Still open: `PersonPicker.kt:153` clear-search icon labelled "取消".
+10. ~~Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
+    on the settings page; `PersonPicker.kt:153` clear-search icon labelled "取消".~~ **Done
+    2026-10-21 passes 2–3** (`253cb2c9` copy, `034ce829` `cd_clear_search`).
 
 ---
 
@@ -247,3 +290,8 @@ numbering kept so the entries refer to them.
    state is carried by colour only; no `.accessibilityValue` for the disabled case.
 3. Med — `CaptureView.swift:17`'s elapsed timer is a 76 pt fixed face: fine as a display face,
    but it ignores the app's text-size setting entirely (the Android counterpart scales).
+4. Med — `PeopleViews.swift:83`: the people-search clear (✕) is labelled `L("cancel")`, so VoiceOver
+   says 取消 for a field-clearing button — the Android side fixed this 2026-10-21 (`cd_clear_search`).
+5. Med — the library row's selection entry is long-press (plus a `select` accessibility action);
+   Android's action sheet gained a visible 「選取」 (`action_select`, `034ce829`) — the iOS
+   `Manage` menu has no equivalent.
