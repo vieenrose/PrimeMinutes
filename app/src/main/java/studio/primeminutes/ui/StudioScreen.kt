@@ -513,6 +513,17 @@ fun StudioScreen(
                     color = pal.Slate400, style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
+                // A no-match from a search + filters was a dead end: the only way out was clearing the
+                // field by hand and finding the filter chips behind the empty list.
+                val filtered = query.isNotBlank() || statusFilter != StatusFilter.ALL || personFilter != null
+                if (!firstRun && densePending == null && filtered) {
+                    Spacer(Modifier.height(20.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { query = ""; statusFilter = StatusFilter.ALL; personFilter = null },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, pal.Slate600),
+                        modifier = Modifier.testTag("studio-clear-filters"),
+                    ) { Text(stringResource(R.string.studio_clear_filters), color = pal.Sky) }
+                }
                 if (firstRun) {
                     // The first recording downloads the speech + summary models: say how much before
                     // it starts, so nobody burns a mobile plan without knowing.
@@ -659,6 +670,9 @@ fun StudioScreen(
                     ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
                     ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { deleteFor = e; actionsFor = null }
                 } else {
+                // Long-press selects, and nothing in the UI says so; this is the path for a mouse, a
+                // stylus, and TalkBack (the row's onLongClickLabel is announced, not shown).
+                ActionRow(Icons.Filled.CheckCircle, stringResource(R.string.action_select)) { actionsFor = null; selectionMode = true; selected[e.id] = Unit }
                 if (e.id == processingId) {
                     ActionRow(Icons.Filled.PlaylistPlay, stringResource(R.string.action_watch_live)) { actionsFor = null; onWatchLive(e) }
                     ActionRow(Icons.Filled.Stop, stringResource(R.string.action_stop_processing), PrimeMinutesPalette.Red) { actionsFor = null; onStopProcessing() }

@@ -270,6 +270,7 @@
     <string name="action_process_now">Process now</string>
     <string name="action_open">Open</string>
     <string name="action_rename">Rename</string>
+    <string name="action_select">Select</string>
     <string name="action_share_audio">Share audio</string>
     <string name="action_delete">Delete</string>
     <string name="delete_confirm">Delete “%s” permanently? The audio and its transcript are removed.</string>
@@ -290,6 +291,7 @@
     <string name="settings_index_all_done">All meetings are indexed for search.</string>
     <string name="settings_search_model_get">Download the search model (%1$s)</string>
     <string name="studio_no_match">No meeting matches your search.</string>
+    <string name="studio_clear_filters">Clear search and filters</string>
     <string name="studio_searching">Searching…</string>
     <string name="day_today">TODAY</string>
     <string name="day_yesterday">YESTERDAY</string>
@@ -310,6 +312,7 @@
     <string name="cd_exit_selection">Exit selection</string>
     <!-- long-press on a library row: the only way into selection mode -->
     <string name="cd_start_selection">Select this meeting</string>
+    <string name="cd_clear_search">Clear search</string>
     <string name="cd_manage">Manage</string>
     <string name="action_watch_live">Watch live</string>
     <string name="filter_all">All (%d)</string>

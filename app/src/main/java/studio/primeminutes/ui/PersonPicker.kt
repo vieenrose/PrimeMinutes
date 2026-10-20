@@ -150,7 +150,9 @@ fun PersonPickerSheet(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 placeholder = { Text(stringResource(R.string.people_search_hint)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, stringResource(R.string.cancel)) } }) else null,
+                // 取消 (Cancel) described a field-clearing button; it says 清除搜尋 now (iOS label is the
+                // same fix, logged as open there).
+                trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, stringResource(R.string.cd_clear_search)) } }) else null,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     val exact = (sec.inMeeting + sec.recent + sec.all).firstOrNull { PersonNames.same(it.person.name, query, fold) }
