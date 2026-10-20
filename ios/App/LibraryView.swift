@@ -27,6 +27,9 @@ struct LibraryView: View {
     /// Focus of the studio search field (Android parity: never focused on screen open;
     /// a tap outside the field resigns it, which hides the keyboard).
     @FocusState private var searchFocused: Bool
+    /// Frame of the search row in global coordinates: the root tap gesture keeps the keyboard up
+    /// for taps inside the row and resigns it for taps anywhere else (Android parity).
+    @State private var searchRowFrame: CGRect = .zero
     /// Fused search over the library, debounced; lexical at once, semantic once the embedder answers.
     private func runSearch() {
         searchTask?.cancel()
@@ -247,6 +250,8 @@ struct LibraryView: View {
                     }.buttonStyle(.plain).foregroundStyle(Color.accentColor).accessibilityLabel(L("ask_entry_cd"))
                 }
             }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
+            .background(GeometryReader { g in Color.clear.preference(key: SearchRowFrameKey.self, value: g.frame(in: .global)) })
+            .onPreferenceChange(SearchRowFrameKey.self) { searchRowFrame = $0 }
             if !EmbedHost.ready && !m.library.sessions.isEmpty {
                 if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6) }
                 else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
@@ -310,6 +315,12 @@ struct LibraryView: View {
             }.padding(.horizontal, 16).padding(.vertical, 8)
         }
         .background(Color(.systemGroupedBackground))
+        // A tap anywhere (cards, chips, background, record) resigns the search field, hiding the
+        // keyboard; taps inside the search row keep it. simultaneousGesture so it fires alongside
+        // the cards' own tap gestures. Android parity: outside tap clears focus.
+        .simultaneousGesture(SpatialTapGesture().onEnded { v in
+            if !searchRowFrame.insetBy(dx: -12, dy: -12).contains(v.location) { searchFocused = false }
+        })
         .alert(L("rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("title"), text: $draft)
             Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
@@ -324,6 +335,12 @@ struct LibraryView: View {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s) } }
         }
     }
+}
+
+/// Global frame of the studio search row, for the outside-tap keyboard dismissal.
+private struct SearchRowFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 /// "Add audio" bottom sheet (Android AddSourceSheet, without the YouTube row: not offered on iOS).
