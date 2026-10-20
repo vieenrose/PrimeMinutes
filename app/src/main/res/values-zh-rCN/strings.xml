@@ -262,6 +262,8 @@
     <string name="search_semantic_downloading">正在下载搜索模型… %1$d%%</string>
     <string name="search_semantic_marker">≈</string>
     <string name="search_semantic_cd">按语义搜索</string>
+    <string name="search_semantic_indexing">语义索引建立中，稍后即可搜索要点</string>
+    <string name="search_semantic_indexing_short">索引建立中…</string>
     <string name="search_model_download_failed">无法下载搜索模型</string>
     <string name="studio_indexing">正在索引…</string>
     <string name="settings_index_old">索引旧会议</string>

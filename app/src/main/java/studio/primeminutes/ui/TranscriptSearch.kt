@@ -74,6 +74,8 @@ fun TranscriptSearchBar(
     semanticAvailable: Boolean = false,
     semantic: Boolean = false,
     onSemantic: () -> Unit = {},
+    /** ≈ is on and this meeting's index is still being built: the counter says so, not "no matches". */
+    indexing: Boolean = false,
     /** The results list under the bar (in-meeting search): shown / hidden; null = no toggle. */
     resultsOpen: Boolean? = null,
     onToggleResults: () -> Unit = {},
@@ -124,7 +126,7 @@ fun TranscriptSearchBar(
         }
         if (query.isNotEmpty()) {
             Text(
-                if (matchCount == 0) stringResource(R.string.search_no_matches)
+                if (matchCount == 0) stringResource(if (indexing) R.string.search_semantic_indexing_short else R.string.search_no_matches)
                 else stringResource(R.string.search_match_count, matchPos + 1, matchCount),
                 style = MaterialTheme.typography.labelMedium,
                 color = pal.Slate400,
@@ -195,6 +197,8 @@ fun MeetingSearchResults(
     onPick: (MeetingSearch.Result) -> Unit,
     onAsk: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    /** ≈ is on and this meeting's index is being built: the list leads with that, keyword hits and all. */
+    indexing: Boolean = false,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val notes = results.filter { it.kind == MeetingSearch.Kind.NOTE }
@@ -233,6 +237,12 @@ fun MeetingSearchResults(
                     )
                 }
             }
+        }
+        if (indexing) item(key = "indexing") {
+            Text(
+                stringResource(R.string.search_semantic_indexing), style = MaterialTheme.typography.labelSmall,
+                color = pal.Slate400, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         }
         if (notes.isNotEmpty()) { header(R.string.search_results_notes, notes.size); rows(notes) }
         if (lines.isNotEmpty()) { header(R.string.search_results_transcript, lines.size); rows(lines) }

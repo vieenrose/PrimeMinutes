@@ -746,6 +746,9 @@ private fun TranscribeScreen(
     // chunk starts whose vector matches the query to the match set.
     var semanticSearch by remember { mutableStateOf(false) }
     var semanticTargets by remember { mutableStateOf<List<Int>>(emptyList()) }
+    // ≈ is on and this meeting's index is being built: the results area says so, and the effect
+    // re-runs (key: indexingIds) once the index lands, so the empty keyword-only list is not sticky.
+    var semanticIndexing by remember { mutableStateOf(false) }
     // In-meeting search (docs/design/in-session-search-ask.md): the open meeting's passages found by
     // meaning (notes and chunks), and whether the results list under the bar is unfolded.
     var densePassages by remember { mutableStateOf<List<studio.primeminutes.core.embed.LibrarySearch.Passage>>(emptyList()) }
@@ -1292,15 +1295,24 @@ private fun TranscribeScreen(
     // Dense pass over the open session's index (index.bin next to its session file). Only for a
     // library session with the model present; the index is requested when it is missing.
     val semanticAvailable = searchModelReady && s.libraryDir != null && !s.running   // a meeting still processing has no index yet
-    LaunchedEffect(s.searchQuery, semanticSearch, s.libraryDir, s.searchActive) {
-        semanticTargets = emptyList(); densePassages = emptyList()
+    LaunchedEffect(s.searchQuery, semanticSearch, s.libraryDir, s.searchActive, indexingIds) {
+        val wasIndexing = semanticIndexing
+        semanticTargets = emptyList(); densePassages = emptyList(); semanticIndexing = false
         val dir = s.libraryDir
         val q = s.searchQuery.trim()
         if (!s.searchActive || !semanticSearch || !semanticAvailable || dir == null || q.isBlank()) return@LaunchedEffect
         delay(300)
         val e = withContext(Dispatchers.IO) { SessionLibrary.byId(context, dir.name) } ?: return@LaunchedEffect
         LibrarySearch.load(context, e)
-        if (!withContext(Dispatchers.IO) { LibrarySearch.indexed(e) }) { LibraryIndexer.request(context, dir.name); return@LaunchedEffect }
+        if (!withContext(Dispatchers.IO) { LibrarySearch.indexed(e) }) {
+            // No index yet: the merge below would be keyword-only and look like "no matches". Say so
+            // (results area) and queue the build; indexingIds re-runs this effect when it lands.
+            semanticIndexing = true
+            android.util.Log.i("primeminutes-search", "≈ on ${dir.name}: index missing, keyword-only for now, index requested")
+            LibraryIndexer.request(context, dir.name)
+            return@LaunchedEffect
+        }
+        if (wasIndexing) android.util.Log.i("primeminutes-search", "index ready for ${dir.name}: semantic search re-run")
         val qv = runCatching { EmbedHost.use(context, 1) { it.embed(Embedder.Prompts.query(q)) } }.getOrNull() ?: return@LaunchedEffect
         // One meeting through the library's dense pass: its notes and chunks above the shared threshold.
         val ps = LibrarySearch.dense(context, listOf(e), qv, maxPassages = studio.primeminutes.core.embed.MeetingSearch.DENSE_PASSAGES, snippetChars = 300)
@@ -1854,13 +1866,14 @@ private fun TranscribeScreen(
                             matchCount = searchMatches.size, matchPos = matchPos,
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
                             semanticAvailable = semanticAvailable, semantic = semanticSearch,
-                            onSemantic = { semanticSearch = !semanticSearch },
-                            resultsOpen = resultsOpen && meetingResults.isNotEmpty(), onToggleResults = { resultsOpen = !resultsOpen },
+                            onSemantic = { semanticSearch = !semanticSearch }, indexing = semanticIndexing,
+                            resultsOpen = resultsOpen && (meetingResults.isNotEmpty() || semanticIndexing), onToggleResults = { resultsOpen = !resultsOpen },
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                         )
-                        if (s.searchActive && resultsOpen && meetingResults.isNotEmpty()) studio.primeminutes.ui.MeetingSearchResults(
+                        if (s.searchActive && resultsOpen && (meetingResults.isNotEmpty() || semanticIndexing)) studio.primeminutes.ui.MeetingSearchResults(
                             meetingResults, s.searchQuery, speakerName = { speakerLabel(it) }, onPick = { pickResult(it) },
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
+                            indexing = semanticIndexing,
                         )
                         LazyColumn(
                             state = listState,
@@ -1884,13 +1897,14 @@ private fun TranscribeScreen(
                             matchCount = searchMatches.size, matchPos = matchPos,
                             onPrev = { searchPrev() }, onNext = { searchNext() }, onClose = { closeSearch() },
                             semanticAvailable = semanticAvailable, semantic = semanticSearch,
-                            onSemantic = { semanticSearch = !semanticSearch },
-                            resultsOpen = resultsOpen && meetingResults.isNotEmpty(), onToggleResults = { resultsOpen = !resultsOpen },
+                            onSemantic = { semanticSearch = !semanticSearch }, indexing = semanticIndexing,
+                            resultsOpen = resultsOpen && (meetingResults.isNotEmpty() || semanticIndexing), onToggleResults = { resultsOpen = !resultsOpen },
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                         )
-                        if (s.searchActive && resultsOpen && meetingResults.isNotEmpty()) studio.primeminutes.ui.MeetingSearchResults(
+                        if (s.searchActive && resultsOpen && (meetingResults.isNotEmpty() || semanticIndexing)) studio.primeminutes.ui.MeetingSearchResults(
                             meetingResults, s.searchQuery, speakerName = { speakerLabel(it) }, onPick = { pickResult(it) },
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
+                            indexing = semanticIndexing,
                         )
                         if (utterances.isEmpty() && !s.running) Text(
                             stringResource(R.string.status_no_speech),
