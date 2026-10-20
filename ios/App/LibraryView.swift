@@ -24,6 +24,8 @@ struct LibraryView: View {
     /// The query whose semantic half is still running: until it lands, no hit means "searching", not "no match".
     @State private var densePending: String?
     @State private var asking: String?
+    /// False until the library's first count change: that one is the launch load, not a finished meeting.
+    @State private var countArmed = false
     /// Focus of the studio search field (Android parity: never focused on screen open;
     /// a tap outside the field resigns it, which hides the keyboard).
     @FocusState private var searchFocused: Bool
@@ -150,7 +152,7 @@ struct LibraryView: View {
                 Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
                 Button(L("rename"), systemImage: "pencil") { draft = s.title; renaming = s }
                 Button(L("delete"), systemImage: "trash", role: .destructive) { deleting = s }
-            } label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
                 .accessibilityLabel(L("more")) }
         }
         .padding(12)
@@ -187,16 +189,16 @@ struct LibraryView: View {
             Spacer(minLength: 0)
             if j.download != nil {
                 Menu { DownloadActions(m: m, j: j) }
-                    label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             } else if active {
                 Menu { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
-                    label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             } else if m.runner.parked.contains(j.id) {
                 Menu { Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }; Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) } }
-                    label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             } else if j.id != m.capture.recordingJob {
                 Menu { Button(L("action_process_now"), systemImage: "text.line.first.and.arrowtriangle.forward") { m.runner.processNext(j) }; Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) } }
-                    label: { Image(systemName: "ellipsis").padding(10).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             }
         }
         .padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -221,19 +223,19 @@ struct LibraryView: View {
             Color.clear.frame(height: 0).onAppear { searchFocused = false; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
-                    Button { selected = [] } label: { Image(systemName: "xmark").font(.title3) }.accessibilityLabel(L("cd_exit_selection"))
+                    Button { selected = [] } label: { Image(systemName: "xmark").font(.title3).tapTarget() }.accessibilityLabel(L("cd_exit_selection"))
                     Text(L("selection_count", selected.count)).font(.title3.bold())
                     Spacer()
                     Button(L("select_all")) { selected = Set(shown.map(\.id)) }
-                    Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3) }
+                    Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3).tapTarget() }.accessibilityLabel(L("delete"))
                 }.padding(.horizontal, 16).padding(.vertical, 8)
             } else {
             HStack {
                 BrandMark(size: 34)
                 Text(L("app_name")).font(.title2.bold())
                 Spacer()
-                Button(action: onAdd) { Image(systemName: "plus").font(.title3) }.accessibilityLabel(L("import_audio"))
-                Button(action: onSettings) { Image(systemName: "slider.horizontal.3").font(.title3) }.accessibilityLabel(L("settings")).padding(.leading, 12)
+                Button(action: onAdd) { Image(systemName: "plus").font(.title3).tapTarget() }.accessibilityLabel(L("import_audio"))
+                Button(action: onSettings) { Image(systemName: "slider.horizontal.3").font(.title3).tapTarget() }.accessibilityLabel(L("settings")).padding(.leading, 12)
             }.padding(.horizontal, 16).padding(.vertical, 8)
             }
             HStack {
@@ -242,11 +244,12 @@ struct LibraryView: View {
                     .focused($searchFocused)
                     .onSubmit { searchFocused = false; if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
                     .onChange(of: query) { _, _ in runSearch() }
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel(L("search_close")) }
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).tapTarget() }.accessibilityLabel(L("search_close")) }
                 if askReady {   // labeled, always there: an empty search opens Ask with an empty question
                     Button { searchFocused = false; asking = query.trimmingCharacters(in: .whitespaces) } label: {
                         Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 10).padding(.vertical, 6).background(Color.accentColor.opacity(0.14), in: Capsule())
+                            .frame(minHeight: 44).contentShape(Rectangle())   // the capsule keeps its height; the hit area reaches 44 pt
                     }.buttonStyle(.plain).foregroundStyle(Color.accentColor).accessibilityLabel(L("ask_entry_cd"))
                 }
             }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
@@ -308,7 +311,7 @@ struct LibraryView: View {
                 Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
                     .buttonStyle(.bordered).padding(.horizontal, 16)
             }
-            Button { if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
+            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
                 Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
                     .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(m.capture.recording ? Color.red : Color.accentColor, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)
@@ -321,18 +324,24 @@ struct LibraryView: View {
         .simultaneousGesture(SpatialTapGesture().onEnded { v in
             if !searchRowFrame.insetBy(dx: -12, dy: -12).contains(v.location) { searchFocused = false }
         })
+        // A meeting that finished processing lands in the library: confirm it by touch (a removal stays silent).
+        .onChange(of: m.library.sessions.count) { prev, now in
+            defer { countArmed = true }
+            guard countArmed else { return }   // the first change is the launch load: not a completion
+            if now > prev { Haptics.success() }
+        }
         .alert(L("rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("title"), text: $draft)
             Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
             Button(L("cancel"), role: .cancel) {}
         }
         .confirmationDialog(L("delete_confirm_many", selected.count), isPresented: $deletingMany, titleVisibility: .visible) {
-            Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; selected = [] }
+            Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; selected = []; Haptics.destructive() }
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
         .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-            Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s) } }
+            Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
         }
     }
 }
@@ -370,7 +379,8 @@ struct AddSourceSheet: View {
             row("play.rectangle", L("source_peertube"), L("source_peertube_desc"), onPeerTube)
             row("doc.badge.arrow.up", L("source_session"), L("source_session_desc"), onSession)
             Spacer(minLength: 0)
-        }.padding(.horizontal, 20).padding(.top, 24).presentationDetents([.height(450)])
+        // medium/large, not a fixed 450 pt: a fixed sheet clips its rows at large text sizes.
+        .padding(.horizontal, 20).padding(.top, 24).presentationDetents([.medium, .large])
     }
 }
 

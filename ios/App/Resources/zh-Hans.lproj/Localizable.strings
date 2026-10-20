@@ -109,8 +109,8 @@
 "storage_delete_title" = "删除这个模型？";
 "storage_delete_body" = "%@（%@）下次使用时会重新下载。";
 "settings_about" = "关于";
-"about_license" = "自由开源 · GPL-3.0";
-"about_components" = "开源组件";
+"about_license" = "录音与文字只留在这台手机";
+"about_components" = "授权组件";
 "settings_reader_model" = "AI 笔记模型";
 "settings_inference" = "推理";
 "add_audio" = "添加音频";
@@ -472,7 +472,7 @@
 "voice_me_name" = "我";
 "voice_me_text" = "请在安静处朗读下方文字约 20 秒。只会保留声音向量，不保留录音。";
 "voice_me_permission" = "Prime Minutes 需要麦克风权限。请先开始一次录音以授权，再回到这里。";
-"voice_me_script" = "今天我们会检视项目进度、上周的决定，以及下一步由谁负责。我会先说明时间表，再谈预算，最后开放提问。Today we will review where the project stands and who takes the next steps.";
+"voice_me_script" = "今天我们会检视项目进度、上周的决定，以及下一步由谁负责。我会先说明时间表，再谈预算，最后开放提问。";
 "voice_me_start" = "开始";
 "voice_me_recording" = "聆听中…请继续朗读。";
 "voice_me_computing" = "正在学习你的声音…";

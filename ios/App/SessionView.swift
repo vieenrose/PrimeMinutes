@@ -190,7 +190,7 @@ struct SessionView: View {
     private func resultRow(_ r: MeetingSearch.Result) -> some View {
         Button { pick(r) } label: {
             HStack(alignment: .top, spacing: 6) {
-                Text(Export.mmss(r.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(Color.accentColor).frame(width: 48, alignment: .leading)
+                Text(Export.mmss(r.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(Color.accentColor).fixedSize().frame(minWidth: 48, alignment: .leading)   // a fixed 48 pt clipped the time at large text sizes
                 if r.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
                 (r.speaker.map { Text(s.name($0) + "  ").font(.caption.weight(.semibold)).foregroundColor(.secondary) } ?? Text(""))
                     + Text(Self.marked(MeetingSearch.snippet(r.text, query), query)).font(.caption)
@@ -253,8 +253,8 @@ struct SessionView: View {
                 card {
                     // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
                     HStack(spacing: 16) { Spacer()
-                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_summary"))
-                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil") }.accessibilityLabel(L("cd_edit")) }
+                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied") } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
+                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit")) }
                     Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
                         return .systemAction })
@@ -265,8 +265,8 @@ struct SessionView: View {
                 card {
                     HStack(spacing: 16) {
                         Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied") } label: { Image(systemName: "doc.on.doc") }.accessibilityLabel(L("cd_copy_actions"))
-                        Button { draft = a; editingActions = true } label: { Image(systemName: "pencil") }.accessibilityLabel(L("cd_edit"))
+                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied") } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
+                        Button { draft = a; editingActions = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit"))
                     }
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
@@ -317,23 +317,23 @@ struct SessionView: View {
                     TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search)
                         .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
                     if EmbedHost.ready {
-                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)) }
+                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)).tapHeight() }
                             .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
                     }
                     if !query.isEmpty {
                         Text(hits.isEmpty ? L("search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Button { stepMatch(-1) } label: { Image(systemName: "chevron.up") }.accessibilityLabel(L("search_prev"))
-                        Button { stepMatch(1) } label: { Image(systemName: "chevron.down") }.accessibilityLabel(L("search_next"))
+                        Button { stepMatch(-1) } label: { Image(systemName: "chevron.up").tapHeight() }.accessibilityLabel(L("search_prev"))
+                        Button { stepMatch(1) } label: { Image(systemName: "chevron.down").tapHeight() }.accessibilityLabel(L("search_next"))
                     }
                     if !query.isEmpty && !meetingResults.isEmpty {
-                        Button { resultsOpen.toggle() } label: { Image(systemName: resultsOpen ? "chevron.up.square" : "list.bullet") }
+                        Button { resultsOpen.toggle() } label: { Image(systemName: resultsOpen ? "chevron.up.square" : "list.bullet").tapHeight() }
                             .accessibilityLabel(L(resultsOpen ? "search_results_hide" : "search_results_show"))
                     }
                     if askMeetingReady {
-                        Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: { Image(systemName: "sparkles") }
+                        Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: { Image(systemName: "sparkles").tapHeight() }
                             .accessibilityLabel(L("ask_meeting_title")).accessibilityIdentifier("search-ask-meeting")
                     }
-                    Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel(L("search_close"))
+                    Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill").tapHeight() }.accessibilityLabel(L("search_close"))
                 }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                 if resultsOpen && !meetingResults.isEmpty { resultsList }
             }
@@ -357,6 +357,7 @@ struct SessionView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { if player.available { player.seekPlay(l.start) } }
                 .contextMenu { lineMenu(l) }
+                .accessibilityAction { if player.available { player.seekPlay(l.start) } }   // VoiceOver's default action: play from this line
                 .accessibilityAction(named: L("cd_line_actions")) { editingLine = l.id; draft = l.text }
             }
         }.padding(.horizontal, 16)
@@ -412,7 +413,7 @@ struct SessionView: View {
             }
         }
         .sheet(isPresented: $showExport) {
-            ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { exportFile = u } else { toast = L("session_share_failed") } } }
+            ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") } } }
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
@@ -524,7 +525,8 @@ struct SessionView: View {
         }
         .overlay(alignment: .bottom) {
             if let toast { Text(toast).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
-                .transition(.opacity).task { try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
+                // A toast is visual only: say it out loud too (VoiceOver gets nothing otherwise).
+                .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
         }
         .sheet(isPresented: $editingSummary) {
             NavigationStack {
@@ -772,7 +774,8 @@ struct NoteRow: View {
     }
     private var color: Color {
         switch full { case "DECISION": return .green; case "ACTION": return .blue; case "OPEN-ISSUE": return .orange
-        case "NUMBER": return Color(red: 0.55, green: 0.42, blue: 0.94); case "PROPOSAL": return Color(red: 0.05, green: 0.6, blue: 0.65); default: return .gray }
+        // System hues: they adapt to dark mode (raw RGB literals did not).
+        case "NUMBER": return .purple; case "PROPOSAL": return .teal; default: return .gray }
     }
     private var label: String {
         switch full { case "DECISION": return L("agent_tag_decision"); case "ACTION": return L("agent_tag_action"); case "OPEN-ISSUE": return L("agent_tag_open")
@@ -783,7 +786,7 @@ struct NoteRow: View {
         HStack(alignment: .top, spacing: 6) {
             Button { if let sec { seek(sec) } } label: {
                 Text(n.ts).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(.blue)
-                    .padding(.horizontal, 5).padding(.vertical, 1).background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.horizontal, 5).padding(.vertical, 1).background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 6)).tapHeight()
             }.buttonStyle(.plain)
             if let tag = n.tag, tag != "-" {
                 Text(label).font(.caption2.weight(.semibold)).foregroundStyle(color)
@@ -793,7 +796,7 @@ struct NoteRow: View {
             if ["DECISION", "ACTION", "NUMBER"].contains(full), let sec {
                 Button { seek(sec) } label: {
                     Text(L("agent_verify")).font(.caption2.weight(.semibold)).foregroundStyle(.orange)
-                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Color.orange.opacity(0.5)))
+                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Color.orange.opacity(0.5))).tapHeight()
                 }.buttonStyle(.plain)
             }
         }.padding(.vertical, 3)
@@ -836,6 +839,8 @@ struct SpeakerStats: View {
                 }
             }
             .padding(.horizontal, 4).contentShape(Rectangle()).onTapGesture { withAnimation { legend.toggle() } }
+            // The tap is invisible to VoiceOver: say it is a button and offer the same action.
+            .accessibilityAddTraits(.isButton).accessibilityAction { withAnimation { legend.toggle() } }
         }
     }
 }
@@ -883,7 +888,7 @@ struct PlayerBar: View {
                 Menu {
                     Button { player.muted.toggle() } label: { Label(L(player.muted ? "cd_unmute" : "cd_mute"), systemImage: player.muted ? "speaker.wave.2" : "speaker.slash") }
                     ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { v in Button("\(Int(v * 100)) %") { player.muted = false; player.volume = Float(v) } }
-                } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary) }
+                } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).tapTarget() }
                     .accessibilityLabel(L("cd_mute"))
                 Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     .lineLimit(1).fixedSize()

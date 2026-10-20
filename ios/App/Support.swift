@@ -119,3 +119,27 @@ enum Dev {
 }
 
 enum StopFlag { nonisolated(unsafe) static var on = false }
+
+/// Touch confirmation at the moments the app answers the user: on the result of a long task, not on the tap.
+/// Not main-actor-isolated: it is also called from queue callbacks and DispatchQueue closures, and it hops to the
+/// main thread itself (the generators must run there).
+enum Haptics {
+    /// A long task ended: a meeting was saved, an answer finished, an export is ready.
+    nonisolated static func success() { onMain { UINotificationFeedbackGenerator().notificationOccurred(.success) } }
+    /// A destructive step completed (meetings deleted).
+    nonisolated static func destructive() { onMain { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() } }
+    /// A momentary switch flipped (recording started / stopped).
+    nonisolated static func toggle(_ on: Bool) { onMain { UIImpactFeedbackGenerator(style: on ? .medium : .light).impactOccurred() } }
+    private nonisolated static func onMain(_ f: @escaping () -> Void) { if Thread.isMainThread { f() } else { DispatchQueue.main.async(execute: f) } }
+}
+
+extension View {
+    /// At least 44x44 pt of hit area (HIG): grows the control's frame, its drawing is untouched.
+    func tapTarget(_ side: CGFloat = 44) -> some View {
+        frame(minWidth: side, minHeight: side).contentShape(Rectangle())
+    }
+    /// The 44 pt height only: for controls packed in a dense row, where the width must stay intrinsic.
+    func tapHeight(_ h: CGFloat = 44) -> some View {
+        frame(minHeight: h).contentShape(Rectangle())
+    }
+}

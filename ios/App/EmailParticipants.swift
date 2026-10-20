@@ -123,7 +123,7 @@ struct EmailParticipantsSheet: View {
                     ForEach(rs, id: \.person.id) { r in recipientRow(r) }
                     ForEach(Array(extras.enumerated()), id: \.offset) { i, e in
                         HStack(spacing: 10) {
-                            Button { extras.remove(at: i) } label: { Image(systemName: "checkmark.square.fill").foregroundStyle(Color.accentColor) }.buttonStyle(.borderless)
+                            Button { extras.remove(at: i) } label: { Image(systemName: "checkmark.square.fill").foregroundStyle(Color.accentColor).tapTarget() }.buttonStyle(.borderless).accessibilityLabel(L("email_remove"))
                             avatar(e.name ?? e.address)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(e.name ?? e.address).lineLimit(1)
@@ -282,7 +282,8 @@ struct EmailParticipantsSheet: View {
                     TextField("name@example.com", text: $typed).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .textFieldStyle(.roundedBorder).submitLabel(.done).onSubmit { if ok { addAddress(r.person.id, EmailRules.normalize(typed)) } }
                         .accessibilityIdentifier("mail-inline-address")
-                    Button { addAddress(r.person.id, EmailRules.normalize(typed)) } label: { Image(systemName: "paperplane.fill") }.disabled(!ok).buttonStyle(.borderless).accessibilityLabel(L("people_save"))
+                    // The action adds this address (it is not a save): VoiceOver must say so.
+                    Button { addAddress(r.person.id, EmailRules.normalize(typed)) } label: { Image(systemName: "paperplane.fill").tapTarget() }.disabled(!ok).buttonStyle(.borderless).accessibilityLabel(L("mail_add_address"))
                     Button { ContactPicker.present { _, chosen in addAddress(r.person.id, chosen) } } label: { Image(systemName: "person.crop.rectangle") }
                         .buttonStyle(.borderless).accessibilityLabel(L("contact_choose"))
                 }.padding(.leading, 34)

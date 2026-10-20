@@ -16,7 +16,7 @@ struct SpeakerSeam: View {
                     .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.35), lineWidth: 1))
                     .padding(.leading, 6)
-            }.frame(maxWidth: .infinity, minHeight: 28).contentShape(Rectangle())
+            }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())   // the seam is a control: 44 pt of hit area
         }.buttonStyle(.plain)
         .accessibilityLabel(L("cd_boundary_handle", labelA, labelB))
     }

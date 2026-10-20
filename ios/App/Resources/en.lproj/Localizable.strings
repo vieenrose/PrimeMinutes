@@ -109,8 +109,8 @@
 "storage_delete_title" = "Delete this model?";
 "storage_delete_body" = "%@ (%@) will be downloaded again the next time it is needed.";
 "settings_about" = "About";
-"about_license" = "Free & open source · GPL-3.0";
-"about_components" = "Open-source components";
+"about_license" = "Your recordings and text stay on this device";
+"about_components" = "Licensed components";
 "settings_reader_model" = "AI notes model";
 "settings_inference" = "Inference";
 "add_audio" = "Add audio";

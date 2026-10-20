@@ -347,6 +347,8 @@ struct AskSheet: View {
     var meeting: Session? = nil
     @State private var followup = ""
     @State private var history: [AskEngine.Turn] = []
+    /// The run was working at the previous phase change: its end is the moment to confirm by touch.
+    @State private var askWasWorking = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -387,6 +389,12 @@ struct AskSheet: View {
                     }.padding(16)
                 }
                 .onChange(of: ask.turns.last?.answer) { _, _ in if let id = ask.turns.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
+                // The answer arrived: confirm it by touch (an answer takes tens of seconds — the last line is the signal).
+                // Only a run that was working counts: opening a sheet with earlier questions is silent.
+                .onChange(of: ask.phase) { _, p in
+                    defer { askWasWorking = p.working }
+                    if askWasWorking && !p.working, let t = ask.turns.last, t.done, !t.answer.isEmpty { Haptics.success() }
+                }
             }
             .background(Color(.systemGroupedBackground))
             .safeAreaInset(edge: .bottom) {
@@ -395,7 +403,7 @@ struct AskSheet: View {
                     if ask.phase.working {
                         Button(L("ask_cancel")) { ask.cancel() }
                     } else {
-                        Button(action: send) { Image(systemName: "paperplane.fill") }.disabled(followup.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityLabel(L("ask_cd"))
+                        Button(action: send) { Image(systemName: "paperplane.fill").tapTarget() }.disabled(followup.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityLabel(L("ask_cd"))
                     }
                 }.padding(12).background(.bar)
             }

@@ -52,7 +52,7 @@ struct HwStatusLine: View {
     }
     private func gauge(_ label: String, _ pct: Int, _ alert: Bool) -> some View {
         HStack(spacing: 3) {
-            Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+            Text(label).font(.caption2).foregroundStyle(.secondary)   // 9 pt literal: illegible and it never grew with the text size
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.secondary.opacity(0.2))
                 GeometryReader { g in Capsule().fill(alert ? Color.red : Color.secondary).frame(width: g.size.width * CGFloat(min(100, max(0, pct))) / 100) }

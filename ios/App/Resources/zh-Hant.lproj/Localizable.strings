@@ -109,8 +109,8 @@
 "storage_delete_title" = "刪除這個模型？";
 "storage_delete_body" = "%@（%@）下次使用時會重新下載。";
 "settings_about" = "關於";
-"about_license" = "自由開放原始碼 · GPL-3.0";
-"about_components" = "開放原始碼元件";
+"about_license" = "錄音與文字只留在這支手機";
+"about_components" = "授權元件";
 "settings_reader_model" = "AI 筆記模型";
 "settings_inference" = "推論";
 "add_audio" = "加入音訊";
@@ -472,7 +472,7 @@
 "voice_me_name" = "我";
 "voice_me_text" = "請在安靜處朗讀下方文字約 20 秒。只會保留聲音向量，不保留錄音。";
 "voice_me_permission" = "Prime Minutes 需要麥克風權限。請先開始一次錄音以授權，再回到這裡。";
-"voice_me_script" = "今天我們會檢視專案進度、上週的決定，以及下一步由誰負責。我會先說明時程，再談預算，最後開放提問。Today we will review where the project stands and who takes the next steps.";
+"voice_me_script" = "今天我們會檢視專案進度、上週的決定，以及下一步由誰負責。我會先說明時程，再談預算，最後開放提問。";
 "voice_me_start" = "開始";
 "voice_me_recording" = "聆聽中…請繼續朗讀。";
 "voice_me_computing" = "正在學習你的聲音…";

@@ -116,7 +116,8 @@ struct AgentPanel: View {
     @State private var expandedOverride: Bool? = Dev.env["VOX_NOTES"] != nil ? true : nil   // DEV: guide shots 17/18 with the notes list open
 
     fileprivate func color(_ s: AgentState) -> Color {
-        switch s { case .starting: return .gray; case .listening: return .blue; case .reading, .summarizing: return .orange; case .restarting: return .secondary; case .done: return .green }
+        // .restarting is drawn as text on its own 14 % tint: .secondary (gray on gray) was the app's lowest-contrast chip.
+        switch s { case .starting: return .gray; case .listening: return .blue; case .reading, .summarizing: return .orange; case .restarting: return .brown; case .done: return .green }
     }
     fileprivate func chip(_ s: AgentState) -> String {
         switch s { case .starting: return L("agent_state_starting"); case .listening: return L("agent_state_listening"); case .reading: return L("agent_state_reading")
@@ -164,7 +165,7 @@ struct AgentPanel: View {
                     if detailed && showLog {
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(agent.log.reversed().prefix(60)) { l in
-                                Text("\(l.prefix) \(l.text)").font(.system(size: 10, design: .monospaced)).lineLimit(2)
+                                Text("\(l.prefix) \(l.text)").font(.system(.caption2, design: .monospaced)).lineLimit(2)   // a semantic style: it follows the text size in Settings
                                     .foregroundStyle(l.dropped ? .secondary : .primary)
                             }
                         }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
@@ -222,7 +223,7 @@ private struct Detailed: View {
 
     private func gauge(_ label: String, _ v: Int, _ m: Int, active: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(label).font(.caption).foregroundStyle(.secondary); Spacer(); Text("\(fmt(Swift.min(v, m))) / \(fmt(m))").font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary) }
+            HStack { Text(label).font(.caption).foregroundStyle(.secondary); Spacer(); Text("\(fmt(Swift.min(v, m))) / \(fmt(m))").font(.system(.caption2, design: .monospaced)).foregroundStyle(.secondary) }
             Bar(value: v, max: m, active: active)
         }
     }
