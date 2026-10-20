@@ -2,6 +2,7 @@ package studio.primeminutes.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -23,7 +24,8 @@ fun PodcastSheet(onDismiss: () -> Unit) {
         containerColor = pal.Slate800,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            // imePadding: the sheet's URL field sat under the keyboard (no scroll past the last row).
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp),
         ) {
             androidx.compose.material3.Text(
                 androidx.compose.ui.res.stringResource(studio.primeminutes.R.string.source_podcast),

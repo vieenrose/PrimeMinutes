@@ -844,6 +844,7 @@ private fun SessionRow(
         RowStatus.DownloadFailed -> R.string.cd_status_download_failed
     })
     val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)}, $statusLabel"
+    val longLabel = stringResource(R.string.cd_start_selection)
     val isSelected = selected
     Column(
         Modifier
@@ -851,7 +852,9 @@ private fun SessionRow(
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) pal.ActiveTint else pal.PanelSurface)
             .border(1.dp, if (selected) pal.Sky else pal.Hairline, RoundedCornerShape(16.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            // Long-press is the only way into selection mode, so TalkBack has to name it; without a
+            // label the screen reader announces the row and nothing about the second gesture.
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = longLabel)
             .semantics(mergeDescendants = true) {
                 contentDescription = rowDesc
                 if (selectionMode) this.selected = isSelected

@@ -181,6 +181,7 @@ private fun PersonPage(
     var renaming by remember { mutableStateOf(false) }
     var noting by remember { mutableStateOf(false) }
     var merging by remember { mutableStateOf(false) }
+    var mergeTarget by remember { mutableStateOf<Person?>(null) }   // both merge paths confirm this one first
     var deleting by remember { mutableStateOf(false) }
     var splitting by remember { mutableStateOf<PersonMeeting?>(null) }
     // Dates follow the interface language, which can differ from the device's.
@@ -200,10 +201,8 @@ private fun PersonPage(
             }
         }
         item {
-            PersonContactCards(p, onMergeInto = { o ->
-                scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
-                onGone()
-            })
+            // The merge is confirmed below (mergeTarget): a person record cannot be un-merged.
+            PersonContactCards(p, onMergeInto = { o -> mergeTarget = o })
             Spacer(Modifier.padding(top = 8.dp))
         }
         item { voiceOfPerson(p) }
@@ -262,8 +261,7 @@ private fun PersonPage(
                     Text(o.name + (o.note?.let { " · $it" } ?: ""), color = pal.Slate200,
                         modifier = Modifier.fillMaxWidth().clickable {
                             merging = false
-                            scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
-                            onGone()
+                            mergeTarget = o     // the pick only chooses; the merge is confirmed next
                         }.padding(vertical = 12.dp))
                 }
             }
@@ -271,6 +269,23 @@ private fun PersonPage(
         confirmButton = {},
         dismissButton = { TextButton(onClick = { merging = false }) { Text(stringResource(R.string.cancel)) } },
     )
+    // A merge is one-way: the person disappears with its note, its contact link and its voice
+    // samples, so both merge paths stop here for the ok.
+    mergeTarget?.let { o ->
+        AlertDialog(
+            onDismissRequest = { mergeTarget = null },
+            title = { Text(stringResource(R.string.people_merge_pick, p.name)) },
+            text = { Text(stringResource(R.string.people_merge_text, p.name, o.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    mergeTarget = null
+                    scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
+                    onGone()
+                }) { Text(stringResource(R.string.contact_merge), color = pal.WarningText) }
+            },
+            dismissButton = { TextButton(onClick = { mergeTarget = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
     if (deleting) {
         var clear by remember { mutableStateOf(false) }
         AlertDialog(

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPage
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.History
@@ -189,11 +190,15 @@ fun EmailParticipantsSheet(
             }
             extras.forEach { (n, a) ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = true, onCheckedChange = { extras.remove(n to a) })
                     Avatar(n ?: a)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(n ?: a, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(if (n != null) a + " · " + stringResource(R.string.mail_one_off) else stringResource(R.string.mail_one_off), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                    }
+                    // A labelled Remove button: the checkbox that stood here deleted the recipient when
+                    // it was un-ticked, which reads as a selection and not as a delete.
+                    IconButton(onClick = { extras.remove(n to a) }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.email_remove), tint = pal.Slate400)
                     }
                 }
             }

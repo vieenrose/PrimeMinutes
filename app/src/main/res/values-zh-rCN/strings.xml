@@ -73,8 +73,8 @@
     <string name="model_kind_embed">搜索模型</string>
     <string name="model_kind_other">其他</string>
     <string name="settings_about">关于</string>
-    <string name="about_license">自由开源 · GPL-3.0</string>
-    <string name="about_components">开源组件</string>
+    <string name="about_license">录音与文字只留在这部手机</string>
+    <string name="about_components">授权组件</string>
 
     <!-- Model option card -->
 
@@ -289,6 +289,8 @@
     <string name="selection_count">已选择 %d 个</string>
     <string name="select_all">全选</string>
     <string name="cd_exit_selection">结束选择</string>
+    <!-- 长按列表项：进入选取模式的唯一途径 -->
+    <string name="cd_start_selection">选取此会议</string>
     <string name="cd_manage">管理</string>
     <string name="action_watch_live">实时查看</string>
     <string name="filter_all">全部（%d）</string>
@@ -535,7 +537,7 @@
     <string name="voice_me_name">我</string>
     <string name="voice_me_text">请在安静处朗读下方文字约 20 秒。只会保留声音向量，不保留录音。</string>
     <string name="voice_me_permission">Prime Minutes 需要麦克风权限。请先开始一次录音以授权，再回到这里。</string>
-    <string name="voice_me_script">今天我们会检视项目进度、上周的决定，以及下一步由谁负责。我会先说明时间表，再谈预算，最后开放提问。Today we will review where the project stands and who takes the next steps.</string>
+    <string name="voice_me_script">今天我们会检视项目进度、上周的决定，以及下一步由谁负责。我会先说明时间表，再谈预算，最后开放提问。</string>
     <string name="voice_me_start">开始</string>
     <string name="voice_me_recording">聆听中…请继续朗读。</string>
     <string name="voice_me_computing">正在学习你的声音…</string>

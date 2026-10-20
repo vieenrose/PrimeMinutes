@@ -6,12 +6,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -58,6 +63,10 @@ fun ItemDownloadCard(
     modifier: Modifier = Modifier,
 ) {
     val pal = LocalPrimeMinutesPalette.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Delete here removes the whole item (its partial audio included) exactly as the library row's
+    // delete does, so it confirms the same way — the card's own Delete used to fire on the first tap.
+    var confirming by remember { mutableStateOf(false) }
     val d = entry.download ?: return
     val r = runningDownload(entry, state)
     Surface(
@@ -80,8 +89,17 @@ fun ItemDownloadCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 if (r?.paused == true) TextButton(onClick = { ImportDownloads.resumeNow() }) { Text(stringResource(R.string.dl_resume)) }
                 if (d.error != null) TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-                TextButton(onClick = onDelete) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
+                TextButton(onClick = { confirming = true }) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
             }
         }
     }
+    if (confirming) AlertDialog(
+        onDismissRequest = { confirming = false },
+        title = { Text(stringResource(R.string.action_delete)) },
+        text = { Text(stringResource(R.string.delete_confirm, entry.title ?: SessionLibrary.defaultTitle(context, entry.createdAt))) },
+        confirmButton = {
+            TextButton(onClick = { confirming = false; onDelete() }) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
+        },
+        dismissButton = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) } },
+    )
 }

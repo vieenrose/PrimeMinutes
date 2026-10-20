@@ -74,8 +74,8 @@
     <string name="model_kind_embed">Search model</string>
     <string name="model_kind_other">Other</string>
     <string name="settings_about">About</string>
-    <string name="about_license">Free &amp; open source · GPL-3.0</string>
-    <string name="about_components">Open-source components</string>
+    <string name="about_license">Your recordings and text stay on this device</string>
+    <string name="about_components">Licensed components</string>
 
     <!-- Model option card -->
 
@@ -308,6 +308,8 @@
     <string name="selection_count">%d selected</string>
     <string name="select_all">Select all</string>
     <string name="cd_exit_selection">Exit selection</string>
+    <!-- long-press on a library row: the only way into selection mode -->
+    <string name="cd_start_selection">Select this meeting</string>
     <string name="cd_manage">Manage</string>
     <string name="action_watch_live">Watch live</string>
     <string name="filter_all">All (%d)</string>
