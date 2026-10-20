@@ -123,7 +123,9 @@ struct EmailParticipantsSheet: View {
                     ForEach(rs, id: \.person.id) { r in recipientRow(r) }
                     ForEach(Array(extras.enumerated()), id: \.offset) { i, e in
                         HStack(spacing: 10) {
-                            Button { extras.remove(at: i) } label: { Image(systemName: "checkmark.square.fill").foregroundStyle(Color.accentColor).tapTarget() }.buttonStyle(.borderless).accessibilityLabel(L("email_remove"))
+                            // A remove button, so it wears a ✕: the checked box here read as a selection
+                            // and pressing it deleted the recipient (Android: same change).
+                            Button { extras.remove(at: i) } label: { Image(systemName: "xmark.circle").foregroundStyle(.secondary).tapTarget() }.buttonStyle(.borderless).accessibilityLabel(L("email_remove"))
                             avatar(e.name ?? e.address)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(e.name ?? e.address).lineLimit(1)
@@ -258,6 +260,9 @@ struct EmailParticipantsSheet: View {
                 Button { checked[r.person.id] = !r.checked } label: {
                     Image(systemName: r.checked ? "checkmark.square.fill" : "square").foregroundStyle(r.address == nil ? Color.secondary : Color.accentColor)
                 }.buttonStyle(.borderless).disabled(r.address == nil)
+                // The state is carried by the glyph alone: VoiceOver has to say who and whether.
+                .accessibilityLabel(r.person.name)
+                .accessibilityValue(r.checked ? L("a11y_checked") : L("a11y_unchecked"))
                 avatar(r.person.name)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -402,7 +407,7 @@ private struct AddRecipientView: View {
         StatusLog.add("mail: mailto ok=\(ok), \(r.to.count) recipient(s), \(m.plain.count) chars, truncated=\(m.truncated)")
         if ok { record(s, "email", "opened", r); return }
         // Nothing takes mailto: the share sheet, the addresses on the clipboard.
-        if !r.to.isEmpty { UIPasteboard.general.string = r.to.joined(separator: ", "); toast(L("mail_addresses_copied")) }
+        if !r.to.isEmpty { UIPasteboard.general.string = r.to.joined(separator: ", "); toast(L("mail_addresses_copied")); Haptics.success() }
         share(m.plain, file: file)
         record(s, "share-sheet", "opened", r)
     }

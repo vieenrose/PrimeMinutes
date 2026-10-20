@@ -156,6 +156,9 @@
 "delete_confirm_many" = "确定要永久删除 %d 个场次吗？音频与转写文本都会被移除。";
 "selection_count" = "已选择 %d 个";
 "select_all" = "全选";
+/* VoiceOver 读取邮件收件人复选框的状态（图标本身没有语音） */
+"a11y_checked" = "已勾选";
+"a11y_unchecked" = "未勾选";
 "cd_exit_selection" = "结束选择";
 "cd_status_queued" = "排入队列";
 "action_remove_from_queue" = "从队列移除";

@@ -156,6 +156,9 @@
 "delete_confirm_many" = "確定要永久刪除 %d 個場次嗎？音訊與逐字稿都會被移除。";
 "selection_count" = "已選取 %d 個";
 "select_all" = "全選";
+/* VoiceOver 讀取郵件收件人核取方塊的狀態（圖示本身沒有語音） */
+"a11y_checked" = "已勾選";
+"a11y_unchecked" = "未勾選";
 "cd_exit_selection" = "結束選取";
 "cd_status_queued" = "排入佇列";
 "action_remove_from_queue" = "從佇列移除";

@@ -156,6 +156,9 @@
 "delete_confirm_many" = "Delete %d sessions permanently? Their audio and transcripts are removed.";
 "selection_count" = "%d selected";
 "select_all" = "Select all";
+/* VoiceOver value of the mail recipients' checkboxes (the state is a glyph alone) */
+"a11y_checked" = "Checked";
+"a11y_unchecked" = "Not checked";
 "cd_exit_selection" = "Exit selection";
 "cd_status_queued" = "Queued";
 "action_remove_from_queue" = "Remove from queue";

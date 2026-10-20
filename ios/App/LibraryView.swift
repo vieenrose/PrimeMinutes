@@ -262,7 +262,7 @@ struct LibraryView: View {
             if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, 16).padding(.top, 6) }
             else if resumer.paused > 0 && !m.imports.dlPaused {   // a run's own model download, waiting to resume
                 HStack {
-                    Image(systemName: "pause.circle").foregroundStyle(.orange)
+                    Image(systemName: "pause.circle").foregroundStyle(.orange).accessibilityHidden(true)   // the text beside it carries the state
                     Text(L("download_paused")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold))
@@ -362,7 +362,7 @@ struct AddSourceSheet: View {
     private func row(_ icon: String, _ title: String, _ desc: String, _ action: @escaping () -> Void) -> some View {
         Button { dismiss(); action() } label: {
             HStack(spacing: 16) {
-                Image(systemName: icon).font(.title2).foregroundStyle(Color.accentColor).frame(width: 32)
+                Image(systemName: icon).font(.title2).foregroundStyle(Color.accentColor).frame(width: 32).accessibilityHidden(true)   // the row's own text is the label
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body).foregroundStyle(.primary)
                     Text(desc).font(.subheadline).foregroundStyle(.secondary)
@@ -464,9 +464,11 @@ struct LiveJobView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
+                // SF Symbols carry built-in VoiceOver labels ("exclamation mark", "clock"…): these are
+                // decoration for the status line next to them, so they must not be announced.
                 if let j = job, j.download != nil {
-                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? .red : .blue)
-                } else if active { ProgressView().controlSize(.small) } else { Image(systemName: "clock").foregroundStyle(.orange) }
+                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? .red : .blue).accessibilityHidden(true)
+                } else if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(.orange).accessibilityHidden(true) }
                 Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
                 Spacer(minLength: 0)
                 if let j = job, j.download?.error != nil { Button(L("retry")) { m.imports.retry(j) }.font(.subheadline.weight(.semibold)) }

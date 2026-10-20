@@ -74,7 +74,7 @@ struct PersonPickerSheet: View {
                 if let onPlaySample { Button(action: onPlaySample) { Image(systemName: "play.circle.fill").font(.title2) }.accessibilityLabel(L("people_play_sample")) }
             }.padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
             HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                 TextField(L("people_search_hint"), text: $query).focused($focused).submitLabel(.done).autocorrectionDisabled()
                     .onSubmit {
                         if let exact = (sec.inMeeting + sec.recent + sec.all).first(where: { PersonNames.same($0.person.name, query, fold) }) { onPick(.existing(exact.person)) }
@@ -273,7 +273,7 @@ struct PeopleScreen: View {
                     let sub = ([p.note ?? (homonyms.contains(p.id) ? ms.first?.title : nil)].compactMap { $0 } + [peopleMeetingsText(ms.count)]).joined(separator: " · ")
                     NavigationLink(value: p.id) {
                         HStack(spacing: 12) {
-                            Image(systemName: "person.fill").foregroundStyle(.secondary)
+                            Image(systemName: "person.fill").foregroundStyle(.secondary).accessibilityHidden(true)   // the name beside it is the label
                             VStack(alignment: .leading, spacing: 2) { Text(p.name).fontWeight(.medium); Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }

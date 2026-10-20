@@ -253,7 +253,7 @@ struct SessionView: View {
                 card {
                     // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
                     HStack(spacing: 16) { Spacer()
-                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied") } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
+                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
                         Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit")) }
                     Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
@@ -265,7 +265,7 @@ struct SessionView: View {
                 card {
                     HStack(spacing: 16) {
                         Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied") } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
+                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
                         Button { draft = a; editingActions = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit"))
                     }
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
@@ -313,7 +313,7 @@ struct SessionView: View {
             }
             if searching {
                 HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search)
                         .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
                     if EmbedHost.ready {
@@ -756,7 +756,7 @@ struct ExportSheet: View {
                     Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
                 }
             }
-            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
+            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success() } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
             Spacer()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
     }
