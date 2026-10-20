@@ -154,7 +154,7 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
     <div class="col"><ul class="big">
       <li>轉寫延遲<b>可在設定調整</b>：越短越快、越長越準（預設 1.92 秒）。</li>
       <li>語者分離由 Nemotron-3 聲紋模型完成，<b>錄音中即標註</b>。</li>
-      <li>「下一場」按钮：連續錄多場，前一場的背景筆記接續整理。</li>
+      <li>「下一場」按鈕：連續錄多場，前一場的背景筆記接續整理。</li>
     </ul></div>
   </div>
 </section>
@@ -165,7 +165,7 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/04-summary.png"></div><div class="cap">段落式摘要＋自動標題</div></div>
     <div class="col"><div class="shot"><img src="img/10b-long-summary.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
-    <div class="col"><div class="shot"><img src="img/18-transcript.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖進度列跟著highlight</div></div>
+    <div class="col"><div class="shot"><img src="img/18-transcript.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
   </div>
 </section>
 
@@ -188,7 +188,7 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
     <div class="col"><ul class="big">
       <li>語意搜尋由 <b>EmbeddingGemma 2 270M</b>（約 160 MB）在手機上完成。</li>
       <li>詞彙搜尋不需模型，安裝即可用。</li>
-      <li>依日期分組，支援篩選chip與「依人」過濾。</li>
+      <li>依日期分組，支援篩選標籤與「依人」過濾。</li>
     </ul></div>
   </div>
 </section>
@@ -287,9 +287,9 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
   <div class="cols">
     <div class="col" style="flex:1.4"><div class="shot"><img src="img/latency_accuracy.png"></div><div class="cap">轉寫延遲 × 準確度：四種 int8 變體（預設 1.92 秒最準）</div></div>
     <div class="col"><ul class="big">
-      <li>Note10+（Snapdragon 855）整夜实测：21–28 分鐘連續錄音，轉寫穩定，記憶體約 1.1 GB 峰值。</li>
+      <li>Note10+（Snapdragon 855）整夜實測：21–28 分鐘連續錄音，轉寫穩定，記憶體約 1.1 GB 峰值。</li>
       <li>Ask 提問回應 6–14 秒（E2B，含檢索）。</li>
-      <li>App 中斷／被系統终止後：<b>自動恢復繼續</b>，不損壞場次。</li>
+      <li>App 中斷／被系統終止後：<b>自動恢復繼續</b>，不損壞場次。</li>
       <li>純 CPU 推理：不搶 GPU／NPU，溫控正常。</li>
       <li>錄音畫面上方即時顯示 <b>CPU／記憶體／電池</b>，數值過高轉紅。</li>
     </ul></div>
@@ -314,6 +314,12 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">轉寫延遲四段可選（速度／準確度取捨）</div></div>
     <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">模型管理：E2B／E4B 切換、選用模型上下架、僅限 Wi‑Fi</div></div>
+    <div class="col"><ul class="big">
+      <li>四段延遲各約 <b>155 MB</b>：<b>越短越快上螢幕，越長越準確</b>。</li>
+      <li>預設 <b>1.92 秒</b>：四段中最準確，一般會議建議維持預設。</li>
+      <li>會議模型（E2B／E4B）可切換，換完可整場重跑筆記與摘要。</li>
+      <li>下載可設<b>僅限 Wi‑Fi</b>，暫停／續傳，電量與網路自動配合。</li>
+    </ul></div>
   </div>
 </section>
 
@@ -321,9 +327,9 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
 <section class="slide">
   <div class="kicker">可靠性</div><h2>中斷不是事故</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的錄音：開 App 即提示续錄</div></div>
+    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的錄音：開 App 即提示續錄</div></div>
     <div class="col"><ul class="big">
-      <li>錄音中被系統终止 → 重開自動接回，已錄內容不丟。</li>
+      <li>錄音中被系統終止 → 重開自動接回，已錄內容不丟。</li>
       <li>背景模型下載可暫停／續傳，電量與網路自動配合。</li>
       <li>整夜 4 小時連續壓力測試：場次全數可解析、無損壞。</li>
       <li>App 更新後資料保留（Releases 覆蓋安裝）。</li>
