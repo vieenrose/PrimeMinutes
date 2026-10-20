@@ -96,6 +96,7 @@
 "search_prev" = "Previous";
 "search_next" = "Next";
 "search_close" = "Close search";
+"cd_clear_search" = "Clear search";
 "status_recording" = "Recording…";
 "capture_live_waiting" = "Listening…";
 "capture_stop" = "Stop and save";
@@ -153,6 +154,7 @@
 "studio_searching" = "Searching…";
 "status_processing" = "Processing…";
 "action_share_audio" = "Share audio";
+"action_select" = "Select";
 "delete_confirm_many" = "Delete %d sessions permanently? Their audio and transcripts are removed.";
 "selection_count" = "%d selected";
 "select_all" = "Select all";

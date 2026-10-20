@@ -80,7 +80,8 @@ struct PersonPickerSheet: View {
                         if let exact = (sec.inMeeting + sec.recent + sec.all).first(where: { PersonNames.same($0.person.name, query, fold) }) { onPick(.existing(exact.person)) }
                         else { addNew(query) }
                     }
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel(L("cancel")) }
+                // 取消 (Cancel) described a field-clearing button; it says 清除搜尋 now (Android: same fix).
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.accessibilityLabel(L("cd_clear_search")) }
             }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10)).padding(.horizontal, 16)
             List {
                 if query.trimmingCharacters(in: .whitespaces).isEmpty && (!suggested.isEmpty || voiceNote != nil) {
@@ -304,6 +305,10 @@ private struct PersonPage: View {
     @State private var renaming = false
     @State private var noting = false
     @State private var merging = false
+    // Both merge paths ask first (a merge is one-way). Two states, not one: the picker's confirm has
+    // to live inside the sheet, and an alert on the page behind a dismissing sheet can be swallowed.
+    @State private var mergeConfirm: Person?
+    @State private var pickConfirm: Person?
     @State private var deleting = false
     @State private var splitting: Session?
     @State private var draft = ""
@@ -322,7 +327,9 @@ private struct PersonPage: View {
                 if store.doc.people.count > 1 { Button(L("people_merge_into")) { merging = true } }
                 Button(L("people_delete"), role: .destructive) { deleting = true }
             }
-            PersonContactSections(person: p) { o in Task { await store.merge(from: p.id, into: o.id) } }
+            // A merge is one-way (the person loses its note, contact link and voice samples), so the
+            // contact card's "Merge" only chooses: the alert below asks for the ok (Android: same fix).
+            PersonContactSections(person: p) { o in mergeConfirm = o }
             PersonVoiceRow(person: p)
             Section(L("people_meetings_of", p.name)) {
                 if meetings.isEmpty { Text(L("people_no_meetings")).foregroundStyle(.secondary) }
@@ -365,15 +372,28 @@ private struct PersonPage: View {
             if !meetings.isEmpty { Button(L("people_delete_clear", meetings.count), role: .destructive) { Task { await store.delete(p.id, clearNames: true) } } }
             Button(L("cancel"), role: .cancel) {}
         } message: { Text(L("people_delete_text")) }
+        .alert(L("people_merge_pick", p.name), isPresented: Binding(get: { mergeConfirm != nil }, set: { if !$0 { mergeConfirm = nil } }), presenting: mergeConfirm) { o in
+            Button(L("contact_merge"), role: .destructive) { mergeConfirm = nil; mergeNow(p.id, o.id) }
+            Button(L("cancel"), role: .cancel) { mergeConfirm = nil }
+        } message: { o in Text(L("people_merge_text", p.name, o.name)) }
         .sheet(isPresented: $merging) {
             NavigationStack {
                 List(store.doc.people.filter { $0.id != p.id }.sorted { PersonNames.normalize($0.name) < PersonNames.normalize($1.name) }) { o in
-                    Button(o.name + (o.note.map { " · " + $0 } ?? "")) { merging = false; Task { await store.merge(from: p.id, into: o.id) } }
+                    Button(o.name + (o.note.map { " · " + $0 } ?? "")) { pickConfirm = o }
                 }
                 .navigationTitle(L("people_merge_pick", p.name)).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { merging = false } } }
+                // Confirmed inside the sheet: the picker stays put, and the page behind never races it.
+                .alert(L("people_merge_pick", p.name), isPresented: Binding(get: { pickConfirm != nil }, set: { if !$0 { pickConfirm = nil } }), presenting: pickConfirm) { o in
+                    Button(L("contact_merge"), role: .destructive) { pickConfirm = nil; merging = false; mergeNow(p.id, o.id) }
+                    Button(L("cancel"), role: .cancel) { pickConfirm = nil }
+                } message: { o in Text(L("people_merge_text", p.name, o.name)) }
             }.presentationDetents([.medium, .large])
         }
+    }
+
+    private func mergeNow(_ from: String, _ into: String) {
+        Task { await store.merge(from: from, into: into) }
     }
 }
 

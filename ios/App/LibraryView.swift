@@ -146,6 +146,8 @@ struct LibraryView: View {
             if !selected.isEmpty {
                 Image(systemName: selected.contains(s.id) ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(selected.contains(s.id) ? Color.accentColor : Color.secondary)
             } else { Menu {
+                // Long-press selects and nothing advertises it; this is the visible path (Android: same item).
+                Button(L("action_select"), systemImage: "checkmark.circle") { toggle(s) }
                 if let a = s.audio, FileManager.default.fileExists(atPath: JobQueue.audioDir.appendingPathComponent(a).path) {
                     Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { sharing = JobQueue.audioDir.appendingPathComponent(a) }
                 }
@@ -244,7 +246,7 @@ struct LibraryView: View {
                     .focused($searchFocused)
                     .onSubmit { searchFocused = false; if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
                     .onChange(of: query) { _, _ in runSearch() }
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).tapTarget() }.accessibilityLabel(L("search_close")) }
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).tapTarget() }.accessibilityLabel(L("cd_clear_search")) }
                 if askReady {   // labeled, always there: an empty search opens Ask with an empty question
                     Button { searchFocused = false; asking = query.trimmingCharacters(in: .whitespaces) } label: {
                         Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").font(.subheadline.weight(.semibold))

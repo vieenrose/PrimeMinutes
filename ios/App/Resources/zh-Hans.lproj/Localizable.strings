@@ -96,6 +96,7 @@
 "search_prev" = "上一个";
 "search_next" = "下一个";
 "search_close" = "关闭搜索";
+"cd_clear_search" = "清除搜索";
 "status_recording" = "录音中…";
 "capture_live_waiting" = "聆听中…";
 "capture_stop" = "停止并保存";
@@ -153,6 +154,7 @@
 "studio_searching" = "搜索中…";
 "status_processing" = "处理中…";
 "action_share_audio" = "分享音频";
+"action_select" = "选取";
 "delete_confirm_many" = "确定要永久删除 %d 个场次吗？音频与转写文本都会被移除。";
 "selection_count" = "已选择 %d 个";
 "select_all" = "全选";

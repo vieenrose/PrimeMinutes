@@ -96,6 +96,7 @@
 "search_prev" = "上一個";
 "search_next" = "下一個";
 "search_close" = "關閉搜尋";
+"cd_clear_search" = "清除搜尋";
 "status_recording" = "錄音中…";
 "capture_live_waiting" = "聆聽中…";
 "capture_stop" = "停止並儲存";
@@ -153,6 +154,7 @@
 "studio_searching" = "搜尋中…";
 "status_processing" = "處理中…";
 "action_share_audio" = "分享音訊";
+"action_select" = "選取";
 "delete_confirm_many" = "確定要永久刪除 %d 個場次嗎？音訊與逐字稿都會被移除。";
 "selection_count" = "已選取 %d 個";
 "select_all" = "全選";
