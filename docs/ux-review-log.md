@@ -12,6 +12,30 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (8) — Android pass 5, final (branch `android`, commit `7b5a9393`)
+
+All open lists were closed, so this pass was a targeted polish scan only: `contentDescription`
+duplication, sub-44 dp targets, simplified characters in `values-zh-rTW/strings.xml`.
+
+**Scan results:** every `IconButton` is ≥40 dp (3 × 18/20 dp hits were the inner glyphs); clickable
+rows all sit at `heightIn(min = 44.dp)`; every icon-only control has a label and every icon inside a
+labelled row has `contentDescription = null`; the zh-TW catalog contains no simplified-only glyphs
+(strict scan over 录/语/义/声/图/书/写/筛/选/关/开/传/转/识/证/议/机/纸/线/专/业/实/现/权/产/观/点/与…)
+and no English runs; SessionRow's status glyph is already `null` with the text in `rowDesc`.
+
+Two nits found and fixed:
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Low | `PersonContact.kt:192` | the default-address ★ carried `contentDescription = email_default` while the line above it renders the same string — TalkBack announced 寄信時預設使用 twice | star is decoration now (`contentDescription = null`) |
+| Low | `EmailParticipantsSheet.kt` one-off recipient | the Remove button announced only「移除」— no indication of what is removed | label is「移除 · <name or address>」 (no new key) |
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` (laptop) → `BUILD
+SUCCESSFUL in 40s`. Worktree `/tmp/pm-ux5` rebased onto `origin/android` (already current), pushed
+`7b5a9393`, removed. No emulator run: the two TalkBack phrases are owed a device pass.
+
+---
+
 ## 2026-10-21 (7) — iOS pass 4 (branch `ios`, commit `e6824fa3`)
 
 Closes iOS open items 2 and 3.
