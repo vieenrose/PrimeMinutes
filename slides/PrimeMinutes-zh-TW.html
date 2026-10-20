@@ -176,7 +176,12 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">誰說了什麼</div><h2>語者辨識、名錄與分界編輯</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/12-speaker-legend.png"></div><div class="cap">語者圖例與顏色，一眼分人</div></div>
+    <div class="col"><ul class="big">
+      <li>聲紋比對由 <b>CAM++ zh-en</b>（約 29 MB）完成：每人以「已確認」的樣本依時長加權，構成他的聲紋基準。</li>
+      <li>建議分三級：相似度 <b>0.5 以下不建議</b>、0.5–0.7「可能」、0.7 以上且明顯領先下一名才算穩。</li>
+      <li>同一場不會把同一人排給兩位語者；只是建議，<b>名字由你確認</b>後才成為基準。</li>
+      <li>圖例與顏色一眼分人，逐字稿每行標語者、可點播。</li>
+    </ul></div>
     <div class="col"><div class="shot"><img src="img/people-voice-zh.gif"></div><div class="cap">「辨識聲音」：之後的會議自動<b>建議</b>名字，由你確認</div></div>
     <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做</div></div>
   </div>
