@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- A "Dial P": letterform P, bowl is a clock dial, center dot marks 12 -->
+  <path fill="#000" d="M60 40 h64 a72 72 0 0 1 0 144 h-40 v-24 h40 a48 48 0 0 0 0 -96 h-64 z
+                       M60 40 v176 h24 v-176 z"/>
+  <circle cx="124" cy="112" r="14" fill="#000"/>
+</svg>

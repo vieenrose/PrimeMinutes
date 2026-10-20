@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 256">
+  <!-- B "Shorthand stroke": one continuous pen stroke, cursive P ending in an upward flick -->
+  <path fill="none" stroke="#000" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"
+        d="M68 212 V96 A44 44 0 0 1 112 52 A44 44 0 0 1 156 96 A44 44 0 0 1 112 140 H86
+           A96 96 0 0 0 184 56"/>
+<text x="300" y="152" font-family="Spectral, Noto Serif, serif" font-size="76" font-weight="600" letter-spacing="2" fill="#000">Prime Minutes</text></svg>

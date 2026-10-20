@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 256">
+  <!-- I "The quote": opening quotation mark, two geometric comma drops -->
+  <g fill="#000">
+    <path d="M84 44 a52 52 0 1 0 0.1 0 Z"/>
+    <path d="M48 120 H124 L92 208 H48 Z"/>
+    <path d="M172 44 a52 52 0 1 0 0.1 0 Z"/>
+    <path d="M136 120 H212 L180 208 H136 Z"/>
+  </g>
+<text x="300" y="152" font-family="Spectral, Noto Serif, serif" font-size="76" font-weight="600" letter-spacing="2" fill="#000">Prime Minutes</text></svg>

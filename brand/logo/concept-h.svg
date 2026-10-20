@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- H "Distillation": three lines of transcript condense into one drop -->
+  <g fill="#000">
+    <rect x="28" y="36"  width="200" height="22" rx="11"/>
+    <rect x="52" y="72"  width="152" height="22" rx="11"/>
+    <rect x="76" y="108" width="104" height="22" rx="11"/>
+  </g>
+  <path fill="#000" d="M128 152 C150 178 168 194 168 208 a40 40 0 0 1 -80 0 C88 194 106 178 128 152 Z"/>
+</svg>

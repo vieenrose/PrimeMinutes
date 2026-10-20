@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Prime Minutes logo, small-size cut</title>
+  <!-- 16px cut: three fat lines, key line escapes, dot -->
+  <rect x="24" y="36" width="176" height="184" rx="28" fill="#000"/>
+  <g fill="#fff">
+    <rect x="56" y="76"  width="80"  height="28" rx="14"/>
+    <rect x="56" y="128" width="144" height="28" rx="14"/>
+    <rect x="56" y="180" width="64"  height="28" rx="14"/>
+  </g>
+  <rect x="200" y="128" width="28" height="28" rx="14" fill="#000"/>
+  <circle cx="228" cy="142" r="20" fill="#000"/>
+</svg>

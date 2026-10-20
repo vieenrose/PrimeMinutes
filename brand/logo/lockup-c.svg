@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 256">
+  <!-- C "Seal": rounded square seal, P carved in negative space, dial dot in counter -->
+  <path fill="#000" fill-rule="evenodd"
+        d="M56 20 h144 a36 36 0 0 1 36 36 v144 a36 36 0 0 1 -36 36 h-144 a36 36 0 0 1 -36 -36 v-144 a36 36 0 0 1 36 -36 z
+           M78 64 h66 a52 52 0 0 1 0 104 h-42 v-24 h42 a28 28 0 0 0 0 -56 h-66 z
+           M78 64 v128 h24 v-128 z
+           M134 100 a12 12 0 1 0 0 24 a12 12 0 1 0 0 -24 z"/>
+<text x="300" y="152" font-family="Spectral, Noto Serif, serif" font-size="76" font-weight="600" letter-spacing="2" fill="#000">Prime Minutes</text></svg>
