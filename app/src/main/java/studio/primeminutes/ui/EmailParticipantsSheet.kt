@@ -270,7 +270,7 @@ fun EmailParticipantsSheet(
             val n = request().to.size
             Button(
                 onClick = { saveDefaults(); onSend(request()) },
-                colors = ButtonDefaults.buttonColors(containerColor = pal.Sky, contentColor = Color.White),
+                colors = ButtonDefaults.buttonColors(containerColor = pal.Sky, contentColor = pal.OnSky),
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = 52.dp).testTag("mail-open"),
             ) {
                 Icon(Icons.Filled.Email, contentDescription = null)

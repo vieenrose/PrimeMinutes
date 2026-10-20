@@ -59,6 +59,11 @@ data class PrimeMinutesColors(
     val ActiveBar: Color,
     /** Amber for TEXT on the panel surface (the status [PrimeMinutesPalette.Warning] is too light on white). */
     val WarningText: Color,
+    /** Ink for text/glyphs drawn ON the [Sky] accent (a selected chip, the selection tick, a filled
+     *  chip). Never `Color.White`: the dark theme's accent is a light blue, and white on it is ~2.6:1.
+     *  [Slate900] is the app's ground, i.e. the contrasting ink of each theme (near-black ink on the
+     *  dark accent, off-white on the light and e-ink accents) — the same ink [GradientButton] uses. */
+    val OnSky: Color = Slate900,
 )
 
 /**

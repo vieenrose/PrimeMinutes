@@ -862,7 +862,7 @@ private fun SessionRow(
             // Leading glyph doubles as the selection checkbox in selection mode (same 36dp footprint,
             // no layout shift). Status is encoded by SHAPE, not just color, so it reads on e-ink.
             when {
-                selectionMode && selected -> GlyphTile(pal.Sky, filled = true) { Icon(Icons.Filled.CheckCircle, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                selectionMode && selected -> GlyphTile(pal.Sky, filled = true) { Icon(Icons.Filled.CheckCircle, null, tint = pal.OnSky, modifier = Modifier.size(20.dp)) }   // OnSky: white on the dark theme's light-blue accent was ~2.6:1
                 selectionMode -> GlyphTile(pal.Slate400, outlined = true) {}
                 status == RowStatus.Processing -> GlyphTile(statusColor) { WaveBars(statusColor) }
                 else -> GlyphTile(statusColor, outlined = status == RowStatus.New) {
@@ -953,7 +953,7 @@ private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label,
         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-        color = if (on) Color.White else pal.Slate400,
+        color = if (on) pal.OnSky else pal.Slate400,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(if (on) pal.Sky else pal.PanelSurface)

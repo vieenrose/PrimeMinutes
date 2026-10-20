@@ -421,7 +421,8 @@ internal fun SummaryCard(
             ) else Spacer(Modifier.weight(1f))
             if (!isEditing) {
                 // One-tap copy to clipboard (the summary export was removed — the .ogg is the editor).
-                IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
+                // No size override: IconButton's 48dp box is the touch target (28dp was under the 44dp minimum).
+                IconButton(onClick = onCopy) {
                     Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.cd_copy_summary),
                         tint = pal.Slate400, modifier = Modifier.size(16.dp))
                 }
@@ -466,7 +467,8 @@ internal fun ActionItemsCard(
                 modifier = Modifier.weight(1f),
             ) else Spacer(Modifier.weight(1f))
             if (!isEditing) {
-                IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
+                // No size override: IconButton's 48dp box is the touch target (28dp was under the 44dp minimum).
+                IconButton(onClick = onCopy) {
                     Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.cd_copy_actions),
                         tint = pal.Slate400, modifier = Modifier.size(16.dp))
                 }
@@ -542,7 +544,8 @@ internal fun LineMenu(
 @Composable
 internal fun EditPencil(onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
+    // No size override: IconButton's 48dp box is the touch target (28dp was under the 44dp minimum).
+    IconButton(onClick = onClick) {
         Icon(
             Icons.Filled.Edit,
             contentDescription = stringResource(R.string.cd_edit),
@@ -603,8 +606,9 @@ internal fun PlayerBar(
     // transport with the times at the edges and volume tucked behind a popup.
     // 28dp strip: at 22dp the scrubber was precise enough for a stylus but fiddly for a thumb.
     val stripH = if (compact) 16.dp else 28.dp
-    val playSize = if (compact) 38.dp else 44.dp
-    val btnSize = if (compact) 34.dp else 40.dp
+    // 44 dp minimum touch target on both densities (38/34 dp was below it).
+    val playSize = if (compact) 44.dp else 48.dp
+    val btnSize = if (compact) 40.dp else 44.dp
     Column(Modifier.fillMaxWidth().padding(vertical = if (compact) 2.dp else 4.dp)) {
         TimelineStrip(
             utterances = utterances,
@@ -794,8 +798,10 @@ internal fun TimelineStrip(
                 cornerRadius = CornerRadius(2f, 2f),
             )
             if (active) {
+                // The active segment's ring: Slate200 is each theme's ink (near-white on dark, deep
+                // navy on light, black on e-ink) — white at 35 % drew nothing on the white cards.
                 drawRoundRect(
-                    color = Color.White.copy(alpha = 0.35f),
+                    color = pal.Slate200.copy(alpha = 0.55f),
                     topLeft = Offset(startX, 0f),
                     size = Size(segW, h),
                     cornerRadius = CornerRadius(2f, 2f),
@@ -983,7 +989,9 @@ internal fun UtteranceTextEditor(initial: String, onSave: (String) -> Unit, onCa
  */
 @Composable
 internal fun speakerChipTextStyle() = MaterialTheme.typography.labelMedium.copy(
-    lineHeight = 12.sp,
+    // lineHeight == the (already scaled) font size: the literal 12 sp kept the line box frozen while
+    // the app's text size grew the glyphs, which clipped 語者 again at large scales.
+    lineHeight = MaterialTheme.typography.labelMedium.fontSize,
     platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
     fontWeight = FontWeight.Medium,
 )

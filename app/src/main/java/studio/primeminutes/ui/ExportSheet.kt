@@ -162,7 +162,7 @@ private fun ExportGroupCard(
                             f.ext.uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (on) Color.White else pal.Slate400,
+                            color = if (on) pal.OnSky else pal.Slate400,
                         )
                     }
                 }
