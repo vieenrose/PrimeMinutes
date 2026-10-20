@@ -825,7 +825,9 @@ struct SpeakerStats: View {
                         HStack(spacing: 0) { ForEach(sh, id: \.spk) { x in palette[x.spk % palette.count].frame(width: g.size.width * x.pct / 100) } }
                             .clipShape(Capsule())
                     }.frame(height: 8)
-                    Image(systemName: legend ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.secondary)
+                    // SF Symbols ship their own VoiceOver names; inside this tap target the chevron is
+                    // decoration and only added "Chevron Up" noise after the speaker count.
+                    Image(systemName: legend ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
                 }
                 if legend {
                     HStack(spacing: 14) {
@@ -839,7 +841,9 @@ struct SpeakerStats: View {
                 }
             }
             .padding(.horizontal, 4).contentShape(Rectangle()).onTapGesture { withAnimation { legend.toggle() } }
-            // The tap is invisible to VoiceOver: say it is a button and offer the same action.
+            // The tap is invisible to VoiceOver: say it is a button, name what the tap does (the chevron's
+            // job for sighted users), and offer the same action.
+            .accessibilityValue(L(legend ? "show_less" : "show_more"))
             .accessibilityAddTraits(.isButton).accessibilityAction { withAnimation { legend.toggle() } }
         }
     }

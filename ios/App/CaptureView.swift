@@ -28,7 +28,8 @@ struct CaptureView: View {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         if m.screen.lines.isEmpty {
                             VStack(spacing: 8) {
-                                Image(systemName: "mic.fill").font(.largeTitle).foregroundStyle(.secondary)
+                                // Decoration: the line below is the empty state's label, so the mic stays silent.
+                                Image(systemName: "mic.fill").font(.largeTitle).foregroundStyle(.secondary).accessibilityHidden(true)
                                 Text(L("capture_live_waiting")).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity).padding(.top, 40)
                         }
