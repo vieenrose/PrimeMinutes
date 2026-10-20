@@ -12,6 +12,39 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (3) — iOS pass 2 (branch `ios`, commit `37920031`)
+
+Audited `ios/App` for what the Android passes exposed: the copy-to-clipboard paths, glyph-only
+state, and SF Symbols' built-in VoiceOver names.
+
+### 1. Copy actions had no feedback beyond a toast (MED)
+
+Export fires a completion haptic (pass 1), the four clipboard paths did not: copy summary, copy
+action items, copy transcript, and the mail sheet's "addresses copied" fallback. All four now call
+`Haptics.success()` — the moment the text is provably in the pasteboard, matching the export haptic.
+
+### 2. Glyph-only state, invisible to VoiceOver (HIGH)
+
+| Severity | Finding | Change |
+|---|---|---|
+| High | Mail recipient checkbox: `checkmark.square.fill` / `square` carries who is included, and the button had no `accessibilityLabel` at all — VoiceOver announced "Button" | `.accessibilityLabel(r.person.name)` + `.accessibilityValue(checked ? a11y_checked : a11y_unchecked)` (2 keys added to en / zh-Hant / zh-Hans) |
+| Med | The mail sheet's one-off recipient used a **checked box** as its Remove button: pressing the box deletes the address, and the box read as a selection (the Android side had the same bug in a checkbox's `onCheckedChange`, fixed today) | glyph → `xmark.circle`, label `email_remove` unchanged; 44 pt hit box kept |
+| Med | SF Symbols ship their own accessibility labels, so decorative glyphs are announced as noise: the paused-download row reads "Pause circle" before its text, the job header row "Exclamation mark"/"Clock", the Add-audio rows their icon names, the People search field and person rows "Magnifyingglass"/"Person" | `.accessibilityHidden(true)` on those decoration images (job status line, Add-audio rows, transcript-search + People search glasses, person row glyph, the small progress spinner) |
+
+**Verification:** tree-sitter Swift parse (`/home/luigi/tmp/parsecheck/check.js`): `SessionView.swift`,
+`EmailParticipants.swift`, `PeopleViews.swift` parse clean; `LibraryView.swift` reports the same 4
+ERROR nodes as its HEAD baseline (grammar false positives, same lines, positions unchanged) — no
+new parse errors. The three catalogs parse with 585 keys and identical key sets. zh-Hant scan
+finds no English fragments and no GPL/open-source copy. No simulator run and no Mac build (no
+`~/work/.maclock` taken): the VoiceOver announcements and the haptics are owed a device pass.
+
+**Skipped this tick:** the `Color.white` on `Color.accentColor` in the library filter chips
+(system blue ≈ 4.3:1 — the Android `OnSky` fix is about a light accent, not applicable here);
+`CaptureView`'s 76 pt timer stays a fixed display face (Dynamic Type would break the row);
+merging on iOS still has no confirm dialog — parity item, logged as open.
+
+---
+
 ## 2026-10-21 (2) — Android pass 2 (branch `android`, commit `253cb2c9`)
 
 The previous entry's skipped list, minus item 5 (library no-match dead end). Audit items 7, 8, 9
@@ -200,3 +233,17 @@ numbering kept so the entries refer to them.
 10. Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
     on the settings page — **done 2026-10-21 pass 2** (`253cb2c9`, both catalogs, matching iOS).
     Still open: `PersonPicker.kt:153` clear-search icon labelled "取消".
+
+---
+
+## Open iOS findings (audited 2026-10-21, not implemented)
+
+1. High — unconfirmed destructive merge, the same pair Android fixed today: the contact card's
+   `contact_merge` (`PersonContact.swift:93` → `PeopleViews.swift:325`) and picking a target in the
+   "Merge into…" sheet (`PeopleViews.swift:371`) both run `store.merge(...)` on the first tap. The
+   strings are already localized (`people_merge_pick`, `people_merge_text`, `contact_merge`), so the
+   fix is one `@State var mergeTarget: Person?` and an `.alert`.
+2. Med — the mail sheet's person rows toggle through a checkbox whose `disabled(r.address == nil)`
+   state is carried by colour only; no `.accessibilityValue` for the disabled case.
+3. Med — `CaptureView.swift:17`'s elapsed timer is a 76 pt fixed face: fine as a display face,
+   but it ignores the app's text-size setting entirely (the Android counterpart scales).
