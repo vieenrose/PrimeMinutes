@@ -295,3 +295,15 @@ numbering kept so the entries refer to them.
 5. Med — the library row's selection entry is long-press (plus a `select` accessibility action);
    Android's action sheet gained a visible 「選取」 (`action_select`, `034ce829`) — the iOS
    `Manage` menu has no equivalent.
+
+---
+
+## Device validation 2026-10-21 — semantic-index degrade fix (`8f8d4e3d`)
+
+Validated on the Note10+ (isolated debug app `studio.primeminutes.androidtest`, build from
+`origin/android` `c352ee68`): 5 cycles on session `20261021-024959` — degrade logs
+`primeminutes-search: index missing, keyword-only for now, index requested`, the 「索引建立中…」
+bar and 「語意索引建立中，稍後即可搜尋重點」 row appear, then `primeminutes-index: indexed …
+10 vectors` → `index ready … semantic search re-run`: semantic hits (≈ 1:00/1:10) appear **by
+themselves**, no re-typing. Main app `studio.primeminutes` untouched. Screenshots
+`/tmp/fixchk/{t1,t3,u2}.png`, logs `/tmp/fixchk-shots/`.
