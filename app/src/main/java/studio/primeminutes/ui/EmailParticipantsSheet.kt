@@ -198,7 +198,7 @@ fun EmailParticipantsSheet(
                     // A labelled Remove button: the checkbox that stood here deleted the recipient when
                     // it was un-ticked, which reads as a selection and not as a delete.
                     IconButton(onClick = { extras.remove(n to a) }, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.email_remove), tint = pal.Slate400)
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.email_remove) + " · " + (n ?: a), tint = pal.Slate400)
                     }
                 }
             }

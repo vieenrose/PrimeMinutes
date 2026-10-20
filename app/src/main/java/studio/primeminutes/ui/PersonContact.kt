@@ -189,7 +189,8 @@ private fun EmailRow(p: Person, e: PersonEmail, isDefault: Boolean, showDefault:
             ).joinToString(" · ")
             Text(sub, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
         }
-        if (isDefault && showDefault) Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.email_default), tint = pal.Sky, modifier = Modifier.size(20.dp))
+        // The line above already reads 寄信時預設使用; a label here made TalkBack say it twice.
+        if (isDefault && showDefault) Icon(Icons.Filled.Star, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(20.dp))
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate400) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
