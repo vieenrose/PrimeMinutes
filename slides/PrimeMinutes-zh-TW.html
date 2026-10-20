@@ -52,8 +52,11 @@ ul.big { list-style:none; display:flex; flex-direction:column; gap:.7em; margin-
 ul.big li { font-size:1.2em; line-height:1.55; padding-left:1.15em; position:relative; }
 ul.big li:before { content:"▸"; position:absolute; left:0; color:var(--accent); }
 table.t { border-collapse:collapse; width:100%; margin-top:10px; font-size:1.05em; }
-table.t th { background:var(--accent); color:#fff; padding:12px 14px; text-align:left; }
+table.t th { background:var(--accent); color:#fff; padding:12px 14px; text-align:left; font-weight:700; letter-spacing:.03em; }
 table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--card); }
+table.t tr:nth-child(even) td { background:#f4f8fb; }
+table.t.rowlab td:first-child { background:#eef3f7; font-weight:700; }
+table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 .foot { position:absolute; left:88px; right:88px; bottom:26px; display:flex; justify-content:space-between; font-size:.78em; color:#93a1af; }
 .foot .ft-t { color:#5b6b7b; }
 .brandrow { display:flex; align-items:center; gap:26px; }
@@ -107,7 +110,7 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
 <!-- 2b 對比 -->
 <section class="slide">
   <div class="kicker">對比</div><h2>雲端會議 AI 與手機上的區別</h2>
-  <table class="t">
+  <table class="t rowlab">
     <tr><th></th><th>雲端會議 AI 服務</th><th>Prime Minutes</th></tr>
     <tr><td>音訊在哪處理</td><td>上傳到服務商伺服器</td><td><b>你的手機，資料不出手機</b></td></tr>
     <tr><td>網路需求</td><td>全程需要（即時上傳串流）</td><td>僅下載模型與匯入內容時</td></tr>
@@ -413,7 +416,8 @@ addEventListener('resize',fit);fit();
 
 /* === NAVIGATION === */
 const slides=[...document.querySelectorAll('.slide')];let i=0;
-slides.forEach(s=>{[...s.children].forEach((c,k)=>{c.classList.add('anim');c.style.setProperty('--d',(k*85)+'ms');});});
+slides.forEach(s=>{[...s.children].forEach((c,k)=>{c.classList.add('anim');c.style.setProperty('--d',(k*85)+'ms');
+  if(c.classList.contains('col'))[...c.children].forEach((d,j)=>{d.classList.add('anim');d.style.setProperty('--d',(k*85+j*85)+'ms');});});});
 const go=n=>{i=Math.max(0,Math.min(slides.length-1,n));
   slides.forEach((s,k)=>s.classList.toggle('visible',k===i));
   const c=slides[i];c.querySelectorAll('.anim').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation='';});
@@ -432,7 +436,7 @@ addEventListener('wheel',(()=>{let t=0;return e=>{if(ov.classList.contains('on')
 
 /* === FOOTERS + PRESENTER CHROME === */
 slides.forEach((s,n)=>{const f=document.createElement('div');f.className='foot';
-  const t=s.querySelector('h1,h2');
+  const t=s.querySelector('h2');
   f.innerHTML='<span>Prime Minutes · 全程離線</span><span class="ft-t">'+(t?t.textContent.trim():'')+'</span><span>'+(n+1)+' / '+slides.length+'</span>';
   f.classList.add('anim');s.appendChild(f);});
 const hint=document.createElement('div');hint.id='hint';
@@ -448,7 +452,7 @@ function toggleTimer(){if(tk){clearInterval(tk);tk=null;timer.style.display='non
 /* === OVERVIEW GRID === */
 const ov=document.getElementById('ov');let ovBuilt=false;
 function buildOv(){slides.forEach((s,n)=>{const cell=document.createElement('div');cell.className='ovcell';
-  const c=s.cloneNode(true);c.classList.remove('visible');c.querySelectorAll('.anim').forEach(el=>el.style.animation='none');
+  const c=s.cloneNode(true);c.classList.remove('visible');c.querySelectorAll('.anim').forEach(el=>{el.style.animation='none';el.style.opacity=1;});
   const lbl=document.createElement('span');lbl.className='lbl';lbl.textContent=(n+1)+' · '+(s.querySelector('h1,h2')?s.querySelector('h1,h2').textContent.trim():'');
   cell.appendChild(c);cell.appendChild(lbl);cell.addEventListener('click',ev=>{ev.stopPropagation();ov.classList.remove('on');go(n);});
   ov.appendChild(cell);});ovBuilt=true;}
