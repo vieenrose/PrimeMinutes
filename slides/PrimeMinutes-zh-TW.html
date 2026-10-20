@@ -189,6 +189,7 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
       <li>語意搜尋由 <b>EmbeddingGemma 2 270M</b>（約 160 MB）在手機上完成。</li>
       <li>詞彙搜尋不需模型，安裝即可用。</li>
       <li>依日期分組，支援篩選標籤與「依人」過濾。</li>
+      <li>每段逐字稿（≤ 512 詞元）嵌入為 <b>256 維向量</b>做餘弦排序；嵌入模型閒置 60 秒自動釋放記憶體。</li>
     </ul></div>
   </div>
 </section>
@@ -201,9 +202,10 @@ table.t td { border:1px solid var(--line); padding:11px 14px; background:var(--c
     <div class="col"><div class="shot"><img src="img/ask.gif"></div><div class="cap">跨會議提問：引用多個場次</div></div>
     <div class="col"><ul class="big">
       <li>三階段：搜尋會議 → 閱讀摘錄 → 作答，面板顯示每階段秒數（約 6–14 秒）。</li>
+      <li>混合檢索：<b>EG2 向量＋詞彙 BM25</b> 雙路排名融合；問題點名某人時，優先路由其參與的會議。</li>
+      <li>摘錄最多 <b>8 條</b>（詞元預算約 800），模型只讀最相關的段落再作答。</li>
       <li>出處列「會議 · 時間」，點出處直接從該時間播放原話。</li>
-      <li>回答跟隨<b>提問的語言</b>；可帶著前一輪連續追問。</li>
-      <li>摘錄標有語者，所以能回答「誰負責什麼、期限何時」。</li>
+      <li>回答跟隨<b>提問的語言</b>，可連續追問；摘錄標語者，能答「誰負責什麼、期限何時」。</li>
     </ul></div>
   </div>
 </section>
