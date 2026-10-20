@@ -12,6 +12,27 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (7) — iOS pass 4 (branch `ios`, commit `e6824fa3`)
+
+Closes iOS open items 2 and 3.
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `EmailParticipants.swift` recipient row | the checkbox for a person with no address is `disabled(r.address == nil)` — the fact that this recipient cannot be picked was carried by the glyph going grey only | `accessibilityValue` now covers it: `a11y_unavailable`「無法選用」when there is no address, `a11y_checked` / `a11y_unchecked` otherwise |
+| Med | `CaptureView.swift:17` | the 76 pt recording timer is a fixed display face (intentional: read from across a table) and VoiceOver read it digit by digit ("oh oh colon one two colon …") | `accessibilityLabel(L("a11y_elapsed", mmss))` —「已錄 12:34」; the 76 pt face stays, this row is meant to be seen |
+
+**New copy:** `a11y_unavailable`, `a11y_elapsed` in en / zh-Hant / zh-Hans — 589 keys per catalog,
+identical key sets. zh-Hant traditional-only.
+
+**Verification:** tree-sitter Swift parse — `EmailParticipants.swift` and `CaptureView.swift` both
+clean (no ERROR nodes). No simulator, no Mac build: the two VoiceOver phrases are owed a device pass.
+
+**Scanned, nothing small left:** the only sub-44 frames on iOS are decorative glyphs inside
+controls that are already 44 pt (the seam grip inside the 44 pt seam button, the job-status icon
+inside its row, the agent log's 20 pt glyph).
+
+---
+
 ## 2026-10-21 (6) — Android pass 4 (branch `android`, commit `a88539a1`)
 
 Fresh review pass over Studio / Session / People / Settings / Import after the audit list closed.
@@ -351,14 +372,15 @@ numbering kept so the entries refer to them.
 
 ---
 
-## Open iOS findings (audited 2026-10-21; 1, 4, 5 implemented in pass 3)
+## Open iOS findings (audited 2026-10-21; all five implemented 2026-10-21)
 
 1. ~~High — unconfirmed destructive merge ...~~ **Done 2026-10-21 iOS pass 3** (`91653aac`):
    confirm alerts on both paths (`mergeConfirm` on the page, `pickConfirm` inside the picker sheet).
-2. Med — the mail sheet's person rows toggle through a checkbox whose `disabled(r.address == nil)`
-   state is carried by colour only; no `.accessibilityValue` for the disabled case.
-3. Med — `CaptureView.swift:17`'s elapsed timer is a 76 pt fixed face: fine as a display face,
-   but it ignores the app's text-size setting entirely (the Android counterpart scales).
+2. ~~Med — the mail sheet's person rows toggle through a checkbox whose `disabled(r.address == nil)`
+   state is carried by colour only.~~ **Done 2026-10-21 iOS pass 4** (`e6824fa3`, `a11y_unavailable`).
+3. ~~Med — `CaptureView.swift:17`'s elapsed timer is a 76 pt fixed face.~~ **Done 2026-10-21 iOS
+   pass 4** (`e6824fa3`): the face stays (it is meant to be seen from across a table), the element now
+   carries `a11y_elapsed` so VoiceOver says 已錄 12:34 instead of the digits.
 4. ~~Med — `PeopleViews.swift:83` clear labelled `L("cancel")`.~~ **Done 2026-10-21 iOS pass 3**
    (`91653aac`, `cd_clear_search`; also `LibraryView.swift:247`, whose label said 關閉搜尋).
 5. ~~Med — the iOS Manage menu has no visible select entry.~~ **Done 2026-10-21 iOS pass 3**
