@@ -1,0 +1,45 @@
+{
+  "brand": "Prime Minutes",
+  "tagline": "會議重點，全程離線",
+  "brief": "A private on-device meeting-minutes app (iOS + Android) for a zh-TW audience. Minutes here means the record, not the duration: the mark must say 'the transcript, distilled to the key line' — calm, precise, trustworthy, the opposite of chatty AI assistants.",
+  "adjectives": ["précis", "privé", "posé", "épuré"],
+  "criteria": "Success: reads at 16 px as an app icon, works in one colour, distinct from chat-bubble/waveform/brain marks, no time-clichés.",
+  "industry": "consumer-app",
+  "nav": ["Fonctionne hors-ligne", "Confidentialité", "Télécharger"],
+  "brand_color": "#0A7A52",
+  "greyscale": false,
+  "designer": "In-house",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Key line",
+      "symbol": "final-symbol.svg",
+      "lockup": "lockup-g.svg",
+      "symbol_on_tile": "ios-icon.svg",
+      "idea": "A transcript card whose key line escapes the edge, pinned by a dot.",
+      "rationale": [
+        "Reads as 'the record, distilled' in one glance",
+        "Strong at 16 px: tile + protruding line survives the app-store grid",
+        "No time-clichés, no chat bubbles, no gradient"
+      ]
+    },
+    {
+      "name": "Distillation",
+      "symbol": "concept-h.svg",
+      "idea": "Three transcript lines converge into one drop.",
+      "rationale": ["Elegant as a splash/loading mark", "Drop alone can read as water — kept as a secondary accent"]
+    },
+    {
+      "name": "The quote",
+      "symbol": "concept-i.svg",
+      "idea": "An opening quotation mark: the spoken word made into the record.",
+      "rationale": ["High character for web/README use", "Pictorial — less unique in the app grid"]
+    }
+  ],
+  "recommendation": "Key line — adopted: strongest 16 px reading, cleanest one-colour behaviour, deployed on Android adaptive v26 and iOS 1024.",
+  "next_steps": [
+    "Ship with next releases (Android 0.53.14+, iOS build 12+)",
+    "Splash accent: Distillation drop",
+    "Trademark search before widening use"
+  ]
+}
