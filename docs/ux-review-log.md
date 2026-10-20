@@ -12,6 +12,47 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (5) — iOS pass 3 (branch `ios`, commit `91653aac`)
+
+Closes iOS open items 1, 4 and 5 — the parity items the Android passes left behind.
+
+### 1. Unconfirmed destructive merge (HIGH)
+
+Both merge paths ran on the first tap (`PersonContact.swift:93` via `PeopleViews.swift:325`, and the
+"Merge into…" sheet's row). They now stop for a confirm built from the already-localized
+`people_merge_pick` + `people_merge_text` + `contact_merge`, mirroring Android `253cb2c9`.
+
+The confirm lives in two states, not one (`mergeConfirm` on the page, `pickConfirm` inside the
+sheet's `NavigationStack`): an alert attached to the page behind a sheet that is dismissing gets
+swallowed by UIKit, so the picker's confirmation is attached inside the sheet and closes the sheet
+only on the destructive tap.
+
+### 2. Clear buttons labelled "Cancel"/"Close search" (MED)
+
+| Severity | Finding | Change |
+|---|---|---|
+| Med | `PeopleViews.swift:83` — the people-search clear ✕ was labelled `L("cancel")` (取消) | `L("cd_clear_search")`「清除搜尋」(key added; Android's `cd_clear_search` is the same copy) |
+| Med | `LibraryView.swift:247` — the library search's clear ✕ (clears the field, keeps the search row open) was labelled `L("search_close")`「關閉搜尋」 | same key; the transcript search's ✕ keeps `search_close`, because it really does close the search |
+
+### 3. Selection mode was long-press only (MED)
+
+The library row's Manage menu now leads with「選取」(`action_select`), the same entry Android shipped
+in `034ce829`; long-press and the `accessibilityAction(named: select)` stay as they were.
+
+**New copy:** `cd_clear_search`, `action_select` in en / zh-Hant / zh-Hans — 587 keys per catalog,
+identical key sets. zh-Hant stays traditional-only; no license/open-source wording.
+
+**Verification:** tree-sitter Swift parse — `PeopleViews.swift` clean; `LibraryView.swift` reports
+the same 4 ERROR nodes as its HEAD baseline (grammar false positives, shifted +2 lines by the
+2-line menu insert), i.e. no new parse errors. No simulator, no Mac build (no `~/work/.maclock`):
+the two alerts, the sheet-internal confirm, and the menu item are owed a device pass.
+
+**Skipped this tick:** iOS 76 pt fixed-size timer (`CaptureView.swift:17`); the mail rows' disabled
+checkbox state (colour only); the library filter chips' `Color.white` on system blue (≈ 4.3:1,
+system accent is saturated — the Android `OnSky` case does not apply).
+
+---
+
 ## 2026-10-21 (4) — Android pass 3 (branch `android`, commit `034ce829`)
 
 Closes open item 5 (the library no-match dead end) and the two affordance items the earlier passes
@@ -279,22 +320,18 @@ numbering kept so the entries refer to them.
 
 ---
 
-## Open iOS findings (audited 2026-10-21, not implemented)
+## Open iOS findings (audited 2026-10-21; 1, 4, 5 implemented in pass 3)
 
-1. High — unconfirmed destructive merge, the same pair Android fixed today: the contact card's
-   `contact_merge` (`PersonContact.swift:93` → `PeopleViews.swift:325`) and picking a target in the
-   "Merge into…" sheet (`PeopleViews.swift:371`) both run `store.merge(...)` on the first tap. The
-   strings are already localized (`people_merge_pick`, `people_merge_text`, `contact_merge`), so the
-   fix is one `@State var mergeTarget: Person?` and an `.alert`.
+1. ~~High — unconfirmed destructive merge ...~~ **Done 2026-10-21 iOS pass 3** (`91653aac`):
+   confirm alerts on both paths (`mergeConfirm` on the page, `pickConfirm` inside the picker sheet).
 2. Med — the mail sheet's person rows toggle through a checkbox whose `disabled(r.address == nil)`
    state is carried by colour only; no `.accessibilityValue` for the disabled case.
 3. Med — `CaptureView.swift:17`'s elapsed timer is a 76 pt fixed face: fine as a display face,
    but it ignores the app's text-size setting entirely (the Android counterpart scales).
-4. Med — `PeopleViews.swift:83`: the people-search clear (✕) is labelled `L("cancel")`, so VoiceOver
-   says 取消 for a field-clearing button — the Android side fixed this 2026-10-21 (`cd_clear_search`).
-5. Med — the library row's selection entry is long-press (plus a `select` accessibility action);
-   Android's action sheet gained a visible 「選取」 (`action_select`, `034ce829`) — the iOS
-   `Manage` menu has no equivalent.
+4. ~~Med — `PeopleViews.swift:83` clear labelled `L("cancel")`.~~ **Done 2026-10-21 iOS pass 3**
+   (`91653aac`, `cd_clear_search`; also `LibraryView.swift:247`, whose label said 關閉搜尋).
+5. ~~Med — the iOS Manage menu has no visible select entry.~~ **Done 2026-10-21 iOS pass 3**
+   (`91653aac`, `action_select` leads the row's Manage menu).
 
 ---
 
