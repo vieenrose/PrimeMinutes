@@ -48,3 +48,51 @@ enum SpeakerRefs {
         return out
     }
 }
+
+/// The live screen's speaker names — Android's `SessionState.speakerNames` while a run is going. Keyed by speaker id
+/// and read by each row as it renders, so a name confirmed mid-run is on every line of that speaker in the same frame,
+/// and clearing one puts "Speaker n" back at once. A blank entry is a name the user cleared: it keeps the clear from
+/// being refilled by the names a re-run carries (Android drops the key: `s.speakerNames - speaker`).
+enum LiveNames {
+    /// A row's label (Android speakerLabel): the confirmed name, else the numbered default.
+    static func label(_ names: [Int: SpeakerLink], _ spk: Int, numbered: (Int) -> String) -> String {
+        guard let n = names[spk]?.name.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty else { return numbered(spk) }
+        return n
+    }
+    /// Confirm `link` for `spk` (Android linkSpeaker / commitSpeakerName); a blank or nil link records a clear.
+    static func setting(_ names: [Int: SpeakerLink], _ spk: Int, _ link: SpeakerLink?) -> [Int: SpeakerLink] {
+        var n = names
+        let t = link?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        n[spk] = t.isEmpty ? SpeakerLink(name: "") : SpeakerLink(name: t, person: link?.person)
+        return n
+    }
+    /// Back to "Speaker n" (Android clearSpeakerName); the person stays in the directory.
+    static func cleared(_ names: [Int: SpeakerLink], _ spk: Int) -> [Int: SpeakerLink] { setting(names, spk, nil) }
+    /// Merge one speaker into another (Android SpeakerEdits.merge: `names - from`): its lines move, its name goes with
+    /// the id that is gone. The target keeps its own label, numbered when it has none — as in the finished meeting.
+    static func merging(_ names: [Int: SpeakerLink], from: Int, into: Int) -> [Int: SpeakerLink] {
+        guard from != into else { return names }
+        var n = names
+        n[from] = nil
+        return n
+    }
+    /// The names as they are stored: a session file keeps no empty names, no cleared speakers.
+    static func stored(_ names: [Int: SpeakerLink]) -> [Int: SpeakerLink] {
+        names.filter { !$0.value.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+    /// What the run saves over `base` (the names the meeting had, or the ones a re-run carried): the live screen's
+    /// choices win and its clears stay cleared (Android: the screen's own names are what persists after a run).
+    static func overlaid(_ base: [Int: SpeakerLink], _ live: [Int: SpeakerLink]) -> [Int: SpeakerLink] {
+        var n = base
+        for (k, l) in live {
+            let t = l.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty { n[k] = nil } else { n[k] = SpeakerLink(name: t, person: l.person) }
+        }
+        return n
+    }
+    /// A speaker left without lines loses its name (Android dropName).
+    static func kept(_ names: [Int: SpeakerLink], _ lines: [Utterance]) -> [Int: SpeakerLink] {
+        let ids = Set(lines.map(\.speaker))
+        return names.filter { ids.contains($0.key) && !$0.value.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+}

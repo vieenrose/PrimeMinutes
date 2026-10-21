@@ -468,10 +468,25 @@ struct LiveJobView: View {
     /// A recording started meanwhile paints its own lines on the shared screen: the job's are not shown then.
     private var showsRun: Bool { active && !m.capture.recording }
     private static let palette = speakerPalette
+    /// The speaker being named from the run's rows (Android: the transcript row's speaker chip, live).
+    @State private var renamingSpeaker: Int?
+    @State private var toast: String?
     /// The line being played (SessionView.current): highlighted, and followed while playing, as in a finished meeting.
     private var current: UUID? {
         guard player.engaged else { return nil }
         return m.screen.lines.last(where: { $0.start <= player.time })?.id
+    }
+    /// The run's speakers, in id order, as the people picker takes them.
+    private var pickerSpeakers: [PickerSpeaker] {
+        Array(Set(m.screen.lines.map(\.speaker))).sorted().map { PickerSpeaker(id: $0, label: m.screen.name($0), person: m.screen.names[$0]?.person) }
+    }
+    private func pickerSpeaker(_ k: Int) -> PickerSpeaker { pickerSpeakers.first { $0.id == k } ?? PickerSpeaker(id: k, label: m.screen.name(k), person: nil) }
+    /// The run as a Session, for the naming sheet (voice suggestions, people usage): the id its meeting will have.
+    private var liveSession: Session {
+        var s = Session(title: job?.title ?? L("meeting"), summary: "", seconds: m.screen.lines.last?.end ?? 0, lines: m.screen.lines, notes: [])
+        s.id = id; s.date = job?.date ?? Date(); s.audio = job?.audio; s.captureStart = job?.captureStart
+        PeopleStore.apply(LiveNames.stored(m.screen.names), to: &s)
+        return s
     }
 
     private var header: some View {
@@ -505,7 +520,11 @@ struct LiveJobView: View {
                     RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 3)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
-                            Text(L("speaker_n", max(0, l.speaker) + 1)).font(.caption.bold()).foregroundStyle(c)
+                            // Naming a speaker of the run: the people picker, as in the finished meeting. The label is
+                            // read from the screen's names, so confirming a name relabels every line of this speaker.
+                            Button { renamingSpeaker = l.speaker } label: {
+                                Text(m.screen.name(max(0, l.speaker))).font(.caption.bold()).foregroundStyle(c)
+                            }.buttonStyle(.borderless)
                             Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
                         }
                         Text(l.text)
@@ -539,13 +558,37 @@ struct LiveJobView: View {
             // While playing, the played line is followed instead of the newest one.
             .onChange(of: current) { _, id in if showsRun, tab == 1, player.engaged, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
         }
+        // Names arrive mid-run, so the reader's S-numbers resolve to them on screen: wrapped unbreakable, as the
+        // watched run renders them on Android (MainActivity summary cards: refs(screen = true) / unbreakable).
         .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
-            SpeakerRefs.resolve(t, label: { L("speaker_n", $0 + 1) }, known: known.isEmpty ? nil : known) })
+            SpeakerRefs.resolve(t, label: { m.screen.name($0) }, known: known.isEmpty ? nil : known, wrap: SpeakerRefs.unbreakable) })
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom) { if player.available { PlayerBar(player: player) } }
         .navigationTitle(job?.title ?? L("meeting")).navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(L("download_delete_confirm"), isPresented: $dlDeleteAsk, titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let j = job { m.imports.remove(j); Haptics.destructive() }; path.removeAll { $0 == .job(id) } }
+        }
+        // Naming a speaker mid-run: the same flow as the finished meeting (docs/design/speaker-tags.md §2.1).
+        .sheet(isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+            if let k = renamingSpeaker {
+                VoiceSuggested(session: liveSession, speaker: k) { suggestions, note in
+                    SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: m.library.sessions,
+                                    suggestions: suggestions, voiceNote: note,
+                                    onPlaySample: player.available ? { playSample(k) } : nil,
+                                    onLink: { p in renamingSpeaker = nil; link(k, p) },
+                                    onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
+                                    onClear: { renamingSpeaker = nil; clearName(k) },
+                                    onMerge: { into in renamingSpeaker = nil; merge(k, into) },
+                                    onDismiss: { renamingSpeaker = nil })
+                }
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast { Text(toast).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.thinMaterial, in: Capsule()).padding(.bottom, 90)
+                // A toast is visual only: say it out loud too, as in the finished meeting (SessionView).
+                .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
         }
         .toolbar {
             if let j = job {
@@ -577,6 +620,53 @@ struct LiveJobView: View {
             guard let s = n.object as? Session, s.id == id, let i = path.lastIndex(of: .job(id)) else { return }
             player.stop(); path[i] = .session(s)
         }
+    }
+
+    // MARK: live speaker names (Android SessionState.speakerNames during a run)
+    /// `k` is `p` of the directory (Android linkSpeaker): every live row of `k` reads the name from the screen model,
+    /// so they all change in this frame.
+    private func link(_ k: Int, _ p: Person) {
+        m.screen.names = LiveNames.setting(m.screen.names, k, SpeakerLink(name: p.name, person: p.id))
+        PeopleStore.shared.touch(p.id)
+        VoiceLinks.impl?.confirmed(session: id, speaker: k, person: p.id)
+        persistNames()
+        withAnimation { toast = L("people_linked") }
+    }
+    /// Back to "Speaker n" (Android clearSpeakerName): the name goes at once, the person stays in the directory.
+    private func clearName(_ k: Int) {
+        let was = m.screen.names[k]?.person
+        m.screen.names = LiveNames.cleared(m.screen.names, k)
+        if let was { VoiceLinks.impl?.unlinked(session: id, speaker: k, person: was) }
+        persistNames()
+        withAnimation { toast = L("people_linked") }
+    }
+    /// Merge one speaker of the run into another (Android SpeakerEdits.merge): its lines move to the target, the
+    /// merged id is gone and its name with it; the target keeps its own label.
+    private func merge(_ from: Int, _ into: Int) {
+        guard from != into else { return }
+        for i in m.screen.lines.indices where m.screen.lines[i].speaker == from { m.screen.lines[i].speaker = into }
+        m.screen.names = LiveNames.merging(m.screen.names, from: from, into: into)
+        persistNames()
+        withAnimation { toast = L("speaker_merged") }
+    }
+    /// Names land in the meeting as soon as it is in the library (a re-run, a resumed job): the live screen answers
+    /// over what it stored, so a speaker the run never mentions loses its name (Android dropName) and the names of
+    /// speakers the screen said nothing about stay as they were. Android defers this to the run's end (autoPersist
+    /// skips while running); writing it at the tap is what keeps a mid-run kill from losing the answer.
+    /// A recording that is not archived yet has no meeting to write to: the run's archive folds its names in.
+    private func persistNames() {
+        let live = m.screen.names, lines = m.screen.lines
+        Task { @MainActor in
+            guard var s = await m.library.all().first(where: { $0.id == id }) else { return }
+            PeopleStore.apply(LiveNames.overlaid(PeopleStore.links(s), LiveNames.kept(live, lines)), to: &s)
+            m.library.update(s)
+        }
+    }
+    /// A short clip of the speaker (VoiceSuggested's sample): its longest clean line, 5 s (SessionView.playSample).
+    private func playSample(_ k: Int) {
+        guard let t = CleanSpeech.sampleStart(m.screen.lines, speaker: k) else { return }
+        player.seek(t); if !player.playing { player.toggle() }
+        Task { try? await Task.sleep(nanoseconds: 5_000_000_000); if player.playing, player.time >= t, player.time < t + 6 { player.toggle() } }
     }
 }
 

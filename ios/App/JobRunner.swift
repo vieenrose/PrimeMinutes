@@ -95,19 +95,29 @@ final class ReaderWorker: @unchecked Sendable {
         if !summary.isEmpty && !silent { s.reader = Prefs.readerId }
         s.readerGuard = readerGuard
         let old = resummarized.removeValue(forKey: s.id)
+        // Names confirmed on the live screen during this run (Android: what the screen's speakerNames holds is what
+        // persists after a run, through its edit journal). They are the user's answer, so a re-run's carried names
+        // only fill a run that has none — exactly Android's carry rule (`if (s.speakerNames.isEmpty() && …)`).
+        let live = screen.names, liveNamed = LiveNames.stored(live)
         // Re-summarize keeps the transcript: the stored one, read NOW — lines, speaker names or a title the user
         // edited while the reader ran were overwritten by the snapshot taken at the tap.
         if let old {
             let cur = await library.all().first { $0.id == s.id } ?? old
             s.lines = cur.lines; s.speakerNames = cur.speakerNames; s.speakerPeople = cur.speakerPeople
             if cur.title != old.title { s.title = cur.title }
-        } else if job != nil, let prev = await library.all().first(where: { $0.id == s.id }), prev.speakerNames?.isEmpty == false, !prev.lines.isEmpty, !lines.isEmpty {
+        } else if liveNamed.isEmpty, job != nil, let prev = await library.all().first(where: { $0.id == s.id }), prev.speakerNames?.isEmpty == false, !prev.lines.isEmpty, !lines.isEmpty {
             // A re-transcribe renumbers the speakers: the names (and person links) follow the new speakers that cover
             // the same speech (SpeakerCarryOver, Android SessionReducer carry).
             let old = Dictionary(uniqueKeysWithValues: (prev.speakerNames ?? [:]).compactMap { k, v in Int(k).map { ($0, SpeakerLink(name: v, person: prev.speakerPeople?[k])) } })
             let kept = SpeakerCarryOver.carry(SpeakerCarryOver.turns(prev.lines), old, SpeakerCarryOver.turns(lines))
             PeopleStore.apply(kept, to: &s)
             if !kept.isEmpty { StatusLog.add("people: \(kept.count) speaker names kept by the re-run") }
+        }
+        // The live names land in the meeting over what it had (a clear stays cleared; SessionView writes them the same
+        // way for a finished meeting), so the saved meeting shows what the live rows showed.
+        if !liveNamed.isEmpty {
+            PeopleStore.apply(LiveNames.overlaid(PeopleStore.links(s), live), to: &s)
+            StatusLog.add("people: \(liveNamed.count) speaker names from the live screen")
         }
         do { try await library.store.save(s) } catch { screen.status = L("session_save_failed"); Notifier.failed(s.title); return }   // Android: never claim success on a failed save
         NotificationCenter.default.post(name: .voxSessionSaved, object: s, userInfo: old.map { ["undo": $0] })
