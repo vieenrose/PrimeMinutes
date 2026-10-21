@@ -450,6 +450,7 @@ struct SessionView: View {
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
+                .submitLabel(.done).onSubmit { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }
             Button(L("done")) { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }
             Button(L("cancel"), role: .cancel) {}
         }

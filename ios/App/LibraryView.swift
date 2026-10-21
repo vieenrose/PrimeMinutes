@@ -15,6 +15,7 @@ struct LibraryView: View {
     @State private var draft = ""
     @State private var selected = Set<UUID>()
     @State private var deletingMany = false
+    @State private var dlDeleteAsk: UUID?   // download item awaiting its delete confirmation
     @State private var sharing: URL?
     @AppStorage("seenSessions") private var seenRaw = ""
     @ObservedObject private var indexer = LibraryIndexer.shared
@@ -191,7 +192,7 @@ struct LibraryView: View {
             }
             Spacer(minLength: 0)
             if j.download != nil {
-                Menu { DownloadActions(m: m, j: j) }
+                Menu { DownloadActions(m: m, j: j, askDelete: { dlDeleteAsk = j.id }) }
                     label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             } else if active {
                 Menu { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
@@ -336,6 +337,7 @@ struct LibraryView: View {
         }
         .alert(L("rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("title"), text: $draft)
+                .submitLabel(.done).onSubmit { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
             Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
             Button(L("cancel"), role: .cancel) {}
         }
@@ -346,6 +348,9 @@ struct LibraryView: View {
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
         .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
+        }
+        .confirmationDialog(L("download_delete_confirm"), isPresented: Binding(get: { dlDeleteAsk != nil }, set: { if !$0 { dlDeleteAsk = nil } }), titleVisibility: .visible) {
+            Button(L("delete"), role: .destructive) { if let id = dlDeleteAsk, let j = m.runner.waiting.first(where: { $0.id == id }) { m.imports.remove(j); Haptics.destructive() }; dlDeleteAsk = nil }
         }
     }
 }
@@ -432,16 +437,18 @@ struct JobGlyph: View {
     }
 }
 
-/// A podcast item's actions while not downloaded: Resume now (paused) or Retry (failed), and Delete (stops the
-/// download and removes its partial file). `onDelete` also leaves the item's screen.
+/// A podcast item's actions while not downloaded: Resume now (paused) or Retry (failed), and Delete — which stops the
+/// download and removes its partial file, so it never runs on the menu tap: `askDelete` opens the caller's confirm,
+/// and `onDelete` (run by the caller after the confirm) also leaves the item's screen.
 struct DownloadActions: View {
     @ObservedObject var m: Model
     let j: Job
+    var askDelete: () -> Void = {}
     var onDelete: () -> Void = {}
     var body: some View {
         if j.download?.error != nil { Button(L("retry"), systemImage: "arrow.clockwise") { m.imports.retry(j) } }
         else if m.imports.dlId == j.id && m.imports.dlPaused { Button(L("download_resume"), systemImage: "play.circle") { m.imports.resumeDownload() } }
-        Button(L("delete"), systemImage: "trash", role: .destructive) { m.imports.remove(j); onDelete() }
+        Button(L("delete"), systemImage: "trash", role: .destructive) { askDelete() }
     }
 }
 
@@ -455,6 +462,7 @@ struct LiveJobView: View {
     @Binding var path: [Route]
     @StateObject private var player = Player(file: nil)
     @State private var tab = 0
+    @State private var dlDeleteAsk = false   // download item awaiting its delete confirmation
     private var job: Job? { m.runner.waiting.first { $0.id == id } }
     private var active: Bool { m.runner.activeJob == id }
     /// A recording started meanwhile paints its own lines on the shared screen: the job's are not shown then.
@@ -536,11 +544,14 @@ struct LiveJobView: View {
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom) { if player.available { PlayerBar(player: player) } }
         .navigationTitle(job?.title ?? L("meeting")).navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(L("download_delete_confirm"), isPresented: $dlDeleteAsk, titleVisibility: .visible) {
+            Button(L("delete"), role: .destructive) { if let j = job { m.imports.remove(j); Haptics.destructive() }; path.removeAll { $0 == .job(id) } }
+        }
         .toolbar {
             if let j = job {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        if j.download != nil { DownloadActions(m: m, j: j) { path.removeAll { $0 == .job(id) } } }
+                        if j.download != nil { DownloadActions(m: m, j: j, askDelete: { dlDeleteAsk = true }) { path.removeAll { $0 == .job(id) } } }
                         else if active { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
                         else if m.runner.parked.contains(j.id) {
                             Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }

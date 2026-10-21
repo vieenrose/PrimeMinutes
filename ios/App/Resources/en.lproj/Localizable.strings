@@ -156,6 +156,7 @@
 "action_share_audio" = "Share audio";
 "action_select" = "Select";
 "delete_confirm_many" = "Delete %d sessions permanently? Their audio and transcripts are removed.";
+"download_delete_confirm" = "Stop the download and remove its partial file?";
 "selection_count" = "%d selected";
 "select_all" = "Select all";
 /* VoiceOver value of the mail recipients' checkboxes (the state is a glyph alone) */

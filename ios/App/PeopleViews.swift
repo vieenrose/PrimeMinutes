@@ -221,7 +221,10 @@ struct SpeakerNameFlow: View {
                 try? await Task.sleep(nanoseconds: UInt64(t * 1e9)); contactAsk = nil; contactNamed(a.0, a.1, contactName)
             }
             .alert(L("contact_name_title"), isPresented: Binding(get: { contactAsk != nil }, set: { if !$0 { contactAsk = nil } }), presenting: contactAsk) { a in
+                // A person's name: QuickType offers the contacts, and autocorrect must not rewrite it (the search field's rule, pass 3).
                 TextField(L("speaker_name"), text: $contactName)
+                    .textContentType(.name).autocorrectionDisabled()
+                    .submitLabel(.done).onSubmit { contactAsk = nil; contactNamed(a.0, a.1, contactName) }
                 Button(L("people_save")) { contactAsk = nil; contactNamed(a.0, a.1, contactName) }
                 Button(L("cancel"), role: .cancel) { contactAsk = nil }
             } message: { a in Text(a.1) }
@@ -354,16 +357,21 @@ private struct PersonPage: View {
         .navigationTitle(p.name).navigationBarTitleDisplayMode(.inline)
         .alert(L("people_rename"), isPresented: $renaming) {
             TextField(L("speaker_name"), text: $draft)
+                .textContentType(.name).autocorrectionDisabled()
+                .submitLabel(.done).onSubmit { let n = draft.trimmingCharacters(in: .whitespacesAndNewlines); if !n.isEmpty, n != p.name { Task { await store.renameEverywhere(p.id, n) } } }
             Button(L("people_save")) { let n = draft.trimmingCharacters(in: .whitespacesAndNewlines); if !n.isEmpty, n != p.name { Task { await store.renameEverywhere(p.id, n) } } }
             Button(L("cancel"), role: .cancel) {}
         }
         .alert(L("people_note"), isPresented: $noting) {
             TextField(L("people_note_short"), text: $draft)
+                .submitLabel(.done).onSubmit { store.setNote(p.id, draft) }
             Button(L("people_save")) { store.setNote(p.id, draft) }
             Button(L("cancel"), role: .cancel) {}
         }
         .alert(L("people_split_title"), isPresented: Binding(get: { splitting != nil }, set: { if !$0 { splitting = nil } }), presenting: splitting) { s in
             TextField(L("speaker_name"), text: $draft)
+                .textContentType(.name).autocorrectionDisabled()
+                .submitLabel(.done).onSubmit { let n = draft; splitting = nil; Task { await store.split(s.id, from: p.id, newName: n) } }
             Button(L("people_save")) { let n = draft; splitting = nil; Task { await store.split(s.id, from: p.id, newName: n) } }
             Button(L("cancel"), role: .cancel) { splitting = nil }
         }

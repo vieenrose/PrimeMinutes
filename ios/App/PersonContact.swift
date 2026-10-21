@@ -120,6 +120,7 @@ struct PersonContactSections: View {
         }
         .alert(L("email_add"), isPresented: $adding) {
             TextField("name@example.com", text: $draft).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.emailAddress)
+                .submitLabel(.done).onSubmit { let a = EmailRules.normalize(draft); if EmailRules.isValid(a) { store.addEmail(p.id, a) } else { StatusLog.add("people: not an e-mail address") } }
             Button(L("people_save")) {
                 let a = EmailRules.normalize(draft)
                 if EmailRules.isValid(a) { store.addEmail(p.id, a) } else { StatusLog.add("people: not an e-mail address") }

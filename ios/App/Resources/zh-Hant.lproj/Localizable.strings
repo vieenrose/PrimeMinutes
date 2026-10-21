@@ -156,6 +156,7 @@
 "action_share_audio" = "分享音訊";
 "action_select" = "選取";
 "delete_confirm_many" = "確定要永久刪除 %d 個場次嗎？音訊與逐字稿都會被移除。";
+"download_delete_confirm" = "要停止下載，並移除已下載的檔案嗎？";
 "selection_count" = "已選取 %d 個";
 "select_all" = "全選";
 /* VoiceOver 讀取郵件收件人核取方塊的狀態（圖示本身沒有語音） */
