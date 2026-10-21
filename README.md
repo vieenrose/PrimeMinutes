@@ -51,6 +51,8 @@
 
 從 [**Releases**](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載最新的 APK 並安裝。App 每天檢查一次新版本，有新版時在首頁提示。
 
+完整的產品簡報（繁體中文，自包含 HTML，下載後直接用瀏覽器開啟）：[**Prime Minutes 簡報**](https://github.com/vieenrose/PrimeMinutes/releases/download/v0.53.15/PrimeMinutes-slides-v2.1.html)。
+
 ## 快速開始
 
 1. 開啟 App，選擇「立即下載」或「僅限 Wi‑Fi」下載模型。
