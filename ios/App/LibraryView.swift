@@ -381,6 +381,7 @@ struct AddSourceSheet: View {
             row("play.rectangle", L("source_peertube"), L("source_peertube_desc"), onPeerTube)
             row("doc.badge.arrow.up", L("source_session"), L("source_session_desc"), onSession)
             Spacer(minLength: 0)
+        }
         // medium/large, not a fixed 450 pt: a fixed sheet clips its rows at large text sizes.
         .padding(.horizontal, 20).padding(.top, 24).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
