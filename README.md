@@ -52,6 +52,8 @@ Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinute
 
 iOS 版目前以 TestFlight 發佈給受邀的測試者，沒有公開連結；版本更新由 TestFlight 負責。也可以從原始碼建置（見下方）。
 
+完整的產品簡報（繁體中文，自包含 HTML，下載後直接用瀏覽器開啟）：[**Prime Minutes 簡報**](https://github.com/vieenrose/PrimeMinutes/releases/download/v0.53.15/PrimeMinutes-slides-v2.1.html)。
+
 ## 快速開始
 
 1. 開啟 App，選擇「立即下載」或「僅限 Wi‑Fi」下載模型。
