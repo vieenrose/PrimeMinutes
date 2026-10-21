@@ -12,6 +12,26 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (14) — Android pass 8 (branch `android`, commit `3857c21d`)
+
+Semantics/IME/feedback pass, behavior only — no layout or visible copy, so in-flight media
+shots are unaffected.
+- `semantics { heading() }` app-wide, first time: Settings `Section()` ×2 (12 cards),
+  SummaryCard / ActionItemsCard / NotesSection, voice cards ×2, PersonPicker + action-sheet
+  titles, SelectionHeader.
+- `ImeAction.Done` wired on the 4 dialog fields whose return key was dead: StudioScreen rename,
+  PeopleScreen `NameDialog`, PersonContact `AddressDialog` (commits only when the address is
+  valid), mail `AddRecipientDialog` (uses the typed address).
+- Haptic parity with iOS `Haptics`: Ask answer finished (armed on the working edge), record
+  switch, next-talk / stop, single + bulk delete confirms, person delete, export finished
+  (armed on the `exporting` edge, covers the watchdog close).
+- `stateDescription` on the transcript-search `≈` toggle with `search_semantic_on` /
+  `search_semantic_off` (zh-TW 已開啟/未開啟) — 592 keys per catalog, identical key sets.
+- Skipped: `scrollBehavior` (no lazy list under an IME-padded field); library-search
+  auto-focus (field always visible).
+Compile `:app:compileDebugKotlin` BUILD SUCCESSFUL; warnings unchanged. Device pass owed:
+TalkBack headings/state, Done-key commits, new haptics.
+
 ## 2026-10-21 (13) — iOS pass 7 (branch `ios`, commit `f68587d3`)
 
 Keyboard management, AutoFill content types, one missing empty state, and the two dead-label
