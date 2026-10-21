@@ -71,7 +71,7 @@ struct VoiceSettingsCard: View {
             Button(L("people_delete"), role: .destructive) { voice.deleteAll() }
             Button(L("cancel"), role: .cancel) {}
         } message: { Text(L("voice_delete_all_text")) }
-        .sheet(isPresented: $enrol) { MeEnrolSheet { enrol = false }.presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $enrol) { MeEnrolSheet { enrol = false }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
         .task {   // DEV: VOX_VOICEME opens "This is me" (with VOX_MICFILE standing in for the mic)
             if Dev.env["VOX_VOICEME"] != nil, people.doc.voice { try? await Task.sleep(nanoseconds: 800_000_000); enrol = true }
         }

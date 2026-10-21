@@ -388,7 +388,7 @@ private struct PersonPage: View {
                     Button(L("contact_merge"), role: .destructive) { pickConfirm = nil; merging = false; mergeNow(p.id, o.id) }
                     Button(L("cancel"), role: .cancel) { pickConfirm = nil }
                 } message: { o in Text(L("people_merge_text", p.name, o.name)) }
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
     }
 

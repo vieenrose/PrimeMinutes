@@ -349,6 +349,8 @@ struct AskSheet: View {
     @State private var history: [AskEngine.Turn] = []
     /// The run was working at the previous phase change: its end is the moment to confirm by touch.
     @State private var askWasWorking = false
+    /// The composer is the sheet's reason for existing: it takes focus when the sheet settles.
+    @FocusState private var composer: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -399,7 +401,7 @@ struct AskSheet: View {
             .background(Color(.systemGroupedBackground))
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : meeting != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).submitLabel(.send).onSubmit(send)
+                    TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : meeting != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).focused($composer).submitLabel(.send).onSubmit(send)
                     if ask.phase.working {
                         Button(L("ask_cancel")) { ask.cancel() }
                     } else {
@@ -428,6 +430,9 @@ struct AskSheet: View {
             }
             if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.library.sessions, question: initial, meeting: meeting) }
             else if meeting != nil, initial.isEmpty { SessionView.preloadEmbedder() }
+            // The keyboard with the sheet: typing is the reason this sheet opens, and the composer lives in a
+            // safe-area inset so the keyboard lifts it. 0.4 s lets the sheet finish presenting first.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { composer = true }
         }
         .task {
             // DEV: VOX_ASK_CLEAR=<seconds> taps ↺ that long after the sheet opens (history checks without UI automation).

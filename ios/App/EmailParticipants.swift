@@ -226,7 +226,7 @@ struct EmailParticipantsSheet: View {
             AddRecipientView(candidates: store.doc.people.filter { p in !p.emails.isEmpty && !rs.contains { $0.person.id == p.id } }) { pick in
                 adding = false
                 if let pick, !extras.contains(where: { EmailRules.key($0.address) == EmailRules.key(pick.1) }) { extras.append((pick.0, pick.1)) }
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(get: { preview != nil }, set: { if !$0 { preview = nil } })) {
             if let m = preview {

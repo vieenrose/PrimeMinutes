@@ -414,7 +414,7 @@ struct SessionView: View {
         }
         .sheet(isPresented: $showExport) {
             ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") } } }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
@@ -460,7 +460,7 @@ struct SessionView: View {
                                     onMerge: { into in renamingSpeaker = nil; merge(k, into) },
                                     onDismiss: { renamingSpeaker = nil })
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
         }
         .modifier(VoiceOutlierPrompt())
@@ -476,7 +476,7 @@ struct SessionView: View {
                                 let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
                             editingLine = nil } }
                     }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .confirmationDialog(merging.map { L("speaker_merge_confirm", s.name($0.0), s.name($0.1)) } ?? "",
                             isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
@@ -492,7 +492,7 @@ struct SessionView: View {
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
                                     onCancel: { player.endPreview(); seamAt = nil })
-                    .presentationDetents([.medium, .large]).presentationBackground(Color(.systemGroupedBackground))
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Color(.systemGroupedBackground))
             }
         }
         .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
@@ -506,7 +506,7 @@ struct SessionView: View {
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
                                     onCancel: { player.endPreview(); splitAt = nil })
-                    .presentationDetents([.medium, .large]).presentationBackground(Color(.systemGroupedBackground))
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Color(.systemGroupedBackground))
             }
         }
         .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N
