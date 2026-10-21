@@ -6,6 +6,8 @@ import Foundation
 struct AsrVariant: Equatable {
     let latencyMs: Int
     let tfliteFile: String, tfliteBytes: Int64, tfliteSha: String
+    /// Token emission offset, per chunk size: the shift that leaves the fewest tokens outside ground-truth speech
+    /// (Android `tools/validate_timestamps.py`, 2026-10-21: 300 ms is the minimum for 160 / 480 / 960 / 1920).
     let tokenOffsetMs: Double
     var id: String { "xasr-punct-\(latencyMs)ms" }
 }
