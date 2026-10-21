@@ -12,6 +12,30 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (10) — Android pass 6 (branch `android`, commit `9c4df28a`)
+
+Closes the Android open item 11 (raised by iOS pass 5) and one parity gap the iOS pass 2 log left.
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `SpeakerStatsPanel.kt:66` | the tap that opens the per-speaker legend carried no state: the chevron is `contentDescription = null` (correct) and the count carries no state, so TalkBack said「3 位語者 … 雙擊即可」with no hint of what the tap does | `.semantics { stateDescription = ... }` on the clickable Column, reading `show_more` / `show_less` (existing keys, all three catalogs) — the iOS `edc14bce` equivalent |
+| Med | `MainActivity.kt` summary / action-items / transcript copy | the four clipboard paths on iOS got a success haptic in iOS pass 2; Android's three in-meeting copies had only the snackbar, which is easy to miss on a long transcript | `HapticFeedbackType.ContextClick` on each copy, right after `setPrimaryClip` |
+
+**Scan, nothing else small:** icon-only controls all labelled (M3 `Icon` makes `contentDescription`
+mandatory, and every decorative glyph is already `null` inside a labelled row), no `IconButton` under
+40 dp left after passes 1–4, no simplified glyphs in `values-zh-rTW`.
+
+**Skipped:** the mail sheet's address-copy fallback (`EmailParticipantsFlow.kt:215 copyAddresses`) —
+it is a plain function on a `scope.launch` path (no composable scope for `LocalHapticFeedback`), and it
+already fires a Toast; adding haptics there means threading a `HapticFeedback` through the sheet.
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` (laptop) → `BUILD
+SUCCESSFUL in 40s`, warnings unchanged (pre-existing icon deprecations only). Worktree `/tmp/pm-ux6`
+rebased onto `origin/android` (already current), pushed `9c4df28a`, removed. No emulator run: the
+TalkBack phrase and the copy haptic are owed a device pass.
+
+---
+
 ## 2026-10-21 (9) — iOS pass 5 (branch `ios`, commit `edc14bce`)
 
 Lean scan of the README-facing chain — capture → summary → export — plus Ask and People, looking for
@@ -393,7 +417,7 @@ lines. No iOS build run (no Swift toolchain on this machine); no device/emulator
   outer `more`); duplicate `navigationTitle` + `.principal` in the Ask sheet.
 - Chip rows (filter/people/speaker chips ~30 pt) — M3 chip spec matches; left as designed.
 
-## Open Android findings (audited 2026-10-20; the ten implemented 2026-10-21, item 11 added 2026-10-21 iOS pass 5)
+## Open Android findings (audited 2026-10-20; all eleven implemented 2026-10-21 — item 11 raised by iOS pass 5, closed by Android pass 6)
 
 Highest-value, from the Compose audit (files on branch `android`). Struck items are fixed,
 numbering kept so the entries refer to them.
@@ -421,10 +445,11 @@ numbering kept so the entries refer to them.
 10. ~~Med — `values-zh-rTW/strings.xml:530` `voice_me_script` mixes English; `about_license` GPL line
     on the settings page; `PersonPicker.kt:153` clear-search icon labelled "取消".~~ **Done
     2026-10-21 passes 2–3** (`253cb2c9` copy, `034ce829` `cd_clear_search`).
-11. Med — `SpeakerStatsPanel.kt:66` the tap that opens the per-speaker legend carries no state: the
+11. ~~Med — `SpeakerStatsPanel.kt:66` the tap that opens the per-speaker legend carries no state: the
     chevron is `contentDescription = null` (correct) and the count is read, but nothing names what the
-    double-tap does. iOS shipped the equivalent in `edc14bce` — a `semantics` value naming
-    show-more / show-less.
+    double-tap does. iOS shipped the equivalent in `edc14bce` — a `semantics` value naming show-more /
+    show-less.~~ **Done 2026-10-21 Android pass 6** (`9c4df28a`, `stateDescription` from `show_more` /
+    `show_less`, all three catalogs).
 
 ---
 
