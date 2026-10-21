@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
@@ -63,8 +65,13 @@ fun SpeakerStatsPanel(
     // Compact by default: ONE line — the count beside the share bar. The per-speaker legend is a
     // tap away (it took three or four lines under every summary for something glanced at once).
     var showLegend by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    // TalkBack: the chevron is decoration (contentDescription = null) and the count carries no state,
+    // so the tap that opens the legend was unlabelled. Say what it does — iOS does the same in its
+    // accessibilityValue (`edc14bce`).
+    val legendState = stringResource(if (showLegend) R.string.show_less else R.string.show_more)
     Column(
-        modifier.fillMaxWidth().clickable { showLegend = !showLegend },
+        modifier.fillMaxWidth().clickable { showLegend = !showLegend }
+            .semantics { stateDescription = legendState },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

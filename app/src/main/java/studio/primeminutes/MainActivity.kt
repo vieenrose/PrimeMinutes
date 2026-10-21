@@ -142,8 +142,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -1493,6 +1495,9 @@ private fun TranscribeScreen(
                     onSave = { vm.saveTitle(it) },
                     onCancel = { vm.editTitle(false) })
             }
+            // Copy feedback: the snackbar is easy to miss on a long transcript, so the moment the text
+            // is provably in the clipboard gets a light tap (iOS pairs the same moment with haptics).
+            val copyHaptic = LocalHapticFeedback.current
             s.summary?.let { sm ->
                 SummaryCard(sm, llmDisplay, s.editingSummary,
                     onBeginEdit = { vm.editSummary(true) },
@@ -1501,6 +1506,7 @@ private fun TranscribeScreen(
                     onCopy = {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes summary", refs(sm)))
+                        copyHaptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.summary_copied)) }
                     },
                     onSeek = anchorSeek, showHeading = twoPane)
@@ -1515,6 +1521,7 @@ private fun TranscribeScreen(
                     onCopy = {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes action items", refs(ai)))
+                        copyHaptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.action_items_copied)) }
                     },
                     onSeek = anchorSeek)
@@ -2118,9 +2125,10 @@ private fun TranscribeScreen(
         delay(3_000); devMailAsked = true; mailOpen = true
     }
     if (s.showExportSheet) {
+        val exportHaptic = LocalHapticFeedback.current
         ExportSheet(
             onExport = { f, share -> onExport(f, share) },
-            onCopyTranscript = { copyTranscript() },
+            onCopyTranscript = { copyTranscript(); exportHaptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
             onDismiss = { vm.showExportSheet(false) },
         )
     }
