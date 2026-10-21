@@ -13,6 +13,12 @@
 //              much of the frozen (live) speaker labelling the final pass agrees with.
 // --settle S   live-view speaker delay (Config::live_settle_s; the app's setting, default 15).
 // --timing N   final-pass character timeline: 0 auto (model token times), 2 inferred placement.
+// --f32        the input is raw 16 kHz mono float32-LE (the quality-eval clips), not a WAV.
+// --tokens F   also write the model's own token timeline to F as [{t,text,spk,snap}]: the emission times
+//              the final pass attributed against, with Config::token_offset_ms applied (NEMO_TOKEN_OFFSET_MS
+//              overrides it in one run). The raw frame index is (t + offset/1000) / 0.040, so an offset
+//              sweep is arithmetic on this file - tools/validate_timestamps.py does the sweep against the
+//              reference's silence, which is how the per-variant offsets in AsrRegistry were derived.
 // --diar-opt   override a diarizer session option, e.g. nemotron_3_diar.chunk_len=25 (streaming
 //              geometry, 80 ms frames) - this is what sets how soon speaker turns are committed.
 // --sweep-settle  evaluate several speaker delays in ONE pass (independent live cursors): writes the
@@ -41,12 +47,16 @@ int main(int argc, char** argv) {
     cfg.diar_model = argv[2];
     cfg.threads = (argc > 5 && argv[5][0] != '-') ? std::atoi(argv[5]) : 2;
     bool live = false;
+    bool f32 = false;
+    std::string token_dump;                     // --tokens
     std::vector<double> sweep;                  // --sweep-settle delays
     for (int i = 5; i < argc; i++) {
         if (!std::strcmp(argv[i], "--live")) live = true;
         else if (!std::strcmp(argv[i], "--max-seg") && i + 1 < argc) cfg.max_segment_s = std::atof(argv[++i]);
         else if (!std::strcmp(argv[i], "--settle") && i + 1 < argc) cfg.live_settle_s = std::atof(argv[++i]);
         else if (!std::strcmp(argv[i], "--timing") && i + 1 < argc) cfg.timing = std::atoi(argv[++i]);
+        else if (!std::strcmp(argv[i], "--tokens") && i + 1 < argc) token_dump = argv[++i];
+        else if (!std::strcmp(argv[i], "--f32")) f32 = true;
         // The app's ggml-free engine (NEMO_NO_GGML, build_host_noggml.sh): --backend litert_host with
         // xasr_host.bin / diar_host.bin as the two model arguments and the LiteRT graphs below.
         else if (!std::strcmp(argv[i], "--backend") && i + 1 < argc) cfg.backend = argv[++i];
@@ -72,7 +82,19 @@ int main(int argc, char** argv) {
     }
     nemo::Wav wav;
     std::string err;
-    if (!nemo::Wav::load(argv[3], wav, err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
+    if (f32) {                                    // raw 16 kHz mono float32-LE, the quality-eval clip format
+        FILE* h = std::fopen(argv[3], "rb");
+        if (!h) { std::fprintf(stderr, "cannot open %s\n", argv[3]); return 1; }
+        std::fseek(h, 0, SEEK_END);
+        const long sz = std::ftell(h);
+        std::rewind(h);
+        wav.pcm.resize(size_t(sz / 4));
+        if (std::fread(wav.pcm.data(), 4, wav.pcm.size(), h) != wav.pcm.size()) {
+            std::fprintf(stderr, "short f32 file: %s\n", argv[3]); std::fclose(h); return 1;
+        }
+        std::fclose(h);
+        wav.rate = wav.rate_orig = 16000;
+    } else if (!nemo::Wav::load(argv[3], wav, err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
     if (wav.rate != 16000) wav.to_16k();
     nemo::Engine eng(cfg);
     if (!eng.init(err)) { std::fprintf(stderr, "init: %s\n", err.c_str()); return 1; }
@@ -152,6 +174,18 @@ int main(int argc, char** argv) {
         }, err)) { std::fprintf(stderr, "finish: %s\n", err.c_str()); return 1; }
     std::fprintf(f, "\n]\n");
     std::fclose(f);
+    if (!token_dump.empty()) {            // --tokens: the model's own timeline, offset applied (see header)
+        FILE* k = std::fopen(token_dump.c_str(), "w");
+        if (!k) { std::fprintf(stderr, "cannot write %s\n", token_dump.c_str()); return 1; }
+        const auto toks = eng.token_table();
+        std::fprintf(k, "[");
+        for (size_t i = 0; i < toks.size(); i++)
+            std::fprintf(k, "%s\n{\"t\":%.3f,\"text\":\"%s\",\"spk\":\"%s\",\"snap\":%s}", i ? "," : "",
+                         toks[i].t_s, esc(toks[i].text).c_str(), esc(toks[i].speaker_id).c_str(),
+                         toks[i].snapped ? "true" : "false");
+        std::fprintf(k, "\n]\n");
+        std::fclose(k);
+    }
     // The diarizer's own speech turns (<out>.turns.json): what DER should be scored on, since text
     // segments run across the pauses between words.
     std::map<std::string, int> ids;

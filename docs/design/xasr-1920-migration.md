@@ -30,10 +30,27 @@ meeting. The punct model emits such tokens more often than the 480 ms model. Fix
 each token owns its decode's common prefix with the final text, never less than the previous token's end; the
 dropped space belongs to no token. All 10 meetings now use token timing; ES2004d 50.4 -> 40.1, TS3003c 30.3 -> 22.5,
 the other 8 meetings are byte-identical in score.
-- Token offset (`token_offset_ms` 300, tuned on 480 ms): the 1920 ms token times are 1.43 / 1.46 s earlier than the
-  480 ms ones (median, ES2004d / TS3003c, `tl_shift.py`), but re-centering (NEMO_TOKEN_OFFSET_MS=-1100) made cpER
-  WORSE on every meeting (zh 34.69, en 33.58). 300 is kept. Not re-derived on the sequential clip
-  (tools/validate_timestamps.py) for this model: TODO before release.
+- Token offset (`token_offset_ms`, per chunk variant now - `AsrRegistry`): the 1920 ms token times are 1.43 / 1.46 s
+  earlier than the 480 ms ones (median, ES2004d / TS3003c, `tl_shift.py`), but re-centering (NEMO_TOKEN_OFFSET_MS=-1100)
+  made cpER WORSE on every meeting (zh 34.69, en 33.58). Re-derived per variant on the audio itself -
+  `tools/validate_timestamps.py` over the token timeline `nemo_eval --tokens` dumps the emission frames of
+  900 s excerpts of TS3003c + ES2004b (en) and L_R003S02C02 (zh), scoring the share of tokens landing outside
+  ground-truth speech (AMI words / AISHELL-4 TextGrid, ±0.05 s, gaps under 0.25 s merged) - one engine run per
+  variant answers the whole sweep, because the encoder's frame list does not depend on the offset:
+
+  | chunk | tokens | least-silence offset | tokens outside speech there | en pick | zh pick |
+  |---|---:|---|---:|---:|---:|
+  | 160 ms | 8634 | **300 ms** | 1.2 % | 300 | 400 |
+  | 480 ms | 8839 | **300 ms** | 1.7 % | 200 | 300 |
+  | 960 ms | 8849 | **300 ms** | 2.0 % | 300 | 300 |
+  | 1920 ms | 8940 | **300 ms** | 2.6 % | 200 | 400 |
+
+  The shipped 300 ms is the minimum for every chunk size, and the curve is flat over the neighbouring 100 ms step
+  (the per-language picks scatter by exactly one step), so the constant stays 300 in both registries - now derived
+  per variant on the audio, and reproducible with the tool. The 1920 ms result also settles the shift question:
+  the model's tokens are indeed ~1.4 s earlier than the 480 ms ones, and re-centering them by that amount is worse,
+  not better: at -1100 ms the share rises to 8.2 %, at 0 ms to 3.2 %, against 2.6 % at 300 - matching the cpER
+  result above.
 - zh: no regression (cpER 32.95 vs 33.92, confT 9.3 vs 9.4).
 
 ## 3. int8 vs float
