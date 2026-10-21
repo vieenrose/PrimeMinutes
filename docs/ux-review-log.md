@@ -12,6 +12,40 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (13) — iOS pass 7 (branch `ios`, commit `f68587d3`)
+
+Keyboard management, AutoFill content types, one missing empty state, and the two dead-label
+cleanups the pass-1 log left. The commit landed inside `f68587d3` (the boundary-editor agent's
+`git commit -a` swept this round's staged index into their commit — content verified intact,
+both change sets present, nothing rebased).
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `EmailParticipants.swift` inline address row + Add-recipient field, `PersonContact.swift:122` address alert | the three e-mail fields declared keyboard + autocapitalization but no `textContentType`, so QuickType offered nothing — the user retypes an address character by character even though iOS has it (the app only helps via the contacts picker) | `.textContentType(.emailAddress)` on all three |
+| Low | `PodcastView.swift` PeerTube link field | return key showed the generic return arrow for a field whose one job is "resolve this link", and AutoFill had no link type to suggest | `.textContentType(.URL).submitLabel(.go)` (the `.onSubmit { go() }` was already wired) |
+| Med | `LibraryView.swift` library search, `SessionView.swift` transcript search | the two remaining search fields left autocorrect on — iOS rewrites quoted names and code-ish queries mid-search; the people search field has carried `.autocorrectionDisabled()` since pass 3, so the app was inconsistent | `.autocorrectionDisabled()` on both |
+| Med | `LibraryView.swift` library list, `SessionView.swift` main scroll, `Ask.swift` answers scroll, `SessionView.swift` ×3 sheet `TextEditor`s (line / summary / action-items) | with a field focused the keyboard only left via the Done key — the long transcript under an open search keyboard, the Ask answers, and a paragraph-long editor were unreachable while typing | `.scrollDismissesKeyboard(.interactively)` on the five scroll surfaces |
+| Med | `SessionView.swift` transcript tab | a session with no lines (no-speech, or processing stopped before transcription) opened the transcript tab on a blank page — the summary tab has empty-state copy, the transcript tab had none (pass-1 skipped list) | centred line under the tab: `status_no_speech` (existing key) for a no-speech session, `transcript_empty` otherwise |
+| Low | `LibraryView.swift:157` card menu, `Ask.swift:412` sheet bar | the pass-1 dead-code list: the ellipsis menu carried nested labels (inner `cd_manage` overridden by outer `more`); the Ask sheet set a `navigationTitle` under its `principal` VStack — principal renders, the title was dead | inner label removed; `navigationTitle` removed (`navigationBarTitleDisplayMode` kept) |
+
+**New copy:** `transcript_empty` in en / zh-Hant / zh-Hans — 590 keys per catalog, identical key
+sets. zh-Hant traditional-only.
+
+**Scan, nothing else to change:** all 9 detented sheets keep medium/large + grabber (pass 6); the
+`.searchable` podcast field ships the system search keyboard; the mail preview sheet is a
+full-height reading view (no detent by design); Ask composer keeps its auto-focus + `.send` label
+(pass 6); Send/Cancel/clear/reset in Ask, the session toolbar, and the player transport all carry
+labels (passes 2–3); the 76 pt capture timer stays fixed with `a11y_elapsed` (pass 4).
+
+**Verification:** tree-sitter Swift parse — `EmailParticipants.swift`, `PersonContact.swift`,
+`PodcastView.swift`, `SessionView.swift` clean (0 nodes); `Ask.swift` 6, `LibraryView.swift` 4 —
+both at baseline, positions unchanged. No simulator, no Mac build (iPhone on a media shoot,
+`~/work/.maclock` untouched): the keyboard-dismiss drags, QuickType suggestions, and the new
+transcript empty line are owed a device pass. Android parity for scroll-to-dismiss is N/A
+(Compose closes the IME via `imePadding` + taps; no composable counterpart).
+
+---
+
 ## 2026-10-21 (12) — Android pass 7 (branch `android`, commit `4c14e49b`)
 
 Carries the follow-up iOS pass 6 logged: the Ask sheet now focuses its own question field.
