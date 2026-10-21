@@ -167,7 +167,7 @@ enum BackgroundWork {
                 let raw = Self.burstOnsets(f).map { String(format: "%.3f", $0) }.joined(separator: "/")
                 let al = Self.burstOnsets(url, aligned: true).map { String(format: "%.3f", $0) }.joined(separator: "/")
                 StatusLog.add(String(format: "prime: %@ rate=%.0f decode=%.3f player=%.3f priming=%.5f ms=%.0f raw=[%@] aligned=[%@]",
-                    name as String, rate, dec, player, pr, pr * 1000, raw, al))
+                    String(name), rate, dec, player, pr, pr * 1000, raw, al))
             }
         } }
     }

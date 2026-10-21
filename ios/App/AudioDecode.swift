@@ -17,7 +17,7 @@ enum AudioDecode {
     static func priming(_ url: URL) -> Double {
         let key = url.path as NSString
         if let v = primeCache.object(forKey: key) { return v.doubleValue }
-        let v = measurePriming(url)
+        let v = cookiePriming(url)
         primeCache.setObject(NSNumber(value: v), forKey: key)
         return v
     }
@@ -69,30 +69,10 @@ enum AudioDecode {
 
     private static let primeCache = NSCache<NSString, NSNumber>()
 
-    /// CoreMedia's own definition of what a player plays: the track's preferred timing starts exactly where
-    /// AVAudioPlayer starts (mp3 prime scope, m4a edit list) — and for wav/pcm it starts at 0. Where CoreMedia
-    /// says nothing, the file's magic cookies (below). Runs off the main thread (decode is streamed on a worker).
-    private static func measurePriming(_ url: URL) -> Double {
-        let asset = AVURLAsset(url: url)
-        var measured: Double = -1
-        let sem = DispatchSemaphore(value: 0)
-        Task.detached(priority: .userInitiated) {
-            defer { sem.signal() }
-            #if os(iOS)
-            guard let track = try? await asset.load(.tracks).first(where: { $0.mediaType == .audio }),
-                  let first = try? await track.load(.preferredTimings)?.first else { return }
-            let s = CMTimeGetSeconds(first.timeRange.start)
-            if s.isFinite, s >= 0, s < 2 { measured = s }   // priming is never a full second of audio
-            #endif
-        }
-        sem.wait()
-        return measured >= 0 ? measured : cookiePriming(url)
-    }
-
-    /// Fallback when CoreMedia exposes no preferred timing. iOS: the file's magic cookies — the mp3 prime scope
-    /// ('prim': 0 = 576, 1 = 1152, 2 = 48000, 3 = 1152 samples) and the AAC pre-fill ('aacf': the priming +
-    /// filler frame lengths, 1024 + 1024 in the m4a files this app sees). macOS host tests: the playable duration
-    /// is the decoded length minus the edit, so their difference is the priming.
+    /// iOS: the file's magic cookies — the mp3 prime scope ('prim': 0 = 576, 1 = 1152, 2 = 48000, 3 = 1152
+    /// samples) and the AAC pre-fill ('aacf': the priming + filler frame lengths, 1024 + 1024 in the m4a files
+    /// this app sees). (CoreMedia's own preferred timing, the player's definition of t = 0, exists only on
+    /// macOS, where AVAudioFile applies the edit itself and the host test reads priming as decode − asset.duration.)
     private static func cookiePriming(_ url: URL) -> Double {
         #if os(macOS)
         guard let f = try? AVAudioFile(forReading: url) else { return 0 }
@@ -100,18 +80,12 @@ enum AudioDecode {
         return (p > 0 && p < 2) ? p : 0
         #else
         var af: AudioFileID?
-        guard AudioFileOpenURL(url as CFURL, .read, 0, &af) == noErr, let af else { return 0 }
+        guard AudioFileOpenURL(url as CFURL, AudioFilePermissions(rawValue: 1)!, 0, &af) == noErr, let af,
+              let rate = try? AVAudioFile(forReading: url).fileFormat.sampleRate, rate > 0 else { return 0 }
         var size: UInt32 = 0
-        guard AudioFileGetPropertyInfo(af, kAudioFileMagicCookieKey, &size, nil) == noErr, size >= 8, size < 65_536 else { return 0 }
-        var data = Data(count: size)
-        guard data.withUnsafeMutableBytes({ AudioFileGetProperty(af, kAudioFileMagicCookieKey, &size, $0.baseAddress!) }) == noErr else { return 0 }
-        var rate: Double = 0
-        var desc = AudioStreamBasicDescription()
-        var dsz = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        withUnsafeMutablePointer(to: &desc) {
-            if AudioFileGetProperty(af, kAudioFilePropertyDataFormat, &dsz, $0) == noErr { rate = desc.mSampleRate }
-        }
-        guard rate > 0 else { return 0 }
+        guard AudioFileGetPropertyInfo(af, kAudioFilePropertyMagicCookieData, &size, nil) == noErr, size >= 8, size < 65_536 else { return 0 }
+        var data = Data(count: Int(size))
+        guard data.withUnsafeMutableBytes({ AudioFileGetProperty(af, kAudioFilePropertyMagicCookieData, &size, $0.baseAddress!) }) == noErr else { return 0 }
         return parseCookies(data, rate: rate)
         #endif
     }

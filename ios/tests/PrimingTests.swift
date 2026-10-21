@@ -33,7 +33,7 @@ enum StatusLog { static func add(_ s: String) { FileHandle.standardError.write((
         }
         func prim(_ scope: UInt32) -> [UInt8] { cookie(0x7072696D, be(scope)) }
         func aacf(_ lens: [UInt16]) -> [UInt8] {
-            var p = be(UInt32(lens.count))
+            var p: [UInt8] = [UInt8(lens.count >> 8), UInt8(lens.count & 0xff)]   // u16 frame count, then a u16 per frame
             for l in lens { p += [UInt8(l >> 8), UInt8(l & 0xff)] }
             return cookie(0x61616366, p)
         }
