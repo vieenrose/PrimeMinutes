@@ -398,6 +398,7 @@ struct AskSheet: View {
                     if askWasWorking && !p.working, let t = ask.turns.last, t.done, !t.answer.isEmpty { Haptics.success() }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)   // dragging the answers down drops the keyboard; tap the field to ask again
             .background(Color(.systemGroupedBackground))
             .safeAreaInset(edge: .bottom) {
                 HStack {
@@ -409,7 +410,8 @@ struct AskSheet: View {
                     }
                 }.padding(12).background(.bar)
             }
-            .navigationTitle(L(meeting != nil ? "ask_meeting_title" : "ask_title")).navigationBarTitleDisplayMode(.inline)
+            // The principal VStack below is the bar's title (title + subtitle); a navigationTitle under it is dead.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { VStack {
                     Text(L(meeting != nil ? "ask_meeting_title" : "ask_title")).font(.headline)

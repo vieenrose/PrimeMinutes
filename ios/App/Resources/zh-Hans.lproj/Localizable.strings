@@ -606,3 +606,4 @@
 "peertube_live" = "无法导入直播";
 "peertube_no_file" = "此视频没有可下载的文件";
 "peertube_add" = "添加";
+"transcript_empty" = "尚无转录文字——处理完成后会显示在这里。";

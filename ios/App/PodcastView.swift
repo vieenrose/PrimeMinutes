@@ -63,6 +63,7 @@ struct PeerTubeView: View {
         NavigationStack {
             Form {
                 TextField(L("source_peertube_desc"), text: $link).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .textContentType(.URL).submitLabel(.go)   // the key shows Go and offers the user's saved links
                     .onSubmit { go() }
                 if let error { Text(error).foregroundStyle(.red) }
                 if busy { HStack(spacing: 8) { ProgressView(); Text(L("dl_searching")).font(.footnote).foregroundStyle(.secondary) } }

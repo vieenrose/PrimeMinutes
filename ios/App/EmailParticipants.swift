@@ -286,6 +286,7 @@ struct EmailParticipantsSheet: View {
                 let ok = EmailRules.isValid(typed)
                 HStack {
                     TextField("name@example.com", text: $typed).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .textContentType(.emailAddress)   // QuickType offers the user's own addresses
                         .textFieldStyle(.roundedBorder).submitLabel(.done).onSubmit { if ok { addAddress(r.person.id, EmailRules.normalize(typed)) } }
                         .accessibilityIdentifier("mail-inline-address")
                     // The action adds this address (it is not a save): VoiceOver must say so.
@@ -325,7 +326,7 @@ private struct AddRecipientView: View {
             .sorted { $0.lastUsed > $1.lastUsed }.prefix(8)
         NavigationStack {
             List {
-                TextField(L("mail_add_hint"), text: $q).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("mail-add-field")
+                TextField(L("mail_add_hint"), text: $q).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.emailAddress).accessibilityIdentifier("mail-add-field")
                 if EmailRules.isValid(q) { Button(L("mail_add_typed", EmailRules.normalize(q))) { onDone((nil, EmailRules.normalize(q))) }.fontWeight(.semibold) }
                 ForEach(Array(hits)) { p in
                     Button { onDone((p.name, p.emails[0].address)) } label: {

@@ -68,6 +68,7 @@ struct SessionView: View {
     @State private var draft = ""
     @State private var renamingSpeaker: Int?
     @State private var editingLine: UUID?
+    @State private var moveLine: UUID?
     /// (from, into) awaiting confirmation: a merge rewrites every line of a speaker, one tap away in a menu.
     @State private var merging: (Int, Int)?
     @State private var transcriptDirty = false
@@ -314,7 +315,7 @@ struct SessionView: View {
             if searching {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                    TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search)
+                    TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search).autocorrectionDisabled()
                         .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
                     if EmbedHost.ready {
                         Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)).tapHeight() }
@@ -338,6 +339,8 @@ struct SessionView: View {
                 if resultsOpen && !meetingResults.isEmpty { resultsList }
             }
             if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
+            // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
+            if s.lines.isEmpty { Text(L(s.noSpeech ? "status_no_speech" : "transcript_empty")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).multilineTextAlignment(.center).padding(.top, 40) }
             ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
                 // A seam handle between two speakers: adjust where one stops and the next starts.
                 if idx > 0, shown[idx - 1].speaker != l.speaker {
@@ -359,6 +362,8 @@ struct SessionView: View {
                 .contextMenu { lineMenu(l) }
                 .accessibilityAction { if player.available { player.seekPlay(l.start) } }   // VoiceOver's default action: play from this line
                 .accessibilityAction(named: L("cd_line_actions")) { editingLine = l.id; draft = l.text }
+                // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
+                .accessibilityAction(named: L("speaker_move_line")) { moveLine = l.id }
             }
         }.padding(.horizontal, 16)
     }
@@ -372,6 +377,7 @@ struct SessionView: View {
                     if tab == 0 { summaryTab } else { transcriptTab }
                 }.padding(.top, 8)
             }
+            .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
             .background(Color(.systemGroupedBackground))
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
@@ -468,6 +474,7 @@ struct SessionView: View {
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
             NavigationStack {
                 TextEditor(text: $draft).padding(.horizontal, 12)
+                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
                         ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
@@ -483,11 +490,30 @@ struct SessionView: View {
             Button(L("speaker_merge")) { if let (f, t) = merging { merge(f, t) }; merging = nil }
             Button(L("cancel"), role: .cancel) { merging = nil }
         }
+        // VoiceOver route for per-line re-attribution: one row per other speaker, same reassign as the menu.
+        .sheet(isPresented: Binding(get: { moveLine != nil }, set: { if !$0 { moveLine = nil } })) {
+            if let id = moveLine, let i = s.lines.firstIndex(where: { $0.id == id }) {
+                NavigationStack {
+                    List {
+                        ForEach(Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != s.lines[i].speaker }, id: \.self) { k in
+                            Button { moveLine = nil; reassign(id, k) } label: {
+                                HStack(spacing: 8) { Circle().fill(tint(k)).frame(width: 10, height: 10); Text(s.name(k)) }
+                                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { moveLine = nil } } }
+                    .navigationTitle(L("speaker_move_line")).navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationDetents([.medium]).presentationDragIndicator(.visible)
+            }
+        }
         .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
             if let k = seamAt, k >= 1, k < s.lines.count {
                 let a = s.lines[k - 1], b = s.lines[k], sm = BoundaryEdits.seam(a, b)
                 BoundaryEditorSheet(tokens: sm.tokens, starts: sm.starts, end: sm.end, initialSplit: sm.split,
                                     colorA: tint(a.speaker), labelA: s.name(a.speaker), colorB: tint(b.speaker), labelB: s.name(b.speaker),
+                                    estimated: BoundaryEdits.estimated(a) || BoundaryEdits.estimated(b),
                                     canPlay: player.available, demo: Self.devDemo,
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
@@ -502,6 +528,7 @@ struct SessionView: View {
                 BoundaryEditorSheet(tokens: toks, starts: BoundaryEdits.tokenStarts(u, toks), end: u.end, initialSplit: toks.count / 2,
                                     colorA: tint(u.speaker), labelA: s.name(u.speaker), colorB: tint(order[0]), labelB: s.name(order[0]),
                                     choices: order.map { SpeakerChoice(id: $0, label: s.name($0), color: tint($0), isNew: !known.contains($0)) },
+                                    estimated: BoundaryEdits.estimated(u),
                                     canPlay: player.available, demo: Self.devDemo,
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
@@ -531,6 +558,7 @@ struct SessionView: View {
         .sheet(isPresented: $editingSummary) {
             NavigationStack {
                 TextEditor(text: $draft).padding(.horizontal, 12)
+                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
                         ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
@@ -542,6 +570,7 @@ struct SessionView: View {
         .sheet(isPresented: $editingActions) {
             NavigationStack {
                 TextEditor(text: $draft).padding(.horizontal, 12)
+                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
                         ToolbarItem(placement: .confirmationAction) { Button(L("done")) {

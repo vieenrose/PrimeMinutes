@@ -154,7 +154,8 @@ struct LibraryView: View {
                 Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
                 Button(L("rename"), systemImage: "pencil") { draft = s.title; renaming = s }
                 Button(L("delete"), systemImage: "trash", role: .destructive) { deleting = s }
-            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
+            // the outer "more" label wins — the inner cd_manage was dead code
+            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
                 .accessibilityLabel(L("more")) }
         }
         .padding(12)
@@ -242,7 +243,7 @@ struct LibraryView: View {
             }
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions"), text: $query).submitLabel(askReady ? .send : .search)
+                TextField(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions"), text: $query).submitLabel(askReady ? .send : .search).autocorrectionDisabled()
                     .focused($searchFocused)
                     .onSubmit { searchFocused = false; if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
                     .onChange(of: query) { _, _ in runSearch() }
@@ -303,6 +304,7 @@ struct LibraryView: View {
                     }
                 }.padding(.horizontal, 16)
             }
+            .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
             if m.runner.activeJob != nil {
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
                     .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)

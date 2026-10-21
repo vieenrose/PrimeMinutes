@@ -75,6 +75,13 @@ enum TokenTimes {
 enum BoundaryEdits {
     static func tokenize(_ text: String) -> [String] { TokenTimes.tokenize(text) }
 
+    /// True when this line's token times are an estimate (spread by character count), not the engine's times:
+    /// a boundary landed on such a line rides a seconds-scale guess, so the editor says "≈".
+    static func estimated(_ u: Utterance) -> Bool {
+        guard let tt = u.tokenTimes else { return true }
+        return tt.count != tokenize(u.text).count
+    }
+
     /// Absolute start of every token of `u`: the engine's times when they still describe this text, else spread by length.
     static func tokenStarts(_ u: Utterance, _ toks: [String]? = nil) -> [Double] {
         let toks = toks ?? tokenize(u.text)

@@ -79,6 +79,8 @@ struct BoundaryEditorSheet: View {
     let tokens: [String], starts: [Double], end: Double, initialSplit: Int
     let colorA: Color, labelA: String, colorB: Color, labelB: String
     var choices: [SpeakerChoice]? = nil
+    /// The token times come from a character-count spread (no engine times): show "≈" on the boundary time.
+    var estimated: Bool = false
     let canPlay: Bool
     /// DEV (README animation): marker steps played one by one after the sheet opens, then Apply.
     var demo: [Int]? = nil
@@ -122,7 +124,7 @@ struct BoundaryEditorSheet: View {
                     .frame(maxHeight: 260)
                     .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                 let delta = split - initialSplit, dt = t - starts[initialSplit]
-                Text(L("boundary_at", Self.precise(t)) + (delta != 0 ? String(format: "   %+d · %+.1f s", delta, dt) : ""))
+                Text(L("boundary_at", (estimated ? "≈" : "") + Self.precise(t)) + (delta != 0 ? String(format: "   %+d · %+.1f s", delta, dt) : ""))
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 Text(L("boundary_hint", lB)).font(.caption).foregroundStyle(.secondary)
                 // One-handed control row: thumbs reach the bottom of the sheet.
