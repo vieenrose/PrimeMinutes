@@ -23,3 +23,4 @@ swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderL
 VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/prose-tests $D/golden
 swiftc -parse-as-library -O $R/ReaderGate.swift $D/ReaderGateTests.swift -o $O/reader-gate-tests && $O/reader-gate-tests
 swiftc -parse-as-library -O $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/../App/SeamStitcher.swift $D/../App/SpeakerRefs.swift $D/SeamAndRefsTests.swift -o $O/seam-refs-tests && $O/seam-refs-tests
+swiftc -parse-as-library -O $D/../App/AudioDecode.swift $D/PrimingTests.swift -o $O/priming-tests && $O/priming-tests

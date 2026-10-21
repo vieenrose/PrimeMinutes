@@ -153,6 +153,64 @@ enum BackgroundWork {
         if let pre = env["VOX_DELETE"]?.uppercased(), pre.count >= 6 { Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             for x in await Model.shared.library.all() where x.id.uuidString.hasPrefix(pre) { StatusLog.add("trace probe delete \(x.id.uuidString.prefix(8))"); Model.shared.library.remove(x) } } }
+        // VOX_PRIME=a.mp3,b.m4a: decode-vs-player offset of imported files (status.log). For each: decode length,
+        // AVAudioPlayer length, measured priming, and burst onsets on both timelines (test files carry 50 ms tones
+        // at 1/10/20/29 s, so aligned onsets must land on those times; raw onsets land priming later).
+        if let spec = env["VOX_PRIME"] { Task { @MainActor in
+            for name in spec.split(separator: ",") where !name.isEmpty {
+                let url = JobQueue.audioDir.appendingPathComponent(String(name))
+                guard let f = try? AVAudioFile(forReading: url) else { StatusLog.add("prime: \(name) unreadable"); continue }
+                let rate = f.processingFormat.sampleRate
+                let dec = Double(f.length) / rate
+                let pr = AudioDecode.priming(url)
+                let player = (try? AVAudioPlayer(contentsOf: url))?.duration ?? -1
+                let raw = Self.burstOnsets(f).map { String(format: "%.3f", $0) }.joined(separator: "/")
+                let al = Self.burstOnsets(url, aligned: true).map { String(format: "%.3f", $0) }.joined(separator: "/")
+                StatusLog.add(String(format: "prime: %@ rate=%.0f decode=%.3f player=%.3f priming=%.5f ms=%.0f raw=[%@] aligned=[%@]",
+                    name as String, rate, dec, player, pr, pr * 1000, raw, al))
+            }
+        } }
+    }
+
+    /// 50 ms tone-burst onsets of a file's 16 kHz mono stream: 10 ms blocks with RMS > 0.08 after ≥ 8 silent
+    /// blocks. From the raw decode zero (AVAudioFile, the pre-fix timeline) or from the player-aligned stream
+    /// the app now feeds the ASR — their difference is the priming the fix removes.
+    private static func burstOnsets(_ source: Any, aligned: Bool = false) -> [Double] {
+        var res: [Double] = [], block: [Float] = [], blockStart: Double = 0, quiet = 99
+        func feed(_ c: [Float]) -> Bool {
+            for x in c {
+                block.append(x)
+                if block.count == 160 {
+                    var s: Float = 0
+                    for y in block { s += y * y }
+                    let loud = sqrt(s / 160) > 0.08
+                    if loud, quiet >= 8 { res.append(blockStart) }
+                    quiet = loud ? 0 : quiet + 1
+                    blockStart += 0.01
+                    block.removeAll(keepingCapacity: true)
+                }
+            }
+            return res.count < 32
+        }
+        if aligned, let url = source as? URL {
+            try? AudioDecode.stream(url) { c in feed(c) }
+            return res
+        }
+        guard let f = source as? AVAudioFile else { return [] }
+        let inFmt = f.processingFormat
+        guard let o = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false),
+              let conv = AVAudioConverter(from: inFmt, to: o) else { return [] }
+        while f.framePosition < f.length {
+            guard let ib = AVAudioPCMBuffer(pcmFormat: inFmt, frameCapacity: 16384) else { break }
+            do { try f.read(into: ib, frameCount: 16384) } catch { break }
+            if ib.frameLength == 0 { break }
+            let cap = AVAudioFrameCount(Double(ib.frameLength) * 16000 / inFmt.sampleRate) + 32
+            guard let ob = AVAudioPCMBuffer(pcmFormat: o, frameCapacity: cap) else { break }
+            try? conv.convert(ib, to: ob, then: .noDataNow)
+            if ob.frameLength == 0 { break }
+            if !feed(Array(UnsafeBufferPointer(start: ob.floatChannelData?[0], count: Int(ob.frameLength)))) { break }
+        }
+        return res
     }
 }
 #endif
