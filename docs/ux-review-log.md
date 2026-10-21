@@ -12,6 +12,29 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (12) — Android pass 7 (branch `android`, commit `4c14e49b`)
+
+Carries the follow-up iOS pass 6 logged: the Ask sheet now focuses its own question field.
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `AskSheet.kt:248` composer | the sheet opens on the answer list and the question field — the only thing to do there — needed a tap before the keyboard appeared; from the library Ask capsule the whole visit is "type a question" | `FocusRequester` + `.focusRequester(askFocus)` on the `BasicTextField`, requested 250 ms after composition so the bottom sheet finishes presenting (`LaunchedEffect(Unit) { delay(250); runCatching { askFocus.requestFocus() } }`, the codebase's existing pattern in `TranscriptSearch.kt:89`); the column already carries `.imePadding()` so the raised keyboard lifts the field |
+
+**Scan, nothing else to change:** every `ModalBottomSheet` already sets `skipPartiallyExpanded = true`
+(10 sites) — the iOS pass-6 detent/grabber case has no Android counterpart; `values-zh-rTW` re-checked
+after the media/brand merges — no simplified glyphs, the 30 Latin runs are product names (Prime Minutes,
+YouTube, Podcast, Markdown, Nemotron, token), 601 keys in all three catalogs with identical key sets;
+brand `Image`s (`StudioScreen.kt:347,496`, `EmptyState.kt:151`) are all `contentDescription = null`
+inside labelled rows.
+
+**Verification:** `./gradlew :app:compileDebugKotlin -Dorg.gradle.jvmargs=-Xmx3g` (laptop) → first run
+failed on a duplicated import pair (fixed), second run `BUILD SUCCESSFUL in 44s`, warnings unchanged
+(the pre-existing `Icons.Filled.Send` deprecation). Worktree `/tmp/pm-ux7` from `origin/android`
+(`96aeaa15`), rebased (already current), pushed `4c14e49b`, removed. No emulator run: the auto-keyboard
+and the 250 ms delay are owed a device pass.
+
+---
+
 ## 2026-10-21 (11) — iOS pass 6 (branch `ios`, commit `fc2f9c65`)
 
 Design sweep on the suggested axes beyond what the earlier passes covered: sheet affordances, focus
@@ -51,8 +74,9 @@ false positives, `LibraryView.swift` its 4 baseline nodes (positions unchanged: 
 inline) — no new parse errors. No simulator, no Mac build (no `~/work/.maclock`): the grabbers, the
 auto-keyboard, and the Ask focus timing are owed a device pass.
 
-**Open item raised, not implemented:** Android's Ask sheet has no `FocusRequester` either — the same
-auto-focus is worth doing on the Compose side (Android open list is otherwise closed).
+**Open item raised:** Android's Ask sheet has no `FocusRequester` either — the same auto-focus is worth
+doing on the Compose side (Android open list is otherwise closed). **Done 2026-10-21 Android pass 7**
+(`4c14e49b`).
 
 ---
 
