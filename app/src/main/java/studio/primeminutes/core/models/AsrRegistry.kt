@@ -13,7 +13,13 @@ data class AsrVariant(
     val latencyMs: Int,
     /** LiteRT encoder graph (int8 weights, dynamic wi8 OCTAV), in its own folder [dirName]. */
     val tflite: AsrPin,
-    /** Token emission offset for the transcript's speaker attribution (engine Config.token_offset_ms). */
+    /**
+     * Token emission offset for the transcript's speaker attribution (engine Config.token_offset_ms): the shift that
+     * puts the transducer's decision frames back on the audio. Derived per chunk size as the offset that leaves the
+     * fewest tokens outside ground-truth speech (tools/validate_timestamps.py, 2026-10-21, 900 s of TS3003c + ES2004b
+     * + L_R003S02C02): 300 ms is the minimum for every variant - 1.2 / 1.7 / 2.0 / 2.6 % of the tokens for
+     * 160 / 480 / 960 / 1920 - and the curve is flat over the neighbouring 100 ms, so one number serves all four.
+     */
     val tokenOffsetMs: Double,
 ) {
     val dirName: String get() = "xasr-punct-${latencyMs}ms"
