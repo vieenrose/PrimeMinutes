@@ -12,7 +12,7 @@
   <a href="https://github.com/vieenrose/PrimeMinutes/releases/latest"><img alt="版本" src="https://img.shields.io/github/v/release/vieenrose/PrimeMinutes?sort=semver"></a>
   <img alt="平台" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white">
   <img alt="授權" src="https://img.shields.io/badge/license-GPL--3.0-blue">
-  <a href="https://github.com/vieenrose/PrimeMinutes/releases/download/v0.53.15/PrimeMinutes-slides-v2.1.html"><img alt="簡報" src="https://img.shields.io/badge/簡報-自包含HTML-0A7A52"></a>
+  <a href="https://vieenrose.github.io/PrimeMinutes/slides/PrimeMinutes-zh-TW.html"><img alt="簡報" src="https://img.shields.io/badge/簡報-線上預覽-0A7A52"></a>
 </p>
 
 <p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="錄音室：連續錄兩場會議"><br><sub>連續錄兩場會議：錄完第一場按「下一場」立即錄第二場，第一場的 AI 筆記在背景接續整理；停止後兩場都自動完成筆記、摘要與標題；接著瀏覽場次、在會議內搜尋與提問、寄給與會者，以及設定中的轉寫延遲與 E4B。第一次閱讀前，AI 筆記卡片預告還要幾分鐘，提問的回答指出負責的語者，寄給與會者的郵件列出會議時間。錄音段 ×4、整理段 ×16、提問等待段 ×4 加速（畫面右側標示），其餘即時；在 Galaxy Note10+ 上實機錄製（E4B 行動版 v2）。</sub></p>
@@ -51,7 +51,7 @@
 
 從 [**Releases**](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載最新的 APK 並安裝。App 每天檢查一次新版本，有新版時在首頁提示。
 
-完整的產品簡報（繁體中文，自包含 HTML，下載後直接用瀏覽器開啟）：[**Prime Minutes 簡報**](https://github.com/vieenrose/PrimeMinutes/releases/download/v0.53.15/PrimeMinutes-slides-v2.1.html)。
+完整的產品簡報（繁體中文，直接在瀏覽器中開啟）：[**Prime Minutes 簡報**](https://vieenrose.github.io/PrimeMinutes/slides/PrimeMinutes-zh-TW.html)。
 
 ## 快速開始
 
