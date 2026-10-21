@@ -14,6 +14,7 @@
 // three different moments.
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -74,6 +75,17 @@ public:
         turn_snap_s_ = window_s; turn_pad_s_ = pad_s; turn_lead_s_ = lead_s; turn_pause_s_ = pause_s;
         turn_max_shift_s_ = max_shift_s;
     }
+    // Energy refinement of that snap (docs/design/speaker-boundary.md): a clean
+    // change sits in a dip of the diarizer's 10 ms log-energy curve, which is a sharper clock than the padded
+    // turn start the snap aims at. Within [window_s] around the change (capped by max_shift_s, the move cap)
+    // the deepest dip replaces the turn-start target when its dip is deeper by [dip] log-energy units; ties
+    // go to the turn start. 0 = off. An energy minimum never moves a change across a pause of pause_s or more.
+    void set_turn_energy(double window_s, double dip) { turn_energy_s_ = window_s; turn_energy_dip_ = dip; }
+    // The log-energy source, installed by the engine from the diarizer's mel frontend (DiarHost::energy_min):
+    // the deepest dip in the sample range [t0,t1], with its time. Without it the snap keeps its turn-start
+    // target alone, so the ggml path (no 10 ms frontend in this process) is unchanged.
+    struct EnergyDip { int64_t at = 0; float val = 0.0f; };
+    void set_energy_fn(std::function<bool(int64_t t0, int64_t t1, EnergyDip* out)> fn) { energy_ = std::move(fn); }
     double char_dur_ms() const { return char_dur_s_ * 1000.0; }
     double gap_snap_ms() const { return gap_snap_s_ * 1000.0; }
 
@@ -119,6 +131,9 @@ public:
 private:
     void append_placed(const std::string& text, int64_t span_start, int64_t span_end, bool exact);
     void snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::string& text, size_t char_from) const;
+    // Energy refinement of a snap target; see set_turn_energy. Returns true when [target] was moved to the dip.
+    bool refine_target_to_energy(int64_t& target, int64_t t, int64_t lo_t, int64_t hi_t,
+                                 int64_t max_shift) const;
 
     int rate_;
     double latency_s_;
@@ -128,6 +143,8 @@ private:
     double gap_snap_s_ = 0.40;
     GapFill gap_fill_ = GapFill::NEAREST;     // turn gaps in the bilingual gate set run 0.05-0.30 s
     double turn_snap_s_ = 0, turn_pad_s_ = 0, turn_lead_s_ = 0, turn_pause_s_ = 0.5, turn_max_shift_s_ = 0.4;
+    double turn_energy_s_ = 0, turn_energy_dip_ = 1.0;
+    std::function<bool(int64_t, int64_t, EnergyDip*)> energy_;
     std::vector<Turn> turns_;
 };
 

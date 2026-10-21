@@ -84,6 +84,20 @@ These counts only include changes between turns of at least 3 tokens. Back-chann
 
    Without the 0.4 s cap the exact rate rose further (EN 65 %, ZH 46 %). But only 56 % of the moved tokens went to the right speaker, so EN cpER rose by 0.15 and DER by 0.3 to 0.7, and the cap was kept. Moving a boundary across a pause stretched a line over the silence; that was the DER cost of the first version. `NEMO_TURN_SNAP=0` turns the snap off.
 
+6. **Aiming the snap at the silence, not at the turn's padding (`DiarHost::energy_min`, `Fusion::refine_target_to_energy`).** A clean speaker change is a silence, and the diarizer's own mel frontend (10 ms frames, the one its encoder eats, `diar_host.cc`) already measures where that silence is: `log(sum of mel powers)` per 10 ms, silence floor about −11.8. Inside the same ±0.4 s the snap may move, the deepest dip of that curve replaces the padded-turn-start + 0.30 s target — but only when it is deeper by `turn_energy_dip` log units than the dip around the shipped target, so a change the turn start already puts in silence stays where it is, and ties go to the turn start. A dip beyond a pause of 0.5 s is not the change (the move cap and the pause guard of point 5 apply, and the energy move adds its own check that it crosses no pause).
+
+   Measured on the same 10 meetings (`tools/nemo-eval` on the gain-normalized clips of the October harness, 480 ms graph, offset 300 ms, `--max-seg 10`; the same run with `NEMO_ENERGY_SNAP=0` reproduces the shipped transcripts byte for byte). Exact on clean changes, before → after, for three margins of "sharper":
+
+   | margin (log units) | EN clean | ZH clean | EN overlap | ZH overlap | EN cpER | ZH DER (transcript, 0.25) |
+   |---|---|---|---|---|---|---|
+   | 1.0 | 52.1 → 55.2 % | 33.8 → 35.0 % | 34.5 → 34.5 % | 34.8 → 34.8 % | 23.44 → 23.46 | 21.18 → 21.19 |
+   | **0.3 (shipped)** | 52.1 → **58.6 %** | 33.8 → 34.4 % | 34.5 → 35.2 % | 34.8 → 34.8 % | 23.44 → 23.53 | 21.18 → 21.19 |
+   | 0.001 | 52.1 → 60.0 % | 33.8 → 36.3 % | 34.5 → 37.0 % | 34.8 → **30.4 %** | 23.44 → 23.48 | 21.18 → 21.19 |
+
+   Median / p90 offset seconds do not move: EN clean 0.0 / 1.70 s, ZH clean 0.28 / 2.95 s at every margin; missed changes 35 (EN) and 94 (ZH); ER 18.18 (EN) / 17.82 (ZH) unchanged, transcript DER +0.02 at every margin. The permissive margin is not shipped because of one column: it drags one ZH overlapped change the wrong way (34.8 → 30.4 % of 23 changes), and the DER cost of dragging a line across a silence is the known failure of the first snap version.
+
+   Per reference change at the shipped margin: of the 145 detected EN clean changes, 10 became exact and 1 left exact; of the 157 ZH, 2 became exact, 1 moved closer, 1 left exact. A re-split change moves by a median 0.2 s (max 1.0 s); 123 of 1844 transcript lines change speaker at the 1.0 margin, 307 at the permissive one. The margin is what limits the gain: in a 15-minute AMI excerpt the snap finds 14 clean changes the energy curve is asked about and takes 4 of them at the 1.0 margin, 7 at the permissive one - the rest have no deeper dip inside ±0.4 s, which is the point (a turn start already sitting in silence is not going to be improved by moving).
+
 ## 2. Current state (both platforms)
 
 ### Data model
