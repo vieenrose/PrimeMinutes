@@ -38,6 +38,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -102,6 +104,10 @@ fun AskSheet(
     val phase by AskEngine.phase.collectAsState()
     val turns by AskEngine.turns.collectAsState()
     var followUp by remember { mutableStateOf("") }
+    // Typing is the reason this sheet opens: the question field takes focus once the sheet settles
+    // (iOS does the same in `fc2f9c65`).
+    val askFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); runCatching { askFocus.requestFocus() } }
 
     // An empty question (the Ask button with no query): the sheet opens on its own question field.
     // The in-meeting Ask's earlier questions (AskHistory), read once per opening; new answers join
@@ -237,7 +243,7 @@ fun AskSheet(
                         if (followUp.isEmpty()) Text(stringResource(if (turns.isNotEmpty()) R.string.ask_followup_hint else if (scope != null) R.string.ask_meeting_hint else R.string.ask_open_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
                         inner()
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(askFocus),
                 )
                 // 44dp: the sheet's primary action was a 32dp target inside a 44dp row.
                 IconButton(onClick = { send() }, enabled = followUp.isNotBlank() && !busy, modifier = Modifier.size(44.dp)) {
