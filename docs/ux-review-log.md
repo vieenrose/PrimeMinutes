@@ -12,6 +12,50 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (11) — iOS pass 6 (branch `ios`, commit `fc2f9c65`)
+
+Design sweep on the suggested axes beyond what the earlier passes covered: sheet affordances, focus
+order, `.contextMenu` on key lists, empty-state copy, progress affordances, Dynamic Type at AX sizes,
+dark-mode colour tokens.
+
+**Implemented (2):**
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | 9 sheets (`LibraryView.swift:385`, `EmailParticipants.swift:229`, `SessionView.swift:417/463/479/495/509`, `VoiceViews.swift:74`, `PeopleViews.swift:391`) | every sheet in the app declares `.presentationDetents([.medium, .large])` and none shows a grabber — a half-height sheet (export, mail, Ask, people picker, enrol) gave no hint it can be dragged to full height, and the text list inside it is clipped at the fold | `.presentationDragIndicator(.visible)` on all nine (deployment target is iOS 17, so the modifier is available everywhere detents are used) |
+| Med | `Ask.swift:405` composer | the Ask sheet opens on the answer list; the question field — the reason the sheet exists — needed a tap before the keyboard appeared, including from the library capsule where typing is the whole intent | `@FocusState` + `.focused($composer)`, focused 0.4 s after the sheet settles (the composer sits in a `safeAreaInset`, so the keyboard lifts it; the 0.4 s matches the sheet-transition waits already used in this file) |
+
+**Swept, nothing to change:**
+- *Fixed font sizes*: only two in `ios/App` — the 76 pt capture timer (intentional, carries
+  `a11y_elapsed` since pass 4) and the 11 pt seam grip glyph.
+- *Fixed frame heights*: every `.frame(height:)` is a bar, rule or spacer (agent strip 6 pt, meter 3 pt,
+  talk-time bar 8 pt, boundary rule 1.5 pt) — none clips text. `SessionView.swift:193` already carries
+  the `fixedSize()` fix for a clipped time.
+- *Progress affordances*: import / job / summary / index paths pair a `ProgressView` with text
+  (`LibraryView.swift:189,274,307,481-483`, `PodcastView.swift:34,68`, `VoiceViews.swift:55,94`,
+  `SessionView.swift:575` exporting sheet); decorative spinners are `accessibilityHidden`.
+- *Empty states*: library (`empty_headline` / `empty_subtitle` / `library_empty`), people picker
+  (`people_picker_empty`), a person with no meetings (`people_no_meetings`), live capture (聆聽中…).
+- *Colour tokens*: `Color.white` appears only as ink on the saturated system accent (library filter chip
+  `LibraryView.swift:128`, people contact chip `PeopleViews.swift:424`) — the exemption logged in iOS
+  pass 1 (system accent is saturated, Android's `OnSky` case does not apply); the one RGB literal
+  (`LibraryView.swift:575`) is the brand mark's navy fallback under the bundle icon, hidden from
+  VoiceOver — not text ink.
+- *`.contextMenu`*: the transcript rows carry one (`SessionView.swift:359`). Library rows were left
+  alone — their long-press is selection mode (`action_select` in pass 3), and a context menu would
+  steal that gesture.
+
+**Verification:** tree-sitter Swift parse — `EmailParticipants.swift`, `SessionView.swift`,
+`VoiceViews.swift`, `PeopleViews.swift` clean; `Ask.swift` reports 3 of its 6 baseline grammar
+false positives, `LibraryView.swift` its 4 baseline nodes (positions unchanged: the sheet edits are
+inline) — no new parse errors. No simulator, no Mac build (no `~/work/.maclock`): the grabbers, the
+auto-keyboard, and the Ask focus timing are owed a device pass.
+
+**Open item raised, not implemented:** Android's Ask sheet has no `FocusRequester` either — the same
+auto-focus is worth doing on the Compose side (Android open list is otherwise closed).
+
+---
+
 ## 2026-10-21 (10) — Android pass 6 (branch `android`, commit `9c4df28a`)
 
 Closes the Android open item 11 (raised by iOS pass 5) and one parity gap the iOS pass 2 log left.
