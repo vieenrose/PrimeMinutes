@@ -99,7 +99,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div style="text-align:left; color:var(--sub); font-size:.9em; line-height:1.5"><b style="color:var(--accent)">Android 用戶：掃碼直接下載最新版 APK</b><br>安裝時允許「未知來源」即可；iPhone 用戶走 TestFlight 受邀測試。</div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.16 · Android v0.53.15 · 版次 2026-10-22</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.17 · Android v0.53.15 · 版次 2026-10-22</p>
 </section>
 
 <!-- 2 問題 -->
@@ -191,7 +191,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
       <li>聲紋比對由 <b>CAM++ zh-en</b>（約 29 MB）完成：每人以「已確認」的樣本依時長加權，構成他的聲紋基準。</li>
       <li>建議分三級：<b>0.5 以下不建議</b>、0.5–0.7「可能」、0.7 以上且明顯領先才算穩；只是建議，<b>名字由你確認</b>後才成為基準。</li>
       <li>圖例與顏色一眼分人；偏離本人其他場次的樣本<b>會先詢問</b>，也能一鍵清除全部聲音資料。</li>
-      <li>錄音中的標註約 <b>5 秒後才出現</b>、尾列隨新證據滾動修正，停止後整場重算——<b>最終稿才是定稿</b>；錄音中的逐字行已直接帶上語者名字（隨標註即時更新，改名字立刻反映）；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
+      <li>錄音中的標註約 <b>5 秒後才出現</b>、尾列隨新證據滾動修正，停止後整場重算——<b>最終稿才是定稿</b>；錄音中的逐字行已直接顯示語者名字（隨標註即時更新，改名後立刻反映）；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
     </ul></div>
     <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」頁說明原理，經你同意才開啟；開啟後會議自動<b>建議</b>名字、由你確認——「聲音」是最多 <b>60 秒</b>語音算出的一串數字（<b>不是錄音</b>），「忘記聲音」先確認才執行</div></div>
     <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做；時間為推算時標「≈」。完成後每句可長按改派語者或分開（錄音中只供觀看）</div></div>
@@ -239,7 +239,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><ul class="big">
       <li>音訊檔（mp3／wav／m4a…）直接匯入；YouTube、PeerTube 貼連結即可——PeerTube 支援任意站點，自動選最小檔案，優先僅含音訊的那個。</li>
       <li>所有音訊一律重採為 <b>16 kHz 單聲道</b>才進管線，與麥克風錄音同一條路。</li>
-      <li>逐字稿時間與播放位置<b>對齊</b>：裝置實測匯入位移 <b>0 ms</b>（各容器）；點時間跳到的那句就是那句。</li>
+      <li>逐字稿時間與播放位置<b>對齊</b>：匯入後實測偏移 <b>0 ms</b>——點哪個時間，就播到那句。</li>
       <li>下載可<b>暫停／續傳</b>，中斷不視為失敗；省電模式自動配合。</li>
       <li>匯入走同一條管線：逐字稿、筆記、摘要、搜尋、提問全部可用，成果與錄音場次完全相同。</li>
     </ul></div>
@@ -345,7 +345,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><ul class="big">
       <li>四段延遲各約 <b>155 MB</b>：<b>越短越快上螢幕，越長越準確</b>。</li>
       <li>預設 <b>1.92 秒</b>：四段中最準確，一般會議建議維持預設。</li>
-      <li>會議模型（E2B／E4B）可切換，換完可整場重跑筆記與摘要；E4B 現為<b>第二代權重</b>：評測摘要 4.0／5（第一代 3.2）、自我矛盾 16 → 7。</li>
+      <li>會議模型（E2B／E4B）可切換，換完可整場重跑筆記與摘要；E4B 現為<b>第二代權重</b>：評測摘要 4.0／5（第一代 3.2）、自相矛盾 16 → 7。</li>
       <li>下載可設<b>僅限 Wi‑Fi</b>，暫停／續傳，電量與網路自動配合。</li>
       <li>介面語言：跟隨系統、English 或繁體中文；<b>AI 產出的中文</b>（筆記、摘要、回答）自動跟隨介面語言。</li>
     </ul></div>
@@ -388,7 +388,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>E4B 需要 8 GB 記憶體</b>；較小的手機用 E2B，筆記在錄音結束後閱讀（較慢出現，結果相同）。</li>
     <li>重疊說話時語者分離可能延後標註（淺灰句子）——可用分界編輯器修正，可復原。</li>
     <li>換人點是<b>估出來的</b>：分離器給區間、音量吸附對齊，約四成正好對齊，尾端偶爾晚半秒到三秒——分界編輯器可逐點微調，更準的對齊工程進行中。</li>
-    <li>最難找的是<b>一秒內的快速接話</b>（中文會議常見）：這種換人點約七成找不到，長按那句改派是兜底，匯入檔的離線重算正在改進。</li>
+    <li>最難找的是<b>一秒內的快速接話</b>（中文會議常見）：這種換人點約七成找不到——遇到時長按那句改派即可補救，匯入檔的離線重算正在改進。</li>
     <li>提問（Ask）為<b>實驗性</b>：答案一律附出處，請點回原話核對。</li>
     <li>第一次進行長時間工作時，App 說明一次「電池最佳化」的影響並詢問是否豁免。</li>
     <li>超長會議：摘要分段逐段補齊，時間與會議長度成正比。</li>
@@ -416,7 +416,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每節目只取最新集；自動檢查列 v2（設計已完成：docs/design/podcast-series.md）。</li>
     <li>長會議摘要再強化：分段散文式摘要與新摘要模型。</li>
     <li>語者功能延伸：分界編輯器與人名錄持續打磨。</li>
-    <li><b>語者分界更準</b>：換人瞬間改由音量最低點吸附對齊——十場公開會議實測：英文「對得剛剛好」47 % → <b>52 %</b>、偏差中位數 0,08 秒降為 <b>0,00</b>；中文的瓶頸是「換人點找太晚」而非對不齊：放大語者記憶的離線重算，六場中文會議實測找不到率 39 % → <b>33 %</b>（講者長隔回場那帶 41 % → <b>24 %</b>），已達出貨門檻，先上在匯入音訊的重算。</li>
+    <li><b>語者分界更準</b>：換人瞬間改由音量最低點吸附對齊——十場公開會議實測：英文「對得剛剛好」47 % → <b>52 %</b>、偏差中位數 0,08 秒降為 <b>0,00</b>；中文的瓶頸是「換人點找太晚」而非對不齊：放大語者記憶的離線重算，六場中文會議實測找不到率 39 % → <b>33 %</b>（講者隔一段時間再回場的那類換人點：41 % → <b>24 %</b>），已達出貨門檻，會先用在匯入音訊的離線重算。</li>
     <li>模型管線與 Ask 延遲持續優化。</li>
   </ul>
 </section>
@@ -431,7 +431,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.16</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.17</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
