@@ -406,7 +406,13 @@ private fun AddRecipientDialog(candidates: List<Person>, onDone: (Pair<String?, 
             Column {
                 OutlinedTextField(q, { q = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
                     placeholder = { Text(stringResource(R.string.mail_add_hint)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth().testTag("mail-add-field"))
+                    // Done = tapping the blue "use this address" line: the keyboard's return key was a
+                    // dead Enter (singleLine, no action wired).
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (EmailRules.isValid(q)) onDone(null to EmailRules.normalize(q))
+                    }),
+                    modifier = Modifier.fillMaxWidth().testTag("mail-add-field"))
                 if (EmailRules.isValid(q)) Text(stringResource(R.string.mail_add_typed, EmailRules.normalize(q)), color = pal.Sky, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().clickable { onDone(null to EmailRules.normalize(q)) }.padding(vertical = 12.dp))
                 hits.forEach { p ->

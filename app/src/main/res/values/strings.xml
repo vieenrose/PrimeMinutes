@@ -282,6 +282,8 @@
     <string name="search_semantic_downloading">Downloading the search model… %1$d%%</string>
     <string name="search_semantic_marker">≈</string>
     <string name="search_semantic_cd">Search by meaning</string>
+    <string name="search_semantic_on">on</string>
+    <string name="search_semantic_off">off</string>
     <string name="search_semantic_indexing">Building the meaning index for this meeting — search by meaning will be ready shortly.</string>
     <string name="search_semantic_indexing_short">Indexing…</string>
     <string name="search_model_download_failed">Couldn\'t download the search model</string>

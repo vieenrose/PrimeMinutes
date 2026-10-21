@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -649,7 +650,10 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(pal.InsetSurface).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = pal.Sky, fontWeight = FontWeight.SemiBold)
+        // Section title marked as a heading: TalkBack's heading swipe jumps card to card on a page
+        // that is a dozen cards long (no heading was set anywhere in the app until now).
+        Text(title, style = MaterialTheme.typography.titleSmall, color = pal.Sky, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.semantics { heading() })
         content()
     }
 }
@@ -658,7 +662,7 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 @Composable
 private fun Section(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = LocalPrimeMinutesPalette.current.Sky,
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp).semantics { heading() })
 }
 
 @Composable

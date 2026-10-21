@@ -88,6 +88,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
@@ -111,7 +112,9 @@ import studio.primeminutes.core.embed.Embedder
 import studio.primeminutes.core.embed.LibrarySearch
 import studio.primeminutes.core.embed.SessionIndex
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.delay
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
@@ -221,6 +224,9 @@ fun StudioScreen(
         DATE_FMT = DateFormat.getDateInstance(DateFormat.MEDIUM, uiLocale)
     }
     val pal = LocalPrimeMinutesPalette.current
+    // Tactile parity with iOS (`Haptics.toggle` on the record switch, `Haptics.destructive` on the
+    // delete confirms): a recording that starts, and a delete that lands, were visual-only here.
+    val haptics = LocalHapticFeedback.current
     var actionsFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var deleteFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
@@ -632,7 +638,10 @@ fun StudioScreen(
                     Spacer(Modifier.height(4.dp))
                 }
                 Button(
-                    onClick = { if (isRecording) onResumeCapture() else onRecord() },
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (isRecording) onResumeCapture() else onRecord()
+                    },
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = if (isRecording) PrimeMinutesPalette.Red else pal.Sky),
                     modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -661,7 +670,7 @@ fun StudioScreen(
                     e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale),
                     style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() },
                 )
                 if (e.download != null) {
                     // A download item: its own actions only (nothing to process or share yet).
@@ -721,6 +730,17 @@ fun StudioScreen(
                 OutlinedTextField(
                     value = field, onValueChange = { field = it }, singleLine = true,
                     modifier = Modifier.focusRequester(focus),
+                    // The dialog opens with this field focused, and its only job is the new name —
+                    // the return key was a dead generic Enter (singleLine, no action), so the user
+                    // had to hunt the 確定 button. Done now commits, same as that button.
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                        renameFor = null
+                        val t = field.text.trim()
+                        if (t.isNotBlank()) onRename(e, t)
+                    }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = pal.Slate200, unfocusedTextColor = pal.Slate200,
                         focusedBorderColor = pal.Sky, unfocusedBorderColor = pal.Slate700,
@@ -738,7 +758,7 @@ fun StudioScreen(
             onDismissRequest = { deleteFor = null },
             title = { Text(stringResource(R.string.action_delete)) },
             text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale))) },
-            confirmButton = { TextButton(onClick = { deleteFor = null; onDelete(e) }) { Text(stringResource(R.string.action_delete)) } },
+            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete)) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(android.R.string.cancel)) } },
         )
     }
@@ -751,6 +771,7 @@ fun StudioScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmDeleteMany = false
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     val victims = entries.filter { it.id in selected }
                     exitSelection()
                     onDeleteMany(victims)
@@ -814,7 +835,7 @@ private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> 
         Text(
             stringResource(R.string.selection_count, count),
             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
+            modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
         )
         TextButton(onClick = onSelectAll) { Text(stringResource(R.string.select_all), color = pal.Sky, fontWeight = FontWeight.Bold) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = PrimeMinutesPalette.Red) }

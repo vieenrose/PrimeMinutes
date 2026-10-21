@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -218,7 +220,10 @@ internal fun AddressDialog(title: String = stringResource(R.string.email_add), o
                 placeholder = { Text("name@example.com") },
                 isError = text.isNotBlank() && !ok,
                 supportingText = if (text.isNotBlank() && !ok) ({ Text(stringResource(R.string.email_invalid)) }) else null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                // Done = the save button once the address validates; the keyboard's return key was a
+                // dead Enter (singleLine, no action wired).
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (ok) onDone(EmailRules.normalize(text)) }),
                 modifier = Modifier.testTag("email-field"))
         },
         confirmButton = { TextButton(enabled = ok, onClick = { onDone(EmailRules.normalize(text)) }) { Text(stringResource(R.string.people_save)) } },

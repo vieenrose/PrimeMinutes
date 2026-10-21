@@ -45,7 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -127,6 +129,15 @@ fun AskSheet(
     DisposableEffect(Unit) { onDispose { AskEngine.release() } }
 
     val busy = phase.working
+    // A long task ended → feel it, the way the export and the copy paths do (iOS `Haptics.success()`
+    // fires at the same moment). Armed on the working edge, so opening a sheet that already holds
+    // yesterday's answers stays silent.
+    val askHaptics = LocalHapticFeedback.current
+    var askWasBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(busy) {
+        if (busy) askWasBusy = true
+        else if (askWasBusy) { askWasBusy = false; askHaptics.performHapticFeedback(HapticFeedbackType.ContextClick) }
+    }
     fun send() {
         val q = followUp.trim(); if (q.isEmpty() || busy) return
         followUp = ""; AskEngine.ask(context, entries, q, lang, scope)

@@ -50,7 +50,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -287,11 +289,14 @@ private fun CaptureButtons(
     buttonHeight: androidx.compose.ui.unit.Dp,
 ) {
     val pal = LocalPrimeMinutesPalette.current
+    // Both buttons end a capture, which was a silent event: felt parity with iOS (record switch
+    // `toggle`, saved-meeting `success`).
+    val haptics = LocalHapticFeedback.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // ⏭ Next talk — the batch-recording workhorse: auto-save this capture, defer its
         // processing, and roll straight into the next session.
         Button(
-            onClick = onNextTalk,
+            onClick = { haptics.performHapticFeedback(HapticFeedbackType.ContextClick); onNextTalk() },
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
@@ -306,7 +311,7 @@ private fun CaptureButtons(
         }
         // ⏹ Stop & save — always safe: the capture is in the library before processing starts.
         Button(
-            onClick = onStop,
+            onClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onStop() },
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),

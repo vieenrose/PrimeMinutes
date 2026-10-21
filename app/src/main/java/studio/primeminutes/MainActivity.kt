@@ -2145,6 +2145,14 @@ private fun TranscribeScreen(
     if (s.showYouTubeSheet) {
         YouTubeSheet(onDismiss = { vm.showYouTubeSheet(false) })
     }
+    // An export that lands, felt — iOS fires `Haptics.success()` on the same completion. Armed on
+    // the exporting edge, so a screen that opens while an export is already running stays silent.
+    val exportDoneHaptic = LocalHapticFeedback.current
+    var wasExporting by remember { mutableStateOf(false) }
+    LaunchedEffect(s.exporting) {
+        if (s.exporting) wasExporting = true
+        else if (wasExporting) { wasExporting = false; exportDoneHaptic.performHapticFeedback(HapticFeedbackType.ContextClick) }
+    }
     // The overlay waits for TranscriptEvent.ExportDone, which never arrives if the service is
     // killed mid-export: once nothing is exporting in the service any more and no completion has
     // landed, close it and say so.

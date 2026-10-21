@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -44,11 +46,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -287,6 +292,8 @@ private fun PersonPage(
         )
     }
     if (deleting) {
+        // Destructive confirm, felt: iOS fires `Haptics.destructive()` on the same tap.
+        val delHaptics = LocalHapticFeedback.current
         var clear by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { deleting = false },
@@ -303,6 +310,7 @@ private fun PersonPage(
             confirmButton = {
                 TextButton(onClick = {
                     deleting = false
+                    delHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     val c = clear
                     scope.launch(Dispatchers.IO) { PeopleStore.delete(context, p.id, c) }
                     onGone()
@@ -320,7 +328,16 @@ internal fun NameDialog(title: String, initial: String, allowBlank: Boolean = fa
     AlertDialog(
         onDismissRequest = { onDone(null) },
         title = { Text(title) },
-        text = { OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(), modifier = Modifier.testTag("name-dialog-field")) },
+        // Done on the keyboard = the save button: the field is the dialog's whole content and the
+        // return key did nothing with it (singleLine, no action wired).
+        text = {
+            OutlinedTextField(
+                text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (allowBlank || text.isNotBlank()) onDone(text.trim()) }),
+                modifier = Modifier.testTag("name-dialog-field"),
+            )
+        },
         confirmButton = { TextButton(enabled = allowBlank || text.isNotBlank(), onClick = { onDone(text.trim()) }) { Text(stringResource(R.string.people_save)) } },
         dismissButton = { TextButton(onClick = { onDone(null) }) { Text(stringResource(R.string.cancel)) } },
     )

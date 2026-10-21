@@ -40,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -131,7 +133,8 @@ fun VoiceSettingsCard() {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.voice_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200)
+                    Text(stringResource(R.string.voice_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                        modifier = Modifier.semantics { heading() })
                     Text(stringResource(if (doc.voice) R.string.voice_on_desc else R.string.voice_off_desc),
                         style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 }
@@ -266,7 +269,8 @@ fun PersonVoiceRow(p: Person) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("person-voice")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.voice_person_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200)
+                Text(stringResource(R.string.voice_person_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                    modifier = Modifier.semantics { heading() })
                 Text(info?.let { (m, s) -> pluralStringResource(R.plurals.voice_person_learned, m, m, s.toInt()) } ?: stringResource(R.string.voice_person_none),
                     style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 if (pending > 0) Text(pluralStringResource(R.plurals.voice_person_pending, pending, pending), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)

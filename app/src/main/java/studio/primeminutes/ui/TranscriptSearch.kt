@@ -49,6 +49,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import studio.primeminutes.R
 import androidx.compose.ui.graphics.Color
@@ -84,6 +85,7 @@ fun TranscriptSearchBar(
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val semanticCd = stringResource(R.string.search_semantic_cd)
+    val semanticState = stringResource(if (semantic) R.string.search_semantic_on else R.string.search_semantic_off)
     // Opening the bar means "I want to type": focus it and raise the keyboard.
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -120,7 +122,12 @@ fun TranscriptSearchBar(
                     stringResource(R.string.search_semantic_marker),
                     color = if (semantic) pal.Sky else pal.Slate400, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.semantics { contentDescription = semanticCd },
+                    // The label is the same on and off — only the ink colour carried the state, so
+                    // TalkBack read the identical phrase for both. The state now rides with it.
+                    modifier = Modifier.semantics {
+                        contentDescription = semanticCd
+                        stateDescription = semanticState
+                    },
                 )
             }
         }

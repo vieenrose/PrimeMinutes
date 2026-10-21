@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Context
@@ -306,7 +307,8 @@ internal fun NotesSection(
     Card(colors = CardDefaults.cardColors(containerColor = pal.Slate800)) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Text(header, style = MaterialTheme.typography.titleSmall,
-                 fontWeight = FontWeight.Bold, color = pal.Slate200)
+                 fontWeight = FontWeight.Bold, color = pal.Slate200,
+                 modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(6.dp))
             items.forEach {
                 // Through renderMarkdown so the bullet's trailing [m:ss] becomes a tap target that
@@ -417,7 +419,7 @@ internal fun SummaryCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = pal.Slate200,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { heading() },
             ) else Spacer(Modifier.weight(1f))
             if (!isEditing) {
                 // One-tap copy to clipboard (the summary export was removed — the .ogg is the editor).
@@ -464,7 +466,7 @@ internal fun ActionItemsCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = pal.Slate200,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { heading() },
             ) else Spacer(Modifier.weight(1f))
             if (!isEditing) {
                 // No size override: IconButton's 48dp box is the touch target (28dp was under the 44dp minimum).
