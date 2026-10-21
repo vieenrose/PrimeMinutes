@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>Prime Minutes logo</title><g transform="translate(-2.56 5.12) scale(0.96)">
-  
-  <!-- Key line: record card, the key line escapes the edge, pinned by a dot -->
-  <rect x="24" y="36" width="176" height="184" rx="32" fill="#1C2733"/>
-  <g fill="#FFFFFF">
-    <rect x="56" y="72"  width="88" height="20" rx="10"/>
-    <rect x="56" y="112" width="56" height="20" rx="10"/>
-    <rect x="56" y="152" width="144" height="20" rx="10"/>
-    <rect x="56" y="192" width="72" height="20" rx="10"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Prime Minutes iOS app icon</title>
+  <rect width="256" height="256" fill="#1C2733"/>
+  <g transform="translate(11.5 21.5) scale(0.82)">
+    <g fill="#FFFFFF">
+      <rect x="56" y="72"  width="88" height="20" rx="10"/>
+      <rect x="56" y="112" width="56" height="20" rx="10"/>
+      <rect x="56" y="152" width="144" height="20" rx="10"/>
+      <rect x="56" y="192" width="72" height="20" rx="10"/>
+    </g>
+    <rect x="200" y="152" width="32" height="20" rx="10" fill="#0A7A52"/>
+    <circle cx="232" cy="162" r="16" fill="#0A7A52"/>
   </g>
-  <rect x="200" y="152" width="32" height="20" rx="10" fill="#0A7A52"/>
-  <circle cx="232" cy="162" r="16" fill="#0A7A52"/>
-</g></svg>
+</svg>
