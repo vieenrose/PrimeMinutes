@@ -12,6 +12,36 @@ A full iOS build is not possible on this machine.
 
 ---
 
+## 2026-10-21 (15) — iOS pass 8 (branch `ios`, commit `7f8bb5b9`)
+
+QuickType/AutoFill, Done-key commits in alerts (Android pass-8 parity), and the last unconfirmed
+destructive flow the pass-2 audit left. Behavior only — no layout, so in-flight media shots are
+unaffected.
+
+| Severity | Site | Finding | Change |
+|---|---|---|---|
+| Med | `PeopleViews.swift` contact-name, rename, split alerts | the three speaker-NAME fields declared nothing — QuickType offered the contacts for an e-mail years ago (pass 7) but never for a name, and autocorrect rewrites proper nouns mid-typing (the reason the search fields carry `autocorrectionDisabled` since pass 3) | `.textContentType(.name).autocorrectionDisabled()` on all three |
+| Med | `PeopleViews.swift` contact-name / rename / note / split, `PersonContact.swift:121` e-mail add, `LibraryView.swift:338` + `SessionView.swift:451` title rename | the seven alert text fields left the return key dead — the keyboard's only exit was Done, the save was the button; Android pass 8 wired `ImeAction.Done` on its four dialog fields the same day | `.submitLabel(.done).onSubmit` mirroring each field's Save/Done button (the codebase's pattern from `EmailParticipants.swift:290`) |
+| High | `LibraryView.swift` `DownloadActions` (library job-row menu + job-screen toolbar menu) | Delete → `m.imports.remove(j)` on the first tap — stops the download and removes its partial file; the Android side got this confirm in pass 2 (`253cb2c9`), iOS was the parity gap (session deletes all confirm) | `DownloadActions` gained `askDelete`; both call sites (library job row, job-screen menu) open a `confirmationDialog` and delete from its destructive button, with the delete haptic |
+
+**New copy:** `download_delete_confirm` in en / zh-Hant / zh-Hans — 591 keys per catalog, identical
+key sets. zh-Hant traditional-only.
+
+**Scan, nothing to change:** VoiceStore "Delete all voice data" confirms (`voice_delete_all` alert,
+destructive role); person delete, merge, unlink, voice-forget, storage swipe-delete all confirm;
+queue removals / stop-processing are menu items restoring a recoverable state (Android parity);
+`email_remove` in the person's address menu matches Android's same shape. The icon-label sweep came
+back empty — every `label: { Image(systemName…) }` in `ios/App` (incl. `Reader/`) carries an
+`accessibilityLabel` (passes 1–3). No `.frame(height:)` wraps text (pass 6), the app's own text-size
+control (App.swift `TextSize`) rides Dynamic Type up to the accessibility sizes, and the dense
+captions that can clip already carry `fixedSize()` (passes 1/4).
+
+**Verification:** tree-sitter Swift parse — `PeopleViews.swift`, `PersonContact.swift`,
+`SessionView.swift` clean (0 nodes); `LibraryView.swift` 4 — its baseline, positions shifted +1 by
+the state line, no new node types. Catalogs: 591 keys, identical key sets. No simulator, no Mac
+build (14 Pro Max on the media shoot, `~/work/.maclock` untouched): the QuickType name strip, the
+alert Done-key commits, and the two new confirm dialogs are owed a device pass.
+
 ## 2026-10-21 (14) — Android pass 8 (branch `android`, commit `3857c21d`)
 
 Semantics/IME/feedback pass, behavior only — no layout or visible copy, so in-flight media
