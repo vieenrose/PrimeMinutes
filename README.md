@@ -13,7 +13,7 @@
   <img alt="授權" src="https://img.shields.io/badge/license-GPL--3.0-blue">
 </p>
 
-<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="錄音室：連續錄兩場會議"><br><sub>連續錄兩場會議：錄完第一場按「下一場」立即錄第二場，第一場的 AI 筆記在背景接續整理；停止後兩場都自動完成筆記、摘要與標題；接著瀏覽場次、匯出、在會議內搜尋與提問、寄給與會者，以及設定。錄音段 ×4、整理段 ×16 加速（畫面右側標示），其餘即時（iPhone 17e，E4B 行動版 v2）。</sub></p>
+<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="錄音室：連續錄兩場會議"><br><sub>連續錄兩場會議：錄完第一場按「下一場」立即錄第二場，第一場的 AI 筆記在背景接續整理；停止後兩場都自動完成筆記、摘要與標題；接著瀏覽場次、匯出、在會議內搜尋與提問、寄給與會者，以及設定。錄音 ×24、整理 ×16、導覽 ×2、提問 ×5 加速（畫面右側標示）（iPhone 14 Pro Max，E4B 行動版 v2）。</sub></p>
 
 Prime Minutes for iOS 是 [Android 版](https://github.com/vieenrose/PrimeMinutes/blob/android/README.md) 的原生 SwiftUI 版本：同一套語音引擎、同一個 AI 筆記模型與閱讀協定，功能與介面對齊 Android。
 
