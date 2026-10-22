@@ -41,7 +41,8 @@ struct Session: Identifiable, Codable, Hashable {
     var meetingStart: Date? { captureStart.map { $0 < 0 ? nil : Date(timeIntervalSince1970: $0) } ?? date }
     /// Processed, but nothing was said (SpeechCheck): shown as such, never as "Done", and never read by the reader.
     var noSpeech: Bool { !SpeechCheck.hasSpeech(lines.map(\.text)) }
-    func name(_ spk: Int) -> String { speakerNames?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
+    func name(_ spk: Int) -> String { Self.name(spk, speakerNames) }
+    static func name(_ spk: Int, _ names: [String: String]?) -> String { names?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
     static func == (a: Session, b: Session) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
 }

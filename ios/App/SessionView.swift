@@ -284,7 +284,7 @@ struct SessionView: View {
                 notesSection(L("notes_topics"), n.topics)
                 ForEach(n.extra) { notesSection($0.key, $0.lines) }
             }
-            if !s.lines.isEmpty { SpeakerStats(s: s, palette: Self.palette).id("stats") }
+            if !s.lines.isEmpty { SpeakerStats(lines: s.lines, names: s.speakerNames, palette: Self.palette).id("stats") }
             if peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }) {
                 HStack { Spacer(); Button { mailOpen = true } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
             }
@@ -838,13 +838,15 @@ struct NoteRow: View {
 
 
 /// Android SpeakerStatsPanel: speaker count beside one stacked talk-time bar in the speakers' colours; tap for the per-speaker legend.
+/// Takes the lines and names, not the Session: Session's == compares ids only, so SwiftUI kept the old bar after a merge.
 struct SpeakerStats: View {
-    let s: Session
+    let lines: [Utterance]
+    let names: [String: String]?
     let palette: [Color]
     @State private var legend = false
     private var shares: [(spk: Int, pct: Double)] {
         var d = [Int: Double]()
-        for l in s.lines { d[max(0, l.speaker), default: 0] += max(0, l.end - l.start) }
+        for l in lines { d[max(0, l.speaker), default: 0] += max(0, l.end - l.start) }
         let total = d.values.reduce(0, +)
         return total > 0 ? d.map { ($0.key, $0.value / total * 100) }.sorted { $0.1 > $1.1 } : []
     }
@@ -867,7 +869,7 @@ struct SpeakerStats: View {
                         ForEach(sh, id: \.spk) { x in
                             HStack(spacing: 6) {
                                 RoundedRectangle(cornerRadius: 2).fill(palette[x.spk % palette.count]).frame(width: 8, height: 8)
-                                Text("\(s.name(x.spk)) · \(Int(x.pct.rounded()))%").font(.caption).foregroundStyle(.secondary)
+                                Text("\(Session.name(x.spk, names)) · \(Int(x.pct.rounded()))%").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
