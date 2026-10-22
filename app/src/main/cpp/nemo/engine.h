@@ -178,12 +178,12 @@ struct Config {
     // Transcript DER, ER unchanged at every margin; cpER +0.02 to +0.09 (EN). docs/design/speaker-boundary.md.
     double turn_energy_s = 0.4;
     double turn_energy_dip = 0.3;
-    // Research flags (line-split P1, not shipped; 0 = shipped behaviour, outputs md5-identical).
-    // line_split bit 1: Fusion::set_line_split (a short reply after its own leading punctuation keeps its line).
-    // token_span_cap_s > 0: a model-timed token is attributed over at most this long from its start, instead of
-    // up to the next token's start (the last token before a pause otherwise spans the pause into the next turn).
+    // line_split bit 1 (shipped): Fusion::set_line_split, a short reply after its own leading punctuation keeps
+    // its line. zh AISHELL-4 miss 98 -> 93 host, 100 -> 97 Note10+, 0 changes lost; EN and 尾牙 unchanged.
+    // token_span_cap_s > 0 (research, off): a model-timed token is attributed over at most this long from its
+    // start, instead of up to the next token's start. Better exact (+16 pt) but EN miss +4 and 尾牙 speaker merges.
     // NEMO_LINE_SPLIT=<mask> / NEMO_TOKEN_SPAN_CAP=<s> override.
-    int line_split = 0;
+    int line_split = 1;
     double token_span_cap_s = 0;
 };
 

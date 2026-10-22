@@ -86,8 +86,8 @@ public:
     // target alone, so the ggml path (no 10 ms frontend in this process) is unchanged.
     struct EnergyDip { int64_t at = 0; float val = 0.0f; };
     void set_energy_fn(std::function<bool(int64_t t0, int64_t t1, EnergyDip* out)> fn) { energy_ = std::move(fn); }
-    // Research flag (line-split P1, /tmp/b4eval/linesplit/REPORT.md), 0 = shipped behaviour. Bit 1: the
-    // sentence-end snap ignores a piece's LEADING punctuation, so a short reply ("。对对") keeps its line.
+    // Bit 1 (Config::line_split, on by default): the sentence-end snap ignores a piece's LEADING punctuation,
+    // so a short reply ("。对对") keeps its line. 0 = the behaviour before line-split P1.
     void set_line_split(int mask) { line_split_ = mask; }
     int line_split() const { return line_split_; }
     double char_dur_ms() const { return char_dur_s_ * 1000.0; }
