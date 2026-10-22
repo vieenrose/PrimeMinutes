@@ -20,11 +20,20 @@ object BoundaryEdits {
     /** Lossless tokenization: joinToString("") == text ([TokenTimes.tokenize]). */
     fun tokenize(text: String): List<String> = TokenTimes.tokenize(text)
 
+    /** The engine's times (or the ones an earlier edit wrote back) still describe this text's tokens. */
+    private fun timed(u: TranscriptEvent.Utterance, toks: List<String>): Boolean {
+        val tt = u.tokenTimes
+        return tt != null && tt.size == toks.size && (u.tokens == null || u.tokens.size == toks.size)
+    }
+
+    /** True when [u]'s token times are an estimate (spread by character count), not the engine's times: a
+     *  boundary landed on such a line rides a seconds-scale guess, so the editor says "≈" (iOS BoundaryEdits.estimated). */
+    fun estimated(u: TranscriptEvent.Utterance): Boolean = !timed(u, tokenize(u.text))
+
     /** Absolute start time of every token of [u] (seconds). */
     fun tokenStarts(u: TranscriptEvent.Utterance, toks: List<String> = tokenize(u.text)): List<Double> {
-        // The engine's times (or the ones an earlier edit wrote back) when they still describe this text's tokens.
         val tt = u.tokenTimes
-        if (tt != null && tt.size == toks.size && (u.tokens == null || u.tokens.size == toks.size)) return tt.map { u.startSec + it }
+        if (tt != null && timed(u, toks)) return tt.map { u.startSec + it }
         val weights = toks.map { t -> t.count { !it.isWhitespace() }.coerceAtLeast(1).toDouble() }
         val total = weights.sum().coerceAtLeast(1.0)
         val span = (u.endSec - u.startSec).coerceAtLeast(0.0)

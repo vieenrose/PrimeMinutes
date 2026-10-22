@@ -58,6 +58,18 @@ class BoundaryEditsTest {
         assertEquals(10.0 + 3.0 * 5 / 6, BoundaryEdits.tokenStarts(stale)[5], 1e-9)
     }
 
+    @Test fun estimatedWhenTimesDoNotDescribeTheText() {
+        // No engine times (an import, an old file): the split falls on a character-count guess, the editor says "≈".
+        assertEquals(true, BoundaryEdits.estimated(u(0, 0, 0.0, 2.0, "可是時間呢")))
+        val timed = Utterance(0, "可是", 13.0, 14.0, 1, tokenTimes = listOf(0.0, 0.4))
+        assertEquals(false, BoundaryEdits.estimated(timed))
+        // times left over from before an edit changed the token count are a guess again
+        assertEquals(true, BoundaryEdits.estimated(timed.copy(text = "可是呢")))
+        // a move writes the times back: the edited pair stays exact
+        val out = BoundaryEdits.move(listOf(Utterance(0, "預算定了對", 10.0, 13.0, 0, tokenTimes = listOf(0.0, 0.5, 1.0, 1.6, 2.9)), timed), 1, 4)
+        assertEquals(listOf(false, false), out.map { BoundaryEdits.estimated(it) })
+    }
+
     @Test fun splitCandidatesNeighboursFirstThenOthersThenNew() {
         val utts = listOf(u(0, 3, 0.0, 1.0, "a"), u(1, 0, 1.0, 2.0, "b c"), u(2, 2, 2.0, 3.0, "d"), u(3, 1, 3.0, 4.0, "e"))
         assertEquals(listOf(2, 3, 1, 4), BoundaryEdits.splitCandidates(utts, 1))

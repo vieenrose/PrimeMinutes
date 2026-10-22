@@ -144,6 +144,8 @@ fun BoundaryEditorSheet(
     colorB: Color,
     labelB: String,
     choices: List<SpeakerChoice>? = null,
+    /** The token times come from a character-count spread (no engine times): "≈" on the boundary time. */
+    estimated: Boolean = false,
     canPlay: Boolean,
     onPreview: (fromSec: Double, toSec: Double) -> Unit,
     onApply: (split: Int, speakerB: Int?) -> Unit,
@@ -194,7 +196,7 @@ fun BoundaryEditorSheet(
             val delta = split - initialSplit
             val dt = t - starts[initialSplit]
             Text(
-                stringResource(R.string.boundary_at, fmtPrecise(t)) +
+                stringResource(R.string.boundary_at, (if (estimated) "≈" else "") + fmtPrecise(t)) +
                     if (delta != 0) String.format(Locale.ROOT, "   %+d · %+.1f s", delta, dt) else "",
                 style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
             )

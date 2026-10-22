@@ -2029,6 +2029,7 @@ private fun TranscribeScreen(
         studio.primeminutes.ui.BoundaryEditorSheet(
             tokens = sm.tokens, starts = sm.starts, end = sm.end, initialSplit = sm.split,
             colorA = col(a.speaker), labelA = nm(a.speaker), colorB = col(b.speaker), labelB = nm(b.speaker),
+            estimated = remember(a, b) { studio.primeminutes.data.BoundaryEdits.run { estimated(a) || estimated(b) } },
             canPlay = s.audioUri != null,
             onPreview = { from, to -> boundaryPreview(from, to) },
             onApply = { k, _ -> stopBoundaryPreview(); boundarySeam = null; vm.moveBoundary(seamIdx, k) },
@@ -2051,6 +2052,7 @@ private fun TranscribeScreen(
             tokens = toks, starts = starts, end = u.endSec, initialSplit = toks.size / 2,
             colorA = col(u.speaker ?: 0), labelA = nm(u.speaker ?: 0), colorB = col(order.first()), labelB = nm(order.first()),
             choices = order.map { studio.primeminutes.ui.SpeakerChoice(it, nm(it), col(it), isNew = it !in known) },
+            estimated = remember(u) { studio.primeminutes.data.BoundaryEdits.estimated(u) },
             canPlay = s.audioUri != null,
             onPreview = { from, to -> boundaryPreview(from, to) },
             onApply = { k, spk -> stopBoundaryPreview(); splitLineAt = null; vm.splitLine(li, k, spk ?: order.first()) },
