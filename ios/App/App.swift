@@ -96,7 +96,7 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { r in
                 switch r {
-                case .session(let x): SessionView(session: m.library.sessions.first { $0.id == x.id } ?? x, save: { m.library.update($0) }, rerun: { m.runner.rerun($0, transcribe: $1) }, openAt: m.openAt?.0 == x.id ? m.openAt?.1 : nil)
+                case .session(let x): SessionView(session: m.library.sessions.first { $0.id == x.id } ?? x, save: { m.library.update($0) }, rerun: { m.runner.rerun($0, transcribe: $1) }, openAt: m.openAt?.0 == x.id ? m.openAt?.1 : nil, busy: m.runner.activeJob == x.id || m.runner.waiting.contains { $0.id == x.id })
                 case .job(let id): LiveJobView(m: m, id: id, path: $path)
                 }
             }

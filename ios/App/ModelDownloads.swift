@@ -178,10 +178,11 @@ import Network
 
     func downloadSpeech() async -> Bool {
         if Dev.env["VOX_BASE"] != nil { return true }
-        await awaitPrefetch(speechOnly: true)
         // A stand-in (another latency, the pre-variant recognizer, the f190 diarizer) runs while the chosen files are
         // fetched in the background: a recording never waits for a latency switch or a model update.
         if Self.speechRunnable { if !Self.speechTargetReady { maybePrefetch() }; return true }
+        await awaitPrefetch(speechOnly: true)
+        if Self.speechRunnable { return true }
         do {
             try await fetch(.speech, "speech", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
             try await fetch(Prefs.asrTarget, "recognizer", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }

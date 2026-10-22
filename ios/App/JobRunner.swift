@@ -153,7 +153,8 @@ final class ReaderWorker: @unchecked Sendable {
             let eng = cached != nil ? nil : ModelDownloads.nemoEngine()
             if cached == nil && eng == nil { await MainActor.run { self.screen.status = L("load_failed") }; return }
             let rm = Prefs.readerForLoad()
-            if Dev.env["VOX_READER_DIR"] == nil { await self.downloads.awaitPrefetch(speechOnly: false) }
+            // Wait for the prefetch only when it holds the reader files this run needs (not for a speech-model update).
+            if Dev.env["VOX_READER_DIR"] == nil, !(await self.downloads.store.isComplete(rm)) { await self.downloads.awaitPrefetch(speechOnly: false) }
             if Dev.env["VOX_READER_DIR"] == nil, !(await self.downloads.store.isComplete(rm)) {   // like Android: the notes model downloads on first use
                 do { try await self.downloads.fetch(rm, "reader", onPause: { self.downloads.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_reader_p", SizeFormat.bytes(d), SizeFormat.bytes(t)) } } }
                 catch { await MainActor.run { self.screen.status = L("download_failed", "\(error)") } }

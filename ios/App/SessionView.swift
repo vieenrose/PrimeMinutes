@@ -60,6 +60,8 @@ struct SessionView: View {
     @State var s: Session
     let save: (Session) -> Void
     let rerun: (Session, Bool) -> Void
+    /// Like Android: a run (re-summarize, re-transcribe) works on this meeting: no transcript edits, undo or "re-summarize?" until it ends.
+    let busy: Bool
     @StateObject private var player: Player
     @AppStorage("showActions") private var showActions = false
     @State private var query = ""
@@ -99,8 +101,8 @@ struct SessionView: View {
     @ObservedObject private var peopleStore = PeopleStore.shared
 
     let openAt: Double?
-    init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil) {
-        _s = State(initialValue: session); self.save = save; self.rerun = rerun; self.openAt = openAt
+    init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil, busy: Bool = false) {
+        _s = State(initialValue: session); self.save = save; self.rerun = rerun; self.openAt = openAt; self.busy = busy
         if openAt != nil { _tab = State(initialValue: 1) }
         if let t = Dev.env["VOX_TAB"].flatMap(Int.init) { _tab = State(initialValue: t) }
         if let q = Dev.env["VOX_QUERY"] { _query = State(initialValue: q); _searching = State(initialValue: true) }; if Dev.env["VOX_SEM"] != nil { _semantic = State(initialValue: true) }
@@ -343,7 +345,7 @@ struct SessionView: View {
             if s.lines.isEmpty { Text(L(s.noSpeech ? "status_no_speech" : "transcript_empty")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).multilineTextAlignment(.center).padding(.top, 40) }
             ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
                 // A seam handle between two speakers: adjust where one stops and the next starts.
-                if idx > 0, shown[idx - 1].speaker != l.speaker {
+                if idx > 0, shown[idx - 1].speaker != l.speaker, !busy {
                     SpeakerSeam(colorA: tint(shown[idx - 1].speaker), colorB: tint(l.speaker), labelA: s.name(shown[idx - 1].speaker), labelB: s.name(l.speaker)) { seamAt = idx }
                         .padding(.vertical, -4)
                 }
@@ -359,11 +361,11 @@ struct SessionView: View {
                 .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Color.yellow.opacity(0.22) : Color(.secondarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
                 .onTapGesture { if player.available { player.seekPlay(l.start) } }
-                .contextMenu { lineMenu(l) }
+                .contextMenu { if !busy { lineMenu(l) } }
                 .accessibilityAction { if player.available { player.seekPlay(l.start) } }   // VoiceOver's default action: play from this line
-                .accessibilityAction(named: L("cd_line_actions")) { editingLine = l.id; draft = l.text }
+                .accessibilityAction(named: L("cd_line_actions")) { if !busy { editingLine = l.id; draft = l.text } }
                 // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
-                .accessibilityAction(named: L("speaker_move_line")) { moveLine = l.id }
+                .accessibilityAction(named: L("speaker_move_line")) { if !busy { moveLine = l.id } }
             }
         }.padding(.horizontal, 16)
     }
@@ -395,10 +397,10 @@ struct SessionView: View {
         .toolbar {
             if !undoSteps.isEmpty || !redoSteps.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo).accessibilityLabel(L("undo"))
+                    Button { undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo || busy).accessibilityLabel(L("undo"))
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { redoEdit() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo).accessibilityLabel(L("redo"))
+                    Button { redoEdit() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo || busy).accessibilityLabel(L("redo"))
                 }
             }
             ToolbarItem(placement: .primaryAction) {
@@ -482,7 +484,7 @@ struct SessionView: View {
                             let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                             if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
                                 let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
-                            editingLine = nil } }
+                            editingLine = nil }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }   // like Android: an emptied line is not a save
                     }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
             }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
@@ -547,7 +549,7 @@ struct SessionView: View {
                 if seams.indices.contains(n) { seamAt = seams[n] }
             }
         }
-        .alert(L("transcript_changed_resummarize"), isPresented: $transcriptDirty) {
+        .alert(L("transcript_changed_resummarize"), isPresented: Binding(get: { transcriptDirty && !busy }, set: { transcriptDirty = $0 })) {
             if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
             Button(L("cancel"), role: .cancel) {}
         }
@@ -619,16 +621,17 @@ struct SessionView: View {
             if let u = speakerUndo {
                 HStack {
                     Text(u.message).font(.subheadline); Spacer()
-                    Button(L("undo")) { undoSpeakerEdit(u) }.bold()
+                    Button(L("undo")) { undoSpeakerEdit(u) }.bold().disabled(busy)
                 }.padding(14).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 110)
                     .task(id: u.id) {
                         try? await Task.sleep(nanoseconds: 8_000_000_000)
                         guard speakerUndo == u else { return }
                         withAnimation { speakerUndo = nil }
-                        if !s.summary.isEmpty && !u.nameOnly { transcriptDirty = true }
+                        if (!s.summary.isEmpty || s.actionItems != nil) && !u.nameOnly { transcriptDirty = true }
                     }
             }
         }
+        .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
         .onDisappear { player.stop() }
     }
 
@@ -695,7 +698,7 @@ struct SessionView: View {
         withAnimation { speakerUndo = nil }
         guard s.lines.map(\.speaker) == u.after else { return }   // the transcript changed since: nothing safe to restore
         if canUndo, undoSteps.last?.before == u.lines { undoEdit() } else { s.lines = u.lines; s.speakerNames = u.names; s.speakerPeople = u.people; save(s) }
-        if u.earlierEdit && !s.summary.isEmpty { transcriptDirty = true }
+        if u.earlierEdit && (!s.summary.isEmpty || s.actionItems != nil) { transcriptDirty = true }
     }
     private func dropName(_ k: Int) {
         s.speakerNames?[String(k)] = nil; if s.speakerNames?.isEmpty == true { s.speakerNames = nil }
@@ -710,12 +713,12 @@ struct SessionView: View {
     private var canUndo: Bool { undoSteps.last.map { $0.after == s.lines && $0.afterNames == s.speakerNames && $0.afterPeople == s.speakerPeople } ?? false }
     private var canRedo: Bool { redoSteps.last.map { $0.before == s.lines && $0.beforeNames == s.speakerNames && $0.beforePeople == s.speakerPeople } ?? false }
     private func undoEdit() {
-        guard canUndo, let st = undoSteps.popLast() else { return }
+        guard canUndo, !busy, let st = undoSteps.popLast() else { return }
         s.lines = st.before; s.speakerNames = st.beforeNames; s.speakerPeople = st.beforePeople; redoSteps.append(st); save(s)
         withAnimation { speakerUndo = nil }
     }
     private func redoEdit() {
-        guard canRedo, let st = redoSteps.popLast() else { return }
+        guard canRedo, !busy, let st = redoSteps.popLast() else { return }
         s.lines = st.after; s.speakerNames = st.afterNames; s.speakerPeople = st.afterPeople; undoSteps.append(st); save(s)
         withAnimation { speakerUndo = nil }
     }
@@ -735,7 +738,7 @@ struct SessionView: View {
     }
     /// DEV (README animation): VOX_BOUNDARY_STEPS="-1,-1" moves the open editor's marker by these steps, then applies.
     static var devDemo: [Int]? { Dev.on ? Dev.env["VOX_BOUNDARY_STEPS"].map { $0.split(separator: ",").compactMap { Int($0) } } : nil }
-    private func edited() { save(s); if !s.summary.isEmpty { transcriptDirty = true } }
+    private func edited() { save(s); if !s.summary.isEmpty || s.actionItems != nil { transcriptDirty = true } }   // Android: summary or action items
 
     private func stepMatch(_ d: Int) {
         guard !hits.isEmpty else { return }
