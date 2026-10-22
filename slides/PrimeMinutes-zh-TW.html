@@ -99,7 +99,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div style="text-align:left; color:var(--sub); font-size:.9em; line-height:1.5"><b style="color:var(--accent)">Android 用戶：掃碼直接下載最新版 APK</b><br>安裝時允許「未知來源」即可；iPhone 用戶走 TestFlight 受邀測試。</div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.26 · Android v0.53.15 · 版次 2026-10-22</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.27 · Android v0.53.15 · 版次 2026-10-22</p>
 </section>
 
 <!-- 2 問題 -->
@@ -417,7 +417,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>語者記憶恢復原廠長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
     <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測。</li>
     <li><b>中文難在收音距離</b>：離麥克風遠，同一個人容易被認成兩個人。匯入音訊改用更大的語者記憶重算，找不到率 39 % → <b>32 %</b>（英文 25 % → 22 %），評估中，代價是多下載約 100 MB。</li>
-    <li><b>試過、暫不上線</b>：用聲紋逐句重新指派，標對比例 88 % → 90 %，但找不到率沒變。</li>
+    <li><b>試過、暫不上線</b>：用聲紋逐句重新指派，標對比例 88 % → 90 %，但找不到率沒變；換人位置改照中文字數重新估算，也沒有比現在準。</li>
   </ul>
 </section>
 
@@ -427,7 +427,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <ul class="big">
     <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每節目只取最新集；自動檢查列 v2（設計已完成：docs/design/podcast-series.md）。</li>
     <li>長會議摘要再強化：分段散文式摘要與新摘要模型。</li>
-    <li>語者功能延伸：分界編輯器與人名錄持續打磨。</li>
+    <li>語者功能延伸：分界編輯器與人名錄持續打磨；改過字的句子，分界時間只能估，會標上「≈」（Android 下一版跟上 iOS）。</li>
     <li><b>語者辨識</b>：換人位置更準、語者記憶恢復原廠長度，下一版上線（見前頁）。</li>
     <li>模型管線與 Ask 延遲持續優化。</li>
   </ul>
@@ -443,7 +443,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.26</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.27</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
