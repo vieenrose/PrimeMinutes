@@ -17,16 +17,27 @@ import Network
     /// The speech engine (ASR + diarizer) on the downloaded models; nil when they cannot be loaded. The recognizer is the
     /// chosen latency once installed, else the closest installed variant, else the pre-variant 480 ms pair.
     nonisolated static func nemoEngine() -> NemoEngine? {
-        let diar = nemoPath("diar_host.bin"), diarT = nemoPath("sortformer_int8_f190.tflite"), th = Prefs.effectiveThreads, settle = Double(Prefs.speakerDelay)
+        let diar = nemoPath("diar_host.bin"), diarT = diarGraph ?? nemoPath(ReaderModel.standInDiarTflite), th = Prefs.effectiveThreads, settle = Double(Prefs.speakerDelay)
+        let e: NemoEngine?
         if Dev.env["VOX_BASE"] == nil, let v = Prefs.asrRunnable {
             let d = Storage.modelsRoot.appendingPathComponent(v.id)
-            let e = NemoEngine(xasr: d.appendingPathComponent(AsrRegistry.hostFile).path, diar: diar, xasrTflite: d.appendingPathComponent(v.tfliteFile).path,
-                               diarTflite: diarT, threads: th, settle: settle, tokenOffsetMs: v.tokenOffsetMs)
+            e = NemoEngine(xasr: d.appendingPathComponent(AsrRegistry.hostFile).path, diar: diar, xasrTflite: d.appendingPathComponent(v.tfliteFile).path,
+                           diarTflite: diarT, threads: th, settle: settle, tokenOffsetMs: v.tokenOffsetMs)
             if AsrRegistry.reclaimsOthers(loaded: v, ok: e != nil, target: Prefs.asrLatency) { Storage.reclaimOtherAsr(v) }   // the chosen one loads: the others go
-            return e
+        } else {
+            e = NemoEngine(xasr: nemoPath(ReaderModel.legacyXasrHost), diar: diar, xasrTflite: nemoPath(ReaderModel.legacyXasrTflite), diarTflite: diarT,
+                           threads: th, settle: settle, tokenOffsetMs: 300)
         }
-        return NemoEngine(xasr: nemoPath(ReaderModel.legacyXasrHost), diar: diar, xasrTflite: nemoPath(ReaderModel.legacyXasrTflite), diarTflite: diarT,
-                          threads: th, settle: settle, tokenOffsetMs: 300)
+        if e != nil, Dev.env["VOX_BASE"] == nil, diarT == nemoPath(ReaderModel.diarTflite) { Storage.reclaimStandInDiar() }   // the f380 diarizer loads: f190 goes
+        return e
+    }
+    /// The diarizer graph the engine loads: the f380 one once installed, else the f190 stand-in of an earlier install; nil
+    /// when the diarizer cannot run yet.
+    nonisolated static var diarGraph: String? {
+        if Storage.ready(.speech) { return nemoPath(ReaderModel.diarTflite) }
+        func size(_ n: String) -> Int64? { try? FileManager.default.attributesOfItem(atPath: nemoPath(n))[.size] as? Int64 }
+        let host = ReaderModel.speech.files[0]
+        return size(host.name) == host.size && size(ReaderModel.standInDiarTflite) == ReaderModel.standInDiarBytes ? nemoPath(ReaderModel.standInDiarTflite) : nil
     }
     /// Right after the chosen recognizer's download (a latency switch): load it once, so a successful load deletes the
     /// other variants now rather than at the next recording or import (Android ModelManager.warmLitertCache). A stand-in
@@ -37,9 +48,9 @@ import Network
         _ = nemoEngine()
     }
     /// The speech engine can run now (diarizer + some recognizer), and the chosen recognizer itself is installed.
-    nonisolated static var speechRunnable: Bool { Storage.ready(.speech) && (Prefs.asrRunnable != nil || Prefs.legacyAsrReady) }
+    nonisolated static var speechRunnable: Bool { diarGraph != nil && (Prefs.asrRunnable != nil || Prefs.legacyAsrReady) }
     nonisolated static var speechTargetReady: Bool { Storage.ready(.speech) && Storage.ready(Prefs.asrTarget) }
-    nonisolated static var speechBytes: Int64 { (Storage.ready(.speech) ? 0 : ReaderModel.speech.totalBytes) + Storage.downloadBytes(Prefs.asrTarget) }
+    nonisolated static var speechBytes: Int64 { Storage.downloadBytes(.speech) + Storage.downloadBytes(Prefs.asrTarget) }
 
     // MARK: first-use downloads with the user's say (Android ModelPrefetch / DownloadConsentDialog)
 
@@ -127,7 +138,7 @@ import Network
         let speech: Task<Bool, Never> = Task.detached { [store] in
             guard p.speechBytes > 0 else { return true }
             do {
-                let base = Storage.ready(.speech) ? Int64(0) : ReaderModel.speech.totalBytes
+                let base = Storage.downloadBytes(.speech)
                 try await self.fetch(.speech, "prefetch speech", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(d) / Double(max(1, p.total)) } }
                 try await self.fetch(Prefs.asrTarget, "prefetch recognizer", onPause: { self.prefetchPaused = $0 }) { d, _ in Task { @MainActor in self.prefetchProgress = Double(base + d) / Double(max(1, p.total)) } }
                 Self.warmChosenAsr()
@@ -168,9 +179,9 @@ import Network
     func downloadSpeech() async -> Bool {
         if Dev.env["VOX_BASE"] != nil { return true }
         await awaitPrefetch(speechOnly: true)
-        // A stand-in recognizer (another latency, or the pre-variant model) transcribes while the chosen one is fetched
-        // in the background: a recording never waits for a latency switch.
-        if await store.isComplete(.speech), Self.speechRunnable { if !Self.speechTargetReady { maybePrefetch() }; return true }
+        // A stand-in (another latency, the pre-variant recognizer, the f190 diarizer) runs while the chosen files are
+        // fetched in the background: a recording never waits for a latency switch or a model update.
+        if Self.speechRunnable { if !Self.speechTargetReady { maybePrefetch() }; return true }
         do {
             try await fetch(.speech, "speech", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }
             try await fetch(Prefs.asrTarget, "recognizer", onPause: { self.pausedStatus($0) }) { d, t in Task { @MainActor in self.screen.status = L("download_speech", SizeFormat.bytes(d), SizeFormat.bytes(t)) } }

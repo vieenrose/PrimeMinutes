@@ -177,6 +177,13 @@ enum Storage {
             let p = modelsRoot.appendingPathComponent("nemo/\(n)"); if fm.fileExists(atPath: p.path) { StatusLog.add("deleting legacy \(n)"); try? fm.removeItem(at: p) }
         }
     }
+    /// The f380 diarizer loaded: the f190 stand-in and its XNNPACK cache go (Android ModelManager.reclaimLoaded).
+    static func reclaimStandInDiar() {
+        let fm = FileManager.default
+        for n in [ReaderModel.standInDiarTflite, ReaderModel.standInDiarTflite + ".wcache"] {
+            let p = modelsRoot.appendingPathComponent("nemo/\(n)"); if fm.fileExists(atPath: p.path) { StatusLog.add("deleting stand-in \(n)"); try? fm.removeItem(at: p) }
+        }
+    }
     /// Bytes `m` still has to download: files not in its folder at their size and not lent by an installed model.
     static func downloadBytes(_ m: ReaderModel) -> Int64 {
         let fm = FileManager.default

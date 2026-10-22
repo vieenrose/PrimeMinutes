@@ -22,10 +22,16 @@ struct DiarHostTurn {
 struct DiarHostConfig {
     std::string host_bin;      // diar_host.bin
     std::string pre_f32;       // pre_encode_512x1024.f32
-    std::string tflite;        // sortformer_*_f190.tflite
+    std::string tflite;        // sortformer_int8_f380.tflite (or the f190 stand-in)
     int threads = 4;
-    // Streaming geometry (engine defaults = the shipped 128/40/50/12 profile).
-    int spkcache_len = 128;
+    // Streaming geometry (80 ms frames). spkcache_len 0 = the most speaker memory the graph's window holds, capped at
+    // the model's trained 264: the f380 graph runs 264, the older f190 graph 128 (the window is cache + chunk + right
+    // context; the FIFO is empty at every window because update_period >= chunk_len > fifo_len).
+    // 2026-10-22: 264 back (was 128 since 2026-09-27, picked for speed). Note10+ 20 min real time: same rtf 1.00,
+    // diarizer step lag p95 0.14 -> 0.34 s; missed speaker changes zh 39.0 -> 33.2 % (6 AISHELL-4 meetings), en
+    // control 24.7 -> 22.4 % headset / 35.4 -> 29.3 % distant mic (AMI); the 128 cache splits one far-field voice
+    // into two identities that 264 keeps whole (docs/research/diarization-precision.md).
+    int spkcache_len = 0;
     int fifo_len = 40;
     int chunk_len = 50;
     int chunk_right_context = 12;

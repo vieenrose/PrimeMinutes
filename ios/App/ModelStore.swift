@@ -30,19 +30,25 @@ struct ReaderModel {
     var totalBytes: Int64 { files.reduce(0) { $0 + $1.size } }
     func url(_ f: ModelFile) -> URL { URL(string: f.remote.hasPrefix("https://") ? f.remote : "https://huggingface.co/\(repo)/resolve/\(rev)/\(f.remote)")! }
 
-    /// Speech engine, diarizer part (Android `ModelManager.DIAR_SET`), in models/nemo; CPU only. The recognizer is one of
-    /// the `asr(_:)` variants (the Settings latency). Installs from before the variants also hold the 480 ms non-punct
-    /// pair in models/nemo (`legacyXasr*`): it transcribes until the chosen variant is installed, then it is deleted.
+    /// Speech engine, diarizer part (Android `ModelManager.DIAR_HOST` + `DIAR_GRAPH`), in models/nemo; CPU only. The
+    /// recognizer is one of the `asr(_:)` variants (the Settings latency). Installs from before the variants also hold the
+    /// 480 ms non-punct pair in models/nemo (`legacyXasr*`): it transcribes until the chosen variant is installed, then it
+    /// is deleted. Likewise installs from before the f380 diarizer graph hold the f190 one (`standInDiarTflite`).
     static let speech: ReaderModel = {
         let host = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
         return ReaderModel(id: "nemo", repo: "", rev: "", files: [
             ModelFile(name: "diar_host.bin", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/\(host)/diar_host.bin",
                       size: 133_648, sha256: "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36"),
-            // LiteRT CPU graph of the diarizer. Pinned to the Luigi/primeminutes-nemo-litert revision below.
-            ModelFile(name: "sortformer_int8_f190.tflite", remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/ec1b218f4d152e09bf30733de0836afc3f6b686b/sortformer_int8_f190.tflite",
-                      size: 101_279_632, sha256: "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf"),
+            // LiteRT CPU graph of the diarizer, 380-frame window: the checkpoint's trained 264-frame speaker cache + 50-frame
+            // chunk + 12 right context fit (DiarHost derives the cache from the graph). Same weights as the f190 graph.
+            ModelFile(name: diarTflite, remote: "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/693b752bd7a9e5128e174df09830aab5fceb8c22/\(diarTflite)",
+                      size: 101_324_560, sha256: "9aa577325f7258345e7f7ff407ebdb105d365f8e0383aa2da2d833a5d255a52f"),
         ])
     }()
+    static let diarTflite = "sortformer_int8_f380.tflite"
+    /// The 190-frame graph (speaker cache 128) of earlier installs: no longer downloaded, it diarizes until the f380 graph
+    /// has loaded once (`Storage.reclaimStandInDiar`).
+    static let standInDiarTflite = "sortformer_int8_f190.tflite", standInDiarBytes: Int64 = 101_279_632
 
     static let legacyXasrHost = "xasr_host.bin", legacyXasrTflite = "xasr_stream_q8_octav.tflite"
     static let legacyXasrSizes: [String: Int64] = [legacyXasrHost: 16_497_008, legacyXasrTflite: 152_653_712]
