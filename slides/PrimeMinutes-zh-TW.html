@@ -99,7 +99,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div style="text-align:left; color:var(--sub); font-size:.9em; line-height:1.5"><b style="color:var(--accent)">Android 用戶：掃碼直接下載最新版 APK</b><br>安裝時允許「未知來源」即可；iPhone 用戶走 TestFlight 受邀測試。</div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.19 · Android v0.53.15 · 版次 2026-10-22</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.22 · Android v0.53.15 · 版次 2026-10-22</p>
 </section>
 
 <!-- 2 問題 -->
@@ -388,7 +388,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>E4B 需要 8 GB 記憶體</b>；較小的手機用 E2B，筆記在錄音結束後閱讀（較慢出現，結果相同）。</li>
     <li>重疊說話時語者分離可能延後標註（淺灰句子）——可用分界編輯器修正，可復原。</li>
     <li>換人點是<b>估出來的</b>：分離器給區間、音量吸附對齊，約四成正好對齊，尾端偶爾晚半秒到三秒——分界編輯器可逐點微調，更準的對齊工程進行中。</li>
-    <li><b>手機放得越近，人分得越準</b>：同一場會議改從遠處收音，漏掉的換人點從 25 % 升到 35 %——離得遠，容易把同一個人認成兩個人。開會時請把手機放在桌子中央、靠近講話的人；一秒內的快速接話仍最難抓，長按那句改派即可補救。</li>
+    <li><b>手機放得越近，人分得越準</b>：同一場會議改從遠處收音，漏掉的換人點從 25 % 升到 35 %；中文會議也一樣，小會議室約 25 %，大會議室升到將近七成——離得遠，容易把同一個人認成兩個人，跟說哪種語言無關。開會時請把手機放在桌子中央、靠近講話的人；一秒內的快速接話仍最難抓，長按那句改派即可補救。</li>
     <li>提問（Ask）為<b>實驗性</b>：答案一律附出處，請點回原話核對。</li>
     <li>第一次進行長時間工作時，App 說明一次「電池最佳化」的影響並詢問是否豁免。</li>
     <li>超長會議：摘要分段逐段補齊，時間與會議長度成正比。</li>
@@ -416,7 +416,8 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每節目只取最新集；自動檢查列 v2（設計已完成：docs/design/podcast-series.md）。</li>
     <li>長會議摘要再強化：分段散文式摘要與新摘要模型。</li>
     <li>語者功能延伸：分界編輯器與人名錄持續打磨。</li>
-    <li><b>語者分界更準</b>：換人瞬間改由音量最低點吸附對齊——十場公開會議實測：英文「對得剛剛好」47 % → <b>52 %</b>、偏差中位數 0.08 秒降為 <b>0.00</b>。中文難在「找不到換人點」，主因是收音距離：離得遠，容易把同一個人認成兩個人。放大語者記憶的離線重算，六場中文會議實測找不到率 39 % → <b>33 %</b>，已過出貨門檻，正在評估用於匯入音訊（代價是多下載一個約 100 MB 的模型）；另試過用聲紋逐句重新指派，說話者標對的比例 88 % → <b>90 %</b>，但找不到率沒變，暫不上線。</li>
+    <li><b>語者分界更準</b>：換人瞬間改由音量最低點吸附對齊——十場公開會議實測：英文「對得剛剛好」47 % → <b>52 %</b>、偏差中位數 0.08 秒降為 <b>0.00</b>。中文難在「找不到換人點」，主因是收音距離：離得遠，容易把同一個人認成兩個人。放大語者記憶的離線重算，六場中文會議實測找不到率 39 % → <b>32 %</b>，已過出貨門檻；英文對照也沒有變差，反而跟著進步（25 % → 22 %），正在評估用於匯入音訊（代價是多下載一個約 100 MB 的模型）；另試過用聲紋逐句重新指派，說話者標對的比例 88 % → <b>90 %</b>，但找不到率沒變，暫不上線。</li>
+    <li><b>語者記憶恢復原廠長度</b>：模型原本設計可保留約 21 秒的語者聲音樣本來比對是誰在說話，App 先前只用了一半。恢復之後，一場 20 分鐘中文會議的語者標錯比例從 32.5 % 降到 <b>5.7 %</b>；Note10+ 實測錄音中照樣跟得上（5 分鐘錄音幾乎與講話同步處理完），代價只是標註晚一點點出現。Android 已驗證，iOS 驗證中，預計下一版上線。</li>
     <li>模型管線與 Ask 延遲持續優化。</li>
   </ul>
 </section>
@@ -431,7 +432,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.19</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.15（版次 2026-10-22）· iOS TestFlight 測試版同步推進 · 簡報 v2.22</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
