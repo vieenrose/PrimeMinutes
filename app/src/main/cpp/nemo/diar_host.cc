@@ -318,13 +318,27 @@ struct DiarHost::Impl {
     Scheduler sched;
     Aosc aosc;
     std::vector<float> probs;   // [frames, kSpk] high resolution timeline
+    std::vector<float> energy;  // log total mel energy per 10 ms frame (see DiarHost::energy_min)
     int64_t samples = 0;
     std::set<std::tuple<int64_t, int64_t, int>> emitted;
+
+    // Total energy of one mel frame on a log scale: mel[m] is log(power_m + eps), so summing the exponents
+    // and taking the log again is log(sum power). Silence floors at log(128 * eps) ~ -11.8, speech runs a
+    // few log units above it, which is the dip a speaker change falls in.
+    static float frame_energy(const float * mel_row) {
+        double sum = 0.0;
+        for (int m = 0; m < kMels; m++) sum += std::exp(mel_row[m]);
+        return (float) std::log(sum + 5.960464477539063e-8);
+    }
 
     void process(const Window & w) {
         int64_t raw = 0;
         auto mel = fe.mel(w.mono, w.mel_start == 0, raw);
         if (raw < w.mel_frames) throw std::runtime_error("DiarHost: frontend produced too few frames");
+        if (w.mel_start + w.mel_frames > (int64_t) energy.size())
+            energy.resize((size_t) (w.mel_start + w.mel_frames), -1.0f);
+        for (int64_t t = 0; t < w.mel_frames; t++)
+            energy[(size_t) (w.mel_start + t)] = frame_energy(mel.data() + (size_t) t * kMels);
         const int64_t enc = (w.mel_frames + kSub - 1) / kSub;
         std::vector<float> stacked((size_t) enc * kSub * kMels, 0.0f);
         std::copy_n(mel.begin(), (size_t) w.mel_frames * kMels, stacked.begin());
@@ -436,6 +450,23 @@ std::vector<DiarHostTurn> DiarHost::finish() {
     const int64_t frames = std::min<int64_t>(expected, (int64_t) (I.probs.size() / kSpk));
     I.probs.resize((size_t) (frames * kSpk));
     return I.decode(frames, true);
+}
+
+bool DiarHost::energy_min(int64_t f0, int64_t f1, int64_t * out_frame, float * out_val) const {
+    const int64_t n = (int64_t) p_->energy.size();
+    f0 = std::max<int64_t>(f0, 0);
+    f1 = std::min<int64_t>(f1, n - 1);
+    int64_t best = -1;
+    float bv = 0.0f;
+    for (int64_t f = f0; f <= f1; f++) {
+        const float v = p_->energy[(size_t) f];
+        if (v < -1e30f) continue;                     // a frame the stream never computed
+        if (best < 0 || v < bv) { best = f; bv = v; }
+    }
+    if (best < 0) return false;
+    if (out_frame) *out_frame = best;
+    if (out_val) *out_val = bv;
+    return true;
 }
 
 }  // namespace nemo

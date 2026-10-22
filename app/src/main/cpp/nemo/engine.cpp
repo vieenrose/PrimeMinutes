@@ -355,11 +355,26 @@ bool Engine::init(std::string& err) {
     {
         if (const char* e = getenv("NEMO_TURN_SNAP")) cfg_.turn_snap_s = std::atof(e);
         if (const char* e = getenv("NEMO_TOKEN_OFFSET_MS")) cfg_.token_offset_ms = std::atof(e);   // research: per-model re-derivation
+        if (const char* e = getenv("NEMO_ENERGY_SNAP")) cfg_.turn_energy_s = std::atof(e);
+        if (const char* e = getenv("NEMO_ENERGY_DIP")) cfg_.turn_energy_dip = std::atof(e);
         double pad_frames = 0;      // 10 ms diarizer frames
         for (const auto& kv : cfg_.diar_opts)
             if (kv.first == "speaker_pad_frames") pad_frames = std::atof(kv.second.c_str());
         fusion_.set_turn_snap(cfg_.turn_snap_s, pad_frames * 0.010, cfg_.turn_snap_lead_s,
                               cfg_.turn_snap_pause_s, cfg_.turn_snap_max_s);
+        fusion_.set_turn_energy(cfg_.turn_energy_s, cfg_.turn_energy_dip);
+        // The energy curve comes from the diarizer's own mel frontend, so it exists on the ggml-free path
+        // only; with no source installed the snap keeps its shipped turn-start target.
+        if (diar_host_ && cfg_.turn_energy_s > 0) {
+            DiarHost* dh = diar_host_.get();
+            fusion_.set_energy_fn([dh](int64_t t0, int64_t t1, Fusion::EnergyDip* out) {
+                int64_t f = 0; float v = 0.0f;
+                if (!dh->energy_min(std::max<int64_t>(t0, 0) / 160, std::max<int64_t>(t1, 0) / 160, &f, &v))
+                    return false;
+                out->at = f * 160; out->val = v;
+                return true;
+            });
+        }
     }
     return true;
 }

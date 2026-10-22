@@ -55,6 +55,16 @@ public:
     // Drains the last windows and returns every turn, open ones included.
     std::vector<DiarHostTurn> finish();
 
+    // Log-energy of the mel frontend, one value per 10 ms frame - the same time base as DiarHostTurn
+    // (frame f is the window centered at f * 160 samples). A clean speaker change sits in a dip of this
+    // curve, which is a sharper clock than the padded turn start, so the engine's boundary snap aims at
+    // the dip. Frames become available as the stream produces them (a window's right context is computed
+    // early, then re-computed as central audio: same audio, same value, so overwriting is harmless).
+    // Memory: one float per 10 ms = 100 KB per hour of audio.
+    // Lowest log-energy in frames [f0, f1] (clamped to what the stream produced) and its frame; false
+    // when that range holds no frame yet.
+    bool energy_min(int64_t f0, int64_t f1, int64_t * out_frame, float * out_val) const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> p_;

@@ -236,6 +236,30 @@ std::vector<TaggedPiece> Fusion::attribute_from(size_t char_from, size_t byte_fr
     return pieces;
 }
 
+// Energy refinement of a snap target - see Fusion::set_turn_energy. The search is capped by the move cap and
+// by the characters the change is allowed to move between, so it is one pass over at most ~80 10 ms frames
+// per clean change, and only around change points: the live path pays it for the tail it re-attributes, the
+// final pass for the changes in the transcript. Nothing else in the attribution chain touches the curve.
+bool Fusion::refine_target_to_energy(int64_t& target, int64_t t, int64_t lo_t, int64_t hi_t,
+                                     int64_t max_shift) const {
+    if (turn_energy_s_ <= 0 || !energy_) return false;
+    const int64_t w = std::min(max_shift, (int64_t)(turn_energy_s_ * rate_));
+    const int64_t w0 = std::max(lo_t, t - w), w1 = std::min(hi_t, t + w);
+    if (w1 <= w0) return false;
+    EnergyDip d;
+    if (!energy_(w0, w1, &d)) return false;
+    // The bar to beat is the curve at the shipped target: its own dip, over a 0.15 s neighbourhood. A dip
+    // that is only marginally deeper than the target's silence is noise, and a target outside the search
+    // window has no measured bar, so the shipped target wins there too.
+    const int64_t n = (int64_t)(0.15 * rate_);
+    const int64_t n0 = std::max(w0, target - n), n1 = std::min(w1, target + n);
+    EnergyDip near;
+    if (n1 <= n0 || !energy_(n0, n1, &near)) return false;
+    if (d.val >= near.val - turn_energy_dip_) return false;
+    target = d.at;
+    return true;
+}
+
 void Fusion::snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::string& text, size_t char_from) const {
     if (turn_snap_s_ <= 0 || pieces.size() < 2 || turns_.empty()) return;
     const auto cps = codepoints(text);
@@ -279,6 +303,15 @@ void Fusion::snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::st
         while (s < n && !spoken(s)) s++;
         return s < n ? at(s) - spans_[char_from + j - 1].end : 0;
     };
+    // Longest silence strictly between the characters (a, b): the pause guard for a move - a boundary must
+    // never cross a pause the text already sits in (the DER cost of the first version, docs/design/
+    // speaker-boundary.md). The endpoints are excluded: the pause at the current change and the pause the
+    // move aims at are the point of the move, not something it crosses.
+    auto max_pause_between = [&](size_t a, size_t b) -> int64_t {
+        int64_t m = 0;
+        for (size_t j = a + 1; j < b; j++) m = std::max(m, pause_before(j));
+        return m;
+    };
     const int64_t pause = (int64_t)(turn_pause_s_ * rate_), max_shift = (int64_t)(turn_max_shift_s_ * rate_);
     const int64_t win = (int64_t)(turn_snap_s_ * rate_), pad = (int64_t)(turn_pad_s_ * rate_),
                   lead = (int64_t)(turn_lead_s_ * rate_);
@@ -311,7 +344,12 @@ void Fusion::snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::st
         }
         if (overlap) continue;
         // First character at or after the turn start, moved back to the start of a word it falls in.
-        const int64_t target = tb->start + lead;
+        int64_t target = tb->start + lead;
+        // Energy refinement: the deepest dip of the diarizer's 10 ms log-energy curve within the move cap
+        // around the text's change. It replaces the turn-start target only when its dip is deeper by the
+        // margin than the dip at the turn start, so a shallower dip next to a sharp turn start keeps the
+        // shipped target, and ties go to the turn start.
+        const bool by_energy = refine_target_to_energy(target, t, at(lo), at(hi), max_shift);
         size_t i = lo;
         while (i <= hi && at(i) < target) i++;
         if (i > hi) continue;
@@ -325,6 +363,9 @@ void Fusion::snap_to_turn_starts(std::vector<TaggedPiece>& pieces, const std::st
         // longer one (else the moved words drag a line's time span across the silence).
         if (std::abs(at(i) - t) > max_shift) continue;
         if (pause_before(pos) >= pause && pause_before(i) < pause_before(pos)) continue;
+        // A dip on the other side of a pause the text already sits in is not the change: dragging a line
+        // across the silence is exactly what the pause guard exists for.
+        if (by_energy && max_pause_between(std::min(i, pos), std::max(i, pos)) >= pause) continue;
         for (size_t j = std::min(i, pos); j < std::max(i, pos); j++) label[j] = (int)(i < pos ? k + 1 : k);
         floor = i;
         moved = true;

@@ -166,6 +166,18 @@ struct Config {
     double turn_snap_lead_s = 0.30;
     double turn_snap_pause_s = 0.5;
     double turn_snap_max_s = 0.4;
+    // Prime Minutes: within that snap window, aim at the deepest dip of the diarizer's 10 ms log-energy
+    // curve when its dip is deeper than the dip at the padded turn start by this many log units (energy
+    // from DiarHost's own mel frontend, see diar_host.h). A clean speaker change is silence, and the
+    // silence's floor is a sharper clock than the padded turn start + lead; the move cap and the pause
+    // guard apply unchanged, so nothing crosses a pause of turn_snap_pause_s or more. 0 = off;
+    // NEMO_ENERGY_SNAP=<s> / NEMO_ENERGY_DIP=<units> override (before/after runs on one build).
+    // Measured on the 10 quality-eval meetings (host harness, exact on clean changes, EN -> ZH): margin 1.0
+    // 52.1 -> 55.2 / 33.8 -> 35.0, margin 0.3 58.6 / 34.4, margin 0.001 (take any deeper dip) 60.0 / 36.3 -
+    // the permissive margin also moved 1 ZH overlapped change the wrong way, so the margin shipped is 0.3.
+    // Transcript DER, ER unchanged at every margin; cpER +0.02 to +0.09 (EN). docs/design/speaker-boundary.md.
+    double turn_energy_s = 0.4;
+    double turn_energy_dip = 0.3;
 };
 
 struct Segment {
