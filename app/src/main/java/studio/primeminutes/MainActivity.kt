@@ -1935,11 +1935,11 @@ private fun TranscribeScreen(
     // would stay in the old language, so it is rebuilt (or dropped) instead. Runs and errors keep theirs.
     val uiLangCode = LocalLanguageController.current.code
     LaunchedEffect(uiLangCode) { vm.languageChanged() }
-    // A hand-edited transcript makes its summary child stale → offer a one-tap re-summarize (once per
+    // A hand-edited transcript makes its summary/action-items children stale → offer a one-tap re-summarize (once per
     // edit episode; the flag stays set while the snackbar shows so further edits don't stack it).
     LaunchedEffect(s.transcriptDirty) {
         // Only on the Session screen: this snackbar carries a Re-summarize action.
-        if (s.transcriptDirty && !s.summary.isNullOrBlank() && !s.running && s.screen == Screen.Session) {
+        if (s.transcriptDirty && (!s.summary.isNullOrBlank() || s.actionItems != null) && !s.running && s.screen == Screen.Session) {
             val res = snackbarHostState.showSnackbar(
                 message = context.getString(R.string.transcript_changed_resummarize),
                 actionLabel = context.getString(R.string.re_summarize),

@@ -307,7 +307,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     private fun linkUndoable(speaker: Int, person: String?, name: String) {
         val before = now.utterances to now.speakerNames
         update { SessionReducer.linkSpeaker(it, speaker, person, name) }
-        run(SessionEffect.OfferSpeakerUndo(R.string.people_linked, now.sessionGen, before, now.utterances))
+        run(SessionEffect.OfferSpeakerUndo(R.string.people_linked, now.sessionGen, before, now.utterances, nameOnly = true))
     }
 
     /** A directory edit rewrote this meeting's sidecar, or renamed a person shown here. */
@@ -678,6 +678,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                     message = strings.str(e.done), actionLabel = strings.str(R.string.undo), duration = SnackbarDuration.Long,
                 )
                 if (res == SnackbarResult.ActionPerformed) update { SessionReducer.undoSpeakerEdit(it, e.gen, e.before, e.after) }
+                else if (!e.nameOnly) update { SessionReducer.speakerEditKept(it, e.gen, e.after) }
             }
             is SessionEffect.OfferRetry -> viewModelScope.launch {
                 val res = snackbar.showSnackbar(message = e.message, actionLabel = strings.str(R.string.retry), duration = SnackbarDuration.Long)

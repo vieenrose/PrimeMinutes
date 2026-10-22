@@ -554,6 +554,11 @@ object SessionReducer {
     fun undoSpeakerEdit(s: SessionState, gen: Int, before: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>, after: List<TranscriptEvent.Utterance>): SessionState =
         if (s.sessionGen == gen && s.utterances === after && s.editUndo.lastOrNull()?.before?.utterances === before.first) undoEdit(s) else s
 
+    /** The snackbar left without Undo: a kept merge/move/boundary edit makes the summary and action items stale. */
+    fun speakerEditKept(s: SessionState, gen: Int, after: List<TranscriptEvent.Utterance>): SessionState =
+        if (s.sessionGen == gen && !s.running && s.utterances === after && (!s.summary.isNullOrBlank() || s.actionItems != null))
+            s.copy(transcriptDirty = true) else s
+
     fun saveTitle(s: SessionState, title: String) =
         s.copy(title = title, editingTitle = false, titleEdited = true, editSeq = s.editSeq + 1, sessionDirty = true)
 

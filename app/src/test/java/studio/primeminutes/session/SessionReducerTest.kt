@@ -263,6 +263,23 @@ class SessionReducerTest {
         assertEquals(edited, SessionReducer.undoSpeakerEdit(edited, u.gen, u.before, u.after))
     }
 
+    @Test fun aKeptSpeakerEditOffersReSummarizeForSummaryOrActionItems() {
+        val s = s0.copy(utterances = listOf(utt(0, speaker = 0), utt(1, speaker = 1)), actionItems = "- do it")
+        val n = SessionReducer.mergeSpeaker(s, env, 1, 0)
+        val u = n.effects.one<SessionEffect.OfferSpeakerUndo>()
+        assertFalse(u.nameOnly)
+        assertTrue(SessionReducer.speakerEditKept(n.state, u.gen, u.after).transcriptDirty)   // action items alone
+        assertTrue(SessionReducer.speakerEditKept(n.state.copy(actionItems = null, summary = "sum"), u.gen, u.after).transcriptDirty)
+        // nothing to regenerate, a run in flight, another session or a later rewrite: no question
+        assertFalse(SessionReducer.speakerEditKept(n.state.copy(actionItems = null), u.gen, u.after).transcriptDirty)
+        assertFalse(SessionReducer.speakerEditKept(n.state.copy(running = true), u.gen, u.after).transcriptDirty)
+        assertFalse(SessionReducer.speakerEditKept(n.state, u.gen + 1, u.after).transcriptDirty)
+        val undone = SessionReducer.undoSpeakerEdit(n.state, u.gen, u.before, u.after)
+        assertFalse(SessionReducer.speakerEditKept(undone, u.gen, u.after).transcriptDirty)
+        // a line edit with only action items marks them stale too
+        assertTrue(SessionReducer.saveLineText(s, 0, "x").transcriptDirty)
+    }
+
     @Test fun transcriptEditsUndoAndRedoFromTheTopBar() {
         var s = s0.copy(utterances = listOf(utt(0, "We agreed. Yeah but", 0), utt(1, "what about it?", 1)))
         val original = s.utterances
