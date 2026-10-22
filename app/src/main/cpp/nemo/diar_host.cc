@@ -25,6 +25,7 @@ constexpr int kSub = 8, kHidden = 512, kSpk = 8, kUp = 8;
 constexpr int64_t kOutHop = 160;   // samples per 10 ms output frame
 constexpr float kPreemph = 0.97f;
 constexpr float kInf = std::numeric_limits<float>::infinity();
+constexpr int64_t kTrainedSpkcache = 264;   // the checkpoint's spkcache_len (model_config.yaml), every NVIDIA profile
 
 struct Streaming {
     int spkcache_len, fifo_len, chunk_len, right, update_period;
@@ -408,7 +409,6 @@ struct DiarHost::Impl {
 DiarHost::DiarHost(const DiarHostConfig & c) : p_(new Impl) {
     auto & I = *p_;
     I.cfg = c;
-    I.s = {c.spkcache_len, c.fifo_len, c.chunk_len, c.chunk_right_context, c.spkcache_update_period};
     FILE * f = std::fopen(c.host_bin.c_str(), "rb");
     if (!f) throw std::runtime_error("DiarHost: cannot open " + c.host_bin);
     char magic[4]; uint32_t dim[3];
@@ -423,6 +423,14 @@ DiarHost::DiarHost(const DiarHostConfig & c) : p_(new Impl) {
     I.fe.init(std::move(fb));
     I.pre = std::make_unique<DiarPreEncode>(c.pre_f32);
     I.graph = std::make_unique<DiarLiteRT>(c.tflite, c.threads);
+    if (c.spkcache_len <= 0) {
+        if (!(c.spkcache_update_period >= c.chunk_len && c.chunk_len > c.fifo_len))
+            throw std::runtime_error("DiarHost: spkcache_len 0 needs spkcache_update_period >= chunk_len > fifo_len");
+        I.cfg.spkcache_len = (int) std::min<int64_t>(kTrainedSpkcache, I.graph->max_frames() - c.chunk_len - c.chunk_right_context);
+        if (I.cfg.spkcache_len < kSpk * (Streaming{}.sil_per_spk + 1))
+            throw std::runtime_error("DiarHost: " + c.tflite + " is too short for a speaker cache");
+    }
+    I.s = {I.cfg.spkcache_len, c.fifo_len, c.chunk_len, c.chunk_right_context, c.spkcache_update_period};
     I.sched.s = I.s;
     I.aosc.cfg = I.s;
     I.aosc.silence = I.silence;

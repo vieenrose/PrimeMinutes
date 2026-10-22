@@ -1020,8 +1020,8 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         return NemoStreamEngine(f.host, asrThreads(), TranscriptionConfig.Holder.config.speakerDelaySec,
             backend = "litert_host", xasrTflite = f.litert.xasr, diarTflite = f.litert.diar, diarPreF32 = f.litert.preEncode,
             tokenOffsetMs = f.tokenOffsetMs).also {
-            // The chosen recognizer loaded: the others (other latencies, the pre-variant model) can go.
-            if (f.variant?.latencyMs == target) runCatching { models.reclaimOtherAsr(f.variant) }
+            // The chosen recognizer loaded: the others (other latencies, the pre-variant model, the f190 diarizer) can go.
+            models.reclaimLoaded(f, target)
         }
     }
 

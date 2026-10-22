@@ -114,7 +114,7 @@ class NemoStreamEngineTest {
         val dir = File(inst.targetContext.filesDir, "models/nemo-litert")
         val clip = File(inst.targetContext.filesDir, "clip.wav")
         val xt = File(dir, "xasr_stream_q8_octav.tflite")
-        val dt = File(dir, "sortformer_int8_f190.tflite")
+        val dt = File(dir, "sortformer-f380/sortformer_int8_f380.tflite").takeIf(File::exists) ?: File(dir, "sortformer_int8_f190.tflite")
         val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
         val hostFiles = NemoModelFiles(File(dir, "xasr_host.bin"), File(dir, "diar_host.bin"))
         // -e backends ggml,litert_cpu (default) | litert_host,litert_cpu ...: the first two entries are compared.
@@ -166,7 +166,7 @@ class NemoStreamEngineTest {
         val dir = File(ctx.filesDir, "models/nemo-litert")
         val clip = File(ctx.filesDir, "clip.wav")
         val e2b = File(ctx.filesDir, "mfa-e2b")
-        val xt = File(dir, "xasr_stream_q8_octav.tflite"); val dt = File(dir, "sortformer_int8_f190.tflite")
+        val xt = File(dir, "xasr_stream_q8_octav.tflite"); val dt = File(dir, "sortformer-f380/sortformer_int8_f380.tflite").takeIf(File::exists) ?: File(dir, "sortformer_int8_f190.tflite")
         val hostFiles = NemoModelFiles(File(dir, "xasr_host.bin"), File(dir, "diar_host.bin"))
         val pre = ModelManager(ctx).asrEngineFiles(studio.primeminutes.core.models.AsrRegistry.DEFAULT_MS)?.litert?.preEncode
         org.junit.Assume.assumeTrue("not pushed", listOf(xt, dt, clip, hostFiles.xasr, hostFiles.diar, File(e2b, "prefill_decode_fused.tflite")).all { it.exists() } && pre != null)
@@ -194,7 +194,7 @@ class NemoStreamEngineTest {
         val dir = File(inst.targetContext.filesDir, "models/nemo-litert")
         val gold = File(inst.targetContext.filesDir, "gold")
         val xt = File(dir, "xasr_stream_q8_octav.tflite")
-        val dt = File(dir, "sortformer_int8_f190.tflite")
+        val dt = File(dir, "sortformer-f380/sortformer_int8_f380.tflite").takeIf(File::exists) ?: File(dir, "sortformer_int8_f190.tflite")
         val files = NemoModelFiles(File(dir, "x-asr-zh-en-q8_0.gguf"), File(dir, "nemotron-3-diarization-q8_0.gguf"))
         val clips = gold.listFiles { f -> f.extension == "wav" }?.sortedBy { it.name }.orEmpty()
         org.junit.Assume.assumeTrue("clips/models not pushed", clips.isNotEmpty() && listOf(xt, dt, files.xasr, files.diar).all { it.exists() })

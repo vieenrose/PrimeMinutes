@@ -24,7 +24,7 @@ data class AsrVariant(
 ) {
     val dirName: String get() = "xasr-punct-${latencyMs}ms"
     /** Provenance written into each session (which recognizer produced the transcript). */
-    val modelId: String get() = "xasr-punct-int8-${latencyMs}ms+sortformer-int8-f190"
+    val modelId: String get() = "xasr-punct-int8-${latencyMs}ms+sortformer-int8-f380"
 }
 
 data class AsrPin(val file: String, val url: String, val bytes: Long, val sha256: String)

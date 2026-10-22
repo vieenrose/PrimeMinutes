@@ -59,17 +59,32 @@ class ModelManager(context: Context) {
     // --- ASR + diarization: nemo-x-asr-diarizer on LiteRT. ---------------------------------------
     //   X-ASR zh-en punct int8 — streaming Zipformer2 transducer, zh + en, one of four chunk sizes (AsrRegistry, Apache-2.0)
     //   Nemotron-3 diar int8   — streaming Sortformer diarization, up to 8 speakers (OpenMDW-1.1)
-    // Layout: the diarizer set in nemo/ (stamped NEMO_REVISION), the shared X-ASR host weights in nemo/xasr-punct-host/,
-    // each recognizer variant's graph in nemo/<variant.dirName>/ (each folder stamped with its file's SHA-256).
+    // Layout: the diarizer host weights in nemo/ (stamped NEMO_REVISION), its graph in nemo/sortformer-f380/, the shared
+    // X-ASR host weights in nemo/xasr-punct-host/, each recognizer variant's graph in nemo/<variant.dirName>/ (each
+    // folder stamped with its file's SHA-256).
     // Installs from before the variants carry the 480 ms non-punct pair in nemo/ (LEGACY_*): it keeps running until
-    // the chosen variant is installed, then it is deleted.
+    // the chosen variant is installed, then it is deleted. Likewise installs from before the 264-frame speaker cache
+    // carry the 190-frame diarizer graph in nemo/ (STANDIN_DIAR_FILE): it runs until the f380 graph has loaded once.
     val nemoDir: File get() = File(modelsDir, NEMO_DIR)
     private val hostDir: File get() = File(nemoDir, HOST_DIR)
+    private val diarGraphDir: File get() = File(nemoDir, DIAR_GRAPH_DIR)
     fun variantDir(v: AsrVariant): File = File(nemoDir, v.dirName)
 
     private fun stamped(dir: File, stamp: String) = runCatching { File(dir, REVISION_MARKER).readText().trim() }.getOrNull() == stamp
-    private fun diarReady(): Boolean =
-        DIAR_SET.all { (name, meta) -> File(nemoDir, name).length() == meta.bytes } && stamped(nemoDir, NEMO_REVISION)
+    private fun diarHostReady(): Boolean =
+        File(nemoDir, HOST_DIAR_FILE).length() == DIAR_HOST.bytes && stamped(nemoDir, NEMO_REVISION)
+    private fun diarGraphReady(): Boolean =
+        File(diarGraphDir, DIAR_GRAPH_FILE).length() == DIAR_GRAPH.bytes && stamped(diarGraphDir, DIAR_GRAPH.sha256)
+    /** The chosen diarizer is installed (nothing left to fetch for it). */
+    private fun diarReady(): Boolean = diarHostReady() && diarGraphReady()
+    /** The graph the diarizer loads: the f380 one once installed, else the f190 stand-in (verified by the old set's
+     *  NEMO_REVISION stamp, which [diarHostReady] checks); null when neither is there. */
+    private fun diarGraph(): File? = when {
+        !diarHostReady() -> null
+        diarGraphReady() -> File(diarGraphDir, DIAR_GRAPH_FILE)
+        File(nemoDir, STANDIN_DIAR_FILE).length() == STANDIN_DIAR_BYTES -> File(nemoDir, STANDIN_DIAR_FILE)
+        else -> null
+    }
     private fun hostReady(): Boolean =
         File(hostDir, AsrRegistry.HOST.file).length() == AsrRegistry.HOST.bytes && stamped(hostDir, AsrRegistry.HOST.sha256)
     /** The variant's graph and the shared host weights are in place (size + the stamp written after the SHA check). */
@@ -81,8 +96,8 @@ class ModelManager(context: Context) {
     /** The files the engine loads for the chosen latency [targetMs]: that variant once installed, else the installed
      *  variant closest to it, else the pre-variant 480 ms pair; null when nothing can run yet. */
     fun asrEngineFiles(targetMs: Int): AsrEngineFiles? {
-        if (!diarReady()) return null
-        val diar = File(nemoDir, LITERT_DIAR_FILE); val pre = preEncodeF32()
+        val diar = diarGraph() ?: return null
+        val pre = preEncodeF32()
         AsrRegistry.runnable(targetMs, ::variantReady)?.let { v ->
             return AsrEngineFiles(NemoModelFiles(File(hostDir, AsrRegistry.HOST.file), File(nemoDir, HOST_DIAR_FILE)),
                 NemoLitertFiles(File(variantDir(v), v.tflite.file), diar, pre), v.tokenOffsetMs, v.modelId, v)
@@ -101,7 +116,7 @@ class ModelManager(context: Context) {
             // The chosen variant just loaded (a latency switch's download ends here): the others go now, not at the
             // next recording or import (they stayed on disk until then, ~155 MB each). A stand-in still running has
             // its files open: unlinking them does not disturb it.
-            .onSuccess { if (f.variant?.latencyMs == targetMs) runCatching { reclaimOtherAsr(f.variant) } }
+            .onSuccess { reclaimLoaded(f, targetMs) }
     }
 
     /** Some recognizer can run (the chosen one or a stand-in): recording and import need nothing more. */
@@ -109,10 +124,11 @@ class ModelManager(context: Context) {
     /** The chosen variant itself is installed (nothing left to fetch for [targetMs]). */
     fun asrTargetReady(targetMs: Int): Boolean = diarReady() && variantReady(AsrRegistry.byLatency(targetMs))
 
-    /** Bytes still to fetch for [targetMs]: the diarizer set, the host weights, the variant's graph, as missing. */
+    /** Bytes still to fetch for [targetMs]: the diarizer's host weights and graph, the X-ASR host weights, the variant's
+     *  graph, as missing. */
     fun asrDownloadBytes(targetMs: Int): Long {
         val v = AsrRegistry.byLatency(targetMs)
-        return (if (diarReady()) 0L else DIAR_SET.values.sumOf { it.bytes }) +
+        return (if (diarHostReady()) 0L else DIAR_HOST.bytes) + (if (diarGraphReady()) 0L else DIAR_GRAPH.bytes) +
             (if (hostReady()) 0L else AsrRegistry.HOST.bytes) + (if (variantReady(v)) 0L else v.tflite.bytes)
     }
 
@@ -121,7 +137,7 @@ class ModelManager(context: Context) {
         nemoDir.takeIf(File::exists)?.deleteRecursively()
     }
 
-    /** Fetch what the chosen variant [targetMs] still misses (diarizer set, host weights, its graph); every file is
+    /** Fetch what the chosen variant [targetMs] still misses (diarizer files, host weights, its graph); every file is
      *  SHA-checked at download and each set stamped once complete, so a pause resumes and a re-pin refetches. */
     suspend fun ensureAsrModels(targetMs: Int, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
         val v = AsrRegistry.byLatency(targetMs)
@@ -143,12 +159,21 @@ class ModelManager(context: Context) {
             }
             endSet(dir, stamp)
         }
-        if (!diarReady()) fetchSet(nemoDir, NEMO_REVISION, DIAR_SET)
+        if (!diarHostReady()) fetchSet(nemoDir, NEMO_REVISION, mapOf(HOST_DIAR_FILE to DIAR_HOST))
+        if (!diarGraphReady()) fetchSet(diarGraphDir, DIAR_GRAPH.sha256, mapOf(DIAR_GRAPH_FILE to DIAR_GRAPH))
         if (!hostReady()) AsrRegistry.HOST.let { h -> fetchSet(hostDir, h.sha256, mapOf(h.file to Pinned(h.url, h.bytes, h.sha256))) }
         if (!variantReady(v)) v.tflite.let { t -> fetchSet(variantDir(v), t.sha256, mapOf(t.file to Pinned(t.url, t.bytes, t.sha256))) }
         check(asrTargetReady(targetMs)) { "ASR model files missing after provisioning" }
         reclaimRetired()
         warmLitertCache(targetMs, threads = 4)
+    }
+
+    /** An engine built from [f] for the chosen latency [targetMs] has loaded: what it replaces goes. */
+    fun reclaimLoaded(f: AsrEngineFiles, targetMs: Int) {
+        if (f.variant?.latencyMs == targetMs) runCatching { reclaimOtherAsr(f.variant) }
+        // The f380 diarizer loaded: the f190 stand-in and its XNNPACK cache (~100 MB each) go.
+        if (f.litert.diar.parentFile == diarGraphDir)
+            listOf(STANDIN_DIAR_FILE, "$STANDIN_DIAR_FILE.wcache").forEach { File(nemoDir, it).takeIf(File::exists)?.delete() }
     }
 
     /** Once [running] (the chosen variant) has loaded: every other recognizer is deleted — the other variants and the
@@ -707,27 +732,34 @@ class ModelManager(context: Context) {
         private const val DIAR_FILE = "nemotron-3-diarization-q8_0.gguf"
         private const val XASR_REV = "acb1a95eac809719a2c86d1048471f96fc6444ad"
         private const val DIAR_REV = "647d39feaa0e91dca5ce355a95403837b76dff56"
-        /** Stamped into nemo/[REVISION_MARKER] when the diarizer set (and, before the variants, the X-ASR pair) verified.
-         *  Kept unchanged so existing installs need no refetch of the diarizer. */
+        /** Stamped into nemo/[REVISION_MARKER] when the diarizer host weights (before the f380 graph, with the f190 graph;
+         *  before the variants, also the X-ASR pair) verified. Kept unchanged so existing installs need no refetch. */
         private const val LITERT_REV = "ec1b218f4d152e09bf30733de0836afc3f6b686b"
         private const val HOST_REV = "37d2f9c8056f3427af324d0c1fc7910c70b65375"
         private const val NEMO_REVISION = "$LITERT_REV+$HOST_REV"
-        private const val LITERT_DIAR_FILE = "sortformer_int8_f190.tflite"
+        /** The 190-frame graph (speaker cache 128) of installs before the f380 one: no longer downloaded, it runs until
+         *  the f380 graph has loaded once ([reclaimLoaded]). */
+        private const val STANDIN_DIAR_FILE = "sortformer_int8_f190.tflite"
+        private const val STANDIN_DIAR_BYTES = 101_279_632L
         private const val PRE_ENCODE_F32 = "pre_encode_512x1024.f32"
         private const val PRE_ENCODE_F32_BYTES = 512L * 1024 * 4
         private const val HOST_DIAR_FILE = "diar_host.bin"
         private const val HOST_DIR = "xasr-punct-host"
         // Host weights of the ggml-free engine (tools/nemo-host/*_pack.py): the Sortformer mel bank + silence embedding;
         // the neural graph is the .tflite.
-        private val DIAR_SET = linkedMapOf(
-            LITERT_DIAR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$LITERT_REV/$LITERT_DIAR_FILE",
-                101_279_632L, "c298ab66e0c8246661eb6f1a5bff1a22c14f4e5bb09c500ca4b83a3fdd57d4cf",
-            ),
-            HOST_DIAR_FILE to Pinned(
-                "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
-                133_648L, "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36",
-            ),
+        private val DIAR_HOST = Pinned(
+            "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$HOST_REV/$HOST_DIAR_FILE",
+            133_648L, "5286c71593db47460a51d319605432d3103eaf1c4e99fbdebf53d5bf60e62c36",
+        )
+        // The diarizer graph with a 380-frame window: the checkpoint's trained 264-frame speaker cache + 50-frame chunk
+        // + 12 right context fit (DiarHost derives the cache from the graph). Same weights as the f190 graph, exported
+        // --frames 380. 2026-10-22: Note10+ real time (rtf 1.00, label lag p95 0.34 s), zh miss 39.0 -> 33.2 %.
+        private const val DIAR_GRAPH_DIR = "sortformer-f380"
+        private const val DIAR_GRAPH_FILE = "sortformer_int8_f380.tflite"
+        private const val DIAR_GRAPH_REV = "693b752bd7a9e5128e174df09830aab5fceb8c22"
+        private val DIAR_GRAPH = Pinned(
+            "https://huggingface.co/Luigi/primeminutes-nemo-litert/resolve/$DIAR_GRAPH_REV/$DIAR_GRAPH_FILE",
+            101_324_560L, "9aa577325f7258345e7f7ff407ebdb105d365f8e0383aa2da2d833a5d255a52f",
         )
         /** The pre-variant recognizer (X-ASR 480 ms, no punct model), never downloaded any more: it runs on installs that
          *  have it until the chosen variant is installed and has loaded once (then [reclaimOtherAsr]). */
