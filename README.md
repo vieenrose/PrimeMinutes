@@ -21,10 +21,10 @@
 
 ## 下載
 
-| 平台 | 取得方式 | 需求 |
-|---|---|---|
-| **Android** | 從 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK；App 每天檢查新版 | Android 8.0+，RAM 8 GB 以上最佳 |
-| **iOS** | TestFlight 測試版（目前受邀測試，公開連結申請中） | iOS 17.0+，RAM 6 GB 以上最佳 |
+| 平台 | 取得方式 | 需求 | 掃碼 |
+|---|---|---|:---:|
+| **Android** | 從 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK；App 每天檢查新版 | Android 8.0+，RAM 8 GB 以上最佳 | <img src="docs/screenshots/qr-android.png" width="110" alt="Android 下載 QR code"> |
+| **iOS** | [TestFlight 公開測試](https://testflight.apple.com/join/saH9YxEA)：先安裝 TestFlight App，再點連結加入 | iOS 17.0+，RAM 6 GB 以上最佳 | <img src="docs/screenshots/qr-ios.png" width="110" alt="iOS TestFlight QR code"> |
 
 這個分支是 iOS 版（SwiftUI）；Android 版的程式碼與說明在 [android 分支](https://github.com/vieenrose/PrimeMinutes/blob/android/README.md)。兩個版本共用同一套語音引擎與 AI 模型，功能一致。
 

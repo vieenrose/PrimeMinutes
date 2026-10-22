@@ -20,7 +20,7 @@
 ## 二、上傳建置版本（在 Mac 上操作）
 
 1. 打開 Xcode，選選單 **Window → Organizer**。
-2. 在「Archives」分頁選最新的 **PrimeMinutes** 封存（目前為 **0.53.0 (2)**，日期 2026-10-16）。
+2. 在「Archives」分頁選最新的 **PrimeMinutes** 封存。可能有兩筆同名的封存（例如兩筆都叫 0.53.0 (11)），這時以日期時間為準，選最新的那筆。
 3. 點右側「**Distribute App**」，選「**App Store Connect**」，再選「**Upload**」。
 4. 簽署選「**Automatically manage signing**」。Xcode 會用雲端憑證自動完成簽署。
 5. 確認摘要後按「Upload」，等待「Upload Successful」。
@@ -38,9 +38,23 @@
    - **外部測試**（給團隊以外的人）：在「外部測試」建立群組並加入建置版本。首次需要通過「Beta 版 App 審查」，通常 1 天內完成。通過後可用電子郵件邀請，或開啟「公開連結」分享。
 6. 測試人員在 iPhone 安裝「**TestFlight**」App，接受邀請後即可安裝 Prime Minutes。
 
-## 四、注意事項
+## 四、開啟公開連結（讓任何 iPhone 用戶掃碼加入）
 
-- 每次上傳新版本都必須提高建置號碼（`ios/App/Info.plist` 的 `CFBundleVersion`），例如下一版改為 `3`。
+公開連結不需要事先知道對方的電子郵件：對方掃 QR code 或點連結，就能在 TestFlight 裡加入測試。
+
+1. 在「TestFlight」分頁的「外部測試」旁點「＋」，建立群組，例如「公開測試」。
+2. 在群組裡點「建置版本」，加入最新版（例如 0.53.0 (11)）。
+3. 依頁面要求填寫測試資訊（測試說明、意見回饋電子郵件等），送出「Beta 版 App 審查」。
+   - 第一次通常 1 天內審完。之後同一群組加入新版本，多半不用再等。
+4. 審查通過後，在群組頁找到「公開連結」，按「啟用公開連結」。
+   - 可以設定人數上限（最多 10,000 人），也可以隨時停用。
+5. 複製連結，格式是 `https://testflight.apple.com/join/` 加一串代碼，交給 luigi 做成 QR code。
+   - 這個連結會一直有效，之後上傳新版本也不用換 QR code。
+6. 目前的公開連結：<https://testflight.apple.com/join/saH9YxEA>（2026-10-22 開通，QR code 在 README 與簡報封面）。
+
+## 五、注意事項
+
+- 每次上傳新版本都必須提高建置號碼（`ios/App/Info.plist` 的 `CFBundleVersion`），例如 `11` 的下一版是 `12`。同一個號碼上傳過一次，就不能再用。
 - TestFlight 建置版本有效期為 **90 天**。
 - 裝置需求：
   - 建議使用 6 GB 以上記憶體的 iPhone，例如 iPhone 14 Pro Max；iPhone XR（3 GB）無法執行摘要模型。

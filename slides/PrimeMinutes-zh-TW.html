@@ -94,12 +94,18 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div style="text-align:left"><h1>Prime Minutes</h1>
   <div class="lede">會議錄音 → 標註語者的逐字稿 → AI 筆記與摘要<br><b style="color:var(--accent)">全程在手機上完成，完全離線</b></div></div></div>
   <p style="margin-top:26px; color:var(--sub); font-size:.95em">iOS 與 Android App · 20–30 分鐘說明＋示範</p>
-  <div style="margin-top:18px; display:flex; align-items:center; gap:18px">
-    <img src="img/qrcode-apk.png" alt="Android APK 下載 QR code" style="width:150px; height:150px; background:#fff; border:1px solid #2a3a4a; border-radius:10px; padding:6px">
-    <div style="text-align:left; color:var(--sub); font-size:.9em; line-height:1.5"><b style="color:var(--accent)">Android 用戶：掃碼直接下載最新版 APK</b><br>安裝時允許「未知來源」即可；iPhone 用戶走 TestFlight 受邀測試。</div>
+  <div style="margin-top:18px; display:flex; align-items:center; gap:34px">
+    <div style="display:flex; align-items:center; gap:14px">
+      <img src="img/qrcode-apk.png" alt="Android APK 下載 QR code" style="width:140px; height:140px; background:#fff; border:1px solid #2a3a4a; border-radius:10px; padding:6px">
+      <div style="text-align:left; color:var(--sub); font-size:.88em; line-height:1.5"><b style="color:var(--accent)">Android</b><br>掃碼下載 APK<br>安裝時允許「未知來源」</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px">
+      <img src="img/qrcode-testflight.png" alt="iOS TestFlight QR code" style="width:140px; height:140px; background:#fff; border:1px solid #2a3a4a; border-radius:10px; padding:6px">
+      <div style="text-align:left; color:var(--sub); font-size:.88em; line-height:1.5"><b style="color:var(--accent)">iPhone</b><br>掃碼加入 TestFlight<br>先裝 TestFlight App</div>
+    </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.29 · Android v0.53.16 · iOS build 11 · 版次 2026-10-22</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.30 · Android v0.53.16 · iOS build 11 · 版次 2026-10-22</p>
 </section>
 
 <!-- 2 問題 -->
@@ -372,7 +378,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="cols">
     <div class="col"><ul class="big">
       <li><b>Android</b>：GitHub Releases 直接安裝 APK，App 內每日檢查新版。</li>
-      <li><b>iOS</b>：TestFlight 測試版，目前 build 11（iPhone 17+ 建議；6 GB 記憶體裝置亦支援 E4B）；公開連結申請中，開通後掃碼即可加入。</li>
+      <li><b>iOS</b>：TestFlight 測試版，目前 build 11（iPhone 17+ 建議；6 GB 記憶體裝置亦支援 E4B）；公開測試已開放，掃封面 QR code 即可加入。</li>
       <li>雙平台行為對齊：搜尋、提問、播放同步、逐字稿編輯。</li>
       <li>互通：<b>.m4a 場次檔</b>兩平台交換——一端匯出（附逐字稿與筆記），另一端匯入即開場次。</li>
       <li>取得與更新：github.com/vieenrose/PrimeMinutes（Releases 與 TestFlight）</li>
@@ -399,7 +405,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide demo">
   <div class="kicker">現場示範（實機）</div><h2>八分鐘走完一場會議</h2>
   <ol>
-    <li>封面<b>掃碼安裝</b> APK——無帳號、裝完即用（示範機已裝好）。</li>
+    <li>封面<b>掃碼安裝</b>：Android 下載 APK，iPhone 加入 TestFlight——無帳號、裝完即用（示範機已裝好）。</li>
     <li>首頁按<b>錄音</b>——邊講邊出逐字稿，語者即時標註（約 2 分鐘）。</li>
     <li>按<b>停止並儲存</b>——AI 筆記卡片顯示閱讀進度。</li>
     <li>開場次：<b>摘要＋筆記＋標題</b>；點任一摘要句子播放原話。</li>
@@ -440,10 +446,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="lede">你的會議，留在你的手機。</div></div></div>
   <div style="margin-top:30px">
     <span class="pill">GitHub Releases 下載 APK</span>
-    <span class="pill">iOS TestFlight</span>
+    <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.16（版次 2026-10-22）· iOS TestFlight build 11 · 簡報 v2.29</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.16（版次 2026-10-22）· iOS TestFlight build 11 · 簡報 v2.30</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
