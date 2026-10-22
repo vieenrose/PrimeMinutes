@@ -357,6 +357,9 @@ bool Engine::init(std::string& err) {
         if (const char* e = getenv("NEMO_TOKEN_OFFSET_MS")) cfg_.token_offset_ms = std::atof(e);   // research: per-model re-derivation
         if (const char* e = getenv("NEMO_ENERGY_SNAP")) cfg_.turn_energy_s = std::atof(e);
         if (const char* e = getenv("NEMO_ENERGY_DIP")) cfg_.turn_energy_dip = std::atof(e);
+        if (const char* e = getenv("NEMO_LINE_SPLIT")) cfg_.line_split = std::atoi(e);
+        if (const char* e = getenv("NEMO_TOKEN_SPAN_CAP")) cfg_.token_span_cap_s = std::atof(e);
+        fusion_.set_line_split(cfg_.line_split);
         double pad_frames = 0;      // 10 ms diarizer frames
         for (const auto& kv : cfg_.diar_opts)
             if (kv.first == "speaker_pad_frames") pad_frames = std::atof(kv.second.c_str());
@@ -388,7 +391,7 @@ bool Engine::init(std::string& err) {
 // hitting. Frame k covers audio from k * 40 ms (10 ms fbank hop, encoder downsampling 4; measured 25.6 Hz
 // including the tail padding, so 40 ms is the mapping and not a guess).
 static bool push_timed_tokens(Fusion& out, xasr_context* ctx, xasr_stream* stream, const std::string& expect,
-                              double offset_ms) {
+                              double offset_ms, double span_cap_s) {
     const int32_t* ids = nullptr;
     const int64_t* frames = nullptr;
     int n = 0;
@@ -415,7 +418,8 @@ static bool push_timed_tokens(Fusion& out, xasr_context* ctx, xasr_stream* strea
         prev_end = e;
         // 40 ms per encoder frame, minus the decision lag the greedy loop introduces (see engine.h).
         const int64_t at = frames[i] * 640 - (int64_t)(offset_ms * 16.0);
-        const int64_t next = (i + 1 < n) ? frames[i + 1] * 640 - (int64_t)(offset_ms * 16.0) : at + 40 * 16;
+        int64_t next = (i + 1 < n) ? frames[i + 1] * 640 - (int64_t)(offset_ms * 16.0) : at + 40 * 16;
+        if (span_cap_s > 0) next = std::min<int64_t>(next, at + (int64_t)(span_cap_s * 16000.0));
         if (!piece.empty()) out.push_token(piece, std::max<int64_t>(0, at), std::max(next, at + 1));
     }
     if (prev_end < final_text.size())   // cannot happen (the last decode IS the final text); keep the text whole
@@ -608,7 +612,7 @@ void Engine::attribute(const std::function<void(const Segment&)>& on_segment, bo
 #ifdef NEMO_HAVE_TOKEN_TIMES
     if (want_tokens && asr_stream_ &&
         push_timed_tokens(timed, (xasr_context*)asr_ctx_, (xasr_stream*)asr_stream_, asr_text_,
-                          cfg_.token_offset_ms)) {
+                          cfg_.token_offset_ms, cfg_.token_span_cap_s)) {
         use = &timed;
         stats_.timing_mode = 1;
     } else

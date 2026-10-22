@@ -178,6 +178,13 @@ struct Config {
     // Transcript DER, ER unchanged at every margin; cpER +0.02 to +0.09 (EN). docs/design/speaker-boundary.md.
     double turn_energy_s = 0.4;
     double turn_energy_dip = 0.3;
+    // Research flags (line-split P1, not shipped; 0 = shipped behaviour, outputs md5-identical).
+    // line_split bit 1: Fusion::set_line_split (a short reply after its own leading punctuation keeps its line).
+    // token_span_cap_s > 0: a model-timed token is attributed over at most this long from its start, instead of
+    // up to the next token's start (the last token before a pause otherwise spans the pause into the next turn).
+    // NEMO_LINE_SPLIT=<mask> / NEMO_TOKEN_SPAN_CAP=<s> override.
+    int line_split = 0;
+    double token_span_cap_s = 0;
 };
 
 struct Segment {
@@ -258,6 +265,13 @@ public:
 
     const Stats& stats() const { return stats_; }
     std::vector<TokenInfo> token_table() const;
+    // Research (tools/nemo-eval NEMO_SPLIT_VARIANTS): after finish(), redo the final attribution with other
+    // line-split flags on the same turns and tokens. The engine keeps the new flags.
+    void reattribute_final(int line_split, double token_span_cap_s, const std::function<void(const Segment&)>& on_segment) {
+        cfg_.line_split = line_split; cfg_.token_span_cap_s = token_span_cap_s;
+        fusion_.set_line_split(line_split);
+        attribute(on_segment, true);
+    }
     const std::vector<Turn>& turns() const { return fusion_.turns(); }
     const std::string& transcript() const { return asr_text_; }
 
