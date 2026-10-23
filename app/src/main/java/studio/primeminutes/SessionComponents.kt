@@ -1080,11 +1080,11 @@ internal fun SpeakerTag(
                     }
                 },
         )
-        // Visible Save / Cancel: the keyboard's Done was the only way out (and it hides on some IMEs).
-        IconButton(onClick = { onCommit(value.trim()) }, modifier = Modifier.size(40.dp)) {
+        // Visible Save / Cancel (48dp, the minimum touch target): the keyboard's Done was the only way out (and it hides on some IMEs).
+        IconButton(onClick = { onCommit(value.trim()) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.save), tint = color)
         }
-        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = LocalPrimeMinutesPalette.current.Slate400)
         }
     }
