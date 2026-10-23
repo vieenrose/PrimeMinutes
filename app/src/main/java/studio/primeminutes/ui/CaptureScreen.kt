@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -305,13 +306,13 @@ private fun CaptureButtons(
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
-            modifier = Modifier.weight(1f).height(buttonHeight),
+            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
             // Minimal padding: on narrow phones the default 24dp sides forced CJK labels to wrap.
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
         // ⏹ Stop & save — always safe: the capture is in the library before processing starts.
@@ -320,12 +321,12 @@ private fun CaptureButtons(
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),
-            modifier = Modifier.weight(1f).height(buttonHeight),
+            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
     }
