@@ -718,7 +718,7 @@ internal fun VolumeControl(
                         Modifier.padding(start = 4.dp, end = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onToggleMute, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = onToggleMute, modifier = Modifier.size(48.dp)) {
                             Icon(muteIcon, contentDescription = if (muted) stringResource(R.string.cd_unmute) else stringResource(R.string.cd_mute), tint = pal.Slate200)
                         }
                         Slider(
