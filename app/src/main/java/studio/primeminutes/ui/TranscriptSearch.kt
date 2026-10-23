@@ -47,7 +47,9 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -137,12 +139,16 @@ fun TranscriptSearchBar(
                 else stringResource(R.string.search_match_count, matchPos + 1, matchCount),
                 style = MaterialTheme.typography.labelMedium,
                 color = pal.Slate400,
+                // Announced as it changes ("3 of 12", "No matches"), so a TalkBack user typing a query hears the result.
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
+            // An explicit tint overrides IconButton's disabled colour: dim the arrows when there is nothing to step through.
+            val arrowTint = if (matchCount > 0) pal.Slate200 else pal.Slate200.copy(alpha = 0.38f)
             IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.search_prev), tint = pal.Slate200, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.search_prev), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
             IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = pal.Slate200, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
         }
         if (resultsOpen != null && query.isNotEmpty()) {
