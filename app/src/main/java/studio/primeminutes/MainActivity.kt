@@ -1456,6 +1456,8 @@ private fun TranscribeScreen(
                 onMergeSpeaker = { target -> u.speaker?.let { mergeAsk = it to target } },
                 onSplitLine = if (!s.running && studio.primeminutes.data.BoundaryEdits.tokenize(u.text).size > 1) ({ splitLineAt = idx }) else null,
                 topPadding = if (seam) 0.dp else null,
+                // Like the seams: a run rewrites the lines, so a move/merge/edit made now would be lost.
+                editable = !s.running,
             )
         }
     }

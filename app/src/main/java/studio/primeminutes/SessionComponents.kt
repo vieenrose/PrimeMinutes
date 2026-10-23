@@ -844,6 +844,8 @@ internal fun UtteranceRow(
     onMergeSpeaker: (Int) -> Unit,
     onSplitLine: (() -> Unit)? = null,
     topPadding: Dp? = null,
+    /** False while a run rewrites the transcript: the line menu and the speaker name are off (an edit would be lost). */
+    editable: Boolean = true,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // Two shapes:
@@ -915,13 +917,17 @@ internal fun UtteranceRow(
             val label = if (!showSpeaker) null
             else utt.speaker?.let { speakerNames[it]?.name ?: stringResource(R.string.speaker_n, it + 1) }
             var menuOpen by remember { mutableStateOf(false) }
+            // A run starting under an open menu closes it for good (it must not pop back when the run ends).
+            LaunchedEffect(editable) { if (!editable) menuOpen = false }
             // Reading layout: a slim header line (speaker in its colour · time), then the text on the
             // full width with a CJK-friendly line height. Tap seeks; long-press opens the line menu.
             Column(
-                Modifier.fillMaxWidth().combinedClickable(
-                    onClick = { onSeek(utt.startSec) },
-                    onLongClick = { menuOpen = true },
-                    onLongClickLabel = stringResource(R.string.cd_line_actions),
+                Modifier.fillMaxWidth().then(
+                    if (editable) Modifier.combinedClickable(
+                        onClick = { onSeek(utt.startSec) },
+                        onLongClick = { menuOpen = true },
+                        onLongClickLabel = stringResource(R.string.cd_line_actions),
+                    ) else Modifier.clickable { onSeek(utt.startSec) },
                 ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -930,7 +936,7 @@ internal fun UtteranceRow(
                             label,
                             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                             color = Color(speakerColorOn(utt.speaker, pal.isDark)),
-                            modifier = Modifier.clickable { onBeginSpeakerEdit(utt.speaker) },
+                            modifier = if (editable) Modifier.clickable { onBeginSpeakerEdit(utt.speaker) } else Modifier,
                         )
                         Text(" · ", style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
                     }
@@ -947,7 +953,7 @@ internal fun UtteranceRow(
                     color = pal.Slate200,
                 )
                 LineMenu(utt.speaker, speakerIds, speakerNames, onBeginEdit, onReassignLine, onMergeSpeaker,
-                    expanded = menuOpen, onExpandedChange = { menuOpen = it }, onSplit = onSplitLine)
+                    expanded = menuOpen && editable, onExpandedChange = { menuOpen = it }, onSplit = onSplitLine)
             }
         }
     }
