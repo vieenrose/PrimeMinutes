@@ -390,7 +390,7 @@ private fun Gauge(label: String, value: Int, max: Int, active: Boolean, modifier
     val pal = LocalPrimeMinutesPalette.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = pal.Slate400, modifier = Modifier.weight(1f), maxLines = 1)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = pal.Slate400, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.width(8.dp))
             Text(
                 "%,d / %,d".format(value.coerceAtMost(max), max),
@@ -791,7 +791,7 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
                 )
             }
             agent.beforeFirstReading -> FirstReadingText(agent, MaterialTheme.typography.labelMedium)
-            else -> Text(statusLine(st), style = MaterialTheme.typography.labelMedium, color = pal.Slate400, maxLines = 1)
+            else -> Text(statusLine(st), style = MaterialTheme.typography.labelMedium, color = pal.Slate400, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
