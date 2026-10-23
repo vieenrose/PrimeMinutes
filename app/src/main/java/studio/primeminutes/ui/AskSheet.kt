@@ -110,6 +110,7 @@ fun AskSheet(
     val phase by AskEngine.phase.collectAsState()
     val turns by AskEngine.turns.collectAsState()
     var followUp by remember { mutableStateOf("") }
+    var confirmClear by remember { mutableStateOf(false) }
     // Typing is the reason this sheet opens: the question field takes focus once the sheet settles
     // (iOS does the same in `fc2f9c65`).
     val askFocus = remember { FocusRequester() }
@@ -176,10 +177,28 @@ fun AskSheet(
                 }
                 // Start over: a new conversation (library-wide; closing the sheet would also unload the
                 // reader), and in-meeting it also forgets this meeting's earlier questions (iOS: both).
-                if (!busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                // In-meeting the saved questions are deleted for good, so that path asks first (iOS
+                // confirmationDialog); the library-wide reset only drops this sheet's conversation.
+                fun startOver() {
                     AskEngine.reset(); history = emptyList()
                     scope?.dir?.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
                     followUp = ""; runCatching { askFocus.requestFocus() }
+                }
+                if (confirmClear) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmClear = false },
+                    title = { Text(stringResource(R.string.ask_meeting_clear)) },
+                    text = { Text(stringResource(R.string.ask_meeting_clear_body)) },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { confirmClear = false; startOver() }, modifier = Modifier.testTag("ask-meeting-clear-confirm")) {
+                            Text(stringResource(R.string.ask_meeting_clear_action), color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.cancel)) }
+                    },
+                )
+                if (!busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                    if (scope != null) confirmClear = true else startOver()
                 }, modifier = Modifier.testTag(if (scope != null) "ask-meeting-clear" else "ask-reset")) {
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(if (scope != null) R.string.ask_meeting_clear else R.string.ask_reset), tint = pal.Slate400)
                 }

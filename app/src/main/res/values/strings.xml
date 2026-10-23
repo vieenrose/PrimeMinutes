@@ -687,6 +687,8 @@
     <string name="ask_meeting_stage_searching">Searching this meeting… %1$d s</string>
     <string name="ask_meeting_earlier">Earlier</string>
     <string name="ask_meeting_clear">Clear this meeting\'s questions</string>
+    <string name="ask_meeting_clear_body">Earlier questions and answers for this meeting will be deleted. This can\'t be undone.</string>
+    <string name="ask_meeting_clear_action">Clear</string>
     <string name="ask_reset">New conversation</string>
     <string name="search_results_notes">AI notes</string>
     <string name="search_results_transcript">Transcript</string>

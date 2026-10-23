@@ -673,6 +673,8 @@
     <string name="ask_meeting_stage_searching">正在搜尋這場會議… %1$d 秒</string>
     <string name="ask_meeting_earlier">先前的問題</string>
     <string name="ask_meeting_clear">清除這場會議的問答</string>
+    <string name="ask_meeting_clear_body">這場會議之前問過的問題和回答都會刪掉，刪了就找不回來。</string>
+    <string name="ask_meeting_clear_action">清除</string>
     <string name="ask_reset">新對話</string>
     <string name="search_results_notes">AI 筆記</string>
     <string name="search_results_transcript">逐字稿</string>
