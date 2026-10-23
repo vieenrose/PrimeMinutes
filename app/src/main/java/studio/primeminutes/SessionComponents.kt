@@ -5,6 +5,7 @@ package studio.primeminutes
 
 import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -397,7 +398,10 @@ internal fun CollapsibleMarkdown(
             stringResource(if (expanded) R.string.show_less else R.string.show_more),
             style = MaterialTheme.typography.labelMedium,
             color = pal.Slate400,
-            modifier = Modifier.padding(top = 4.dp).clickable { expanded = !expanded },
+            // Role + 48dp minimum: the bare label was a ~16dp-high tap target that TalkBack read as plain text.
+            modifier = Modifier.padding(top = 4.dp)
+                .minimumInteractiveComponentSize()
+                .clickable(role = Role.Button) { expanded = !expanded },
         )
     }
 }
