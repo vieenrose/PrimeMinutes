@@ -209,7 +209,7 @@ fun EmailParticipantsSheet(
             }
             // Speakers who cannot be recipients yet: name them first.
             Recipients.loose(speakers, labels.filterKeys { it !in people }, people).forEach { l ->
-                Row(Modifier.fillMaxWidth().then(if (onNameSpeaker != null) Modifier.clickable { onNameSpeaker(l.speaker) } else Modifier).heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().then(if (onNameSpeaker != null) Modifier.clickable(role = Role.Button) { onNameSpeaker(l.speaker) } else Modifier).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (l.label == null) stringResource(R.string.mail_unnamed, stringResource(R.string.speaker_n, l.speaker + 1))
                         else stringResource(R.string.mail_plain_label, l.label),
