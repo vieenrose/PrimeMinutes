@@ -39,6 +39,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
@@ -229,7 +230,7 @@ fun MeetingSearchResults(
         fun rows(rs: List<MeetingSearch.Result>) = rs.forEachIndexed { i, r ->
             item(key = "${r.kind}-${r.line}-${r.timeSec}-$i") {
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(r) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(r) }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Text(
@@ -267,7 +268,7 @@ fun MeetingSearchResults(
         }
         if (onAsk != null) item(key = "ask") {
             Row(
-                Modifier.fillMaxWidth().clickable { onAsk() }.padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { onAsk() }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky, modifier = Modifier.size(16.dp))
