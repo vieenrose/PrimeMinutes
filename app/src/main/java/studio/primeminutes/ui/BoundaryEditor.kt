@@ -74,6 +74,7 @@ import kotlinx.coroutines.delay
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import java.util.Locale
+import androidx.compose.ui.semantics.heading
 
 /**
  * The seam between two consecutive lines of different speakers: a hairline that fades from A's colour
@@ -178,7 +179,7 @@ fun BoundaryEditorSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = pal.Slate900) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = 12.dp)) {
             Text(stringResource(if (choices != null) R.string.boundary_split_title else R.string.boundary_title),
-                style = MaterialTheme.typography.titleMedium, color = pal.Slate200)
+                style = MaterialTheme.typography.titleMedium, color = pal.Slate200, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SpeakerDot(colorA); Text(" $labelA", color = colorA, fontWeight = FontWeight.SemiBold,

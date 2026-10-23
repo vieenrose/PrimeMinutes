@@ -86,6 +86,8 @@ import studio.primeminutes.core.share.ShareHistory
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
 import java.io.File
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** What the participants sheet hands to the caller, which opens the mail app (or the share sheet). */
 data class MailRequest(
@@ -179,7 +181,8 @@ fun EmailParticipantsSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().testTag("mail-sheet")) {
-            Text(stringResource(R.string.mail_sheet_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = pal.Slate200)
+            Text(stringResource(R.string.mail_sheet_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                modifier = Modifier.semantics { heading() })
             Text("$title · $dateLabel", color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
             SectionLabel(stringResource(R.string.mail_recipients))

@@ -71,6 +71,8 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
 import java.text.DateFormat
 import java.util.Date
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** One meeting a person is linked in. */
 private data class PersonMeeting(val entry: SessionLibrary.Entry, val speakers: Set<Int>)
@@ -129,7 +131,7 @@ private fun PeopleContent(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_people_back), tint = pal.Slate200)
             }
             Text(open?.name ?: stringResource(R.string.people_title), style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (open == null) {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("people-list")) {
