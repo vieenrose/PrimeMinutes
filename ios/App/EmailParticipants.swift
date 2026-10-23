@@ -292,7 +292,7 @@ struct EmailParticipantsSheet: View {
                         .accessibilityIdentifier("mail-inline-address")
                     // The action adds this address (it is not a save): VoiceOver must say so.
                     Button { addAddress(r.person.id, EmailRules.normalize(typed)) } label: { Image(systemName: "paperplane.fill").tapTarget() }.disabled(!ok).buttonStyle(.borderless).accessibilityLabel(L("mail_add_address"))
-                    Button { ContactPicker.present { _, chosen in addAddress(r.person.id, chosen) } } label: { Image(systemName: "person.crop.rectangle") }
+                    Button { ContactPicker.present { _, chosen in addAddress(r.person.id, chosen) } } label: { Image(systemName: "person.crop.rectangle").tapTarget() }
                         .buttonStyle(.borderless).accessibilityLabel(L("contact_choose"))
                 }.padding(.leading, 34)
                 Text(L("mail_will_save", r.person.name)).font(.caption).foregroundStyle(.secondary).padding(.leading, 34)
