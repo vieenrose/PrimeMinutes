@@ -969,7 +969,8 @@ struct Collapsible<C: View>: View {
                 .background(content().fixedSize(horizontal: false, vertical: true).hidden()
                     .background(GeometryReader { g in Color.clear.onAppear { full = g.size.height }.onChange(of: g.size.height) { _, h in full = h } }))
             if expanded || full > folded + 1 {
-                Button(L(expanded ? "show_less" : "show_more")) { withAnimation { expanded.toggle() } }.font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                // A caption-size text button was a ~16 pt tall target; give it the 44 pt height without widening it.
+                Button { withAnimation { expanded.toggle() } } label: { Text(L(expanded ? "show_less" : "show_more")).tapHeight() }.font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
         }
     }
