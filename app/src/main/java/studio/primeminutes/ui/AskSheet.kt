@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -219,8 +221,8 @@ fun AskSheet(
                                 else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
                                 maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                                    .clickable { onOpenAt(x.entry, x.at) },
+                                modifier = Modifier.clickable(role = Role.Button) { onOpenAt(x.entry, x.at) }
+                                    .heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically).padding(vertical = 2.dp),
                             )
                         }
                     }
