@@ -612,3 +612,4 @@
 "transcript_empty" = "尚无转录文字——处理完成后会显示在这里。";
 "cd_volume" = "音量";
 "cd_muted" = "已静音";
+"settings_locked_running" = "录音或处理进行中，识别、AI 笔记模型与线程设置要等它结束才能调整。";

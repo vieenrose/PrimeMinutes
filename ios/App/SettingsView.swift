@@ -26,10 +26,13 @@ struct SettingsView: View {
     var openMeeting: (Session, Double) -> Void = { _, _ in }
     @ObservedObject private var people = PeopleStore.shared
     @State private var showPeople = Dev.env["VOX_PEOPLE"] != nil
+    /// A recording or job is running: the engine settings it reads stay put until it ends (Android `enabled = !s.running`).
+    private var locked: Bool { m.runner.activeJob != nil || m.capture.recording }
     var body: some View {
         NavigationStack { ScrollViewReader { proxy in
             Form {
                 ModelDownloadSection(downloads: m.downloads)   // the first-use download in progress, with Cancel
+                if locked { Section { Label(L("settings_locked_running"), systemImage: "lock").foregroundStyle(.secondary) } }
                 Section {
                     Picker(L("language"), selection: $language) { ForEach(AppLanguage.allCases) { Text($0.autonym).tag($0.rawValue) } }
                 } header: { Text(L("settings_language")) } footer: { Text(L("settings_language_hint")) }
@@ -52,7 +55,7 @@ struct SettingsView: View {
                         Slider(value: $asrIndex, in: 0...Double(AsrRegistry.latencies.count - 1), step: 1) { editing in
                             guard !editing else { return }
                             Prefs.asrLatency = AsrRegistry.latencies[Int(asrIndex)]; m.downloads.maybePrefetchSpeech()
-                        }.accessibilityIdentifier("settings-asr-latency")
+                        }.accessibilityIdentifier("settings-asr-latency").disabled(locked)
                     }
                 } footer: { Text(L("settings_asr_latency_hint")) }
                 // The people directory (names shared by all meetings; voice recognition will live there too).
@@ -70,20 +73,23 @@ struct SettingsView: View {
                         if Prefs.e4bAllowed { Text(L("reader_model_e4b") + " · 3.3 GB").tag("E4B") }
                     }.pickerStyle(.inline).labelsHidden()
                     .onChange(of: reader) { Prefs.readerId = reader }
+                    .disabled(locked)
                     .id("readerModel")
                 } header: { Text(L("settings_reader_model")) } footer: {
                     Text(L("reader_model_hint", SizeFormat.bytes(ReaderModel.e2b.totalBytes), SizeFormat.bytes(ReaderModel.e4bV2.totalBytes)) + (Prefs.e4bAllowed ? "" : "\n" + L("reader_model_e4b_ram")))
                 }
                 Section { Toggle(L("settings_hw_monitor"), isOn: $hwMonitor) } footer: { Text(L("settings_hw_monitor_hint")) }
                 Section {
+                    Group {
                     Toggle(L("threads_auto"), isOn: Binding(get: { threads == 0 }, set: { threads = $0 ? 0 : Prefs.effectiveThreads; Prefs.threads = threads }))
                     if threads > 0 {
                         Stepper(L("threads_n", threads), value: Binding(get: { threads }, set: { threads = $0; Prefs.threads = $0 }), in: 2...max(2, Prefs.cores))
                     }
+                    }.disabled(locked)
                     Button(L(benching ? "settings_inference_running" : "settings_inference_run")) {
                         benching = true; threads = 0; Prefs.threads = 0
                         Task { _ = await Prefs.runBench(); benchTick += 1; benching = false }
-                    }.disabled(benching)
+                    }.disabled(benching || locked)
                 } header: { Text(L("settings_inference")) } footer: { Text(inferenceFooter).id(benchTick) }
                 Section {
                     if !EmbedHost.ready {
