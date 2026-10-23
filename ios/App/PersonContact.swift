@@ -108,8 +108,8 @@ struct PersonContactSections: View {
                     if isDefault && showDefault { Image(systemName: "star.fill").foregroundStyle(Color.accentColor).accessibilityLabel(L("email_default")) }
                     Menu {
                         if !isDefault { Button(L("email_make_default")) { store.makeDefaultEmail(p.id, e.address) } }
-                        Button(L("email_remove"), role: .destructive) { store.removeEmail(p.id, e.address) }
-                    } label: { Image(systemName: "ellipsis.circle").foregroundStyle(.secondary) }.accessibilityLabel(L("cd_more_options"))
+                        Button(L("email_remove"), role: .destructive) { store.removeEmail(p.id, e.address); Haptics.destructive() }
+                    } label: { Image(systemName: "ellipsis.circle").foregroundStyle(.secondary).tapTarget() }.accessibilityLabel(L("cd_more_options"))
                 }
             }
             Button { draft = ""; adding = true } label: { Label(L("email_add"), systemImage: "plus") }.accessibilityIdentifier("email-add")
