@@ -393,6 +393,7 @@ struct SessionView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
+                    if busy { RunStatusRow(id: s.id).padding(.horizontal, 16) }
                     Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
                         .pickerStyle(.segmented).padding(.horizontal, 16)
                     if tab == 0 { summaryTab } else { transcriptTab }
@@ -777,6 +778,33 @@ struct SessionView: View {
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }
 
+}
+
+/// A run (re-summarize, re-transcribe) on the open meeting: its status line and progress, as the live view's header
+/// shows them (LiveJobView); until now nothing on this screen said anything was happening until the summary changed.
+/// Its own view, so the model's changes redraw this row only.
+private struct RunStatusRow: View {
+    @ObservedObject private var m = Model.shared
+    let id: UUID
+    var body: some View {
+        let active = m.runner.activeJob == id
+        let job = m.runner.waiting.first(where: { $0.id == id })
+        if active || job != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    // Decoration for the status text next to it (an SF Symbol would read its own name).
+                    if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(.orange).accessibilityHidden(true) }
+                    Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
+                    Spacer(minLength: 0)
+                    if active { HwStatusLine() }
+                }
+                if active { ProgressView(value: min(max(m.runner.jobProgress, 0), 1)) }
+            }
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("session-run-status")
+        }
+    }
 }
 
 /// Calls `changed` while the user scrolls a scroll view by hand (a programmatic scrollTo does not count). iOS 18 reads
