@@ -347,6 +347,7 @@ struct AskSheet: View {
     var meeting: Session? = nil
     @State private var followup = ""
     @State private var history: [AskEngine.Turn] = []
+    @State private var confirmClear = false
     /// The run was working at the previous phase change: its end is the moment to confirm by touch.
     @State private var askWasWorking = false
     /// The composer is the sheet's reason for existing: it takes focus when the sheet settles.
@@ -419,8 +420,14 @@ struct AskSheet: View {
                 } }
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
                 // In-meeting: a new conversation also forgets this meeting's earlier questions.
-                ToolbarItem(placement: .primaryAction) { Button { ask.reset(); if let m = meeting { history = []; AskHistory.clear(m.id) } } label: { Image(systemName: "arrow.counterclockwise") }
-                    .accessibilityLabel(L(meeting != nil ? "ask_meeting_clear" : "ask_reset")) }
+                // Saved questions are lost for good, so a meeting with any asks first; nothing to clear → disabled.
+                ToolbarItem(placement: .primaryAction) { Button { if meeting != nil, !(history.isEmpty && ask.turns.isEmpty) { confirmClear = true } else { ask.reset() } } label: { Image(systemName: "arrow.counterclockwise") }
+                    .disabled(history.isEmpty && ask.turns.isEmpty)
+                    .accessibilityLabel(L(meeting != nil ? "ask_meeting_clear" : "ask_reset"))
+                    .confirmationDialog(L("ask_meeting_clear"), isPresented: $confirmClear, titleVisibility: .visible) {
+                        Button(L("ask_meeting_clear"), role: .destructive) { ask.reset(); if let m = meeting { history = []; AskHistory.clear(m.id) } }
+                        Button(L("cancel"), role: .cancel) {}
+                    } }
             }
         }
         .onAppear {
