@@ -611,6 +611,7 @@
 "peertube_no_file" = "此视频没有可下载的文件";
 "peertube_add" = "添加";
 "transcript_empty" = "尚无转录文字——处理完成后会显示在这里。";
+"transcript_empty_title" = "还没有转写文本";
 "cd_volume" = "音量";
 "cd_muted" = "已静音";
 "settings_locked_running" = "录音或处理进行中，识别、AI 笔记模型与线程设置要等它结束才能调整。";

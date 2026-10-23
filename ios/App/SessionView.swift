@@ -361,7 +361,10 @@ struct SessionView: View {
             }
             if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
             // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
-            if s.lines.isEmpty { Text(L(s.noSpeech ? "status_no_speech" : "transcript_empty")).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity).multilineTextAlignment(.center).padding(.top, 40) }
+            if s.lines.isEmpty {
+                ContentUnavailableView(L(s.noSpeech ? "status_no_speech" : "transcript_empty_title"), systemImage: s.noSpeech ? "waveform.slash" : "text.alignleft",
+                                       description: s.noSpeech ? nil : Text(L("transcript_empty"))).padding(.top, 24)
+            }
             ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
                 // A seam handle between two speakers: adjust where one stops and the next starts.
                 if idx > 0, shown[idx - 1].speaker != l.speaker, !busy {
