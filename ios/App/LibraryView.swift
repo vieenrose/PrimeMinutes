@@ -300,15 +300,23 @@ struct LibraryView: View {
                         }.frame(maxWidth: .infinity).padding(.top, 40)
                     }
                     if !m.library.sessions.isEmpty && days.isEmpty {
-                        VStack(spacing: 16) {
-                            Text(L(densePending != nil ? "studio_searching" : "studio_no_match")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        if densePending != nil {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                Text(L("studio_searching")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            }.frame(maxWidth: .infinity).padding(.top, 40).accessibilityElement(children: .combine)
+                        } else {
                             // A no-match with a search and filter chips on was a dead end: the way out was
                             // clearing the field by hand and finding the chips behind the empty list (Android parity).
-                            if densePending == nil && (!query.trimmingCharacters(in: .whitespaces).isEmpty || filter != .all || personFilter != nil) {
-                                Button(L("studio_clear_filters")) { query = ""; filter = .all; personFilter = nil; searchFocused = false }
-                                    .buttonStyle(.bordered).controlSize(.large)
-                            }
-                        }.frame(maxWidth: .infinity).padding(.top, 40)
+                            ContentUnavailableView {
+                                Label(L("studio_no_match"), systemImage: "magnifyingglass")
+                            } actions: {
+                                if !query.trimmingCharacters(in: .whitespaces).isEmpty || filter != .all || personFilter != nil {
+                                    Button(L("studio_clear_filters")) { query = ""; filter = .all; personFilter = nil; searchFocused = false }
+                                        .buttonStyle(.bordered).controlSize(.large)
+                                }
+                            }.frame(maxWidth: .infinity).padding(.top, 24)
+                        }
                     }
                     ForEach(m.runner.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
                     ForEach(days, id: \.0) { day, items in
