@@ -197,6 +197,7 @@
     <string name="search_prev">上一個</string>
     <string name="search_next">下一個</string>
     <string name="search_close">關閉搜尋</string>
+    <string name="search_more_cd">更多搜尋選項</string>
     <string name="svc_transcribing">轉錄中…</string>
     <string name="card_action_items">行動項目</string>
     <string name="action_items_copied">已複製行動項目</string>

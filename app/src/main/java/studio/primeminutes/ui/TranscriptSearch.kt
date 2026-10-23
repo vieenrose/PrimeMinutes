@@ -1,6 +1,14 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -92,8 +100,17 @@ fun TranscriptSearchBar(
     // Opening the bar means "I want to type": focus it and raise the keyboard.
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val showResults = resultsOpen != null && query.isNotEmpty()
+    val extras = (if (showResults) 1 else 0) + (if (onAsk != null) 1 else 0)
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+    // 48 dp targets on a ~390 dp row left the query field ~30 dp wide. Keep the field at least
+    // 120 dp: when the inline buttons would squeeze it below that, results/Ask move into a ⋮ menu.
+    val fixed = 24.dp + 26.dp + 48.dp + (if (semanticAvailable) 48.dp else 0.dp) +
+        (if (query.isNotEmpty()) 56.dp + 96.dp else 0.dp)
+    val overflow = extras > 0 && maxWidth - fixed - 48.dp * extras < 120.dp
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
@@ -152,23 +169,49 @@ fun TranscriptSearchBar(
                 Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
         }
-        if (resultsOpen != null && query.isNotEmpty()) {
-            IconButton(onClick = onToggleResults, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    if (resultsOpen) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
-                    stringResource(if (resultsOpen) R.string.search_results_hide else R.string.search_results_show),
-                    tint = if (resultsOpen) pal.Sky else pal.Slate400, modifier = Modifier.size(20.dp),
-                )
+        if (overflow) {
+            Box {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Filled.MoreVert, stringResource(R.string.search_more_cd), tint = pal.Slate400, modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (showResults) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (resultsOpen == true) R.string.search_results_hide else R.string.search_results_show)) },
+                            leadingIcon = { Icon(if (resultsOpen == true) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List, null) },
+                            onClick = { menuOpen = false; onToggleResults() },
+                        )
+                    }
+                    if (onAsk != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_meeting_title)) },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky) },
+                            onClick = { menuOpen = false; onAsk() },
+                            modifier = Modifier.testTag("search-ask-meeting"),
+                        )
+                    }
+                }
             }
-        }
-        if (onAsk != null) {
-            IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("search-ask-meeting")) {
-                Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
+        } else {
+            if (resultsOpen != null && query.isNotEmpty()) {
+                IconButton(onClick = onToggleResults, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        if (resultsOpen == true) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
+                        stringResource(if (resultsOpen == true) R.string.search_results_hide else R.string.search_results_show),
+                        tint = if (resultsOpen == true) pal.Sky else pal.Slate400, modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            if (onAsk != null) {
+                IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("search-ask-meeting")) {
+                    Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
+                }
             }
         }
         IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.search_close), tint = pal.Slate400, modifier = Modifier.size(18.dp))
         }
+    }
     }
 }
 
