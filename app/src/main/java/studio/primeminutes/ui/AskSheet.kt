@@ -199,11 +199,14 @@ fun AskSheet(
                         t.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
-                    if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
-                            speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
-                        style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
-                    )
+                    // Selectable (long-press, then copy) like iOS's `.textSelection`; a tap on a citation still opens it.
+                    if (t.answer.isNotBlank()) androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
+                                speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
+                            style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
+                        )
+                    }
                     if (t.done && t.excerpts.isNotEmpty()) {
                         Text(
                             stringResource(R.string.ask_sources), style = MaterialTheme.typography.labelSmall,
