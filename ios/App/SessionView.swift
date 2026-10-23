@@ -65,7 +65,9 @@ struct SessionView: View {
     @StateObject private var player: Player
     @AppStorage("showActions") private var showActions = false
     @State private var query = ""
-    @State private var follow = true
+    /// When the user last scrolled the page by hand: following the playing line holds off for a few seconds after it
+    /// (Android: only while playing, 4 s after a manual scroll), so scrolling back to re-read is not snapped away.
+    @State private var userScrolledAt = Date.distantPast
     @State private var renamingTitle = false
     @State private var draft = ""
     @State private var renamingSpeaker: Int?
@@ -380,11 +382,13 @@ struct SessionView: View {
                 }.padding(.top, 8)
             }
             .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
+            .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
             .background(Color(.systemGroupedBackground))
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
-            .onChange(of: current) { _, id in if follow, player.engaged, tab == 1, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
+            // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
+            .onChange(of: current) { _, id in if player.playing, query.isEmpty, tab == 1, Date().timeIntervalSince(userScrolledAt) > 4, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
             .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
             .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
@@ -754,6 +758,23 @@ struct SessionView: View {
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }
 
+}
+
+/// Calls `changed` while the user scrolls a scroll view by hand (a programmatic scrollTo does not count). iOS 18 reads
+/// the scroll phase; iOS 17 has no phase, so a drag recognized alongside the scroll stands in (on iOS 18 such a gesture
+/// can hold up the scroll itself, hence not used there).
+private struct UserScrollWatch: ViewModifier {
+    let changed: () -> Void
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollPhaseChange { old, new in
+                func byHand(_ p: ScrollPhase) -> Bool { p == .interacting || p == .decelerating }
+                if byHand(old) || byHand(new) { changed() }   // on the way out too: the hold-off counts from the end of a fling
+            }
+        } else {
+            content.simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in changed() })
+        }
+    }
 }
 
 struct ShareSheet: UIViewControllerRepresentable {
