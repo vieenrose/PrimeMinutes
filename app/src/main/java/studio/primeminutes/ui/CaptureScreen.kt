@@ -1,5 +1,8 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.animateFloat
 
 import androidx.compose.ui.draw.alpha
@@ -208,8 +211,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
     // A model still downloading (e.g. the 3 GB summary model on a first run, while the meeting is
     // already being transcribed): say so on the booth, not only in the notification shade.
     if (utterances.isNotEmpty()) notice?.takeIf { it.isNotBlank() }?.let {
+        // Polite live region: TalkBack users hear the download state change without hunting for it.
         Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(vertical = 4.dp))
+            modifier = Modifier.padding(vertical = 4.dp).semantics { liveRegion = LiveRegionMode.Polite })
     }
     if (utterances.isEmpty()) {
         // Centered waiting state: a corner-anchored one-liner made the big empty panel
@@ -224,7 +228,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
                 Text(stringResource(R.string.capture_live_waiting), color = pal.Slate400, style = MaterialTheme.typography.titleMedium)
                 notice?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(6.dp))
-                    Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                    Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
         }
