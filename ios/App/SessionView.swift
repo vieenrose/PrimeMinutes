@@ -983,6 +983,8 @@ struct PlayerBar: View {
     var body: some View {
         VStack(spacing: 6) {
             Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration)) { editing in if !editing, !player.playing { player.toggle() } }
+                // VoiceOver otherwise reads a bare percentage of the meeting; say what it is and where playback is.
+                .accessibilityLabel(L("cd_seek")).accessibilityValue(L("cd_seek_value", Export.mmss(player.time), Export.mmss(player.duration)))
             HStack {
                 // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
                 Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)

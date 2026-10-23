@@ -616,3 +616,5 @@
 "cd_muted" = "已静音";
 "settings_locked_running" = "录音或处理进行中，识别、AI 笔记模型与线程设置要等它结束才能调整。";
 "settings_inference_failed" = "测试没有完成，已保留原来的设置。";
+"cd_seek" = "播放位置";
+"cd_seek_value" = "%1$@，共 %2$@";

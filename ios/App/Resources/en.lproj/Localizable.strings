@@ -616,3 +616,5 @@
 "cd_muted" = "Muted";
 "settings_locked_running" = "Recognizer, AI notes model and thread settings unlock when the current recording or job is done.";
 "settings_inference_failed" = "The measurement failed, so your previous setting was kept.";
+"cd_seek" = "Playback position";
+"cd_seek_value" = "%1$@ of %2$@";
