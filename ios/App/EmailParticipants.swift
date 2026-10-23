@@ -259,6 +259,7 @@ struct EmailParticipantsSheet: View {
             HStack(spacing: 10) {
                 Button { checked[r.person.id] = !r.checked } label: {
                     Image(systemName: r.checked ? "checkmark.square.fill" : "square").foregroundStyle(r.address == nil ? Color.secondary : Color.accentColor)
+                        .tapTarget()   // the bare glyph was a ~22 pt target beside the avatar
                 }.buttonStyle(.borderless).disabled(r.address == nil)
                 // The state is carried by the glyph alone, and "no address" by the box going grey:
                 // VoiceOver has to say who, whether, and that this one cannot be picked at all.
