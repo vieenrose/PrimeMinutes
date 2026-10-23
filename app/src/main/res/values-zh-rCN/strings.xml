@@ -672,6 +672,7 @@
     <string name="ask_meeting_stage_searching">正在搜索这场会议… %1$d 秒</string>
     <string name="ask_meeting_earlier">先前的问题</string>
     <string name="ask_meeting_clear">清除这场会议的问答</string>
+    <string name="ask_reset">新对话</string>
     <string name="search_results_notes">AI 笔记</string>
     <string name="search_results_transcript">逐字稿</string>
     <string name="search_results_show">显示结果列表</string>

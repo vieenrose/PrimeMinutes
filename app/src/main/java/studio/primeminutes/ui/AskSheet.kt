@@ -172,12 +172,14 @@ fun AskSheet(
                 if (busy) IconButton(onClick = { AskEngine.cancel() }) {
                     Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.ask_cancel), tint = pal.Slate400)
                 }
-                // In-meeting: start over and forget this meeting's earlier questions.
-                if (scope != null && !busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                // Start over: a new conversation (library-wide; closing the sheet would also unload the
+                // reader), and in-meeting it also forgets this meeting's earlier questions (iOS: both).
+                if (!busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
                     AskEngine.reset(); history = emptyList()
-                    scope.dir.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
-                }, modifier = Modifier.testTag("ask-meeting-clear")) {
-                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.ask_meeting_clear), tint = pal.Slate400)
+                    scope?.dir?.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
+                    followUp = ""; runCatching { askFocus.requestFocus() }
+                }, modifier = Modifier.testTag(if (scope != null) "ask-meeting-clear" else "ask-reset")) {
+                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(if (scope != null) R.string.ask_meeting_clear else R.string.ask_reset), tint = pal.Slate400)
                 }
             }
             Column(
