@@ -426,6 +426,7 @@
 "people_title" = "People";
 "people_settings_desc" = "The names you gave to speakers, shared by all your meetings";
 "people_none" = "No one yet. Tap a speaker’s name in a transcript to name them.";
+"people_none_title" = "No people yet";
 "people_migration_card" = "We found %d names in your meetings and gathered them here. Identical names became one person: check them, and split one that is two people.";
 "people_migration_card_one" = "We found one name in your meetings and gathered it here. Check it, and split it if it is two people.";
 "people_migration_ok" = "OK";

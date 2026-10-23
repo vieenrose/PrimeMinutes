@@ -426,6 +426,7 @@
 "people_title" = "说话人名录";
 "people_settings_desc" = "你为说话人取的名字，所有会议共用";
 "people_none" = "还没有任何人。在转写文本中点说话人名称即可命名。";
+"people_none_title" = "还没有人";
 "people_migration_card" = "在你的会议中找到 %d 个名字，已集中到这里。相同的名字已合为一人：请检查，若其实是两个人，可以分开。";
 "people_migration_card_one" = "在你的会议中找到 1 个名字，已集中到这里。请检查，若其实是两个人，可以分开。";
 "people_migration_ok" = "知道了";

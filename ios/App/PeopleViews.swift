@@ -270,7 +270,9 @@ struct PeopleScreen: View {
                 }
             }
             VoiceSettingsCard()
-            if doc.people.isEmpty { Text(L("people_none")).foregroundStyle(.secondary) }
+            if doc.people.isEmpty {
+                ContentUnavailableView(L("people_none_title"), systemImage: "person.2", description: Text(L("people_none")))
+            }
             Section {
                 ForEach(sorted) { p in
                     let ms = meetings[p.id] ?? []
