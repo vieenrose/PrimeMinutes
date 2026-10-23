@@ -435,4 +435,26 @@ class SessionReducerTest {
         assertEquals(SpeakerName("Mark", person = "p9"), s.speakerNames[0]); assertTrue(s.sessionDirty)
         assertTrue(SessionReducer.linkSpeaker(s, 0, null, "").speakerNames.isEmpty())
     }
+
+    @Test fun namingASpeakerIsUndoable() {
+        val s = s0.copy(utterances = listOf(utt(0, speaker = 0), utt(1, speaker = 1)))
+        val before = s.utterances to s.speakerNames
+        val named = SessionReducer.linkSpeaker(s, 0, "p9", "Mark")
+        assertTrue(SessionReducer.canUndoEdit(named))
+        // the top bar's Undo, then Redo
+        val undone = SessionReducer.undoEdit(named)
+        assertNull(undone.speakerNames[0]); assertTrue(SessionReducer.canRedoEdit(undone))
+        assertEquals("Mark", SessionReducer.redoEdit(undone).speakerNames[0]?.name)
+        // the snackbar's Undo is the same step
+        assertNull(SessionReducer.undoSpeakerEdit(named, named.sessionGen, before, named.utterances).speakerNames[0])
+        // the same name again records nothing
+        assertEquals(named.editUndo, SessionReducer.linkSpeaker(named, 0, "p9", "Mark").editUndo)
+        // a second naming after it: the first one's snackbar no longer undoes anything
+        val twice = SessionReducer.linkSpeaker(named, 1, null, "Lin")
+        assertEquals(twice, SessionReducer.undoSpeakerEdit(twice, twice.sessionGen, before, twice.utterances))
+        // naming keeps the earlier steps: a merge before it is still undoable after
+        val merged = SessionReducer.mergeSpeaker(s, env, 1, 0).state
+        val back = SessionReducer.undoEdit(SessionReducer.undoEdit(SessionReducer.linkSpeaker(merged, 0, null, "Mark")))
+        assertEquals(listOf(0, 1), back.utterances.map { it.speaker }); assertTrue(back.speakerNames.isEmpty())
+    }
 }

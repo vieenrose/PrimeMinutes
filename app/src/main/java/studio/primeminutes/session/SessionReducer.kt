@@ -502,12 +502,14 @@ object SessionReducer {
         )
     }
 
-    /** Link [speaker] to a person of the directory, named [name] (null [person]: a plain name; blank name: cleared). */
-    fun linkSpeaker(s: SessionState, speaker: Int, person: String?, name: String): SessionState = s.copy(
-        speakerNames = if (name.isBlank()) s.speakerNames - speaker
-            else s.speakerNames + (speaker to SpeakerName(name.trim(), confidence = "user", person = person)),
-        sessionDirty = true, editingSpeakerId = null, editSeq = s.editSeq + 1,
-    )
+    /** Link [speaker] to a person of the directory, named [name] (null [person]: a plain name; blank name: cleared).
+     *  An Undo step like any other hand-edit (the snackbar's Undo and the top bar's). */
+    fun linkSpeaker(s: SessionState, speaker: Int, person: String?, name: String): SessionState {
+        val names = if (name.isBlank()) s.speakerNames - speaker
+            else s.speakerNames + (speaker to SpeakerName(name.trim(), confidence = "user", person = person))
+        if (names == s.speakerNames) return s.copy(editingSpeakerId = null)
+        return recordEdit(s, s.utterances, names).copy(sessionDirty = true, editingSpeakerId = null, editSeq = s.editSeq + 1)
+    }
 
     /** The directory renamed, merged or deleted people of this meeting: its names as the sidecar now has them. */
     fun namesRelinked(s: SessionState, names: Map<Int, SpeakerName>): SessionState =
@@ -552,7 +554,10 @@ object SessionReducer {
 
     /** The snackbar's Undo of a speaker edit: the same step as the top bar's Undo, only if nothing changed since. */
     fun undoSpeakerEdit(s: SessionState, gen: Int, before: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>, after: List<TranscriptEvent.Utterance>): SessionState =
-        if (s.sessionGen == gen && s.utterances === after && s.editUndo.lastOrNull()?.before?.utterances === before.first) undoEdit(s) else s
+        // Both halves of the snapshot: a name-only step keeps the utterances, so they alone can't tell it from the next one.
+        if (s.sessionGen == gen && s.utterances === after && s.editUndo.lastOrNull()?.before?.let {
+                it.utterances === before.first && it.speakerNames === before.second
+            } == true) undoEdit(s) else s
 
     /** The snackbar left without Undo: a kept merge/move/boundary edit makes the summary and action items stale. */
     fun speakerEditKept(s: SessionState, gen: Int, after: List<TranscriptEvent.Utterance>): SessionState =

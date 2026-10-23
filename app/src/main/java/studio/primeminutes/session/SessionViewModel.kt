@@ -307,6 +307,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     private fun linkUndoable(speaker: Int, person: String?, name: String) {
         val before = now.utterances to now.speakerNames
         update { SessionReducer.linkSpeaker(it, speaker, person, name) }
+        if (now.speakerNames === before.second) return   // the same name again: nothing to undo
         run(SessionEffect.OfferSpeakerUndo(R.string.people_linked, now.sessionGen, before, now.utterances, nameOnly = true))
     }
 
