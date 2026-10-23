@@ -203,9 +203,20 @@ struct SessionView: View {
         }.buttonStyle(.plain)
     }
     @State private var semTask: Task<Void, Never>?
+    /// ≈ is on but this meeting has no index yet (Android TranscriptSearch `indexing`): say so instead of "no matches",
+    /// ask for the build once, and search again when it lands.
+    @State private var semIndexing = false
+    @State private var indexAsked = false
+    private var hasIndex: Bool { FileManager.default.fileExists(atPath: SessionIndex.url(s.id).path) }
     private func semSearch() {
-        semTask?.cancel(); semIds = []; semPassages = []
+        semTask?.cancel(); semIds = []; semPassages = []; semIndexing = false
         let q = query.trimmingCharacters(in: .whitespaces); guard semantic, q.count >= 2, EmbedHost.ready else { return }
+        if !hasIndex {
+            semIndexing = true
+            // While a run works on this meeting the index is asked for when it saves the result.
+            if !indexAsked, !busy { indexAsked = true; LibraryIndexer.shared.request(s) }
+            return
+        }
         let s = self.s
         semTask = Task {
             try? await Task.sleep(nanoseconds: 250_000_000); if Task.isCancelled { return }
@@ -326,7 +337,7 @@ struct SessionView: View {
                             .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
                     }
                     if !query.isEmpty {
-                        Text(hits.isEmpty ? L("search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text(hits.isEmpty ? L(semantic && semIndexing ? "studio_indexing" : "search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         Button { stepMatch(-1) } label: { Image(systemName: "chevron.up").tapHeight() }.accessibilityLabel(L("search_prev"))
                         Button { stepMatch(1) } label: { Image(systemName: "chevron.down").tapHeight() }.accessibilityLabel(L("search_next"))
                     }
@@ -340,6 +351,12 @@ struct SessionView: View {
                     }
                     Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill").tapHeight() }.accessibilityLabel(L("search_close"))
                 }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                if semantic && semIndexing {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small).accessibilityHidden(true)
+                        Text(L("search_semantic_indexing")).font(.caption).foregroundStyle(.secondary)
+                    }.padding(.horizontal, 12).accessibilityElement(children: .combine).accessibilityIdentifier("search-semantic-indexing")
+                }
                 if resultsOpen && !meetingResults.isEmpty { resultsList }
             }
             if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
@@ -636,6 +653,8 @@ struct SessionView: View {
             }
         }
         .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
+        // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
+        .onReceive(LibraryIndexer.shared.$indexing) { ids in if semIndexing, !ids.contains(s.id), hasIndex { semSearch() } }
         .onDisappear { player.stop() }
     }
 

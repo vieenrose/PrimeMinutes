@@ -343,6 +343,7 @@
 "search_semantic_downloading" = "正在下載搜尋模型… %d%%";
 "search_semantic_marker" = "依語意找到";
 "search_semantic_cd" = "依語意搜尋";
+"search_semantic_indexing" = "正在為這場會議建立語意索引，稍後就能依語意搜尋。";
 "search_model_download_failed" = "無法下載搜尋模型";
 "studio_indexing" = "正在建立索引…";
 "settings_index_old" = "為舊會議建立索引";

@@ -343,6 +343,7 @@
 "search_semantic_downloading" = "Downloading the search model… %d%%";
 "search_semantic_marker" = "found by meaning";
 "search_semantic_cd" = "Search by meaning";
+"search_semantic_indexing" = "Building the meaning index for this meeting. Search by meaning will be ready shortly.";
 "search_model_download_failed" = "Couldn't download the search model";
 "studio_indexing" = "Indexing…";
 "settings_index_old" = "Index older meetings";
