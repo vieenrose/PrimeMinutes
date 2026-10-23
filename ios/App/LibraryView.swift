@@ -95,11 +95,13 @@ struct LibraryView: View {
         return g.keys.sorted(by: >).map { ($0, g[$0]!) }
     }
     /// Android: the passages of a search hit under the card, ≈ marking the ones only the meaning found.
+    /// A summary line that matched is shown (it says why the meeting is listed); only a match on the
+    /// title is dropped, since the card already shows the title.
     private func passages(_ s: Session) -> some View {
-        let ps = hits.first { $0.session.id == s.id }?.passages.filter { $0.kind != .meeting || $0.semanticOnly } ?? []
+        let ps = hits.first { $0.session.id == s.id }?.passages.filter { $0.kind != .meeting || $0.semanticOnly || $0.snippet != s.title } ?? []
         return VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(ps.enumerated()), id: \.offset) { _, p in
-                Button { openAt(s, p.timeSec) } label: {
+                Button { if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } } label: {
                     HStack(alignment: .top, spacing: 6) {
                         if p.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
                         if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
