@@ -50,12 +50,12 @@ struct CaptureView: View {
                 }
                 .onChange(of: m.screen.lines.count) { _, _ in if let id = m.screen.lines.last?.id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
             }
-            Button { m.capture.nextTalk() } label: {
+            Button { Haptics.toggle(true); m.capture.nextTalk() } label: {
                 Label(L("capture_next_talk"), systemImage: "forward.end.fill").font(.headline).accessibilityLabel(L("cd_next_talk"))
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
             }.padding(.horizontal, 20)
-            Button { m.capture.toggleRecord() } label: {
+            Button { Haptics.toggle(false); m.capture.toggleRecord() } label: {
                 Label(L("capture_stop"), systemImage: "stop.fill").font(.headline)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(Color.red, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)
