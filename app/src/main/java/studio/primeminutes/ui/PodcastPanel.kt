@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -123,7 +124,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
             }
         } else {
             TextButton(onClick = { selected = null; episodes = emptyList() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.width(18.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp)); Text(sel.title)
             }
             episodes.forEach { e ->
