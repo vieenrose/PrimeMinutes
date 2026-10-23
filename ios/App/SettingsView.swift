@@ -58,6 +58,9 @@ struct SettingsView: View {
                             guard !editing else { return }
                             Prefs.asrLatency = AsrRegistry.latencies[Int(asrIndex)]; m.downloads.maybePrefetchSpeech()
                         }.accessibilityIdentifier("settings-asr-latency").disabled(locked)
+                        // VoiceOver read the raw stop index ("0", "1"...); name the slider and speak the chosen stop.
+                        .accessibilityLabel(L("settings_asr_latency"))
+                        .accessibilityValue(L(["settings_asr_latency_fastest", "settings_asr_latency_fast", "settings_asr_latency_balanced", "settings_asr_latency_accurate"][Int(asrIndex)]))
                     }
                 } footer: { Text(L("settings_asr_latency_hint")) }
                 // The people directory (names shared by all meetings; voice recognition will live there too).
