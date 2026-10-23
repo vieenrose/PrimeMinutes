@@ -120,7 +120,7 @@ fun TranscriptSearchBar(
         )
         if (semanticAvailable) {
             // "≈" — adds the passages that match by meaning to the match set.
-            IconButton(onClick = onSemantic, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onSemantic, modifier = Modifier.size(48.dp)) {
                 Text(
                     stringResource(R.string.search_semantic_marker),
                     color = if (semantic) pal.Sky else pal.Slate400, fontWeight = FontWeight.Bold,
@@ -145,15 +145,15 @@ fun TranscriptSearchBar(
             )
             // An explicit tint overrides IconButton's disabled colour: dim the arrows when there is nothing to step through.
             val arrowTint = if (matchCount > 0) pal.Slate200 else pal.Slate200.copy(alpha = 0.38f)
-            IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.search_prev), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
-            IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
         }
         if (resultsOpen != null && query.isNotEmpty()) {
-            IconButton(onClick = onToggleResults, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onToggleResults, modifier = Modifier.size(48.dp)) {
                 Icon(
                     if (resultsOpen) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
                     stringResource(if (resultsOpen) R.string.search_results_hide else R.string.search_results_show),
@@ -162,11 +162,11 @@ fun TranscriptSearchBar(
             }
         }
         if (onAsk != null) {
-            IconButton(onClick = onAsk, modifier = Modifier.size(40.dp).testTag("search-ask-meeting")) {
+            IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("search-ask-meeting")) {
                 Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
             }
         }
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.search_close), tint = pal.Slate400, modifier = Modifier.size(18.dp))
         }
     }
