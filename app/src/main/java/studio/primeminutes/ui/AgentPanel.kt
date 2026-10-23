@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +29,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -283,7 +286,7 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
             Text(
                 stringResource(R.string.agent_show_process),
                 style = MaterialTheme.typography.labelLarge, color = pal.Sky,
-                modifier = Modifier.clickable { expanded = true }.padding(vertical = 2.dp),
+                modifier = Modifier.clickable(role = Role.Button) { expanded = true }.heightIn(min = 48.dp).wrapContentHeight(),
             )
             return@Column
         }
@@ -305,17 +308,17 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
             if (done) Text(
                 stringResource(R.string.agent_hide_process),
                 style = MaterialTheme.typography.labelLarge, color = pal.Sky,
-                modifier = Modifier.clickable { expanded = false }.padding(vertical = 4.dp),
+                modifier = Modifier.clickable(role = Role.Button) { expanded = false }.heightIn(min = 48.dp).wrapContentHeight(),
             )
             if (hasProcess) Text(
                 stringResource(if (detailed) R.string.agent_view_simple else R.string.agent_view_detailed),
                 style = MaterialTheme.typography.labelLarge, color = pal.Slate400,
-                modifier = Modifier.clickable { detailed = !detailed; if (!detailed) showLog = false }.padding(vertical = 4.dp),
+                modifier = Modifier.clickable(role = Role.Button) { detailed = !detailed; if (!detailed) showLog = false }.heightIn(min = 48.dp).wrapContentHeight(),
             )
             if (detailed && agent.log.isNotEmpty()) Text(
                 stringResource(if (showLog) R.string.agent_hide_log else R.string.agent_show_log, agent.log.size),
                 style = MaterialTheme.typography.labelLarge, color = pal.Slate400,
-                modifier = Modifier.clickable { showLog = !showLog }.padding(vertical = 4.dp),
+                modifier = Modifier.clickable(role = Role.Button) { showLog = !showLog }.heightIn(min = 48.dp).wrapContentHeight(),
             )
         }
         if (detailed && showLog) {
