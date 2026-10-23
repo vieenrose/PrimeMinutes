@@ -238,6 +238,17 @@ class SessionReducerTest {
         assertEquals("new", SessionReducer.undoResummary(moved, env, undo.undo, undo.gen).state.summary)
     }
 
+    @Test fun reSummarizeWritesAFirstSummaryWhenThereIsNone() {
+        // The ⋮ Re-summarize on a meeting whose first summary failed or was stopped.
+        val s = s0.copy(utterances = listOf(utt(0)), summary = null, transcriptReady = true, screen = Screen.Session)
+        assertTrue(SessionReducer.regenerateStaleChildren(s, env, null).effects.none { it is SessionEffect.StartSummarize })
+        val r = SessionReducer.reSummarize(s, env, journal = null)
+        assertTrue(r.state.running); r.effects.one<SessionEffect.StartSummarize>()
+        // Nothing to give back: no Undo offered once it is written.
+        val done = SessionReducer.onEvent(r.state, env, r.state.sessionGen, TranscriptEvent.SummaryComplete("first"), null)
+        assertEquals("first", done.state.summary); assertTrue(done.effects.none { it is SessionEffect.OfferResummaryUndo })
+    }
+
     @Test fun handEditsMarkTheSessionAndItsChildren() {
         var s = s0.copy(utterances = listOf(utt(0), utt(1)), summary = "sum")
         s = SessionReducer.beginLineEdit(s, 1)

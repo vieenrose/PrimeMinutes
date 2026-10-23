@@ -498,12 +498,13 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         }
     }
 
-    /** The ⋮ Re-summarize: the reader starts over (saved notes cleared), then one re-summarize. */
+    /** The ⋮ Re-summarize: the reader starts over (saved notes cleared), then one re-summarize —
+     *  also on a meeting with no summary yet (its first one failed or was stopped). */
     fun reSummarizeFromMenu() {
         val d = now.libraryDir
         viewModelScope.launch {
             d?.let { withContext(Dispatchers.IO) { SessionLibrary.byId(ctx, it.name)?.let(SessionLibrary::clearNotes) } }
-            regenerateStaleChildren()
+            reSummarize()
         }
     }
 
