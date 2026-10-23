@@ -239,7 +239,8 @@ fun AskSheet(
                                 if (scope != null) ReaderProtocol.formatTs(x.sec) + named(x, speakerN = { n -> ctx.getString(R.string.speaker_n, n) }).trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
                                 else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
-                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                // Two lines: at large font a long meeting title ate the timestamp, so sources looked identical.
+                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.clickable(role = Role.Button) { onOpenAt(x.entry, x.at) }
                                     .heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically).padding(vertical = 2.dp),
                             )
