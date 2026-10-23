@@ -360,12 +360,12 @@ fun StudioScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onImport),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onImport),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
                 Spacer(Modifier.width(4.dp))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onSettings),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onSettings),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
             }
