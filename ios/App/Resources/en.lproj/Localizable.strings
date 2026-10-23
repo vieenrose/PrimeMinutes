@@ -610,3 +610,5 @@
 "peertube_no_file" = "This video offers no downloadable file";
 "peertube_add" = "Add";
 "transcript_empty" = "Nothing transcribed yet — the transcript shows up here after processing.";
+"cd_volume" = "Volume";
+"cd_muted" = "Muted";

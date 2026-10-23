@@ -610,3 +610,5 @@
 "peertube_no_file" = "此视频没有可下载的文件";
 "peertube_add" = "添加";
 "transcript_empty" = "尚无转录文字——处理完成后会显示在这里。";
+"cd_volume" = "音量";
+"cd_muted" = "已静音";
