@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -217,7 +218,7 @@ fun EmailParticipantsSheet(
                     if (onNameSpeaker != null) Text(stringResource(if (l.label == null) R.string.mail_name_action else R.string.mail_link_action), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
                 }
             }
-            Row(Modifier.fillMaxWidth().clickable { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.mail_add_recipient), color = pal.Sky, fontWeight = FontWeight.SemiBold)
@@ -425,7 +426,7 @@ private fun AddRecipientDialog(candidates: List<Person>, onDone: (Pair<String?, 
                         Text(p.emails.first().address, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                Row(Modifier.fillMaxWidth().clickable { pick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.contact_choose), color = pal.Sky)

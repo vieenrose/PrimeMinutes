@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,7 +125,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
         }
         if (p.me) Text(stringResource(R.string.email_me_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
         p.emails.forEachIndexed { i, e -> EmailRow(p, e, isDefault = i == 0, showDefault = p.emails.size > 1) }
-        Row(Modifier.fillMaxWidth().clickable { adding = true }.heightIn(min = 48.dp).padding(vertical = 8.dp).testTag("email-add"),
+        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).padding(vertical = 8.dp).testTag("email-add"),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
             Spacer(Modifier.width(8.dp))
