@@ -4,7 +4,8 @@ struct SettingsView: View {
     @ObservedObject var m: Model
     private var inferenceFooter: String {
         let capped: String = Prefs.capped ? "\n" + L("settings_inference_capped") : ""
-        return L("threads_note", Prefs.effectiveThreads, Prefs.cores) + capped + "\n" + L("settings_inference_hint")
+        let failed: String = benchFailed ? "\n" + L("settings_inference_failed") : ""
+        return L("threads_note", Prefs.effectiveThreads, Prefs.cores) + capped + failed + "\n" + L("settings_inference_hint")
     }
     @Binding var language: String
     @Binding var theme: String
@@ -13,6 +14,7 @@ struct SettingsView: View {
     @State private var threads = Prefs.threads
     @State private var benching = false
     @State private var benchTick = 0
+    @State private var benchFailed = false
     @AppStorage("hwMonitor") private var hwMonitor = true
     @State private var reader = Prefs.readerId
     @State private var delay = Prefs.speakerDelay
@@ -87,8 +89,13 @@ struct SettingsView: View {
                     }
                     }.disabled(locked)
                     Button(L(benching ? "settings_inference_running" : "settings_inference_run")) {
-                        benching = true; threads = 0; Prefs.threads = 0
-                        Task { _ = await Prefs.runBench(); benchTick += 1; benching = false }
+                        let previous = threads
+                        benching = true; benchFailed = false; threads = 0; Prefs.threads = 0
+                        Task {
+                            // No pick (benchmark failed): keep the user's previous choice and say so instead of silently going Auto.
+                            if await Prefs.runBench() == nil { threads = previous; Prefs.threads = previous; benchFailed = true }
+                            benchTick += 1; benching = false
+                        }
                     }.disabled(benching || locked)
                 } header: { Text(L("settings_inference")) } footer: { Text(inferenceFooter).id(benchTick) }
                 Section {
