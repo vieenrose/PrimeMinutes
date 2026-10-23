@@ -385,6 +385,11 @@
     <string name="err_decode_failed">此裝置無法解碼 %1$s 音訊</string>
     <string name="err_youtube_no_stream">此影片沒有可用的音訊串流（可能受地區或登入限制）。</string>
     <string name="err_youtube_live">直播無法轉錄，請選擇一般影片。</string>
+    <string name="err_youtube_no_decodable">此裝置無法解碼這部影片提供的任何音訊格式（%1$s）。</string>
+    <string name="err_peertube_bad_link">不是 PeerTube 影片連結</string>
+    <string name="err_peertube_http">PeerTube 伺服器回應錯誤 %1$d</string>
+    <string name="err_peertube_live">無法匯入直播</string>
+    <string name="err_peertube_no_file">此影片沒有可下載的檔案</string>
     <string name="network_error">網路錯誤——請檢查連線後再試一次。</string>
     <plurals name="podcast_episodes">
         <item quantity="other">%d 集</item>

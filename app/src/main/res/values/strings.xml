@@ -392,6 +392,11 @@
     <string name="err_decode_failed">This device could not decode %1$s audio</string>
     <string name="err_youtube_no_stream">No audio stream available for this video (it may be region- or login-gated).</string>
     <string name="err_youtube_live">Live streams can\'t be transcribed; pick a regular video.</string>
+    <string name="err_youtube_no_decodable">This device can\'t decode any audio format this video offers (%1$s).</string>
+    <string name="err_peertube_bad_link">Not a PeerTube video link</string>
+    <string name="err_peertube_http">The PeerTube server replied with error %1$d</string>
+    <string name="err_peertube_live">Live streams can\'t be imported</string>
+    <string name="err_peertube_no_file">This video offers no downloadable file</string>
     <string name="network_error">Network error — check your connection and try again.</string>
     <plurals name="podcast_episodes">
         <item quantity="one">%d episode</item>

@@ -141,8 +141,10 @@ object YouTube {
         val best = playable.filter { it.averageBitrate > 0 }.minByOrNull { it.averageBitrate }
             ?: playable.firstOrNull()
             ?: error(
-                "This device cannot decode any audio format this video offers " +
-                    "(${streams.mapNotNull { it.format?.getName() }.distinct().joinToString()}).",
+                ctx.getString(
+                    studio.primeminutes.R.string.err_youtube_no_decodable,
+                    streams.mapNotNull { it.format?.getName() }.distinct().joinToString(),
+                ),
             )
         val ext = best.format?.suffix?.takeIf { it.isNotBlank() } ?: "m4a"
         YouTubeAudio(title = info.name?.ifBlank { "YouTube audio" } ?: "YouTube audio",
