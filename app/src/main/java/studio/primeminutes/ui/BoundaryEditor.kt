@@ -211,9 +211,9 @@ fun BoundaryEditorSheet(
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cd_boundary_earlier))
                 }
                 OutlinedButton(onClick = { onPreview(maxOf(0.0, t - 2.0), t) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).height(52.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 1) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 1) }
                 OutlinedButton(onClick = { onPreview(t, minOf(t + 2.0, end)) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).height(52.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 1) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 1) }
                 FilledTonalIconButton(onClick = { set(split + 1) }, modifier = Modifier.size(52.dp), colors = nudgeColors()) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cd_boundary_later))
                 }
