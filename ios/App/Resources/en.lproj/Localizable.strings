@@ -151,6 +151,7 @@
 "re_transcribe" = "Re-transcribe";
 "re_summarize" = "Re-summarize";
 "studio_no_match" = "No session matches your search.";
+"studio_clear_filters" = "Clear search and filters";
 "studio_searching" = "Searching…";
 "status_processing" = "Processing…";
 "action_share_audio" = "Share audio";

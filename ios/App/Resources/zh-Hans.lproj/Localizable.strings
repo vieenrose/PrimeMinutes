@@ -151,6 +151,7 @@
 "re_transcribe" = "重新转录";
 "re_summarize" = "重新摘要";
 "studio_no_match" = "没有符合搜索的场次。";
+"studio_clear_filters" = "清除搜索与筛选";
 "studio_searching" = "搜索中…";
 "status_processing" = "处理中…";
 "action_share_audio" = "分享音频";
