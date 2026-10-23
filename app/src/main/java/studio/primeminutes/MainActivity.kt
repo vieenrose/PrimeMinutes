@@ -2119,7 +2119,8 @@ private fun TranscribeScreen(
         s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,
         exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras,
         refs = { refs(it) }, notify = { vm.notify(it) },
-        onNameSpeaker = { sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) },
+        // Like the transcript's speaker names: off while a run relabels the speakers.
+        onNameSpeaker = if (s.running) null else ({ sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) }),
         onDismiss = { mailOpen = false },
     )
     // DEV: `--ez vox_mail true` opens the participants sheet on the open meeting (device checks, screenshots).

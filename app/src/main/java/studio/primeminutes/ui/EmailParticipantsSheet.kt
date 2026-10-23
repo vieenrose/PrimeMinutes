@@ -135,7 +135,8 @@ fun EmailParticipantsSheet(
     entryDir: File?,
     onSend: (MailRequest) -> Unit,
     onShareChat: (MailRequest) -> Unit,
-    onNameSpeaker: (Int) -> Unit,
+    /** Null while a run rewrites the speakers: a name given now could land on a label the diarizer moves. */
+    onNameSpeaker: ((Int) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
@@ -207,13 +208,13 @@ fun EmailParticipantsSheet(
             }
             // Speakers who cannot be recipients yet: name them first.
             Recipients.loose(speakers, labels.filterKeys { it !in people }, people).forEach { l ->
-                Row(Modifier.fillMaxWidth().clickable { onNameSpeaker(l.speaker) }.heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().then(if (onNameSpeaker != null) Modifier.clickable { onNameSpeaker(l.speaker) } else Modifier).heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (l.label == null) stringResource(R.string.mail_unnamed, stringResource(R.string.speaker_n, l.speaker + 1))
                         else stringResource(R.string.mail_plain_label, l.label),
                         color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                     )
-                    Text(stringResource(if (l.label == null) R.string.mail_name_action else R.string.mail_link_action), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
+                    if (onNameSpeaker != null) Text(stringResource(if (l.label == null) R.string.mail_name_action else R.string.mail_link_action), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
                 }
             }
             Row(Modifier.fillMaxWidth().clickable { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
