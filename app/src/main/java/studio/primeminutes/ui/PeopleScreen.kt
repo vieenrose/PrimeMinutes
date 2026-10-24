@@ -3,6 +3,8 @@ package studio.primeminutes.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -303,8 +305,9 @@ private fun PersonPage(
             text = {
                 Column {
                     Text(stringResource(R.string.people_delete_text))
-                    if (meetings.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { clear = !clear }) {
-                        Checkbox(checked = clear, onCheckedChange = { clear = it })
+                    if (meetings.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(value = clear, role = Role.Checkbox, onValueChange = { clear = it })) {
+                        Checkbox(checked = clear, onCheckedChange = null)
                         Text(stringResource(R.string.people_delete_clear, meetings.size))
                     }
                 }
