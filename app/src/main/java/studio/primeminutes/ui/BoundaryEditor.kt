@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -212,9 +213,11 @@ fun BoundaryEditorSheet(
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cd_boundary_earlier))
                 }
                 OutlinedButton(onClick = { onPreview(maxOf(0.0, t - 2.0), t) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 2, textAlign = TextAlign.Center) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 2, textAlign = TextAlign.Center) }
                 OutlinedButton(onClick = { onPreview(t, minOf(t + 2.0, end)) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 2, textAlign = TextAlign.Center) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 2, textAlign = TextAlign.Center) }
                 FilledTonalIconButton(onClick = { set(split + 1) }, modifier = Modifier.size(52.dp), colors = nudgeColors()) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cd_boundary_later))
                 }
