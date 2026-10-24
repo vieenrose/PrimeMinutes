@@ -39,7 +39,7 @@ struct PodcastView: View {
                     if current == nil && series.isEmpty {
                         if searched.isEmpty {
                             ContentUnavailableView(L("podcast"), systemImage: "antenna.radiowaves.left.and.right", description: Text(L("podcast_empty_hint")))
-                        } else { ContentUnavailableView.search(text: searched) }
+                        } else { ContentUnavailableView(L("podcast_no_results"), systemImage: "magnifyingglass", description: Text(L("podcast_no_results_hint", searched))) }
                     } else if current != nil && episodes.isEmpty {
                         ContentUnavailableView(L("podcast_no_episodes"), systemImage: "list.bullet")
                     }

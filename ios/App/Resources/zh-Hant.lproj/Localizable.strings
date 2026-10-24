@@ -620,3 +620,5 @@
 "settings_inference_failed" = "測試沒有完成，已保留原本的設定。";
 "cd_seek" = "播放位置";
 "cd_seek_value" = "%1$@，共 %2$@";
+"podcast_no_results" = "找不到結果";
+"podcast_no_results_hint" = "沒有符合「%@」的 Podcast，請檢查拼字或換個關鍵字。";
