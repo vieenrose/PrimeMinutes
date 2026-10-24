@@ -110,7 +110,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.38 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.42 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
 </section>
 
 <!-- 2 問題 -->
@@ -189,7 +189,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
       <li>摘要為連貫散文，一次最多 <b>1,600 詞元</b>；超長會議分寫接續（每段約 600 詞元、上限 4 段）。</li>
       <li>摘要句尾附筆記時間（如 [1:23]），點句子即可播原話。</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/long-summary-zh.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
+    <div class="col"><div class="shot"><img src="img/long-summary-android-zh.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
     <div class="col"><div class="shot"><img src="img/transcript-player-zh.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
   </div>
 </section>
@@ -426,12 +426,12 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 
 <!-- 19b 語者辨識進展 -->
 <section class="slide">
-  <div class="kicker">最新版本</div><h2>語者辨識：Android v0.53.16 與 iOS build 11 的改進</h2>
+  <div class="kicker">近期改進</div><h2>語者辨識：Android v0.53.16 起、iOS build 11 的改進</h2>
   <ul class="big">
     <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」47 % → <b>52 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
     <li><b>語者記憶恢復完整長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
     <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測；iOS build 11 已上傳 TestFlight，內容與 Android 相同。</li>
-    <li><b>中文難在收音距離</b>：離麥克風遠，同一個人容易被認成兩個人。匯入音訊改用更大的語者記憶重算，漏標比例 39 % → <b>32 %</b>（英文 25 % → 22 %），評估中，代價是多下載約 100 MB。</li>
+    <li><b>中文難在收音距離</b>：離麥克風遠、聲音又相近時，模型容易把講者認成別人，這是模型本身的極限。把語者記憶再加大、調整判斷門檻都試過，結果和現在差不多，就不再往這個方向調。</li>
     <li><b>試過、暫不上線</b>：用聲紋逐句重新指派，標對比例 88 % → 90 %，但漏標比例沒變；換人位置改照中文字數重新估算，也沒有比現在準。</li>
   </ul>
 </section>
@@ -457,7 +457,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.38</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.42</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
