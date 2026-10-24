@@ -110,7 +110,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.45 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.46 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
 </section>
 
 <!-- 2 問題 -->
@@ -246,7 +246,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="kicker">不只錄音</div><h2>匯入音訊檔 · Podcast · YouTube · PeerTube</h2>
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/07-add-source.png"></div><div class="cap">首頁「＋」：檔案 / Podcast / 影音連結</div></div>
-    <div class="col"><div class="shot"><img src="img/08-podcast.png"></div><div class="cap">Podcast 單集：貼上 RSS 集數連結，自動下載轉寫</div></div>
+    <div class="col"><div class="shot"><img src="img/08-podcast.png"></div><div class="cap">Podcast 單集匯入後：邊轉錄邊出逐字稿，語者即時分開</div></div>
     <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
       <li>音訊檔（mp3／wav／m4a…）直接匯入；YouTube、PeerTube 貼連結即可——PeerTube 支援任意站點，自動選最小檔案，優先僅含音訊的那個。</li>
       <li>所有音訊一律重採為 <b>16 kHz 單聲道</b>才進管線，與麥克風錄音同一條路。</li>
@@ -357,13 +357,13 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="kicker">調校空間</div><h2>設定：延遲、模型與下載</h2>
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">轉寫延遲四段可選（速度／準確度取捨）</div></div>
-    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">模型管理：E2B／E4B 切換、選用模型上下架、僅限 Wi‑Fi</div></div>
+    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">外觀主題、文字大小、硬體狀態列與介面語言</div></div>
     <div class="col"><ul class="big">
       <li>四段延遲各約 <b>155 MB</b>：<b>越短越快上螢幕，越長越準確</b>。</li>
       <li>預設 <b>1.92 秒</b>：四段中最準確，一般會議建議維持預設。</li>
       <li>會議模型（E2B／E4B）可切換，換完可整場重跑筆記與摘要；E4B 現為<b>第二代權重</b>：評測摘要 4.0／5（第一代 3.2）、自相矛盾 16 → 7。</li>
       <li>下載可設<b>僅限 Wi‑Fi</b>，暫停／續傳，電量與網路自動配合。</li>
-      <li>介面語言：跟隨系統、English 或繁體中文；<b>AI 產出的中文</b>（筆記、摘要、回答）自動跟隨介面語言。</li>
+      <li>介面語言：跟隨系統、English、繁體中文或简体中文；逐字稿、摘要與筆記的<b>繁簡字體</b>跟著介面語言走。</li>
     </ul></div>
   </div>
 </section>
@@ -431,7 +431,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」47 % → <b>52 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
     <li><b>語者記憶恢復完整長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
     <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測；iOS build 11 已上傳 TestFlight，內容與 Android 相同。</li>
-    <li><b>中文難在收音距離</b>：離麥克風遠、聲音又相近時，模型容易把講者認成別人，這是模型本身的極限。把語者記憶再加大、調整判斷門檻都試過，結果和現在差不多，就不再往這個方向調。</li>
+    <li><b>中文難在收音距離</b>：離麥克風遠、聲音又相近時，模型容易把講者認成別人，這是模型本身的極限；把手機放近講話的人，效果最明顯。</li>
   </ul>
 </section>
 
@@ -455,7 +455,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.45</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.46</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
