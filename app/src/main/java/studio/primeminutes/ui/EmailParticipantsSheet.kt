@@ -421,14 +421,14 @@ private fun AddRecipientDialog(candidates: List<Person>, onDone: (Pair<String?, 
                     }),
                     modifier = Modifier.fillMaxWidth().testTag("mail-add-field"))
                 if (EmailRules.isValid(q)) Text(stringResource(R.string.mail_add_typed, EmailRules.normalize(q)), color = pal.Sky, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.fillMaxWidth().clickable { onDone(null to EmailRules.normalize(q)) }.padding(vertical = 12.dp))
+                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(null to EmailRules.normalize(q)) }.heightIn(min = 48.dp).padding(vertical = 12.dp))
                 hits.forEach { p ->
-                    Column(Modifier.fillMaxWidth().clickable { onDone(p.name to p.emails.first().address) }.padding(vertical = 8.dp)) {
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(p.name to p.emails.first().address) }.heightIn(min = 48.dp).padding(vertical = 8.dp)) {
                         Text(p.name, color = pal.Slate200)
                         Text(p.emails.first().address, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.heightIn(min = 48.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.contact_choose), color = pal.Sky)
