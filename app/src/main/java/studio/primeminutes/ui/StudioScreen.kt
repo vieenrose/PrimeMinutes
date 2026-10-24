@@ -758,7 +758,7 @@ fun StudioScreen(
             onDismissRequest = { deleteFor = null },
             title = { Text(stringResource(R.string.action_delete)) },
             text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale))) },
-            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete)) } },
+            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(android.R.string.cancel)) } },
         )
     }
@@ -775,7 +775,7 @@ fun StudioScreen(
                     val victims = entries.filter { it.id in selected }
                     exitSelection()
                     onDeleteMany(victims)
-                }) { Text(stringResource(R.string.action_delete)) }
+                }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) }
             },
             dismissButton = { TextButton(onClick = { confirmDeleteMany = false }) { Text(stringResource(android.R.string.cancel)) } },
         )

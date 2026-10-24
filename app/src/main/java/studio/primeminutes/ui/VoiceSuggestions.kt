@@ -180,7 +180,7 @@ fun VoiceSettingsCard() {
         onDismissRequest = { deleteAsk = false },
         title = { Text(stringResource(R.string.voice_delete_all)) },
         text = { Text(stringResource(R.string.voice_delete_all_text)) },
-        confirmButton = { TextButton(onClick = { deleteAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.deleteAll(context) } }) { Text(stringResource(R.string.people_delete)) } },
+        confirmButton = { TextButton(onClick = { deleteAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.deleteAll(context) } }) { Text(stringResource(R.string.people_delete), color = LocalPrimeMinutesPalette.current.WarningText) } },
         dismissButton = { TextButton(onClick = { deleteAsk = false }) { Text(stringResource(R.string.cancel)) } },
     )
     if (enrol) MeEnrolDialog(onDone = { enrol = false })

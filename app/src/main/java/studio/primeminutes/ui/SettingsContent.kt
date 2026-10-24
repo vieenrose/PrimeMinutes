@@ -407,7 +407,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
                 androidx.compose.material3.TextButton(onClick = {
                     confirm = null
                     scope.launch { withContext(Dispatchers.IO) { m.delete() }; version++ }
-                }) { Text(stringResource(R.string.action_delete)) }
+                }) { Text(stringResource(R.string.action_delete), color = LocalPrimeMinutesPalette.current.WarningText) }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
