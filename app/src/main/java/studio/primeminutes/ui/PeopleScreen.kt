@@ -157,7 +157,7 @@ private fun PeopleContent(
                         if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it)) }
                         add(meetingCount(ms.size))
                     }.joinToString(" · ")
-                    Row(Modifier.fillMaxWidth().clickable { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(22.dp))
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -220,7 +220,7 @@ private fun PersonPage(
         items(meetings, key = { it.entry.id }) { m ->
             var menu by remember { mutableStateOf(false) }
             Row(
-                Modifier.fillMaxWidth().clickable {
+                Modifier.fillMaxWidth().clickable(role = Role.Button) {
                     scope.launch {
                         val t = withContext(Dispatchers.IO) {
                             studio.primeminutes.core.session.PrimeMinutesSession.peek(m.entry.sessionFile)
@@ -268,7 +268,7 @@ private fun PersonPage(
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(people.filter { it.id != p.id }.sortedBy { PersonNames.normalize(it.name) }, key = { it.id }) { o ->
                     Text(o.name + (o.note?.let { " · $it" } ?: ""), color = pal.Slate200,
-                        modifier = Modifier.fillMaxWidth().clickable {
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) {
                             merging = false
                             mergeTarget = o     // the pick only chooses; the merge is confirmed next
                         }.padding(vertical = 12.dp))
