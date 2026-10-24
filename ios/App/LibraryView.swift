@@ -129,7 +129,11 @@ struct LibraryView: View {
                 .padding(.horizontal, 14).padding(.vertical, 7)
                 .background(filter == f ? Color.accentColor : Color(.secondarySystemGroupedBackground), in: Capsule())
                 .foregroundStyle(filter == f ? Color.white : Color.primary)
+                // The capsule stays compact; the tap area reaches the 44 pt HIG minimum.
+                .frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        // VoiceOver only saw the colour change; say which filter is on.
+        .accessibilityAddTraits(filter == f ? .isSelected : [])
     }
     private func card(_ s: Session) -> some View {
         HStack(spacing: 12) {
