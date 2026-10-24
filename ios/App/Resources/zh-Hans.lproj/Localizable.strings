@@ -43,6 +43,8 @@
 "queue_n" = "队列中有 %d 个录音";
 "podcast" = "播客";
 "from_files" = "音频文件";
+"podcast_empty_hint" = "用节目名称搜索，再挑一集来转录。";
+"podcast_no_episodes" = "这个节目还没有单集";
 "podcast_search" = "搜索播客";
 "podcast_downloading" = "下载单集 %d %%";
 "back" = "返回";

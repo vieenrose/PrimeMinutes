@@ -43,6 +43,8 @@
 "queue_n" = "佇列中有 %d 個錄音";
 "podcast" = "Podcast";
 "from_files" = "音訊檔";
+"podcast_empty_hint" = "用節目名稱搜尋，再挑一集來轉錄。";
+"podcast_no_episodes" = "這個節目還沒有單集";
 "podcast_search" = "搜尋 Podcast";
 "podcast_downloading" = "下載單集 %d %%";
 "back" = "返回";

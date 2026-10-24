@@ -43,6 +43,8 @@
 "queue_n" = "%d recordings queued";
 "podcast" = "Podcast";
 "from_files" = "Audio file";
+"podcast_empty_hint" = "Search for a show by name, then pick an episode to transcribe.";
+"podcast_no_episodes" = "No episodes in this feed";
 "podcast_search" = "Search podcasts";
 "podcast_downloading" = "Downloading episode %d %%";
 "back" = "Back";

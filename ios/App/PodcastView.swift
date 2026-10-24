@@ -10,6 +10,7 @@ struct PodcastView: View {
     @State private var busy = false
     @State private var busyLabel = "dl_searching"
     @State private var error: String?
+    @State private var searched = ""   // the query whose results are shown, for the no-result state
     var body: some View {
         NavigationStack {
             List {
@@ -33,6 +34,17 @@ struct PodcastView: View {
                 }
                 if busy { HStack(spacing: 8) { ProgressView(); Text(L(busyLabel)).font(.footnote).foregroundStyle(.secondary) } }
             }
+            .overlay {
+                if !busy && error == nil {
+                    if current == nil && series.isEmpty {
+                        if searched.isEmpty {
+                            ContentUnavailableView(L("podcast"), systemImage: "antenna.radiowaves.left.and.right", description: Text(L("podcast_empty_hint")))
+                        } else { ContentUnavailableView.search(text: searched) }
+                    } else if current != nil && episodes.isEmpty {
+                        ContentUnavailableView(L("podcast_no_episodes"), systemImage: "list.bullet")
+                    }
+                }
+            }
             .navigationTitle(current?.title ?? L("podcast"))
             .searchable(text: $query, prompt: L("podcast_search"))
             .onSubmit(of: .search) { search() }
@@ -44,7 +56,7 @@ struct PodcastView: View {
     }
     private func search() {
         busy = true; busyLabel = "dl_searching"; error = nil; current = nil
-        Task { defer { busy = false }; do { series = try await Podcast.search(query) } catch { self.error = L("status_error", error.localizedDescription) } }
+        Task { defer { busy = false }; do { series = try await Podcast.search(query); searched = query } catch { self.error = L("status_error", error.localizedDescription) } }
     }
     private func open(_ s: PodcastSeries) {
         busy = true; busyLabel = "dl_loading_episodes"; error = nil; current = s
