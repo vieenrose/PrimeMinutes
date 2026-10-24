@@ -1032,7 +1032,9 @@ private fun ActionRow(icon: ImageVector, label: String, tint: Color? = null, onC
         headlineContent = { Text(label, color = tint ?: pal.Slate200) },
         leadingContent = { Icon(icon, contentDescription = null, tint = tint ?: pal.Sky) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        // TalkBack read the sheet's action rows (Rename, Delete, Process now, …) as plain text:
+        // they are buttons, like every other row here.
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
     )
 }
 

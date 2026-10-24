@@ -257,7 +257,7 @@ internal fun ConfidenceDots(level: Int, color: Color) {
 private fun PersonRow(name: String, sub: String?, greyed: Boolean = false, dots: Int = 0, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (dots > 0) ConfidenceDots(dots, pal.Sky)

@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -70,7 +71,7 @@ fun SpeakerStatsPanel(
     // accessibilityValue (`edc14bce`).
     val legendState = stringResource(if (showLegend) R.string.show_less else R.string.show_more)
     Column(
-        modifier.fillMaxWidth().clickable { showLegend = !showLegend }
+        modifier.fillMaxWidth().clickable(role = Role.Button) { showLegend = !showLegend }
             .semantics { stateDescription = legendState },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
