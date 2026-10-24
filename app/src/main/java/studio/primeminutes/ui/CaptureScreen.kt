@@ -121,11 +121,13 @@ fun CaptureScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isRecording) PrimeMinutesPalette.Red else pal.Slate200,
                 fontWeight = FontWeight.Bold,
+                // Weighted so the gauges are measured first and the title wraps (not ellipsizes)
+                // into the remaining width at large font scales.
+                modifier = Modifier.weight(1f),
             )
             // The engines' load, trailing on the header row (page gutter, same as iOS) rather than
             // floating centered under the timer; only while the mic and the engines run.
             if (isRecording) {
-                Spacer(Modifier.weight(1f))
                 HwStatusLine(Modifier.padding(end = 4.dp))
             }
         }
