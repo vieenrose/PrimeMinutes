@@ -809,7 +809,7 @@ private fun PassageRow(
                 ?: p.speakerId?.let { stringResource(R.string.speaker_n, it + 1) }   // as the transcript names it
             val head = buildString {
                 if (p.kind != SessionIndex.Kind.MEETING) {
-                    val t = p.timeSec.toInt(); append("%d:%02d".format(t / 60, t % 60))
+                    val t = p.timeSec.toInt(); append(studio.primeminutes.fmtSec(t))
                 }
                 speaker?.let { if (isNotEmpty()) append(" · "); append(it) }
             }
@@ -928,7 +928,7 @@ private fun SessionRow(
                     // A download item has no length yet (or only the feed's): its state says more.
                     if (entry.durationSec > 0 || entry.download == null) {
                         append(" · ")
-                        append("%d:%02d".format(entry.durationSec / 60, entry.durationSec % 60))
+                        append(studio.primeminutes.fmtSec(entry.durationSec))
                     }
                     if (processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
                     if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }

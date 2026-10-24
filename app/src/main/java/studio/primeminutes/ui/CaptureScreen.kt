@@ -180,7 +180,7 @@ private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modi
     // the vertical space goes to the live transcript instead of empty padding.
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Text(
-            "%d:%02d".format(recSeconds / 60, recSeconds % 60),
+            studio.primeminutes.fmtSec(recSeconds),
             fontSize = 64.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,   // tabular: no layout shift per tick
@@ -276,7 +276,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "%d:%02d".format(u.startSec.toInt() / 60, u.startSec.toInt() % 60),
+                                    studio.primeminutes.fmtSec(u.startSec.toInt()),
                                     color = pal.Slate400, style = MaterialTheme.typography.labelSmall,
                                 )
                             }

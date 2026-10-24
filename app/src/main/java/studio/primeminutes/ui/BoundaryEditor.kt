@@ -338,5 +338,8 @@ private fun TokenStrip(
 
 private fun fmtPrecise(sec: Double): String {
     val ms = (sec * 1000).toLong().coerceAtLeast(0)
-    return String.format(Locale.ROOT, "%d:%02d.%d", ms / 60000, (ms / 1000) % 60, (ms % 1000) / 100)
+    // h:mm:ss from the first hour, so the preview label reads "1:15:03.2" past 3600 s ("75:03.2" was
+    // unreadable); Locale.ROOT: machine-adjacent fixed text.
+    return String.format(Locale.ROOT, if (ms >= 3_600_000) "%d:%02d:%02d.%d" else "%d:%02d.%d",
+        ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, (ms % 1000) / 100)
 }

@@ -563,12 +563,20 @@ internal fun EditPencil(onClick: () -> Unit) {
 
 internal fun fmt(sec: Double): String {
     val s = sec.toInt()
-    return "%d:%02d".format(s / 60, s % 60)
+    return fmtSec(s)
 }
 
 internal fun fmtMs(ms: Int): String {
     val s = ms / 1000
-    return "%d:%02d".format(s / 60, s % 60)
+    return fmtSec(s)
+}
+
+// Line times match the exports and the reader's prompt: h:mm:ss from the first hour, so a 75-minute
+// meeting reads "1:15:03", not the unreadable "75:03" (m:ss under 3600 s, as before).
+internal fun fmtSec(s: Int): String {
+    val v = s.coerceAtLeast(0)
+    return if (v >= 3600) "%d:%02d:%02d".format(v / 3600, (v / 60) % 60, v % 60)
+    else "%d:%02d".format(v / 60, v % 60)
 }
 
 /** A rounded surface card used to group a section (settings, podcast, summary). */

@@ -942,7 +942,7 @@ private fun TranscribeScreen(
     }
     recoveredRec?.let { wav ->
         val secs = RecordingRecovery.seconds(wav).toInt()
-        val dur = "%d:%02d".format(secs / 60, secs % 60)
+        val dur = fmtSec(secs)
         AlertDialog(
             onDismissRequest = {},
             title = { Text(stringResource(R.string.recover_title)) },
