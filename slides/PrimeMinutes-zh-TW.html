@@ -68,6 +68,11 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 .flow .step { background:var(--card); border:1px solid var(--line); border-left:5px solid var(--accent); border-radius:10px; padding:14px 18px; font-size:.95em; }
 .flow .step b { color:var(--accent); }
 .flow .arr { color:var(--accent2); font-size:1.3em; font-weight:700; }
+.tile { flex:1; background:var(--card); border:1px solid var(--line); border-left:6px solid var(--accent); border-radius:12px; padding:16px 24px; display:flex; flex-direction:column; justify-content:center; }
+.tile .tq { font-size:.9em; color:var(--sub); font-weight:500; }
+.tile .tn { font-size:2.1em; font-weight:700; color:var(--accent); line-height:1.2; font-variant-numeric:tabular-nums; }
+.tile .tn span { font-size:.5em; color:var(--sub); font-weight:500; }
+.tile .td { font-size:.78em; color:var(--sub); line-height:1.45; }
 .demo ol { font-size:1.22em; line-height:1.9; margin-top:.4em; padding-left:1.4em; }
 /* === PRESENTER CHROME (outside the stage) === */
 #bar { position:fixed; left:0; bottom:0; height:4px; background:var(--accent2); width:0; transition:width .18s; z-index:20; }
@@ -105,7 +110,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.32 · Android v0.53.17 · iOS build 11 · 版次 2026-10-22</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.38 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
 </section>
 
 <!-- 2 問題 -->
@@ -184,8 +189,8 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
       <li>摘要為連貫散文，一次最多 <b>1,600 詞元</b>；超長會議分寫接續（每段約 600 詞元、上限 4 段）。</li>
       <li>摘要句尾附筆記時間（如 [1:23]），點句子即可播原話。</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/10b-long-summary.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
-    <div class="col"><div class="shot"><img src="img/18-transcript.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
+    <div class="col"><div class="shot"><img src="img/long-summary-zh.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
+    <div class="col"><div class="shot"><img src="img/transcript-player-zh.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
   </div>
 </section>
 
@@ -197,10 +202,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
       <li>聲紋比對由 <b>CAM++ zh-en</b>（約 29 MB）完成：每人以「已確認」的樣本依時長加權，構成他的聲紋基準。</li>
       <li>建議分三級：<b>0.5 以下不建議</b>、0.5–0.7「可能」、0.7 以上且明顯領先才算穩；只是建議，<b>名字由你確認</b>後才成為基準。</li>
       <li>圖例與顏色一眼分人；偏離本人其他場次的樣本<b>會先詢問</b>，也能一鍵清除全部聲音資料。</li>
-      <li>錄音中的標註約 <b>5 秒後才出現</b>、尾列隨新證據滾動修正，停止後整場重算——<b>最終稿才是定稿</b>；錄音中的逐字行已直接顯示語者名字（隨標註即時更新，改名後立刻反映）；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
+      <li>錄音中的標註約 <b>5 秒後才出現</b>，停止後整場重算——<b>最終稿才是定稿</b>；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」頁說明原理，經你同意才開啟；開啟後會議自動<b>建議</b>名字、由你確認——「聲音」是最多 <b>60 秒</b>語音算出的一串數字（<b>不是錄音</b>），「忘記聲音」先確認才執行</div></div>
-    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做；時間為推算時標「≈」。完成後每句可長按改派語者或分開（錄音中只供觀看）</div></div>
+    <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」經你同意才開啟，會議自動<b>建議</b>名字、由你確認；「聲音」是最多 <b>60 秒</b>語音算出的一串數字（<b>不是錄音</b>）</div></div>
+    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做；推算的時間標「≈」</div></div>
   </div>
   <p class="lede">名字跨會議共用（人錄），從系統聯絡人加入電子郵件；人名欄不自動改字，iOS 並建議聯絡人姓名。</p>
 </section>
@@ -242,7 +247,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/07-add-source.png"></div><div class="cap">首頁「＋」：檔案 / Podcast / 影音連結</div></div>
     <div class="col"><div class="shot"><img src="img/08-podcast.png"></div><div class="cap">Podcast 單集：貼上 RSS 集數連結，自動下載轉寫</div></div>
-    <div class="col"><ul class="big">
+    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
       <li>音訊檔（mp3／wav／m4a…）直接匯入；YouTube、PeerTube 貼連結即可——PeerTube 支援任意站點，自動選最小檔案，優先僅含音訊的那個。</li>
       <li>所有音訊一律重採為 <b>16 kHz 單聲道</b>才進管線，與麥克風錄音同一條路。</li>
       <li>逐字稿時間與播放位置<b>對齊</b>：匯入後實測偏移 <b>0 ms</b>——點哪個時間，就播到那句。</li>
@@ -256,9 +261,9 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">成果帶走</div><h2>匯出與「寄給與會者」</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/export.png"></div><div class="cap">匯出：PDF · Markdown · 純文字 · SRT／VTT／LRC 字幕 · 場次 .m4a</div></div>
-    <div class="col"><div class="shot"><img src="img/mail-participants.png"></div><div class="cap">寄給與會者：摘要＋紀要＋會議時間，用你自己的郵件 App</div></div>
-    <div class="col"><ul class="big">
+    <div class="col"><div class="shot"><img src="img/21-export.png"></div><div class="cap">匯出：PDF · Markdown · 純文字 · SRT／VTT／LRC 字幕 · 場次 .m4a</div></div>
+    <div class="col"><div class="shot"><img src="img/mail-preview-zh.png"></div><div class="cap">寄給與會者：摘要＋紀要＋會議時間，用你自己的郵件 App</div></div>
+    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
       <li>匯出內容以<b>語者名字</b>標註（非 S1／S2 代號）；PDF 與純文字含標題、摘要、待辦、筆記與逐字稿（附時間標點）。</li>
       <li>字幕：長句按標點自動切條，單條不超過 32 個中文字，時間依句長分配，直接供剪輯軟體使用。</li>
       <li>檔名取<b>會議標題</b>（前 60 字元，非法字元自動代換）。</li>
@@ -318,12 +323,17 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">效能與品質</div><h2>延遲、準確度與資源</h2>
   <div class="cols">
-    <div class="col" style="flex:1.4"><div class="shot"><img src="img/latency_accuracy.png"></div><div class="cap">轉寫延遲 × 準確度：四種 int8 變體（預設 1.92 秒最準）</div></div>
+    <div class="col" style="flex:1.3; gap:18px">
+      <div class="tile"><div class="tq">會議結束後，多久拿到摘要？</div><div class="tn">約 3.5–4.6 <span>分鐘</span></div><div class="td">E4B，29–38 分鐘的會議（實測 207–279 秒）。<br>筆記在錄音中已邊錄邊寫，停止後只剩寫摘要。</div></div>
+      <div class="tile"><div class="tq">趕時間就選 E2B</div><div class="tn">約 1.4 <span>分鐘</span></div><div class="td">49 分鐘的會議，分段摘要 82 秒（E4B 同場 187 秒）。<br>於與 Note10+ 同速的測試機量得。</div></div>
+      <div class="tile"><div class="tq">AI 筆記要多少記憶體？</div><div class="tn">E2B 1.4 <span>GB</span> · E4B 2.9 <span>GB</span></div><div class="td">寫筆記時的程序峰值（含模型本身）。</div></div>
+      <div class="cap">Galaxy Note10+（Snapdragon 855）純 CPU 實測；第二格為同速測試機</div>
+    </div>
     <div class="col"><ul class="big">
-      <li>Note10+（Snapdragon 855）整夜實測：21–28 分鐘連續錄音，轉寫穩定，記憶體約 1.1 GB 峰值。</li>
+      <li>Note10+（Snapdragon 855）實測 21–28 分鐘連續錄音：轉寫穩定，錄音中記憶體峰值約 1.1 GB。</li>
       <li>公開評測（AISHELL-4／AMI）語者分離 DER：中文 <b>9.8 %</b>、英文 <b>12.0 %</b>；換人點約四成正好對齊，分界更準的工程進行中（見「接下來」）。</li>
       <li>Ask 提問回應 6–14 秒（E2B，含檢索）。</li>
-      <li>App 中斷／被系統終止後：<b>自動恢復繼續</b>，不損壞場次。</li>
+      <li>App 中斷／被系統終止後：重開會<b>提示接續處理</b>，已錄內容不丟、場次不損壞。</li>
       <li>純 CPU 推理：不搶 GPU／NPU，溫控正常。</li>
       <li>錄音畫面上方即時顯示 <b>CPU／記憶體／電池</b>，數值過高轉紅。</li>
     </ul></div>
@@ -362,11 +372,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">可靠性</div><h2>中斷不是事故</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的錄音：開 App 即提示續錄</div></div>
+    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的錄音：開 App 即提示接續轉寫</div></div>
     <div class="col"><ul class="big">
-      <li>錄音中被系統終止 → 重開自動接回，已錄內容不丟。</li>
+      <li>錄音中被系統終止 → 重開 App 會提示接續轉寫，已錄內容不丟。</li>
       <li>背景模型下載可暫停／續傳，電量與網路自動配合。</li>
-      <li>整夜 4 小時連續壓力測試：場次全數可解析、無損壞。</li>
       <li>App 更新後資料保留（Releases 覆蓋安裝）。</li>
     </ul></div>
   </div>
@@ -420,10 +429,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="kicker">最新版本</div><h2>語者辨識：Android v0.53.16 與 iOS build 11 的改進</h2>
   <ul class="big">
     <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」47 % → <b>52 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
-    <li><b>語者記憶恢復原廠長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
+    <li><b>語者記憶恢復完整長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
     <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測；iOS build 11 已上傳 TestFlight，內容與 Android 相同。</li>
-    <li><b>中文難在收音距離</b>：離麥克風遠，同一個人容易被認成兩個人。匯入音訊改用更大的語者記憶重算，找不到率 39 % → <b>32 %</b>（英文 25 % → 22 %），評估中，代價是多下載約 100 MB。</li>
-    <li><b>試過、暫不上線</b>：用聲紋逐句重新指派，標對比例 88 % → 90 %，但找不到率沒變；換人位置改照中文字數重新估算，也沒有比現在準。</li>
+    <li><b>中文難在收音距離</b>：離麥克風遠，同一個人容易被認成兩個人。匯入音訊改用更大的語者記憶重算，漏標比例 39 % → <b>32 %</b>（英文 25 % → 22 %），評估中，代價是多下載約 100 MB。</li>
+    <li><b>試過、暫不上線</b>：用聲紋逐句重新指派，標對比例 88 % → 90 %，但漏標比例沒變；換人位置改照中文字數重新估算，也沒有比現在準。</li>
   </ul>
 </section>
 
@@ -431,10 +440,9 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">正在進行</div><h2>接下來</h2>
   <ul class="big">
-    <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每節目只取最新集；自動檢查列 v2（設計已完成：docs/design/podcast-series.md）。</li>
+    <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每個節目只取最新一集（設計中）。</li>
     <li>長會議摘要再強化：分段散文式摘要與新摘要模型。</li>
     <li>語者功能延伸：分界編輯器與人名錄持續打磨；改過字的句子，分界時間只能估，會標上「≈」（Android v0.53.16 起與 iOS 一致）。</li>
-    <li><b>語者辨識</b>：換人位置更準、語者記憶恢復原廠長度，已在 Android v0.53.16 上線（見前頁），iOS build 11 已上傳 TestFlight。下一步是把跨兩位講者的句子切開。</li>
     <li>模型管線與 Ask 延遲持續優化。</li>
   </ul>
 </section>
@@ -449,7 +457,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-22）· iOS TestFlight build 11 · 簡報 v2.32</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.38</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
