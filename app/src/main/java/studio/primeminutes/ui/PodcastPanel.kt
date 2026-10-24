@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import studio.primeminutes.R
@@ -160,6 +161,6 @@ private fun RowCard(onClick: (() -> Unit)?, content: @Composable () -> Unit) {
         color = pal.InsetSurface,
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, pal.Hairline),
-        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
     ) { content() }
 }
