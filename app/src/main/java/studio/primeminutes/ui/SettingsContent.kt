@@ -1,6 +1,8 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.ColumnScope
@@ -625,7 +627,9 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
         style = MaterialTheme.typography.bodySmall,
         color = pal.Sky,
         modifier = Modifier
-            .clickable { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
+            .heightIn(min = 48.dp)
+            .wrapContentHeight(Alignment.CenterVertically)
             .padding(vertical = 4.dp),
     )
 }
