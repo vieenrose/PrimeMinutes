@@ -383,6 +383,8 @@ private fun RecipientRow(r: Recipients.Row, anyMe: Boolean, onCheck: (Boolean) -
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 48.dp)) {
                 OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
                     placeholder = { Text("name@example.com") }, isError = text.isNotBlank() && !ok,
+                    // Same hint as AddressDialog: a red outline alone does not say what is wrong.
+                    supportingText = if (text.isNotBlank() && !ok) ({ Text(stringResource(R.string.email_invalid)) }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (ok) { onAddress(EmailRules.normalize(text)); saved = true; typing = false } }),
                     trailingIcon = { IconButton(enabled = ok, onClick = { onAddress(EmailRules.normalize(text)); saved = true; typing = false }) {
