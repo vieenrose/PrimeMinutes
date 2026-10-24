@@ -31,6 +31,11 @@ struct CaptureView: View {
                                 // Decoration: the line below is the empty state's label, so the mic stays silent.
                                 Image(systemName: "mic.fill").font(.largeTitle).foregroundStyle(.secondary).accessibilityHidden(true)
                                 Text(L("capture_live_waiting")).foregroundStyle(.secondary)
+                                // Before the first audio is fed (elapsed 0) the status says what is holding the
+                                // start up, e.g. models loading; once recording runs, the timer says it all.
+                                if m.capture.elapsed == 0, !m.screen.status.isEmpty {
+                                    Text(m.screen.status).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                }
                             }.frame(maxWidth: .infinity).padding(.top, 40)
                         }
                         ForEach(m.screen.lines) { l in
@@ -62,5 +67,9 @@ struct CaptureView: View {
             }.padding(.horizontal, 20).padding(.vertical, 12)
         }
         .background(Color(.systemGroupedBackground))
+        // VoiceOver hears start-up progress and errors (models loading, mic error) without hunting for them.
+        .onChange(of: m.screen.status) { _, s in
+            if m.capture.elapsed == 0, !s.isEmpty { AccessibilityNotification.Announcement(s).post() }
+        }
     }
 }
