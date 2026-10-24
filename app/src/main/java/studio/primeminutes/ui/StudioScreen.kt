@@ -1016,12 +1016,12 @@ private fun Banner(icon: ImageVector, tint: Color, text: String, onClick: () -> 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 8.dp)
-            .clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.13f)).clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.13f)).clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
