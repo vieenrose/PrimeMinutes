@@ -62,6 +62,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.filled.Check
 import studio.primeminutes.R
 import androidx.compose.ui.graphics.Color
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
@@ -102,13 +104,31 @@ fun TranscriptSearchBar(
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val showResults = resultsOpen != null && query.isNotEmpty()
     val extras = (if (showResults) 1 else 0) + (if (onAsk != null) 1 else 0)
+    val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(modifier.fillMaxWidth()) {
-    // 48 dp targets on a ~390 dp row left the query field ~30 dp wide. Keep the field at least
-    // 120 dp: when the inline buttons would squeeze it below that, results/Ask move into a ⋮ menu.
-    val fixed = 24.dp + 26.dp + 48.dp + (if (semanticAvailable) 48.dp else 0.dp) +
-        (if (query.isNotEmpty()) 56.dp + 96.dp else 0.dp)
-    val overflow = extras > 0 && maxWidth - fixed - 48.dp * extras < 120.dp
+    // Keep the query field at least 120 dp at every font scale. The counter ("1 / 2") grows with the
+    // font, so when the row is short: results/Ask move into ⋮ first, then ≈, then the counter drops
+    // to its own line under the field. Every button stays 48 dp.
+    val hasQuery = query.isNotEmpty()
+    val counterW = 56.dp * fontScale
+    val base = 24.dp + 26.dp + 48.dp + (if (hasQuery) 96.dp else 0.dp)
+    var inlineExtras = extras
+    var semInline = semanticAvailable
+    var counterInline = hasQuery
+    fun fits(): Boolean {
+        val menu = inlineExtras < extras || (semanticAvailable && !semInline)
+        val used = base + (if (counterInline) counterW else 0.dp) + (if (semInline) 48.dp else 0.dp) +
+            48.dp * inlineExtras + (if (menu) 48.dp else 0.dp)
+        return maxWidth - used >= 120.dp
+    }
+    if (!fits()) inlineExtras = 0
+    if (!fits()) semInline = false
+    if (!fits()) counterInline = false
+    val overflow = inlineExtras < extras || (semanticAvailable && !semInline)
     var menuOpen by remember { mutableStateOf(false) }
+    val counterText = if (matchCount == 0) stringResource(if (indexing) R.string.search_semantic_indexing_short else R.string.search_no_matches)
+        else stringResource(R.string.search_match_count, matchPos + 1, matchCount)
+    Column(Modifier.fillMaxWidth()) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -135,7 +155,7 @@ fun TranscriptSearchBar(
                 inner()
             },
         )
-        if (semanticAvailable) {
+        if (semInline) {
             // "≈" — adds the passages that match by meaning to the match set.
             IconButton(onClick = onSemantic, modifier = Modifier.size(48.dp)) {
                 Text(
@@ -152,14 +172,7 @@ fun TranscriptSearchBar(
             }
         }
         if (query.isNotEmpty()) {
-            Text(
-                if (matchCount == 0) stringResource(if (indexing) R.string.search_semantic_indexing_short else R.string.search_no_matches)
-                else stringResource(R.string.search_match_count, matchPos + 1, matchCount),
-                style = MaterialTheme.typography.labelMedium,
-                color = pal.Slate400,
-                // Announced as it changes ("3 of 12", "No matches"), so a TalkBack user typing a query hears the result.
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            if (counterInline) MatchCounter(counterText)
             // An explicit tint overrides IconButton's disabled colour: dim the arrows when there is nothing to step through.
             val arrowTint = if (matchCount > 0) pal.Slate200 else pal.Slate200.copy(alpha = 0.38f)
             IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(48.dp)) {
@@ -175,14 +188,28 @@ fun TranscriptSearchBar(
                     Icon(Icons.Filled.MoreVert, stringResource(R.string.search_more_cd), tint = pal.Slate400, modifier = Modifier.size(20.dp))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (showResults) {
+                    if (semanticAvailable && !semInline) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.search_semantic_cd)) },
+                            leadingIcon = {
+                                Text(
+                                    stringResource(R.string.search_semantic_marker), fontWeight = FontWeight.Bold,
+                                    color = if (semantic) pal.Sky else pal.Slate400, style = MaterialTheme.typography.titleMedium,
+                                )
+                            },
+                            trailingIcon = if (semantic) { { Icon(Icons.Filled.Check, null, tint = pal.Sky) } } else null,
+                            onClick = { menuOpen = false; onSemantic() },
+                            modifier = Modifier.semantics { stateDescription = semanticState },
+                        )
+                    }
+                    if (showResults && inlineExtras == 0) {
                         DropdownMenuItem(
                             text = { Text(stringResource(if (resultsOpen == true) R.string.search_results_hide else R.string.search_results_show)) },
                             leadingIcon = { Icon(if (resultsOpen == true) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List, null) },
                             onClick = { menuOpen = false; onToggleResults() },
                         )
                     }
-                    if (onAsk != null) {
+                    if (onAsk != null && inlineExtras == 0) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.ask_meeting_title)) },
                             leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky) },
@@ -192,7 +219,8 @@ fun TranscriptSearchBar(
                     }
                 }
             }
-        } else {
+        }
+        if (inlineExtras > 0) {
             if (resultsOpen != null && query.isNotEmpty()) {
                 IconButton(onClick = onToggleResults, modifier = Modifier.size(48.dp)) {
                     Icon(
@@ -212,7 +240,24 @@ fun TranscriptSearchBar(
             Icon(Icons.Filled.Close, stringResource(R.string.search_close), tint = pal.Slate400, modifier = Modifier.size(18.dp))
         }
     }
+    if (hasQuery && !counterInline) {
+        // Own line, aligned with the query text (12 dp padding + 18 dp icon + 8 dp gap).
+        MatchCounter(counterText, Modifier.padding(start = 38.dp, end = 12.dp, bottom = 4.dp))
     }
+    }
+    }
+}
+
+@Composable
+private fun MatchCounter(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = LocalPrimeMinutesPalette.current.Slate400,
+        maxLines = 1,
+        // Announced as it changes ("3 of 12", "No matches"), so a TalkBack user typing a query hears the result.
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 /** Render [text] with every (case-insensitive) occurrence of [query] highlighted. Returns plain
