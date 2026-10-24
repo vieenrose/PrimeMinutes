@@ -1,6 +1,7 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -78,6 +79,6 @@ private fun SourceRow(icon: ImageVector, title: String, subtitle: String, onClic
         supportingContent = { Text(subtitle, color = pal.Slate400) },
         leadingContent = { Icon(icon, contentDescription = null, tint = pal.Sky) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
     )
 }

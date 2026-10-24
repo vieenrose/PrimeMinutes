@@ -101,7 +101,7 @@ fun ExportSheet(
                 headlineContent = { Text(stringResource(R.string.export_copy_transcript), color = pal.Slate200) },
                 leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = pal.Sky) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.fillMaxWidth().clickable { onDismiss(); onCopyTranscript() },
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDismiss(); onCopyTranscript() },
             )
         }
     }
