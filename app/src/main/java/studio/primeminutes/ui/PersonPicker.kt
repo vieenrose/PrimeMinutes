@@ -215,7 +215,8 @@ fun PersonPickerSheet(
                 if (allowClear && current != null) item {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = pal.Hairline)
                     Text(stringResource(R.string.people_clear_name, defaultLabel(current.id)), color = pal.Slate400,
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(PersonPick.Clear) }.padding(vertical = 12.dp))
+                        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(PersonPick.Clear) }
+                            .heightIn(min = 48.dp).padding(vertical = 12.dp))
                 }
                 item { Spacer(Modifier.padding(bottom = 16.dp)) }
             }

@@ -285,8 +285,8 @@ fun AskSheet(
                     },
                     modifier = Modifier.weight(1f).focusRequester(askFocus),
                 )
-                // 44dp: the sheet's primary action was a 32dp target inside a 44dp row.
-                IconButton(onClick = { send() }, enabled = followUp.isNotBlank() && !busy, modifier = Modifier.size(44.dp)) {
+                // 48dp target: the sheet's primary action was a 32dp icon inside a 44dp row.
+                IconButton(onClick = { send() }, enabled = followUp.isNotBlank() && !busy, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.ask_cd), tint = if (followUp.isNotBlank() && !busy) pal.Sky else pal.Slate400, modifier = Modifier.size(18.dp))
                 }
             }
