@@ -622,3 +622,4 @@
 "cd_seek_value" = "%1$@，共 %2$@";
 "podcast_no_results" = "无结果";
 "podcast_no_results_hint" = "没有符合“%@”的播客，请检查拼写或换个关键词。";
+"podcast_too_large" = "文件太大，无法下载（超过 500 MB）。";

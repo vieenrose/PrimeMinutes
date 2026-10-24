@@ -8,6 +8,12 @@ enum Podcast {
     static let maxBytes: Int64 = 500 << 20
     private static let ua = "PrimeMinutes/1.0"
 
+    /// Localized download failure (instead of a bare URLError the user cannot act on).
+    enum Failure: LocalizedError {
+        case tooLarge
+        var errorDescription: String? { L("podcast_too_large") }
+    }
+
     static func search(_ query: String) async throws -> [PodcastSeries] {
         var c = URLComponents(string: "https://itunes.apple.com/search")!
         c.queryItems = [.init(name: "term", value: query), .init(name: "media", value: "podcast"), .init(name: "entity", value: "podcast"),
@@ -33,7 +39,7 @@ enum Podcast {
         guard let u = URL(string: ep.audioUrl), ["http", "https"].contains(u.scheme) else { throw URLError(.unsupportedURL) }
         var head = request(u, ua); head.httpMethod = "HEAD"
         let total = ((try? await URLSession.shared.data(for: head).1) as? HTTPURLResponse)?.expectedContentLength ?? -1
-        if total > maxBytes { throw URLError(.dataLengthExceedsMaximum) }
+        if total > maxBytes { throw Failure.tooLarge }
         // The partial file is named after the episode, not the job (a fresh UUID per tap): a cancelled or failed
         // download resumes when the same episode is picked again (Android podcast_<hash>), instead of leaving an
         // orphan .part behind and starting over.
@@ -46,7 +52,7 @@ enum Podcast {
             try await Chunked.fetch(request(u, ua), to: part, resumeFrom: 0, onProgress: report)
         }
         let size = (try FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
-        if size > maxBytes { try? FileManager.default.removeItem(at: part); throw URLError(.dataLengthExceedsMaximum) }
+        if size > maxBytes { try? FileManager.default.removeItem(at: part); throw Failure.tooLarge }
         try? FileManager.default.removeItem(at: dest)
         try FileManager.default.moveItem(at: part, to: dest)
         return dest

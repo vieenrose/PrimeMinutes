@@ -622,3 +622,4 @@
 "cd_seek_value" = "%1$@，共 %2$@";
 "podcast_no_results" = "找不到結果";
 "podcast_no_results_hint" = "沒有符合「%@」的 Podcast，請檢查拼字或換個關鍵字。";
+"podcast_too_large" = "檔案太大，無法下載（超過 500 MB）。";
