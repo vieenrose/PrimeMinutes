@@ -64,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -162,7 +163,8 @@ fun SettingsContent(
         if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
             androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = 8.dp)
+                Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onOpenPeople)
+                    .padding(vertical = 8.dp)
                     .testTag("settings-people"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
