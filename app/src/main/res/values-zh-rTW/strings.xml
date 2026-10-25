@@ -88,6 +88,8 @@
     <string name="youtube_no_videos">找不到影片</string>
     <string name="youtube_search_failed">搜尋失敗</string>
     <string name="podcast_failed">Podcast 請求失敗</string>
+    <string name="podcast_no_series">找不到 Podcast 節目。換個說法或用更短的詞試試。</string>
+    <string name="podcast_no_episodes">此節目沒有可下載的單集。</string>
     <string name="settings_inference_failed">基準測試失敗，保留先前結果</string>
     <string name="youtube_search_hint">搜尋影片或貼上連結</string>
     <string name="youtube_go">前往</string>

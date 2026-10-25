@@ -89,6 +89,8 @@
     <string name="youtube_no_videos">No videos found</string>
     <string name="youtube_search_failed">Search failed</string>
     <string name="podcast_failed">Podcast request failed</string>
+    <string name="podcast_no_series">No podcast series found. Try another spelling or a shorter term.</string>
+    <string name="podcast_no_episodes">This series offers no episode audio.</string>
     <string name="settings_inference_failed">Benchmark failed — the previous result is kept</string>
     <string name="youtube_search_hint">Search videos or paste a link</string>
     <string name="youtube_go">Go</string>
