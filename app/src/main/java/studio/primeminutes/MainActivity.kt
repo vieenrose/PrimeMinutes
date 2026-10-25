@@ -1618,6 +1618,15 @@ private fun TranscribeScreen(
             !s.showAddSourceSheet && !s.showYouTubeSheet,
     ) { vm.leaveToStudio() }
 
+    // Back during a session-wide search closes the search first: leaving the meeting while the
+    // transcript is still on screen loses the bar and the results list (iOS: back stays in the
+    // view). The bar's ✕ still does the same thing; this catches the hardware button and gesture.
+    BackHandler(
+        (s.screen == Screen.Session || s.screen == Screen.Capture) &&
+            s.searchActive && !s.showConfigSheet && !s.showPodcastSheet &&
+            !s.showAddSourceSheet && !s.showYouTubeSheet && !s.showExportSheet,
+    ) { closeSearch() }
+
     when (s.screen) {
         Screen.Studio -> {
             // Read once in place (so the first frame is not an empty library), then off the main
