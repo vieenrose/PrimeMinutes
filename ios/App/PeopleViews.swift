@@ -251,6 +251,8 @@ struct PeopleScreen: View {
     @ObservedObject private var store = PeopleStore.shared
     @State private var openId: String? = nil
     @State private var devOpened = false
+    /// Swipe-to-delete asks first, with the same choices as the person page's Delete.
+    @State private var deletingRow: Person? = nil
 
     var body: some View {
         let doc = store.doc
@@ -283,9 +285,16 @@ struct PeopleScreen: View {
                             VStack(alignment: .leading, spacing: 2) { Text(p.name).fontWeight(.medium); Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
+                    .swipeActions { Button(L("people_delete"), systemImage: "trash", role: .destructive) { deletingRow = p } }
                 }
             }
         }
+        .alert(deletingRow.map { L("people_delete_title", $0.name) } ?? "", isPresented: Binding(get: { deletingRow != nil }, set: { if !$0 { deletingRow = nil } }), presenting: deletingRow) { p in
+            let n = meetings[p.id]?.count ?? 0
+            Button(L("people_delete"), role: .destructive) { Task { await store.delete(p.id, clearNames: false) }; Haptics.destructive() }
+            if n > 0 { Button(L("people_delete_clear", n), role: .destructive) { Task { await store.delete(p.id, clearNames: true) }; Haptics.destructive() } }
+            Button(L("cancel"), role: .cancel) {}
+        } message: { _ in Text(L("people_delete_text")) }
         .navigationTitle(L("people_title"))
         .navigationDestination(for: String.self) { id in PersonPage(id: id, library: library, openMeeting: openMeeting) }
         .navigationDestination(isPresented: Binding(get: { openId != nil }, set: { if !$0 { openId = nil } })) {

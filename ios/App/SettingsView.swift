@@ -58,6 +58,8 @@ struct SettingsView: View {
                             guard !editing else { return }
                             Prefs.asrLatency = AsrRegistry.latencies[Int(asrIndex)]; m.downloads.maybePrefetchSpeech()
                         }.accessibilityIdentifier("settings-asr-latency").disabled(locked)
+                        // A disabled Slider keeps most of its tint; grey it so the lock is obvious.
+                        .opacity(locked ? 0.4 : 1)
                         // VoiceOver read the raw stop index ("0", "1"...); name the slider and speak the chosen stop.
                         .accessibilityLabel(L("settings_asr_latency"))
                         .accessibilityValue(L(["settings_asr_latency_fastest", "settings_asr_latency_fast", "settings_asr_latency_balanced", "settings_asr_latency_accurate"][Int(asrIndex)]))

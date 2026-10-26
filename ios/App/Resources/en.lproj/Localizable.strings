@@ -620,3 +620,7 @@
 "settings_inference_failed" = "The measurement failed, so your previous setting was kept.";
 "cd_seek" = "Playback position";
 "cd_seek_value" = "%1$@ of %2$@";
+"podcast_no_results" = "No Results";
+"podcast_no_results_hint" = "No podcasts match “%@”. Check the spelling or try another search.";
+"podcast_too_large" = "This file is too large to download (over 500 MB).";
+"peertube_http" = "The PeerTube server could not provide this video (HTTP %d).";

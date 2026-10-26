@@ -620,3 +620,7 @@
 "settings_inference_failed" = "测试没有完成，已保留原来的设置。";
 "cd_seek" = "播放位置";
 "cd_seek_value" = "%1$@，共 %2$@";
+"podcast_no_results" = "无结果";
+"podcast_no_results_hint" = "没有符合“%@”的播客，请检查拼写或换个关键词。";
+"podcast_too_large" = "文件太大，无法下载（超过 500 MB）。";
+"peertube_http" = "PeerTube 服务器无法提供这个视频（HTTP %d）。";

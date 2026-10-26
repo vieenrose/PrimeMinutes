@@ -5,8 +5,15 @@ import Foundation
 enum PeerTube {
     struct Video { let title: String; let fileUrl: String; let seconds: Int }
     enum Failure: LocalizedError {
-        case notALink, live, noFile
-        var errorDescription: String? { L(self == .notALink ? "peertube_bad_link" : self == .live ? "peertube_live" : "peertube_no_file") }
+        case notALink, live, noFile, http(Int)
+        var errorDescription: String? {
+            switch self {
+            case .notALink: return L("peertube_bad_link")
+            case .live: return L("peertube_live")
+            case .noFile: return L("peertube_no_file")
+            case .http(let code): return String(format: L("peertube_http"), code)
+            }
+        }
     }
 
     /// (host, video id) of `https://host/w/<id>`, `/videos/watch/<id>` or `/videos/embed/<id>`; nil for anything else.
@@ -28,7 +35,7 @@ enum PeerTube {
         var r = URLRequest(url: host.appendingPathComponent("api/v1/videos/\(id)"), timeoutInterval: 20)
         r.setValue("PrimeMinutes/1.0", forHTTPHeaderField: "User-Agent")
         let (d, resp) = try await URLSession.shared.data(for: r)
-        if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw URLError(.fileDoesNotExist) }
+        if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw Failure.http(h.statusCode) }
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any] else { throw Failure.noFile }
         if o["isLive"] as? Bool == true { throw Failure.live }
         let files = (o["files"] as? [[String: Any]] ?? []) + ((o["streamingPlaylists"] as? [[String: Any]] ?? []).flatMap { $0["files"] as? [[String: Any]] ?? [] })
