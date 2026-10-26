@@ -589,9 +589,9 @@ struct SessionView: View {
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); editingSummary = false
-                            if t != s.summary { s.summary = t; save(s) } } }
+                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
+                            editingSummary = false
+                            if t != s.summary { s.summary = t; save(s) } }.disabled(t.isEmpty) }
                     }.navigationTitle(L("tab_summary")).navigationBarTitleDisplayMode(.inline)
             }
         }
@@ -601,9 +601,9 @@ struct SessionView: View {
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); editingActions = false
-                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } } }
+                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
+                            editingActions = false
+                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } }.disabled(t.isEmpty) }
                     }.navigationTitle(L("card_action_items")).navigationBarTitleDisplayMode(.inline)
             }
         }
