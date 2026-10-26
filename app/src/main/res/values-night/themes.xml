@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night launch/splash placeholder: deep blue-black ground matching the dark
+         palette's Slate900 (#0E1420), so the launch flash agrees with the app's
+         dark ground instead of flashing white before first composition. -->
+    <style name="Theme.PrimeMinutes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0E1420</item>
+    </style>
+</resources>

@@ -164,7 +164,7 @@ fun AskSheet(
                         Text(
                             stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold, color = pal.WarningText,
-                            modifier = Modifier.clip(CircleShape).background(pal.WarningText.copy(alpha = 0.13f))
+                            modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
                                 .padding(horizontal = 9.dp, vertical = 4.dp),
                         )
                     }

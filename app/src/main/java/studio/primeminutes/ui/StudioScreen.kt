@@ -410,7 +410,7 @@ fun StudioScreen(
                     Spacer(Modifier.width(6.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clip(CircleShape).background(pal.Sky.copy(alpha = 0.14f))
+                        modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
                             .clickable { onAsk(query) }
                             .semantics(mergeDescendants = true) { role = Role.Button }
                             .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),

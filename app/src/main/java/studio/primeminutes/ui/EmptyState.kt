@@ -184,7 +184,7 @@ private fun Pillar(icon: ImageVector, titleRes: Int, descRes: Int) {
             modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .background(pal.Sky.copy(alpha = 0.14f))
+                .background(pal.AccentWash)
                 .padding(9.dp),
         )
         Spacer(Modifier.width(14.dp))

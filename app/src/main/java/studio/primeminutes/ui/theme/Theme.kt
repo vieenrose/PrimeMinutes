@@ -64,6 +64,15 @@ data class PrimeMinutesColors(
      *  [Slate900] is the app's ground, i.e. the contrasting ink of each theme (near-black ink on the
      *  dark accent, off-white on the light and e-ink accents) — the same ink [GradientButton] uses. */
     val OnSky: Color = Slate900,
+    /** Tonal wash: accent-tinted container for selected chips, tonal buttons and pills. Mapped
+     *  from the Sky palette per theme (not the M3 lavender default) so `secondaryContainer` and
+     *  `tertiary` roles stay in the palette's hue family. */
+    val AccentWash: Color,
+    /** Muted accent for secondary tonal surfaces (progress tracks, inactive ticks). */
+    val AccentMuted: Color,
+    /** Error ink per theme: pure red reads on dark grounds but washes out on white, so the
+     *  light and e-ink themes deepen it. */
+    val ErrorText: Color,
 )
 
 /**
@@ -109,6 +118,9 @@ val DarkColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF7DA2FF).copy(alpha = 0.16f),
     ActiveBar = Color(0xFF7DA2FF),
     WarningText = Color(0xFFE08A0B),
+    AccentWash = Color(0xFF7DA2FF).copy(alpha = 0.16f),
+    AccentMuted = Color(0xFF9DB8FF),
+    ErrorText = Color(0xFFFF7A7A),
 )
 
 /**
@@ -137,6 +149,9 @@ val LightColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF2F6BFF).copy(alpha = 0.12f),
     ActiveBar = Color(0xFF2F6BFF),
     WarningText = Color(0xFF9A5B00),
+    AccentWash = Color(0xFF2F6BFF).copy(alpha = 0.12f),
+    AccentMuted = Color(0xFF1E4FD6),
+    ErrorText = Color(0xFFB3261E),
 )
 
 /**
@@ -170,6 +185,9 @@ val EinkColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF0B5CAD).copy(alpha = 0.12f),
     ActiveBar = Color(0xFF0B5CAD),
     WarningText = Color(0xFF000000),
+    AccentWash = Color(0xFF0B5CAD).copy(alpha = 0.12f),
+    AccentMuted = Color(0xFF3730A3),
+    ErrorText = Color(0xFF8B0000),
 )
 
 /** Ambient palette. Defaults to dark so previews / stray reads outside [PrimeMinutesTheme] still resolve. */
@@ -225,7 +243,17 @@ private fun schemeFor(pal: PrimeMinutesColors): ColorScheme {
         surfaceTint = androidx.compose.ui.graphics.Color.Transparent,
         surfaceVariant = pal.Slate700,
         onSurfaceVariant = pal.Slate400,
-        error = PrimeMinutesPalette.Red,
+        // Tonal roles follow the Sky palette per theme — never the M3 lavender default, which
+        // clashes with the deep-blue / white / paper grounds. On-tonal ink is the theme's
+        // primary text (Slate200, ~13:1 on the wash in every theme).
+        secondaryContainer = pal.AccentWash,
+        onSecondaryContainer = pal.Slate200,
+        tertiary = pal.AccentMuted,
+        onTertiary = pal.Slate900,
+        tertiaryContainer = pal.AccentWash,
+        onTertiaryContainer = pal.Slate200,
+        error = pal.ErrorText,
+        onError = pal.Slate900,
         outline = pal.Slate600,
     )
 }
