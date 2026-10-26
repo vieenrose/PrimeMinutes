@@ -482,7 +482,7 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
-        .sheet(isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+        .sheet(isPresented: Binding(get: { renamingSpeaker != nil && !busy }, set: { if !$0 { renamingSpeaker = nil } })) {
             if let k = renamingSpeaker {
                 VoiceSuggested(session: s, speaker: k) { suggestions, note in
                     SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
@@ -623,6 +623,7 @@ struct SessionView: View {
         .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
             guard let new = n.object as? Session, new.id == s.id else { return }
+            if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
             s = new
             if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
             if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
