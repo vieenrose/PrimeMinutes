@@ -374,7 +374,7 @@ struct SessionView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless)
+                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
                         Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
                     }
                     Text(Self.marked(l.text, query))
@@ -433,14 +433,14 @@ struct SessionView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button(L("rename")) { draft = s.title; renamingTitle = true }
+                    Button(L("rename")) { draft = s.title; renamingTitle = true }.disabled(busy)
                     if askMeetingReady { Button { askMeeting = "" } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") } }
-                    Button(L("export_menu_entry")) { showExport = true }
-                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) } }
+                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
+                    Button(L("export_menu_entry")) { showExport = true }.disabled(busy)
+                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) }.disabled(busy) }
                     if s.audio != nil {
-                        Button(L("re_transcribe")) { rerun(s, true) }
-                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }   // nothing to summarize (Android canReSummarize)
+                        Button(L("re_transcribe")) { rerun(s, true) }.disabled(busy)
+                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
                     }
                 } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
             }
@@ -462,7 +462,7 @@ struct SessionView: View {
             }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
-            EmailParticipantsSheet(session: s, onSend: { r in
+            EmailParticipantsSheet(session: s, busy: busy, onSend: { r in
                 mailOpen = false
                 let cur = s
                 Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
@@ -482,7 +482,7 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
-        .sheet(isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+        .sheet(isPresented: Binding(get: { renamingSpeaker != nil && !busy }, set: { if !$0 { renamingSpeaker = nil } })) {
             if let k = renamingSpeaker {
                 VoiceSuggested(session: s, speaker: k) { suggestions, note in
                     SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
@@ -589,9 +589,9 @@ struct SessionView: View {
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); editingSummary = false
-                            if t != s.summary { s.summary = t; save(s) } } }
+                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
+                            editingSummary = false
+                            if t != s.summary { s.summary = t; save(s) } }.disabled(t.isEmpty) }
                     }.navigationTitle(L("tab_summary")).navigationBarTitleDisplayMode(.inline)
             }
         }
@@ -601,9 +601,9 @@ struct SessionView: View {
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); editingActions = false
-                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } } }
+                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
+                            editingActions = false
+                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } }.disabled(t.isEmpty) }
                     }.navigationTitle(L("card_action_items")).navigationBarTitleDisplayMode(.inline)
             }
         }
@@ -623,6 +623,7 @@ struct SessionView: View {
         .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
             guard let new = n.object as? Session, new.id == s.id else { return }
+            if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
             s = new
             if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
             if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }

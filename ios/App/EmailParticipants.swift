@@ -72,6 +72,8 @@ private let onlyTags: Set<String> = ["DECISION", "ACTION"]
 /// preview, then the mail composer opens with everything filled in. The app never sends mail itself.
 struct EmailParticipantsSheet: View {
     let session: Session
+    /// Like Android: a run works on this meeting — the Name/Link rows stay visible but do not fire.
+    let busy: Bool
     let onSend: (MailRequest) -> Void
     let onShareChat: (MailRequest) -> Void
     let onNameSpeaker: (Int) -> Void
@@ -140,7 +142,7 @@ struct EmailParticipantsSheet: View {
                                 Spacer()
                                 Text(L(l.label == nil ? "mail_name_action" : "mail_link_action")).font(.subheadline.weight(.semibold)).foregroundStyle(Color.accentColor)
                             }
-                        }.buttonStyle(.plain)
+                        }.buttonStyle(.plain).disabled(busy)
                     }
                     Button { adding = true } label: { Label(L("mail_add_recipient"), systemImage: "plus") }.accessibilityIdentifier("mail-add-recipient")
                     if !anyMe && !rs.isEmpty {
