@@ -110,7 +110,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.46 · Android v0.53.17 · iOS build 11 · 版次 2026-10-24</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.49 · Android v0.53.17 · iOS build 11 · 版次 2026-10-25</p>
 </section>
 
 <!-- 2 問題 -->
@@ -173,7 +173,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><div class="shot"><img src="img/agent-live.gif"></div><div class="cap">AI 筆記卡片即時顯示閱讀進度</div></div>
     <div class="col"><ul class="big">
       <li>轉寫延遲四段可選：<b>0.16／0.48／0.96／1.92 秒</b>，越短越快上螢幕、越長越準（預設 1.92 秒）。</li>
-      <li>語者分離由 Nemotron-3 聲紋模型完成，<b>錄音中即標註</b>；標註延遲 5–30 秒可調（預設 15 秒）。</li>
+      <li>語者分離由 Nemotron-3 聲紋模型完成：文字先上螢幕，<b>語者名字預設約 15 秒後補上</b>；可調 5–30 秒，等越久標得越準（實測即時標註與最終稿的一致性：8 秒 93 %、15 秒 94.7 %、30 秒 95.8 %）。</li>
       <li>「下一場」按鈕：連續錄多場，前一場的背景筆記接續整理。</li>
     </ul></div>
   </div>
@@ -202,7 +202,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
       <li>聲紋比對由 <b>CAM++ zh-en</b>（約 29 MB）完成：每人以「已確認」的樣本依時長加權，構成他的聲紋基準。</li>
       <li>建議分三級：<b>0.5 以下不建議</b>、0.5–0.7「可能」、0.7 以上且明顯領先才算穩；只是建議，<b>名字由你確認</b>後才成為基準。</li>
       <li>圖例與顏色一眼分人；偏離本人其他場次的樣本<b>會先詢問</b>，也能一鍵清除全部聲音資料。</li>
-      <li>錄音中的標註約 <b>5 秒後才出現</b>，停止後整場重算——<b>最終稿才是定稿</b>；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
+      <li>錄音中的語者標註預設約 <b>15 秒後才出現</b>，停止後整場重算——<b>最終稿才是定稿</b>；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
     </ul></div>
     <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」經你同意才開啟，會議自動<b>建議</b>名字、由你確認；「聲音」是最多 <b>60 秒</b>語音算出的一串數字（<b>不是錄音</b>）</div></div>
     <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做；推算的時間標「≈」</div></div>
@@ -331,7 +331,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
     <div class="col"><ul class="big">
       <li>Note10+（Snapdragon 855）實測 21–28 分鐘連續錄音：轉寫穩定，錄音中記憶體峰值約 1.1 GB。</li>
-      <li>公開評測（AISHELL-4／AMI）語者分離 DER：中文 <b>9.8 %</b>、英文 <b>12.0 %</b>；換人點約四成正好對齊，其餘可用分界編輯器微調。</li>
+      <li>公開評測（AISHELL-4／AMI）語者分離 DER：中文 <b>8.9 %</b>、英文 <b>9.9 %</b>；換人點約四成正好對齊，其餘可用分界編輯器微調。</li>
       <li>Ask 提問回應 6–14 秒（E2B，含檢索）。</li>
       <li>App 中斷／被系統終止後：重開會<b>提示接續處理</b>，已錄內容不丟、場次不損壞。</li>
       <li>純 CPU 推理：不搶 GPU／NPU，溫控正常。</li>
@@ -345,7 +345,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <ul class="big">
     <li>無帳號、無伺服器、無上傳——音訊與逐字稿只存在你的手機。</li>
     <li>完全離線可用：飛航模式也能錄音、筆記、摘要、提問。</li>
-    <li>唯一的網路連線：下載模型、匯入 Podcast／YouTube／PeerTube，以及每日一次新版檢查。</li>
+    <li>唯一的網路連線：下載模型、匯入 Podcast／YouTube／PeerTube；Android 另有每日一次的新版檢查。</li>
     <li>聯絡人郵件走你裝置上既有的郵件 App，App 不經手內容。</li>
     <li>App 資料不入備份（會議隱私優先）。</li>
   </ul>
@@ -428,7 +428,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 <section class="slide">
   <div class="kicker">近期改進</div><h2>語者辨識：Android v0.53.16 起、iOS build 11 的改進</h2>
   <ul class="big">
-    <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」47 % → <b>52 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
+    <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」52.1 % → <b>58.6 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
     <li><b>語者記憶恢復完整長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
     <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測；iOS build 11 已上傳 TestFlight，內容與 Android 相同。</li>
     <li><b>中文難在收音距離</b>：離麥克風遠、聲音又相近時，模型容易把講者認成別人，這是模型本身的極限；把手機放近講話的人，效果最明顯。</li>
@@ -455,7 +455,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.46</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.49</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
