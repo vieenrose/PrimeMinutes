@@ -462,7 +462,7 @@ struct SessionView: View {
             }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
-            EmailParticipantsSheet(session: s, onSend: { r in
+            EmailParticipantsSheet(session: s, busy: busy, onSend: { r in
                 mailOpen = false
                 let cur = s
                 Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
