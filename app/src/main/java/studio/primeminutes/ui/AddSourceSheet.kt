@@ -1,6 +1,7 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /**
  * One place to add audio from any source — File / Record / Podcast / YouTube as list rows,
@@ -58,7 +61,7 @@ fun AddSourceSheet(
                 style = MaterialTheme.typography.titleLarge,
                 color = pal.Slate200,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).semantics { heading() },
             )
             SourceRow(Icons.Filled.FolderOpen, stringResource(R.string.source_audio_file), stringResource(R.string.source_audio_file_desc)) { onDismiss(); onPickFile() }
             SourceRow(Icons.Filled.Podcasts, stringResource(R.string.source_podcast), stringResource(R.string.source_podcast_desc)) { onDismiss(); onPodcast() }
@@ -76,6 +79,6 @@ private fun SourceRow(icon: ImageVector, title: String, subtitle: String, onClic
         supportingContent = { Text(subtitle, color = pal.Slate400) },
         leadingContent = { Icon(icon, contentDescription = null, tint = pal.Sky) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
     )
 }

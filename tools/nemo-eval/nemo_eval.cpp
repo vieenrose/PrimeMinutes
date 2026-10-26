@@ -201,6 +201,34 @@ int main(int argc, char** argv) {
     }
     std::fprintf(g, "\n]\n");
     std::fclose(g);
+    // Research (line-split P1): NEMO_SPLIT_VARIANTS="name:mask:cap,..." re-attributes the final pass with other
+    // line-split flags on the same turns/tokens and writes <out>.<name>.json (same format as <out>).
+    if (const char* sv = getenv("NEMO_SPLIT_VARIANTS")) {
+        for (const char* p = sv; *p;) {
+            const char* e = p; while (*e && *e != ',') e++;
+            const std::string item(p, e);
+            p = *e ? e + 1 : e;
+            const size_t c1 = item.find(':'), c2 = item.find(':', c1 == std::string::npos ? 0 : c1 + 1);
+            if (c1 == std::string::npos || c2 == std::string::npos) continue;
+            const std::string name = item.substr(0, c1);
+            const int mask = std::atoi(item.substr(c1 + 1, c2 - c1 - 1).c_str());
+            const double cap = std::atof(item.substr(c2 + 1).c_str());
+            FILE* v = std::fopen((out.substr(0, out.size() - 5) + "." + name + ".json").c_str(), "w");
+            if (!v) continue;
+            const auto t0 = std::chrono::steady_clock::now();
+            std::fprintf(v, "[");
+            bool vf = true;
+            eng.reattribute_final(mask, cap, [&](const nemo::Segment& s) {
+                std::fprintf(v, "%s\n{\"spk\":%d,\"start\":%.3f,\"end\":%.3f,\"text\":\"%s\"}", vf ? "" : ",",
+                             s.speaker, s.start_s, s.end_s, esc(s.text).c_str());
+                vf = false;
+            });
+            std::fprintf(v, "\n]\n");
+            std::fclose(v);
+            std::fprintf(stderr, "[variant] %s mask=%d cap=%g attr_ms=%.1f\n", name.c_str(), mask, cap,
+                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+        }
+    }
     if (live && !live_ms.empty()) {
         std::vector<double> sorted = live_ms;
         std::sort(sorted.begin(), sorted.end());

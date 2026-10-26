@@ -77,11 +77,13 @@ sealed interface SessionEffect {
     data class Snackbar(val message: String) : SessionEffect
     /** "Re-summarized" with Undo: put [undo] back if still on session [gen] and idle. */
     data class OfferResummaryUndo(val undo: ResummaryUndo, val gen: Int) : SessionEffect
-    /** A speaker merge/move with Undo: restore [before] if nothing changed since ([after]). */
+    /** A speaker merge/move with Undo: restore [before] if nothing changed since ([after]).
+     *  Kept (no Undo) and not [nameOnly] → the transcript's children are stale (iOS speakerUndo). */
     data class OfferSpeakerUndo(
         @StringRes val done: Int, val gen: Int,
         val before: Pair<List<TranscriptEvent.Utterance>, Map<Int, SpeakerName>>,
         val after: List<TranscriptEvent.Utterance>,
+        val nameOnly: Boolean = false,
     ) : SessionEffect
     /** A failed run's error with Retry (same source) while still on session [gen]. */
     data class OfferRetry(val message: String, val source: Uri, val gen: Int) : SessionEffect

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,6 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import studio.primeminutes.R
@@ -104,6 +109,12 @@ fun PodcastPanel(onStarted: () -> Unit) {
 
         val sel = selected
         if (sel == null) {
+            // Empty search results were just an empty column: say why, announced politely so a
+            // TalkBack user typing a query hears "no series" land (the library's no-match row).
+            if (!busy && series.isEmpty()) Text(
+                stringResource(R.string.podcast_no_series), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(vertical = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
             series.forEach { s ->
                 RowCard(onClick = {
                     scope.launch {
@@ -123,9 +134,14 @@ fun PodcastPanel(onStarted: () -> Unit) {
             }
         } else {
             TextButton(onClick = { selected = null; episodes = emptyList() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.width(18.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp)); Text(sel.title)
             }
+            // A feed with no enclosures: say so instead of leaving just the Transcribe button gone.
+            if (!busy && episodes.isEmpty()) Text(
+                stringResource(R.string.podcast_no_episodes), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(vertical = 6.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
             episodes.forEach { e ->
                 RowCard(onClick = null) {
                     Row(
@@ -159,6 +175,6 @@ private fun RowCard(onClick: (() -> Unit)?, content: @Composable () -> Unit) {
         color = pal.InsetSurface,
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, pal.Hairline),
-        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
     ) { content() }
 }

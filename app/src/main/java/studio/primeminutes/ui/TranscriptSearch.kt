@@ -1,6 +1,14 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,6 +47,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
@@ -47,10 +56,14 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.filled.Check
 import studio.primeminutes.R
 import androidx.compose.ui.graphics.Color
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
@@ -89,8 +102,35 @@ fun TranscriptSearchBar(
     // Opening the bar means "I want to type": focus it and raise the keyboard.
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val showResults = resultsOpen != null && query.isNotEmpty()
+    val extras = (if (showResults) 1 else 0) + (if (onAsk != null) 1 else 0)
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+    // Keep the query field at least 120 dp at every font scale. The counter ("1 / 2") grows with the
+    // font, so when the row is short: results/Ask move into ⋮ first, then ≈, then the counter drops
+    // to its own line under the field. Every button stays 48 dp.
+    val hasQuery = query.isNotEmpty()
+    val counterW = 56.dp * fontScale
+    val base = 24.dp + 26.dp + 48.dp + (if (hasQuery) 96.dp else 0.dp)
+    var inlineExtras = extras
+    var semInline = semanticAvailable
+    var counterInline = hasQuery
+    fun fits(): Boolean {
+        val menu = inlineExtras < extras || (semanticAvailable && !semInline)
+        val used = base + (if (counterInline) counterW else 0.dp) + (if (semInline) 48.dp else 0.dp) +
+            48.dp * inlineExtras + (if (menu) 48.dp else 0.dp)
+        return maxWidth - used >= 120.dp
+    }
+    if (!fits()) inlineExtras = 0
+    if (!fits()) semInline = false
+    if (!fits()) counterInline = false
+    val overflow = inlineExtras < extras || (semanticAvailable && !semInline)
+    var menuOpen by remember { mutableStateOf(false) }
+    val counterText = if (matchCount == 0) stringResource(if (indexing) R.string.search_semantic_indexing_short else R.string.search_no_matches)
+        else stringResource(R.string.search_match_count, matchPos + 1, matchCount)
+    Column(Modifier.fillMaxWidth()) {
     Row(
-        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
@@ -115,9 +155,9 @@ fun TranscriptSearchBar(
                 inner()
             },
         )
-        if (semanticAvailable) {
+        if (semInline) {
             // "≈" — adds the passages that match by meaning to the match set.
-            IconButton(onClick = onSemantic, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onSemantic, modifier = Modifier.size(48.dp)) {
                 Text(
                     stringResource(R.string.search_semantic_marker),
                     color = if (semantic) pal.Sky else pal.Slate400, fontWeight = FontWeight.Bold,
@@ -132,37 +172,92 @@ fun TranscriptSearchBar(
             }
         }
         if (query.isNotEmpty()) {
-            Text(
-                if (matchCount == 0) stringResource(if (indexing) R.string.search_semantic_indexing_short else R.string.search_no_matches)
-                else stringResource(R.string.search_match_count, matchPos + 1, matchCount),
-                style = MaterialTheme.typography.labelMedium,
-                color = pal.Slate400,
-            )
-            IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.search_prev), tint = pal.Slate200, modifier = Modifier.size(20.dp))
+            if (counterInline) MatchCounter(counterText)
+            // An explicit tint overrides IconButton's disabled colour: dim the arrows when there is nothing to step through.
+            val arrowTint = if (matchCount > 0) pal.Slate200 else pal.Slate200.copy(alpha = 0.38f)
+            IconButton(onClick = onPrev, enabled = matchCount > 0, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.search_prev), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
-            IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = pal.Slate200, modifier = Modifier.size(20.dp))
+            IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.search_next), tint = arrowTint, modifier = Modifier.size(20.dp))
             }
         }
-        if (resultsOpen != null && query.isNotEmpty()) {
-            IconButton(onClick = onToggleResults, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    if (resultsOpen) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
-                    stringResource(if (resultsOpen) R.string.search_results_hide else R.string.search_results_show),
-                    tint = if (resultsOpen) pal.Sky else pal.Slate400, modifier = Modifier.size(20.dp),
-                )
+        if (overflow) {
+            Box {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Filled.MoreVert, stringResource(R.string.search_more_cd), tint = pal.Slate400, modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (semanticAvailable && !semInline) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.search_semantic_cd)) },
+                            leadingIcon = {
+                                Text(
+                                    stringResource(R.string.search_semantic_marker), fontWeight = FontWeight.Bold,
+                                    color = if (semantic) pal.Sky else pal.Slate400, style = MaterialTheme.typography.titleMedium,
+                                )
+                            },
+                            trailingIcon = if (semantic) { { Icon(Icons.Filled.Check, null, tint = pal.Sky) } } else null,
+                            onClick = { menuOpen = false; onSemantic() },
+                            modifier = Modifier.semantics { stateDescription = semanticState },
+                        )
+                    }
+                    if (showResults && inlineExtras == 0) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(if (resultsOpen == true) R.string.search_results_hide else R.string.search_results_show)) },
+                            leadingIcon = { Icon(if (resultsOpen == true) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List, null) },
+                            onClick = { menuOpen = false; onToggleResults() },
+                        )
+                    }
+                    if (onAsk != null && inlineExtras == 0) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_meeting_title)) },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky) },
+                            onClick = { menuOpen = false; onAsk() },
+                            modifier = Modifier.testTag("search-ask-meeting"),
+                        )
+                    }
+                }
             }
         }
-        if (onAsk != null) {
-            IconButton(onClick = onAsk, modifier = Modifier.size(40.dp).testTag("search-ask-meeting")) {
-                Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
+        if (inlineExtras > 0) {
+            if (resultsOpen != null && query.isNotEmpty()) {
+                IconButton(onClick = onToggleResults, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        if (resultsOpen == true) Icons.Filled.ExpandLess else Icons.AutoMirrored.Filled.List,
+                        stringResource(if (resultsOpen == true) R.string.search_results_hide else R.string.search_results_show),
+                        tint = if (resultsOpen == true) pal.Sky else pal.Slate400, modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            if (onAsk != null) {
+                IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("search-ask-meeting")) {
+                    Icon(Icons.Filled.AutoAwesome, stringResource(R.string.ask_meeting_title), tint = pal.Sky, modifier = Modifier.size(18.dp))
+                }
             }
         }
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, stringResource(R.string.search_close), tint = pal.Slate400, modifier = Modifier.size(18.dp))
         }
     }
+    if (hasQuery && !counterInline) {
+        // Own line, aligned with the query text (12 dp padding + 18 dp icon + 8 dp gap).
+        MatchCounter(counterText, Modifier.padding(start = 38.dp, end = 12.dp, bottom = 4.dp))
+    }
+    }
+    }
+}
+
+@Composable
+private fun MatchCounter(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = LocalPrimeMinutesPalette.current.Slate400,
+        maxLines = 1,
+        // Announced as it changes ("3 of 12", "No matches"), so a TalkBack user typing a query hears the result.
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 /** Render [text] with every (case-insensitive) occurrence of [query] highlighted. Returns plain
@@ -223,7 +318,7 @@ fun MeetingSearchResults(
         fun rows(rs: List<MeetingSearch.Result>) = rs.forEachIndexed { i, r ->
             item(key = "${r.kind}-${r.line}-${r.timeSec}-$i") {
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(r) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(r) }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Text(
@@ -261,7 +356,7 @@ fun MeetingSearchResults(
         }
         if (onAsk != null) item(key = "ask") {
             Row(
-                Modifier.fillMaxWidth().clickable { onAsk() }.padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { onAsk() }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky, modifier = Modifier.size(16.dp))

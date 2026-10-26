@@ -942,7 +942,7 @@ private fun TranscribeScreen(
     }
     recoveredRec?.let { wav ->
         val secs = RecordingRecovery.seconds(wav).toInt()
-        val dur = "%d:%02d".format(secs / 60, secs % 60)
+        val dur = fmtSec(secs)
         AlertDialog(
             onDismissRequest = {},
             title = { Text(stringResource(R.string.recover_title)) },
@@ -1396,10 +1396,16 @@ private fun TranscribeScreen(
             autoScrolling = false
         }
     }
-    // Keep the current search match in view as the user steps through.
+    // Keep the current search match in view as the user steps through, and move the player
+    // there too (as iOS does): stepping through matches leaves the playhead behind otherwise,
+    // so Play starts at 0:00 instead of the match on screen.
     LaunchedEffect(matchPos, searchMatches) {
         searchMatches.getOrNull(matchPos)?.let { idx ->
             runCatching { listState.animateScrollToItem(headerCount + idx, scrollOffset = -120) }
+            s.utterances.getOrNull(idx)?.let { u ->
+                positionMs = studio.primeminutes.core.embed.MeetingSearch.parkMs(u.startSec)
+                player?.let { p -> runCatching { p.seekTo(positionMs) } }
+            }
         }
     }
 
@@ -1456,6 +1462,8 @@ private fun TranscribeScreen(
                 onMergeSpeaker = { target -> u.speaker?.let { mergeAsk = it to target } },
                 onSplitLine = if (!s.running && studio.primeminutes.data.BoundaryEdits.tokenize(u.text).size > 1) ({ splitLineAt = idx }) else null,
                 topPadding = if (seam) 0.dp else null,
+                // Like the seams: a run rewrites the lines, so a move/merge/edit made now would be lost.
+                editable = !s.running,
             )
         }
     }
@@ -1615,6 +1623,15 @@ private fun TranscribeScreen(
         s.screen != Screen.Studio && !s.showConfigSheet && !s.showPodcastSheet &&
             !s.showAddSourceSheet && !s.showYouTubeSheet,
     ) { vm.leaveToStudio() }
+
+    // Back during a session-wide search closes the search first: leaving the meeting while the
+    // transcript is still on screen loses the bar and the results list (iOS: back stays in the
+    // view). The bar's ✕ still does the same thing; this catches the hardware button and gesture.
+    BackHandler(
+        (s.screen == Screen.Session || s.screen == Screen.Capture) &&
+            s.searchActive && !s.showConfigSheet && !s.showPodcastSheet &&
+            !s.showAddSourceSheet && !s.showYouTubeSheet && !s.showExportSheet,
+    ) { closeSearch() }
 
     when (s.screen) {
         Screen.Studio -> {
@@ -1913,11 +1930,24 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
-                        if (utterances.isEmpty() && !s.running) Text(
-                            stringResource(R.string.status_no_speech),
-                            color = pal.Slate400,
-                            modifier = Modifier.padding(top = 24.dp),
-                        )
+                        // A silent meeting and a not-yet-transcribed one are different states: the
+                        // entry's persisted no-speech flag (SpeechCheck at save, like iOS) tells
+                        // them apart once the transcript is in. While it loads, say nothing.
+                        if (utterances.isEmpty() && !s.running && !s.opening && s.transcriptReady) {
+                            val silent = meetingEntry?.noSpeech == true
+                            Column(modifier = Modifier.padding(top = 24.dp)) {
+                                Text(
+                                    stringResource(if (silent) R.string.status_no_speech else R.string.transcript_empty_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = pal.Slate200,
+                                )
+                                if (!silent) Text(
+                                    stringResource(R.string.transcript_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = pal.Slate400,
+                                )
+                            }
+                        }
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f),
@@ -1935,11 +1965,11 @@ private fun TranscribeScreen(
     // would stay in the old language, so it is rebuilt (or dropped) instead. Runs and errors keep theirs.
     val uiLangCode = LocalLanguageController.current.code
     LaunchedEffect(uiLangCode) { vm.languageChanged() }
-    // A hand-edited transcript makes its summary child stale → offer a one-tap re-summarize (once per
+    // A hand-edited transcript makes its summary/action-items children stale → offer a one-tap re-summarize (once per
     // edit episode; the flag stays set while the snackbar shows so further edits don't stack it).
     LaunchedEffect(s.transcriptDirty) {
         // Only on the Session screen: this snackbar carries a Re-summarize action.
-        if (s.transcriptDirty && !s.summary.isNullOrBlank() && !s.running && s.screen == Screen.Session) {
+        if (s.transcriptDirty && (!s.summary.isNullOrBlank() || s.actionItems != null) && !s.running && s.screen == Screen.Session) {
             val res = snackbarHostState.showSnackbar(
                 message = context.getString(R.string.transcript_changed_resummarize),
                 actionLabel = context.getString(R.string.re_summarize),
@@ -2117,7 +2147,8 @@ private fun TranscribeScreen(
         s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,
         exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras,
         refs = { refs(it) }, notify = { vm.notify(it) },
-        onNameSpeaker = { sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) },
+        // Like the transcript's speaker names: off while a run relabels the speakers.
+        onNameSpeaker = if (s.running) null else ({ sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) }),
         onDismiss = { mailOpen = false },
     )
     // DEV: `--ez vox_mail true` opens the participants sheet on the open meeting (device checks, screenshots).

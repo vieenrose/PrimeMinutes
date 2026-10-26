@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -165,7 +166,7 @@ fun PersonPickerSheet(
             )
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                 if (allowContacts && query.isBlank()) item {
-                    Row(Modifier.fillMaxWidth().clickable { pickContact() }.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("people-contacts"),
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pickContact() }.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("people-contacts"),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
                         Spacer(Modifier.width(8.dp))
@@ -205,7 +206,7 @@ fun PersonPickerSheet(
                     Text(stringResource(R.string.people_picker_empty), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
                 }
                 if (sec.canAdd) item {
-                    Row(Modifier.fillMaxWidth().clickable { addNew(query) }.padding(vertical = 12.dp).testTag("people-add"), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { addNew(query) }.padding(vertical = 12.dp).testTag("people-add"), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.people_add_new, query.trim()), color = pal.Sky, fontWeight = FontWeight.SemiBold)
@@ -214,7 +215,8 @@ fun PersonPickerSheet(
                 if (allowClear && current != null) item {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = pal.Hairline)
                     Text(stringResource(R.string.people_clear_name, defaultLabel(current.id)), color = pal.Slate400,
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(PersonPick.Clear) }.padding(vertical = 12.dp))
+                        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(PersonPick.Clear) }
+                            .heightIn(min = 48.dp).padding(vertical = 12.dp))
                 }
                 item { Spacer(Modifier.padding(bottom = 16.dp)) }
             }
@@ -255,7 +257,7 @@ internal fun ConfidenceDots(level: Int, color: Color) {
 private fun PersonRow(name: String, sub: String?, greyed: Boolean = false, dots: Int = 0, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (dots > 0) ConfidenceDots(dots, pal.Sky)

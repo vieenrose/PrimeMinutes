@@ -5,6 +5,7 @@ package studio.primeminutes
 
 import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -397,7 +398,10 @@ internal fun CollapsibleMarkdown(
             stringResource(if (expanded) R.string.show_less else R.string.show_more),
             style = MaterialTheme.typography.labelMedium,
             color = pal.Slate400,
-            modifier = Modifier.padding(top = 4.dp).clickable { expanded = !expanded },
+            // Role + 48dp minimum: the bare label was a ~16dp-high tap target that TalkBack read as plain text.
+            modifier = Modifier.padding(top = 4.dp)
+                .minimumInteractiveComponentSize()
+                .clickable(role = Role.Button) { expanded = !expanded },
         )
     }
 }
@@ -559,12 +563,20 @@ internal fun EditPencil(onClick: () -> Unit) {
 
 internal fun fmt(sec: Double): String {
     val s = sec.toInt()
-    return "%d:%02d".format(s / 60, s % 60)
+    return fmtSec(s)
 }
 
 internal fun fmtMs(ms: Int): String {
     val s = ms / 1000
-    return "%d:%02d".format(s / 60, s % 60)
+    return fmtSec(s)
+}
+
+// Line times match the exports and the reader's prompt: h:mm:ss from the first hour, so a 75-minute
+// meeting reads "1:15:03", not the unreadable "75:03" (m:ss under 3600 s, as before).
+internal fun fmtSec(s: Int): String {
+    val v = s.coerceAtLeast(0)
+    return if (v >= 3600) "%d:%02d:%02d".format(v / 3600, (v / 60) % 60, v % 60)
+    else "%d:%02d".format(v / 60, v % 60)
 }
 
 /** A rounded surface card used to group a section (settings, podcast, summary). */
@@ -714,7 +726,7 @@ internal fun VolumeControl(
                         Modifier.padding(start = 4.dp, end = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onToggleMute, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = onToggleMute, modifier = Modifier.size(48.dp)) {
                             Icon(muteIcon, contentDescription = if (muted) stringResource(R.string.cd_unmute) else stringResource(R.string.cd_mute), tint = pal.Slate200)
                         }
                         Slider(
@@ -844,6 +856,8 @@ internal fun UtteranceRow(
     onMergeSpeaker: (Int) -> Unit,
     onSplitLine: (() -> Unit)? = null,
     topPadding: Dp? = null,
+    /** False while a run rewrites the transcript: the line menu and the speaker name are off (an edit would be lost). */
+    editable: Boolean = true,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // Two shapes:
@@ -915,13 +929,17 @@ internal fun UtteranceRow(
             val label = if (!showSpeaker) null
             else utt.speaker?.let { speakerNames[it]?.name ?: stringResource(R.string.speaker_n, it + 1) }
             var menuOpen by remember { mutableStateOf(false) }
+            // A run starting under an open menu closes it for good (it must not pop back when the run ends).
+            LaunchedEffect(editable) { if (!editable) menuOpen = false }
             // Reading layout: a slim header line (speaker in its colour · time), then the text on the
             // full width with a CJK-friendly line height. Tap seeks; long-press opens the line menu.
             Column(
-                Modifier.fillMaxWidth().combinedClickable(
-                    onClick = { onSeek(utt.startSec) },
-                    onLongClick = { menuOpen = true },
-                    onLongClickLabel = stringResource(R.string.cd_line_actions),
+                Modifier.fillMaxWidth().then(
+                    if (editable) Modifier.combinedClickable(
+                        onClick = { onSeek(utt.startSec) },
+                        onLongClick = { menuOpen = true },
+                        onLongClickLabel = stringResource(R.string.cd_line_actions),
+                    ) else Modifier.clickable { onSeek(utt.startSec) },
                 ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -930,7 +948,7 @@ internal fun UtteranceRow(
                             label,
                             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                             color = Color(speakerColorOn(utt.speaker, pal.isDark)),
-                            modifier = Modifier.clickable { onBeginSpeakerEdit(utt.speaker) },
+                            modifier = if (editable) Modifier.clickable(role = Role.Button) { onBeginSpeakerEdit(utt.speaker) } else Modifier,
                         )
                         Text(" · ", style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
                     }
@@ -947,7 +965,7 @@ internal fun UtteranceRow(
                     color = pal.Slate200,
                 )
                 LineMenu(utt.speaker, speakerIds, speakerNames, onBeginEdit, onReassignLine, onMergeSpeaker,
-                    expanded = menuOpen, onExpandedChange = { menuOpen = it }, onSplit = onSplitLine)
+                    expanded = menuOpen && editable, onExpandedChange = { menuOpen = it }, onSplit = onSplitLine)
             }
         }
     }
@@ -1070,11 +1088,11 @@ internal fun SpeakerTag(
                     }
                 },
         )
-        // Visible Save / Cancel: the keyboard's Done was the only way out (and it hides on some IMEs).
-        IconButton(onClick = { onCommit(value.trim()) }, modifier = Modifier.size(40.dp)) {
+        // Visible Save / Cancel (48dp, the minimum touch target): the keyboard's Done was the only way out (and it hides on some IMEs).
+        IconButton(onClick = { onCommit(value.trim()) }, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.save), tint = color)
         }
-        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = LocalPrimeMinutesPalette.current.Slate400)
         }
     }

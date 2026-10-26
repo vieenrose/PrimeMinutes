@@ -89,6 +89,8 @@
     <string name="youtube_no_videos">No videos found</string>
     <string name="youtube_search_failed">Search failed</string>
     <string name="podcast_failed">Podcast request failed</string>
+    <string name="podcast_no_series">No podcast series found. Try another spelling or a shorter term.</string>
+    <string name="podcast_no_episodes">This series offers no episode audio.</string>
     <string name="settings_inference_failed">Benchmark failed — the previous result is kept</string>
     <string name="youtube_search_hint">Search videos or paste a link</string>
     <string name="youtube_go">Go</string>
@@ -129,6 +131,8 @@
     <string name="status_recording">Recording…</string>
     <string name="status_done">Done</string>
     <string name="status_no_speech">No speech detected</string>
+    <string name="transcript_empty_title">No transcript yet</string>
+    <string name="transcript_empty">Nothing transcribed yet — the transcript shows up here after processing.</string>
     <string name="status_transcript_lines">Transcript: %d lines</string>
     <string name="status_transcript_lines_speakers">Transcript: %1$d lines, %2$d speakers</string>
     <string name="status_error">Error: %1$s</string>
@@ -215,6 +219,7 @@
     <string name="search_prev">Previous match</string>
     <string name="search_next">Next match</string>
     <string name="search_close">Close search</string>
+    <string name="search_more_cd">More search options</string>
     <string name="svc_transcribing">Transcribing…</string>
     <string name="card_action_items">Action items</string>
     <string name="action_items_copied">Action items copied</string>
@@ -392,6 +397,11 @@
     <string name="err_decode_failed">This device could not decode %1$s audio</string>
     <string name="err_youtube_no_stream">No audio stream available for this video (it may be region- or login-gated).</string>
     <string name="err_youtube_live">Live streams can\'t be transcribed; pick a regular video.</string>
+    <string name="err_youtube_no_decodable">This device can\'t decode any audio format this video offers (%1$s).</string>
+    <string name="err_peertube_bad_link">Not a PeerTube video link</string>
+    <string name="err_peertube_http">The PeerTube server replied with error %1$d</string>
+    <string name="err_peertube_live">Live streams can\'t be imported</string>
+    <string name="err_peertube_no_file">This video offers no downloadable file</string>
     <string name="network_error">Network error — check your connection and try again.</string>
     <plurals name="podcast_episodes">
         <item quantity="one">%d episode</item>
@@ -681,6 +691,9 @@
     <string name="ask_meeting_stage_searching">Searching this meeting… %1$d s</string>
     <string name="ask_meeting_earlier">Earlier</string>
     <string name="ask_meeting_clear">Clear this meeting\'s questions</string>
+    <string name="ask_meeting_clear_body">Earlier questions and answers for this meeting will be deleted. This can\'t be undone.</string>
+    <string name="ask_meeting_clear_action">Clear</string>
+    <string name="ask_reset">New conversation</string>
     <string name="search_results_notes">AI notes</string>
     <string name="search_results_transcript">Transcript</string>
     <string name="search_results_show">Show the results list</string>

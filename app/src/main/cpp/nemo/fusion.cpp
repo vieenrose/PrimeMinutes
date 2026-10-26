@@ -43,7 +43,13 @@ bool sentence_end(const std::string& cp) {
 // first word left on the wrong side ("...想法？我覺 | 得地點..."): character timing is coarse at a turn
 // change, the punctuation is not. Move that short tail to the next piece. The mirror case (a short
 // "了。" opening the next piece) is NOT moved: it is indistinguishable from a real one-word reply ("好。").
-void snap_to_sentence_end(std::vector<TaggedPiece>& pieces) {
+//
+// [lead_guard] (Fusion::set_line_split, research flag, off by default): a sentence end with nothing spoken
+// before it in the piece is the PREVIOUS speaker's punctuation that the ASR emitted at the turn start
+// (build_segments hands it back). The tail after it is this piece's own short reply ("。对对", "。啊不是"),
+// not the next speaker's first word: moving it erases the piece, and with it a change the diarizer saw.
+bool spoken_cp(const std::string& s, size_t off, size_t len);
+void snap_to_sentence_end(std::vector<TaggedPiece>& pieces, bool lead_guard) {
     for (size_t k = 0; k + 1 < pieces.size(); k++) {
         TaggedPiece& a = pieces[k];
         TaggedPiece& b = pieces[k + 1];
@@ -55,6 +61,11 @@ void snap_to_sentence_end(std::vector<TaggedPiece>& pieces) {
         }
         const size_t tail = cps.size() - cut;
         if (cut == cps.size() || tail == 0 || tail > 3 || cut == 0) continue;
+        if (lead_guard) {
+            bool before = false;
+            for (size_t i = 0; i + 1 < cut && !before; i++) before = spoken_cp(a.text, cps[i].first, cps[i].second);
+            if (!before) continue;
+        }
         const size_t byte = cps[cut].first;
         b.text = a.text.substr(byte) + b.text;
         a.text.resize(byte);
@@ -70,7 +81,7 @@ void snap_to_sentence_end(std::vector<TaggedPiece>& pieces) {
 // through words, with an identical transcript either way. Attribution accuracy barely moved between those
 // two runs, which is how we know the damage was in the cut, not in the speaker choice.
 std::vector<TaggedPiece> tag_sequence(const std::string& text, const std::vector<const Turn*>& mark,
-                                      const std::vector<char>& snapped) {
+                                      const std::vector<char>& snapped, bool lead_guard) {
     const auto cps = codepoints(text);
     std::vector<TaggedPiece> pieces;
     if (cps.empty()) return pieces;
@@ -112,8 +123,20 @@ std::vector<TaggedPiece> tag_sequence(const std::string& text, const std::vector
         }
         i = j;
     }
-    snap_to_sentence_end(pieces);
+    snap_to_sentence_end(pieces, lead_guard);
     return pieces;
+}
+
+// A spoken character: not punctuation or space (same ranges as snap_to_turn_starts' `spoken`).
+bool spoken_cp(const std::string& s, size_t off, size_t len) {
+    const unsigned char* u = (const unsigned char*)s.data() + off;
+    uint32_t cp = u[0];
+    if (len == 2) cp = ((u[0] & 0x1F) << 6) | (u[1] & 0x3F);
+    else if (len == 3) cp = ((u[0] & 0x0F) << 12) | ((u[1] & 0x3F) << 6) | (u[2] & 0x3F);
+    else if (len == 4) cp = ((u[0] & 0x07) << 18) | ((u[1] & 0x3F) << 12) | ((u[2] & 0x3F) << 6) | (u[3] & 0x3F);
+    if (cp < 0x80) return (bool)std::isalnum((int)cp);
+    return !((cp >= 0x2000 && cp <= 0x206F) || (cp >= 0x3000 && cp <= 0x303F) || (cp >= 0xFF00 && cp <= 0xFF0F) ||
+             (cp >= 0xFF1A && cp <= 0xFF20) || (cp >= 0xFF3B && cp <= 0xFF40) || (cp >= 0xFF5B && cp <= 0xFF65));
 }
 
 }  // namespace
@@ -220,7 +243,7 @@ std::vector<TaggedPiece> Fusion::attribute_from(size_t char_from, size_t byte_fr
         mark[i] = covering(sp.start, sp.end - sp.start, &sn);
         snap[i] = sn ? 1 : 0;
     }
-    auto pieces = tag_sequence(tail, mark, snap);
+    auto pieces = tag_sequence(tail, mark, snap, (line_split_ & 1) != 0);
     snap_to_turn_starts(pieces, tail, char_from);
     // Recover the time range each piece covers from the character spans (tag_sequence groups by word,
     // so times cannot travel with the text there).

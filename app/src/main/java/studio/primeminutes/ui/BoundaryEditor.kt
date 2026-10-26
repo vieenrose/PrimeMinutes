@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -11,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -74,6 +76,7 @@ import kotlinx.coroutines.delay
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import java.util.Locale
+import androidx.compose.ui.semantics.heading
 
 /**
  * The seam between two consecutive lines of different speakers: a hairline that fades from A's colour
@@ -178,7 +181,7 @@ fun BoundaryEditorSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = pal.Slate900) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = 12.dp)) {
             Text(stringResource(if (choices != null) R.string.boundary_split_title else R.string.boundary_title),
-                style = MaterialTheme.typography.titleMedium, color = pal.Slate200)
+                style = MaterialTheme.typography.titleMedium, color = pal.Slate200, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SpeakerDot(colorA); Text(" $labelA", color = colorA, fontWeight = FontWeight.SemiBold,
@@ -210,9 +213,11 @@ fun BoundaryEditorSheet(
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cd_boundary_earlier))
                 }
                 OutlinedButton(onClick = { onPreview(maxOf(0.0, t - 2.0), t) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).height(52.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 1) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 2, textAlign = TextAlign.Center) }
                 OutlinedButton(onClick = { onPreview(t, minOf(t + 2.0, end)) }, enabled = canPlay,
-                    modifier = Modifier.weight(1f).height(52.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 1) }
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 2, textAlign = TextAlign.Center) }
                 FilledTonalIconButton(onClick = { set(split + 1) }, modifier = Modifier.size(52.dp), colors = nudgeColors()) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cd_boundary_later))
                 }
@@ -333,5 +338,8 @@ private fun TokenStrip(
 
 private fun fmtPrecise(sec: Double): String {
     val ms = (sec * 1000).toLong().coerceAtLeast(0)
-    return String.format(Locale.ROOT, "%d:%02d.%d", ms / 60000, (ms / 1000) % 60, (ms % 1000) / 100)
+    // h:mm:ss from the first hour, so the preview label reads "1:15:03.2" past 3600 s ("75:03.2" was
+    // unreadable); Locale.ROOT: machine-adjacent fixed text.
+    return String.format(Locale.ROOT, if (ms >= 3_600_000) "%d:%02d:%02d.%d" else "%d:%02d.%d",
+        ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, (ms % 1000) / 100)
 }

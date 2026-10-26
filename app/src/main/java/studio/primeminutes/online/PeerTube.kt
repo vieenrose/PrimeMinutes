@@ -1,11 +1,13 @@
 package studio.primeminutes.online
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import studio.primeminutes.R
 
 /**
  * PeerTube video source: a link from any instance resolves, through the instance's public REST API
@@ -38,17 +40,18 @@ object PeerTube {
         return !p.first.contains("youtube.") && !p.first.contains("youtu.be")
     }
 
-    suspend fun resolve(url: String): Video = withContext(Dispatchers.IO) {
-        val (origin, id) = parse(url) ?: error("Not a PeerTube video link")
+    /** [ctx] localizes the failure messages, shown on the import item as "Failed · reason". */
+    suspend fun resolve(ctx: Context, url: String): Video = withContext(Dispatchers.IO) {
+        val (origin, id) = parse(url) ?: error(ctx.getString(R.string.err_peertube_bad_link))
         val conn = (URL("$origin/api/v1/videos/$id").openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000; readTimeout = 20_000
             setRequestProperty("User-Agent", "PrimeMinutes/1.0")
         }
         val o = try {
-            if (conn.responseCode >= 400) error("PeerTube: HTTP ${conn.responseCode}")
+            if (conn.responseCode >= 400) error(ctx.getString(R.string.err_peertube_http, conn.responseCode))
             JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
         } finally { conn.disconnect() }
-        if (o.optBoolean("isLive")) error("Live streams cannot be imported")
+        if (o.optBoolean("isLive")) error(ctx.getString(R.string.err_peertube_live))
         val files = mutableListOf<JSONObject>()
         o.optJSONArray("files")?.let { a -> for (k in 0 until a.length()) files += a.getJSONObject(k) }
         o.optJSONArray("streamingPlaylists")?.let { pl ->
@@ -59,7 +62,7 @@ object PeerTube {
             val u = f.optString("fileUrl").ifBlank { f.optString("fileDownloadUrl") }
             if (!u.startsWith("http") || u.endsWith(".m3u8")) null
             else (f.optJSONObject("resolution")?.optInt("id", Int.MAX_VALUE) ?: Int.MAX_VALUE) to u
-        }.minByOrNull { it.first } ?: error("This video offers no downloadable file")
+        }.minByOrNull { it.first } ?: error(ctx.getString(R.string.err_peertube_no_file))
         Video(o.optString("name"), best.second, o.optInt("duration"))
     }
 }

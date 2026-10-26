@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -132,13 +133,15 @@ fun VoiceSettingsCard() {
         colors = CardDefaults.cardColors(containerColor = pal.Slate800)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val voiceTitle = stringResource(R.string.voice_title)
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.voice_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                    Text(voiceTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
                         modifier = Modifier.semantics { heading() })
                     Text(stringResource(if (doc.voice) R.string.voice_on_desc else R.string.voice_off_desc),
                         style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 }
-                Switch(checked = doc.voice, enabled = download == null, modifier = Modifier.testTag("voice-switch"),
+                Switch(checked = doc.voice, enabled = download == null,
+                    modifier = Modifier.testTag("voice-switch").semantics { contentDescription = voiceTitle },
                     onCheckedChange = { on -> if (on) explain = true else VoiceStore.disable(context, deleteData = false) })
             }
             download?.let {
@@ -177,7 +180,7 @@ fun VoiceSettingsCard() {
         onDismissRequest = { deleteAsk = false },
         title = { Text(stringResource(R.string.voice_delete_all)) },
         text = { Text(stringResource(R.string.voice_delete_all_text)) },
-        confirmButton = { TextButton(onClick = { deleteAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.deleteAll(context) } }) { Text(stringResource(R.string.people_delete)) } },
+        confirmButton = { TextButton(onClick = { deleteAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.deleteAll(context) } }) { Text(stringResource(R.string.people_delete), color = LocalPrimeMinutesPalette.current.WarningText) } },
         dismissButton = { TextButton(onClick = { deleteAsk = false }) { Text(stringResource(R.string.cancel)) } },
     )
     if (enrol) MeEnrolDialog(onDone = { enrol = false })
@@ -268,14 +271,15 @@ fun PersonVoiceRow(p: Person) {
     var forgetAsk by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("person-voice")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val learnTitle = stringResource(R.string.voice_person_title)
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.voice_person_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                Text(learnTitle, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200,
                     modifier = Modifier.semantics { heading() })
                 Text(info?.let { (m, s) -> pluralStringResource(R.plurals.voice_person_learned, m, m, s.toInt()) } ?: stringResource(R.string.voice_person_none),
                     style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 if (pending > 0) Text(pluralStringResource(R.plurals.voice_person_pending, pending, pending), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
             }
-            Switch(checked = p.voiceEnabled, onCheckedChange = { on ->
+            Switch(checked = p.voiceEnabled, modifier = Modifier.semantics { contentDescription = learnTitle }, onCheckedChange = { on ->
                 scope.launch(Dispatchers.IO) { VoiceStore.setLearning(context, p.id, on) }
             })
         }

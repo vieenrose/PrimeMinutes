@@ -46,6 +46,9 @@ import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /**
  * Search YouTube by keyword (or paste a link) → pick a result → resolve the audio stream,
@@ -98,7 +101,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(stringResource(R.string.source_youtube), style = MaterialTheme.typography.titleLarge,
-                color = pal.Slate200, fontWeight = FontWeight.Bold)
+                color = pal.Slate200, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query,
@@ -132,7 +135,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
                         color = pal.InsetSurface,
                         shape = MaterialTheme.shapes.medium,
                         border = BorderStroke(1.dp, pal.Hairline),
-                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { transcribe(v.url, v.title) },
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Button) { transcribe(v.url, v.title) },
                     ) {
                         Column(Modifier.padding(12.dp)) {
                             Text(v.title, style = MaterialTheme.typography.bodyMedium,

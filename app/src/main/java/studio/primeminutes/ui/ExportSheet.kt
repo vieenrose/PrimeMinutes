@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.core.export.ExportFormat
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /**
  * One place to get a session out of the app, replacing eight flat entries in the overflow menu.
@@ -70,7 +72,7 @@ fun ExportSheet(
                 style = MaterialTheme.typography.titleLarge,
                 color = pal.Slate200,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).semantics { heading() },
             )
 
             ExportGroupCard(
@@ -99,7 +101,7 @@ fun ExportSheet(
                 headlineContent = { Text(stringResource(R.string.export_copy_transcript), color = pal.Slate200) },
                 leadingContent = { Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = pal.Sky) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.fillMaxWidth().clickable { onDismiss(); onCopyTranscript() },
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDismiss(); onCopyTranscript() },
             )
         }
     }

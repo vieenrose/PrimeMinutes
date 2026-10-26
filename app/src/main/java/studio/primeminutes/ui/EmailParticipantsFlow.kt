@@ -54,7 +54,8 @@ fun EmailParticipantsFlow(
     exportExtras: (Boolean) -> String?,
     refs: (String?) -> String?,
     notify: (String) -> Unit,
-    onNameSpeaker: (Int) -> Unit,
+    /** Null while a run is in flight (see [EmailParticipantsSheet]). */
+    onNameSpeaker: ((Int) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current

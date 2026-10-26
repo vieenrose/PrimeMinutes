@@ -1,6 +1,8 @@
 package studio.primeminutes.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.ColumnScope
@@ -62,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -160,7 +163,8 @@ fun SettingsContent(
         if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
             androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = 8.dp)
+                Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onOpenPeople)
+                    .padding(vertical = 8.dp)
                     .testTag("settings-people"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -407,7 +411,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
                 androidx.compose.material3.TextButton(onClick = {
                     confirm = null
                     scope.launch { withContext(Dispatchers.IO) { m.delete() }; version++ }
-                }) { Text(stringResource(R.string.action_delete)) }
+                }) { Text(stringResource(R.string.action_delete), color = LocalPrimeMinutesPalette.current.WarningText) }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -625,7 +629,9 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
         style = MaterialTheme.typography.bodySmall,
         color = pal.Sky,
         modifier = Modifier
-            .clickable { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
+            .heightIn(min = 48.dp)
+            .wrapContentHeight(Alignment.CenterVertically)
             .padding(vertical = 4.dp),
     )
 }

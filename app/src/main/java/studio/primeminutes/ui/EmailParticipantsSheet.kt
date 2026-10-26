@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.Role
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,6 +87,8 @@ import studio.primeminutes.core.share.ShareHistory
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
 import java.io.File
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** What the participants sheet hands to the caller, which opens the mail app (or the share sheet). */
 data class MailRequest(
@@ -133,7 +136,8 @@ fun EmailParticipantsSheet(
     entryDir: File?,
     onSend: (MailRequest) -> Unit,
     onShareChat: (MailRequest) -> Unit,
-    onNameSpeaker: (Int) -> Unit,
+    /** Null while a run rewrites the speakers: a name given now could land on a label the diarizer moves. */
+    onNameSpeaker: ((Int) -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
@@ -179,7 +183,8 @@ fun EmailParticipantsSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().testTag("mail-sheet")) {
-            Text(stringResource(R.string.mail_sheet_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = pal.Slate200)
+            Text(stringResource(R.string.mail_sheet_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = pal.Slate200,
+                modifier = Modifier.semantics { heading() })
             Text("$title · $dateLabel", color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
             SectionLabel(stringResource(R.string.mail_recipients))
@@ -197,23 +202,23 @@ fun EmailParticipantsSheet(
                     }
                     // A labelled Remove button: the checkbox that stood here deleted the recipient when
                     // it was un-ticked, which reads as a selection and not as a delete.
-                    IconButton(onClick = { extras.remove(n to a) }, modifier = Modifier.size(44.dp)) {
+                    IconButton(onClick = { extras.remove(n to a) }, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.email_remove) + " · " + (n ?: a), tint = pal.Slate400)
                     }
                 }
             }
             // Speakers who cannot be recipients yet: name them first.
             Recipients.loose(speakers, labels.filterKeys { it !in people }, people).forEach { l ->
-                Row(Modifier.fillMaxWidth().clickable { onNameSpeaker(l.speaker) }.heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().then(if (onNameSpeaker != null) Modifier.clickable(role = Role.Button) { onNameSpeaker(l.speaker) } else Modifier).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (l.label == null) stringResource(R.string.mail_unnamed, stringResource(R.string.speaker_n, l.speaker + 1))
                         else stringResource(R.string.mail_plain_label, l.label),
                         color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                     )
-                    Text(stringResource(if (l.label == null) R.string.mail_name_action else R.string.mail_link_action), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
+                    if (onNameSpeaker != null) Text(stringResource(if (l.label == null) R.string.mail_name_action else R.string.mail_link_action), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
                 }
             }
-            Row(Modifier.fillMaxWidth().clickable { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.mail_add_recipient), color = pal.Sky, fontWeight = FontWeight.SemiBold)
@@ -378,6 +383,8 @@ private fun RecipientRow(r: Recipients.Row, anyMe: Boolean, onCheck: (Boolean) -
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 48.dp)) {
                 OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
                     placeholder = { Text("name@example.com") }, isError = text.isNotBlank() && !ok,
+                    // Same hint as AddressDialog: a red outline alone does not say what is wrong.
+                    supportingText = if (text.isNotBlank() && !ok) ({ Text(stringResource(R.string.email_invalid)) }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (ok) { onAddress(EmailRules.normalize(text)); saved = true; typing = false } }),
                     trailingIcon = { IconButton(enabled = ok, onClick = { onAddress(EmailRules.normalize(text)); saved = true; typing = false }) {
@@ -414,14 +421,14 @@ private fun AddRecipientDialog(candidates: List<Person>, onDone: (Pair<String?, 
                     }),
                     modifier = Modifier.fillMaxWidth().testTag("mail-add-field"))
                 if (EmailRules.isValid(q)) Text(stringResource(R.string.mail_add_typed, EmailRules.normalize(q)), color = pal.Sky, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.fillMaxWidth().clickable { onDone(null to EmailRules.normalize(q)) }.padding(vertical = 12.dp))
+                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(null to EmailRules.normalize(q)) }.heightIn(min = 48.dp).padding(vertical = 12.dp))
                 hits.forEach { p ->
-                    Column(Modifier.fillMaxWidth().clickable { onDone(p.name to p.emails.first().address) }.padding(vertical = 8.dp)) {
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(p.name to p.emails.first().address) }.heightIn(min = 48.dp).padding(vertical = 8.dp)) {
                         Text(p.name, color = pal.Slate200)
                         Text(p.emails.first().address, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                Row(Modifier.fillMaxWidth().clickable { pick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.heightIn(min = 48.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.contact_choose), color = pal.Sky)

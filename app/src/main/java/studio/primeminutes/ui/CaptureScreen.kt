@@ -1,5 +1,8 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.animateFloat
 
 import androidx.compose.ui.draw.alpha
@@ -19,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -117,11 +121,13 @@ fun CaptureScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = if (isRecording) PrimeMinutesPalette.Red else pal.Slate200,
                 fontWeight = FontWeight.Bold,
+                // Weighted so the gauges are measured first and the title wraps (not ellipsizes)
+                // into the remaining width at large font scales.
+                modifier = Modifier.weight(1f),
             )
             // The engines' load, trailing on the header row (page gutter, same as iOS) rather than
             // floating centered under the timer; only while the mic and the engines run.
             if (isRecording) {
-                Spacer(Modifier.weight(1f))
                 HwStatusLine(Modifier.padding(end = 4.dp))
             }
         }
@@ -174,7 +180,7 @@ private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modi
     // the vertical space goes to the live transcript instead of empty padding.
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Text(
-            "%d:%02d".format(recSeconds / 60, recSeconds % 60),
+            studio.primeminutes.fmtSec(recSeconds),
             fontSize = 64.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,   // tabular: no layout shift per tick
@@ -208,8 +214,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
     // A model still downloading (e.g. the 3 GB summary model on a first run, while the meeting is
     // already being transcribed): say so on the booth, not only in the notification shade.
     if (utterances.isNotEmpty()) notice?.takeIf { it.isNotBlank() }?.let {
+        // Polite live region: TalkBack users hear the download state change without hunting for it.
         Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(vertical = 4.dp))
+            modifier = Modifier.padding(vertical = 4.dp).semantics { liveRegion = LiveRegionMode.Polite })
     }
     if (utterances.isEmpty()) {
         // Centered waiting state: a corner-anchored one-liner made the big empty panel
@@ -224,7 +231,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
                 Text(stringResource(R.string.capture_live_waiting), color = pal.Slate400, style = MaterialTheme.typography.titleMedium)
                 notice?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(6.dp))
-                    Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                    Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
         }
@@ -268,7 +276,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "%d:%02d".format(u.startSec.toInt() / 60, u.startSec.toInt() % 60),
+                                    studio.primeminutes.fmtSec(u.startSec.toInt()),
                                     color = pal.Slate400, style = MaterialTheme.typography.labelSmall,
                                 )
                             }
@@ -300,13 +308,13 @@ private fun CaptureButtons(
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
-            modifier = Modifier.weight(1f).height(buttonHeight),
+            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
             // Minimal padding: on narrow phones the default 24dp sides forced CJK labels to wrap.
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
         // ⏹ Stop & save — always safe: the capture is in the library before processing starts.
@@ -315,12 +323,12 @@ private fun CaptureButtons(
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),
-            modifier = Modifier.weight(1f).height(buttonHeight),
+            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
     }

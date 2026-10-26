@@ -360,12 +360,12 @@ fun StudioScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onImport),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onImport),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
                 Spacer(Modifier.width(4.dp))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onSettings),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onSettings),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
             }
@@ -629,7 +629,7 @@ fun StudioScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-                            .clickable(onClick = onProcessAll).padding(horizontal = 12.dp, vertical = 8.dp),
+                            .clickable(role = Role.Button, onClick = onProcessAll).padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
                         Icon(Icons.Filled.PlaylistPlay, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
@@ -644,7 +644,7 @@ fun StudioScreen(
                     },
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = if (isRecording) PrimeMinutesPalette.Red else pal.Sky),
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) {
                     Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
@@ -758,7 +758,7 @@ fun StudioScreen(
             onDismissRequest = { deleteFor = null },
             title = { Text(stringResource(R.string.action_delete)) },
             text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale))) },
-            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete)) } },
+            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(android.R.string.cancel)) } },
         )
     }
@@ -775,7 +775,7 @@ fun StudioScreen(
                     val victims = entries.filter { it.id in selected }
                     exitSelection()
                     onDeleteMany(victims)
-                }) { Text(stringResource(R.string.action_delete)) }
+                }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) }
             },
             dismissButton = { TextButton(onClick = { confirmDeleteMany = false }) { Text(stringResource(android.R.string.cancel)) } },
         )
@@ -809,7 +809,7 @@ private fun PassageRow(
                 ?: p.speakerId?.let { stringResource(R.string.speaker_n, it + 1) }   // as the transcript names it
             val head = buildString {
                 if (p.kind != SessionIndex.Kind.MEETING) {
-                    val t = p.timeSec.toInt(); append("%d:%02d".format(t / 60, t % 60))
+                    val t = p.timeSec.toInt(); append(studio.primeminutes.fmtSec(t))
                 }
                 speaker?.let { if (isNotEmpty()) append(" · "); append(it) }
             }
@@ -928,7 +928,7 @@ private fun SessionRow(
                     // A download item has no length yet (or only the feed's): its state says more.
                     if (entry.durationSec > 0 || entry.download == null) {
                         append(" · ")
-                        append("%d:%02d".format(entry.durationSec / 60, entry.durationSec % 60))
+                        append(studio.primeminutes.fmtSec(entry.durationSec))
                     }
                     if (processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
                     if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }
@@ -1016,12 +1016,12 @@ private fun Banner(icon: ImageVector, tint: Color, text: String, onClick: () -> 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 8.dp)
-            .clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.13f)).clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.13f)).clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+        Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -1032,7 +1032,9 @@ private fun ActionRow(icon: ImageVector, label: String, tint: Color? = null, onC
         headlineContent = { Text(label, color = tint ?: pal.Slate200) },
         leadingContent = { Icon(icon, contentDescription = null, tint = tint ?: pal.Sky) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        // TalkBack read the sheet's action rows (Rename, Delete, Process now, …) as plain text:
+        // they are buttons, like every other row here.
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
     )
 }
 

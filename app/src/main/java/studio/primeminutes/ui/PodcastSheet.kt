@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** Podcast search/browse/download in a bottom sheet (hosts the existing [PodcastPanel]). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,7 +33,7 @@ fun PodcastSheet(onDismiss: () -> Unit) {
                 androidx.compose.ui.res.stringResource(studio.primeminutes.R.string.source_podcast),
                 style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                 color = pal.Slate200, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 10.dp),
+                modifier = Modifier.padding(bottom = 10.dp).semantics { heading() },
             )
             PodcastPanel(onStarted = onDismiss)
         }

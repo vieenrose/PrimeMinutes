@@ -3,6 +3,8 @@ package studio.primeminutes.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +73,8 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
 import java.text.DateFormat
 import java.util.Date
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** One meeting a person is linked in. */
 private data class PersonMeeting(val entry: SessionLibrary.Entry, val speakers: Set<Int>)
@@ -129,7 +133,7 @@ private fun PeopleContent(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_people_back), tint = pal.Slate200)
             }
             Text(open?.name ?: stringResource(R.string.people_title), style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (open == null) {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("people-list")) {
@@ -153,7 +157,7 @@ private fun PeopleContent(
                         if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it)) }
                         add(meetingCount(ms.size))
                     }.joinToString(" · ")
-                    Row(Modifier.fillMaxWidth().clickable { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(22.dp))
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -216,7 +220,7 @@ private fun PersonPage(
         items(meetings, key = { it.entry.id }) { m ->
             var menu by remember { mutableStateOf(false) }
             Row(
-                Modifier.fillMaxWidth().clickable {
+                Modifier.fillMaxWidth().clickable(role = Role.Button) {
                     scope.launch {
                         val t = withContext(Dispatchers.IO) {
                             studio.primeminutes.core.session.PrimeMinutesSession.peek(m.entry.sessionFile)
@@ -264,7 +268,7 @@ private fun PersonPage(
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(people.filter { it.id != p.id }.sortedBy { PersonNames.normalize(it.name) }, key = { it.id }) { o ->
                     Text(o.name + (o.note?.let { " · $it" } ?: ""), color = pal.Slate200,
-                        modifier = Modifier.fillMaxWidth().clickable {
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) {
                             merging = false
                             mergeTarget = o     // the pick only chooses; the merge is confirmed next
                         }.padding(vertical = 12.dp))
@@ -301,8 +305,9 @@ private fun PersonPage(
             text = {
                 Column {
                     Text(stringResource(R.string.people_delete_text))
-                    if (meetings.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { clear = !clear }) {
-                        Checkbox(checked = clear, onCheckedChange = { clear = it })
+                    if (meetings.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(value = clear, role = Role.Checkbox, onValueChange = { clear = it })) {
+                        Checkbox(checked = clear, onCheckedChange = null)
                         Text(stringResource(R.string.people_delete_clear, meetings.size))
                     }
                 }

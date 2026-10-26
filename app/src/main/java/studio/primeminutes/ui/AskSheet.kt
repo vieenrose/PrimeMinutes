@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -74,6 +76,10 @@ import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 
 /** `[[entryId@sec]]` as AskEngine publishes the model's `[[k]]` tags (and a tolerant `[[id@sec]`/`[id@sec]`). */
 private val CITE_RE = Regex("""\[{1,2}([A-Za-z0-9_\-]+)@(\d+)]{1,2}""")
@@ -106,6 +112,7 @@ fun AskSheet(
     val phase by AskEngine.phase.collectAsState()
     val turns by AskEngine.turns.collectAsState()
     var followUp by remember { mutableStateOf("") }
+    var confirmClear by remember { mutableStateOf(false) }
     // Typing is the reason this sheet opens: the question field takes focus once the sheet settles
     // (iOS does the same in `fc2f9c65`).
     val askFocus = remember { FocusRequester() }
@@ -152,7 +159,7 @@ fun AskSheet(
                         Text(
                             stringResource(if (scope != null) R.string.ask_meeting_title else R.string.ask_title),
                             style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
-                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).semantics { heading() },
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
@@ -170,12 +177,32 @@ fun AskSheet(
                 if (busy) IconButton(onClick = { AskEngine.cancel() }) {
                     Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.ask_cancel), tint = pal.Slate400)
                 }
-                // In-meeting: start over and forget this meeting's earlier questions.
-                if (scope != null && !busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                // Start over: a new conversation (library-wide; closing the sheet would also unload the
+                // reader), and in-meeting it also forgets this meeting's earlier questions (iOS: both).
+                // In-meeting the saved questions are deleted for good, so that path asks first (iOS
+                // confirmationDialog); the library-wide reset only drops this sheet's conversation.
+                fun startOver() {
                     AskEngine.reset(); history = emptyList()
-                    scope.dir.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
-                }, modifier = Modifier.testTag("ask-meeting-clear")) {
-                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.ask_meeting_clear), tint = pal.Slate400)
+                    scope?.dir?.let { d -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { AskHistory.clear(d) } }
+                    followUp = ""; runCatching { askFocus.requestFocus() }
+                }
+                if (confirmClear) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmClear = false },
+                    title = { Text(stringResource(R.string.ask_meeting_clear)) },
+                    text = { Text(stringResource(R.string.ask_meeting_clear_body)) },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { confirmClear = false; startOver() }, modifier = Modifier.testTag("ask-meeting-clear-confirm")) {
+                            Text(stringResource(R.string.ask_meeting_clear_action), color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.cancel)) }
+                    },
+                )
+                if (!busy && (history.isNotEmpty() || turns.isNotEmpty())) IconButton(onClick = {
+                    if (scope != null) confirmClear = true else startOver()
+                }, modifier = Modifier.testTag(if (scope != null) "ask-meeting-clear" else "ask-reset")) {
+                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(if (scope != null) R.string.ask_meeting_clear else R.string.ask_reset), tint = pal.Slate400)
                 }
             }
             Column(
@@ -195,11 +222,14 @@ fun AskSheet(
                         t.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                         color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                     )
-                    if (t.answer.isNotBlank()) Text(
-                        answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
-                            speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
-                        style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
-                    )
+                    // Selectable (long-press, then copy) like iOS's `.textSelection`; a tap on a citation still opens it.
+                    if (t.answer.isNotBlank()) androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
+                                speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
+                            style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
+                        )
+                    }
                     if (t.done && t.excerpts.isNotEmpty()) {
                         Text(
                             stringResource(R.string.ask_sources), style = MaterialTheme.typography.labelSmall,
@@ -211,9 +241,10 @@ fun AskSheet(
                                 if (scope != null) ReaderProtocol.formatTs(x.sec) + named(x, speakerN = { n -> ctx.getString(R.string.speaker_n, n) }).trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
                                 else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
-                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                                    .clickable { onOpenAt(x.entry, x.at) },
+                                // Two lines: at large font a long meeting title ate the timestamp, so sources looked identical.
+                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable(role = Role.Button) { onOpenAt(x.entry, x.at) }
+                                    .heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically).padding(vertical = 2.dp),
                             )
                         }
                     }
@@ -230,7 +261,14 @@ fun AskSheet(
                 }
                 if (status != null) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
                     if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
-                    Text(status, style = MaterialTheme.typography.bodySmall, color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400)
+                    // Polite live region: the stage and its seconds change under a streaming answer,
+                    // so a TalkBack user hears "searching 3 s" → "reading 5 s" → the failure without
+                    // hunting for the line (the transcript search's counter does the same).
+                    Text(
+                        status, style = MaterialTheme.typography.bodySmall,
+                        color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 }
                 Text(
                     stringResource(R.string.ask_disclaimer), style = MaterialTheme.typography.labelSmall,
@@ -256,8 +294,8 @@ fun AskSheet(
                     },
                     modifier = Modifier.weight(1f).focusRequester(askFocus),
                 )
-                // 44dp: the sheet's primary action was a 32dp target inside a 44dp row.
-                IconButton(onClick = { send() }, enabled = followUp.isNotBlank() && !busy, modifier = Modifier.size(44.dp)) {
+                // 48dp target: the sheet's primary action was a 32dp icon inside a 44dp row.
+                IconButton(onClick = { send() }, enabled = followUp.isNotBlank() && !busy, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.ask_cd), tint = if (followUp.isNotBlank() && !busy) pal.Sky else pal.Slate400, modifier = Modifier.size(18.dp))
                 }
             }

@@ -88,6 +88,8 @@
     <string name="youtube_no_videos">找不到影片</string>
     <string name="youtube_search_failed">搜尋失敗</string>
     <string name="podcast_failed">Podcast 請求失敗</string>
+    <string name="podcast_no_series">找不到 Podcast 節目。換個說法或用更短的詞試試。</string>
+    <string name="podcast_no_episodes">此節目沒有可下載的單集。</string>
     <string name="settings_inference_failed">基準測試失敗，保留先前結果</string>
     <string name="youtube_search_hint">搜尋影片或貼上連結</string>
     <string name="youtube_go">前往</string>
@@ -125,6 +127,8 @@
     <string name="status_recording">錄音中…</string>
     <string name="status_done">完成</string>
     <string name="status_no_speech">未偵測到語音</string>
+    <string name="transcript_empty_title">還沒有逐字稿</string>
+    <string name="transcript_empty">尚無轉錄文字——處理完成後會顯示在這裡。</string>
     <string name="status_transcript_lines">逐字稿：%d 行</string>
     <string name="status_transcript_lines_speakers">逐字稿：%1$d 行，%2$d 位語者</string>
     <string name="status_error">錯誤：%1$s</string>
@@ -197,6 +201,7 @@
     <string name="search_prev">上一個</string>
     <string name="search_next">下一個</string>
     <string name="search_close">關閉搜尋</string>
+    <string name="search_more_cd">更多搜尋選項</string>
     <string name="svc_transcribing">轉錄中…</string>
     <string name="card_action_items">行動項目</string>
     <string name="action_items_copied">已複製行動項目</string>
@@ -385,6 +390,11 @@
     <string name="err_decode_failed">此裝置無法解碼 %1$s 音訊</string>
     <string name="err_youtube_no_stream">此影片沒有可用的音訊串流（可能受地區或登入限制）。</string>
     <string name="err_youtube_live">直播無法轉錄，請選擇一般影片。</string>
+    <string name="err_youtube_no_decodable">此裝置無法解碼這部影片提供的任何音訊格式（%1$s）。</string>
+    <string name="err_peertube_bad_link">不是 PeerTube 影片連結</string>
+    <string name="err_peertube_http">PeerTube 伺服器回應錯誤 %1$d</string>
+    <string name="err_peertube_live">無法匯入直播</string>
+    <string name="err_peertube_no_file">此影片沒有可下載的檔案</string>
     <string name="network_error">網路錯誤——請檢查連線後再試一次。</string>
     <plurals name="podcast_episodes">
         <item quantity="other">%d 集</item>
@@ -667,6 +677,9 @@
     <string name="ask_meeting_stage_searching">正在搜尋這場會議… %1$d 秒</string>
     <string name="ask_meeting_earlier">先前的問題</string>
     <string name="ask_meeting_clear">清除這場會議的問答</string>
+    <string name="ask_meeting_clear_body">這場會議之前問過的問題和回答都會刪掉，刪了就找不回來。</string>
+    <string name="ask_meeting_clear_action">清除</string>
+    <string name="ask_reset">新對話</string>
     <string name="search_results_notes">AI 筆記</string>
     <string name="search_results_transcript">逐字稿</string>
     <string name="search_results_show">顯示結果清單</string>

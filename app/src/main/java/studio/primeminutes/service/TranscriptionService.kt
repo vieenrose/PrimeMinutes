@@ -753,7 +753,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                         }
                         SessionLibrary.PendingDownload.PEERTUBE -> {
                             stageRes = R.string.dl_resolving; publish()
-                            val v = studio.primeminutes.online.PeerTube.resolve(d.url)
+                            val v = studio.primeminutes.online.PeerTube.resolve(applicationContext, d.url)
                             if (title.isNullOrBlank() && v.title.isNotBlank()) {
                                 title = v.title
                                 SessionLibrary.rename(applicationContext, item.dir, v.title); dl.changed()
