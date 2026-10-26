@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -71,6 +70,7 @@ import studio.primeminutes.core.people.PersonNames
 import studio.primeminutes.core.people.SpeakerLink
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 import java.text.DateFormat
 import java.util.Date
 import androidx.compose.ui.semantics.semantics
@@ -128,7 +128,7 @@ private fun PeopleContent(
     BackHandler { if (open != null) openId = null else onClose() }
 
     Column(Modifier.fillMaxSize().background(pal.Slate900).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xs, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (open != null) openId = null else onClose() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_people_back), tint = pal.Slate200)
             }
@@ -136,9 +136,9 @@ private fun PeopleContent(
                 fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (open == null) {
-            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("people-list")) {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("people-list")) {
                 if (doc.migrationFound > 0) item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(pal.PanelSurface, RoundedCornerShape(12.dp)).padding(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.PanelSurface, MaterialTheme.shapes.medium).padding(Spacing.md)) {
                         Text(pluralStringResource(R.plurals.people_migration_card, doc.migrationFound, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissMigrationCard(context) } }, modifier = Modifier.align(Alignment.End)) {
                             Text(stringResource(R.string.people_migration_ok))
@@ -147,7 +147,7 @@ private fun PeopleContent(
                 }
                 item { voiceHeader() }
                 if (doc.people.isEmpty()) item {
-                    Text(stringResource(R.string.people_none), color = pal.Slate400, modifier = Modifier.padding(vertical = 24.dp))
+                    Text(stringResource(R.string.people_none), color = pal.Slate400, modifier = Modifier.padding(vertical = Spacing.xxl))
                 }
                 val homonyms = doc.people.groupBy { PersonNames.normalize(it.name) }.values.filter { it.size > 1 }.flatten().map { it.id }.toSet()
                 val sorted = doc.people.sortedWith(compareByDescending<Person> { meetings[it.id]?.size ?: 0 }.thenBy { PersonNames.normalize(it.name) })
@@ -157,10 +157,10 @@ private fun PeopleContent(
                         if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it)) }
                         add(meetingCount(ms.size))
                     }.joinToString(" · ")
-                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = 8.dp),
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(22.dp))
-                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Column(Modifier.weight(1f).padding(start = Spacing.md)) {
                             Text(p.name, color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                             Text(sub, color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -197,14 +197,14 @@ private fun PersonPage(
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val dateFmt = remember(uiLocale) { DateFormat.getDateInstance(DateFormat.MEDIUM, uiLocale) }
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("person-page")) {
-        p.note?.let { item { Text(it, color = pal.Slate400, modifier = Modifier.padding(bottom = 8.dp)) } }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("person-page")) {
+        p.note?.let { item { Text(it, color = pal.Slate400, modifier = Modifier.padding(bottom = Spacing.sm)) } }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(vertical = Spacing.sm)) {
                 OutlinedButton(onClick = { renaming = true }) { Text(stringResource(R.string.people_rename)) }
                 OutlinedButton(onClick = { noting = true }) { Text(stringResource(R.string.people_note_short)) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(bottom = Spacing.sm)) {
                 if (people.size > 1) OutlinedButton(onClick = { merging = true }) { Text(stringResource(R.string.people_merge_into)) }
                 OutlinedButton(onClick = { deleting = true }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
             }
@@ -212,11 +212,11 @@ private fun PersonPage(
         item {
             // The merge is confirmed below (mergeTarget): a person record cannot be un-merged.
             PersonContactCards(p, onMergeInto = { o -> mergeTarget = o })
-            Spacer(Modifier.padding(top = 8.dp))
+            Spacer(Modifier.padding(top = Spacing.sm))
         }
         item { voiceOfPerson(p) }
         item { SectionLabel(stringResource(R.string.people_meetings_of, p.name)) }
-        if (meetings.isEmpty()) item { Text(stringResource(R.string.people_no_meetings), color = pal.Slate400, modifier = Modifier.padding(vertical = 8.dp)) }
+        if (meetings.isEmpty()) item { Text(stringResource(R.string.people_no_meetings), color = pal.Slate400, modifier = Modifier.padding(vertical = Spacing.sm)) }
         items(meetings, key = { it.entry.id }) { m ->
             var menu by remember { mutableStateOf(false) }
             Row(
@@ -244,7 +244,7 @@ private fun PersonPage(
             }
             HorizontalDivider(color = pal.Hairline)
         }
-        item { Spacer(Modifier.padding(bottom = 24.dp)) }
+        item { Spacer(Modifier.padding(bottom = Spacing.xxl)) }
     }
 
     if (renaming) NameDialog(stringResource(R.string.people_rename), p.name, onDone = { n ->
@@ -271,7 +271,7 @@ private fun PersonPage(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) {
                             merging = false
                             mergeTarget = o     // the pick only chooses; the merge is confirmed next
-                        }.padding(vertical = 12.dp))
+                        }.padding(vertical = Spacing.md))
                 }
             }
         },

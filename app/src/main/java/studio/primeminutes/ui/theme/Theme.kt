@@ -230,11 +230,60 @@ private fun schemeFor(pal: PrimeMinutesColors): ColorScheme {
     )
 }
 
+/**
+ * Spacing scale — the 8pt grid the whole app composes from. All layout paddings, gaps
+ * (`spacedBy`), `Spacer` ticks and `contentPadding` use these; raw dp literals in layout
+ * position are rhythm drift. Sizing roles (touch targets, icon sizes, dividers, fixed widths,
+ * offsets, elevation) keep plain dp — they are geometry, not rhythm.
+ *
+ * Values stay fixed dp (Compose `dp` already scales with screen density; only fonts follow the
+ * user's font scale, which [PrimeMinutesTheme] applies via typography).
+ */
+object Spacing {
+    val xxs = 2.dp
+    val xs = 4.dp
+    val sm = 8.dp
+    val md = 12.dp
+    val lg = 16.dp
+    val xl = 20.dp
+    val xxl = 24.dp
+}
+
+/**
+ * Radius tokens — every radius in the app maps onto the existing M3 shape scale in
+ * [PrimeMinutesShapes], so one edit changes the whole shape language:
+ *
+ * Call sites keep reading `MaterialTheme.shapes.*` (a composable-free lookup); these
+ * aliases exist so the shape language has pronounceable names in code review:
+ *
+ * | Alias      | Shape slot    | Radius | Use                                     |
+ * |------------|---------------|--------|-----------------------------------------|
+ * | Chip       | `extraSmall`  | 8.dp   | chips, tags, thumbnails, rails          |
+ * | Card       | `small`       | 10.dp  | inset cards, input containers           |
+ * | Dialog     | `medium`      | 12.dp  | dialogs, buttons, tiles                 |
+ * | Sheet      | `large`       | 16.dp  | sheets, panels, banners                 |
+ * | Pill       | `CircleShape` | —      | pills, dots, avatars, toggle thumbs     |
+ *
+ * `extraLarge` keeps the M3 default 28.dp: nothing in the app used a hardcoded 28.dp, and
+ * drifting from the spec default would break M3 shape monotonicity for zero gain.
+ * Hairline 1–3.dp radii (progress rails, dividers' end caps) are geometry, not shape language,
+ * and stay raw dp at the call site.
+ *
+ * NOTE: `MaterialTheme.shapes.*` is @Composable, so it cannot back a top-level `val`. Keep
+ * these as plain dp and construct shapes at the call site via `MaterialTheme.shapes.*`.
+ */
+object Radius {
+    val Chip = 8.dp
+    val Card = 10.dp
+    val Dialog = 12.dp
+    val Sheet = 16.dp
+}
+
 private val PrimeMinutesShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
+    extraSmall = RoundedCornerShape(Radius.Chip),
+    small = RoundedCornerShape(Radius.Card),
+    medium = RoundedCornerShape(Radius.Dialog),
+    large = RoundedCornerShape(Radius.Sheet),
 )
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)

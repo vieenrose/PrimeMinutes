@@ -62,6 +62,7 @@ import studio.primeminutes.core.people.VoiceStore
 import studio.primeminutes.core.people.VoiceSuggestion
 import studio.primeminutes.data.SpeakerName
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import java.io.File
 
 /**
@@ -129,9 +130,9 @@ fun VoiceSettingsCard() {
     val known by produceState(emptyMap<String, Pair<Int, Float>>(), version, doc) {
         value = withContext(Dispatchers.IO) { VoiceStore.known(context) }
     }
-    Card(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("voice-card"),
+    Card(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).testTag("voice-card"),
         colors = CardDefaults.cardColors(containerColor = pal.Slate800)) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(Spacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val voiceTitle = stringResource(R.string.voice_title)
                 Column(Modifier.weight(1f)) {
@@ -145,17 +146,17 @@ fun VoiceSettingsCard() {
                     onCheckedChange = { on -> if (on) explain = true else VoiceStore.disable(context, deleteData = false) })
             }
             download?.let {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(stringResource(R.string.voice_downloading), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth())
             }
             if (failed) Text(stringResource(R.string.voice_download_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             if (doc.voice) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(pluralStringResource(R.plurals.voice_known, known.size, known.size), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 if (working.isNotEmpty()) Text(stringResource(R.string.voice_note_working), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedButton(onClick = { enrol = true }, modifier = Modifier.testTag("voice-me")) {
                         Text(stringResource(if (doc.people.any { it.me && it.id in known }) R.string.voice_me_again else R.string.voice_me))
                     }
@@ -208,8 +209,8 @@ private fun MeEnrolDialog(onDone: () -> Unit) {
                     3 -> R.string.voice_me_done
                     else -> R.string.voice_me_failed
                 }))
-                if (phase == 1) { Spacer(Modifier.height(8.dp)); LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth()) }
-                if (phase == 0 && granted) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.voice_me_script), style = MaterialTheme.typography.bodySmall) }
+                if (phase == 1) { Spacer(Modifier.height(Spacing.sm)); LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth()) }
+                if (phase == 0 && granted) { Spacer(Modifier.height(Spacing.sm)); Text(stringResource(R.string.voice_me_script), style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
@@ -269,7 +270,7 @@ fun PersonVoiceRow(p: Person) {
     val info by produceState<Pair<Int, Float>?>(null, version, p.id) { value = withContext(Dispatchers.IO) { VoiceStore.known(context)[p.id] } }
     val pending by produceState(0, version, p.id) { value = withContext(Dispatchers.IO) { VoiceStore.pendingOutliers(context, p.id).size } }
     var forgetAsk by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("person-voice")) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).testTag("person-voice")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val learnTitle = stringResource(R.string.voice_person_title)
             Column(Modifier.weight(1f)) {

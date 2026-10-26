@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -40,6 +39,7 @@ import studio.primeminutes.R
 import studio.primeminutes.core.session.RecentSession
 import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Blank-slate hero that states the product promise up front — fully on-device, offline, and yours
@@ -62,7 +62,7 @@ fun EmptyState(
             modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -76,7 +76,7 @@ fun EmptyState(
             }
             Column(
                 Modifier.weight(1f).widthIn(max = 380.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Pillars()
                 RecentList(recents, onOpenRecent)
@@ -87,15 +87,15 @@ fun EmptyState(
             modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 24.dp),
+                .padding(horizontal = Spacing.xxl, vertical = Spacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
             Hero(iconSize = 64)
             // The three pillars of the product — the reason this app exists.
             Column(
-                Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(top = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(top = Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Pillars()
             }
@@ -111,7 +111,7 @@ private fun RecentList(recents: List<RecentSession>, onOpen: (RecentSession) -> 
     val pal = LocalPrimeMinutesPalette.current
     if (recents.isEmpty()) return
     Column(
-        Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(top = 4.dp),
+        Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(top = Spacing.xs),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
@@ -124,9 +124,9 @@ private fun RecentList(recents: List<RecentSession>, onOpen: (RecentSession) -> 
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .clickable { onOpen(r) }
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.History, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))

@@ -118,6 +118,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.delay
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -347,7 +348,7 @@ fun StudioScreen(
             // Flat identity row — the gradient band is retired. Content over chrome.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Spacing.xs),
             ) {
                 androidx.compose.foundation.Image(
                     androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
@@ -360,12 +361,12 @@ fun StudioScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onImport),
+                    Modifier.size(48.dp).clip(MaterialTheme.shapes.medium).clickable(role = Role.Button, onClick = onImport),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(Spacing.xs))
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onSettings),
+                    Modifier.size(48.dp).clip(MaterialTheme.shapes.medium).clickable(role = Role.Button, onClick = onSettings),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
             }
@@ -375,12 +376,12 @@ fun StudioScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth().padding(horizontal = Gutter)
-                    .clip(RoundedCornerShape(12.dp)).background(pal.PanelSurface)
-                    .border(1.dp, pal.Hairline, RoundedCornerShape(12.dp))
-                    .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                    .clip(MaterialTheme.shapes.medium).background(pal.PanelSurface)
+                    .border(1.dp, pal.Hairline, MaterialTheme.shapes.medium)
+                    .heightIn(min = 44.dp).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 Icon(Icons.Filled.Search, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 BasicTextField(
                     value = query, onValueChange = { query = it }, singleLine = true,
                     textStyle = TextStyle(color = pal.Slate200, fontSize = MaterialTheme.typography.bodyMedium.fontSize),
@@ -409,13 +410,13 @@ fun StudioScreen(
                     Spacer(Modifier.width(6.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.Sky.copy(alpha = 0.14f))
+                        modifier = Modifier.clip(CircleShape).background(pal.Sky.copy(alpha = 0.14f))
                             .clickable { onAsk(query) }
                             .semantics(mergeDescendants = true) { role = Role.Button }
                             .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Icon(Icons.Filled.QuestionAnswer, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(Spacing.xs))
                         Text(stringResource(R.string.ask_title), color = pal.Sky, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -429,7 +430,7 @@ fun StudioScreen(
                     else stringResource(R.string.search_semantic_downloading, (dl * 100).toInt()),
                     color = pal.Sky, style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 6.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(MaterialTheme.shapes.extraSmall)
                         .clickable(enabled = dl == null, onClick = onDownloadSearchModel)
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
@@ -445,7 +446,7 @@ fun StudioScreen(
             prefetch?.let { st ->
                 studio.primeminutes.ui.components.ModelDownloadCard(
                     st, onCancel = { studio.primeminutes.core.models.ModelPrefetch.cancel() },
-                    modifier = Modifier.padding(start = Gutter, end = Gutter, top = 8.dp),
+                    modifier = Modifier.padding(start = Gutter, end = Gutter, top = Spacing.sm),
                 )
             }
 
@@ -456,8 +457,8 @@ fun StudioScreen(
             val showDone = doneCount > 0 && doneCount < entries.size
             if (showNew || showDone) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     FilterChip(stringResource(R.string.filter_all, entries.size), statusFilter == StatusFilter.ALL) { statusFilter = StatusFilter.ALL }
                     if (showNew) FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) { statusFilter = StatusFilter.NEW }
@@ -468,9 +469,9 @@ fun StudioScreen(
             // "Meetings with X": one chip per person of the directory, the most present first.
             if (people.isNotEmpty()) {
                 androidx.compose.foundation.lazy.LazyRow(
-                    Modifier.fillMaxWidth().padding(top = 8.dp).testTag("people-filter"),
+                    Modifier.fillMaxWidth().padding(top = Spacing.sm).testTag("people-filter"),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Gutter),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     item { FilterChip(stringResource(R.string.people_filter_all), personFilter == null) { personFilter = null } }
                     items(people, key = { it.first.id }) { (p, ids) ->
@@ -502,13 +503,13 @@ fun StudioScreen(
                         androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
                         modifier = Modifier.size(72.dp),
                     )
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(Spacing.xl))
                     Text(
                         stringResource(R.string.studio_empty_title),
                         color = pal.Slate200, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                 }
                 Text(
                     when {
@@ -523,7 +524,7 @@ fun StudioScreen(
                 // field by hand and finding the filter chips behind the empty list.
                 val filtered = query.isNotBlank() || statusFilter != StatusFilter.ALL || personFilter != null
                 if (!firstRun && densePending == null && filtered) {
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(Spacing.xl))
                     androidx.compose.material3.OutlinedButton(
                         onClick = { query = ""; statusFilter = StatusFilter.ALL; personFilter = null },
                         border = androidx.compose.foundation.BorderStroke(1.dp, pal.Slate600),
@@ -540,20 +541,20 @@ fun StudioScreen(
                     }
                     // While it downloads, the card at the top says how far (with Cancel).
                     if (prefetch == null && pendingBytes > 0) {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(Spacing.md))
                         Text(
                             stringResource(R.string.first_run_download_notice, studio.primeminutes.core.models.SizeFormat.bytes(pendingBytes)),
                             color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center,
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(Spacing.xl))
                     androidx.compose.material3.OutlinedButton(
                         onClick = onImport,
                         border = androidx.compose.foundation.BorderStroke(1.dp, pal.Slate600),
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(R.string.studio_empty_import), color = pal.Sky)
                     }
                 }
@@ -561,7 +562,7 @@ fun StudioScreen(
         } else {
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 10.dp, bottom = 8.dp),
             ) {
                 if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
@@ -593,7 +594,7 @@ fun StudioScreen(
                             dayLabel(day, today, yesterday),
                             style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
                             color = pal.Slate200, letterSpacing = TextUnit(1f, TextUnitType.Sp),
-                            modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad).padding(start = Gutter, top = 12.dp, bottom = 4.dp),
+                            modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad).padding(start = Gutter, top = Spacing.md, bottom = Spacing.xs),
                         )
                     }
                     items(list, key = { it.id }, contentType = { "row" }) { e ->
@@ -628,26 +629,26 @@ fun StudioScreen(
                 if (pendingCount > 0) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-                            .clickable(role = Role.Button, onClick = onProcessAll).padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(MaterialTheme.shapes.medium)
+                            .clickable(role = Role.Button, onClick = onProcessAll).padding(horizontal = Spacing.md, vertical = Spacing.sm),
                     ) {
                         Icon(Icons.Filled.PlaylistPlay, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.source_process_all, pendingCount), color = pal.Sky, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                 }
                 Button(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (isRecording) onResumeCapture() else onRecord()
                     },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = ButtonDefaults.buttonColors(containerColor = if (isRecording) PrimeMinutesPalette.Red else pal.Sky),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) {
                     Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(
                         stringResource(if (isRecording) R.string.studio_return_capture else R.string.source_record),
                         fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
@@ -665,12 +666,12 @@ fun StudioScreen(
         val e = entries.firstOrNull { it.id == sel.id } ?: sel
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(onDismissRequest = { actionsFor = null }, sheetState = sheetState, containerColor = pal.Slate800) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(bottom = Spacing.xxl)) {
                 Text(
                     e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale),
                     style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() },
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm).semantics { heading() },
                 )
                 if (e.download != null) {
                     // A download item: its own actions only (nothing to process or share yet).
@@ -795,7 +796,7 @@ private fun PassageRow(
     val pal = LocalPrimeMinutesPalette.current
     Row(
         Modifier.fillMaxWidth().padding(start = Gutter + 12.dp, end = Gutter)
-            .clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)
+            .clip(MaterialTheme.shapes.extraSmall).clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -803,7 +804,7 @@ private fun PassageRow(
             stringResource(R.string.search_semantic_marker), color = pal.Sky, fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.width(16.dp).semantics { contentDescription = "" },
-        ) else Spacer(Modifier.width(16.dp))
+        ) else Spacer(Modifier.width(Spacing.lg))
         Column(Modifier.weight(1f)) {
             val speaker = p.speaker?.takeIf { it.isNotBlank() }
                 ?: p.speakerId?.let { stringResource(R.string.speaker_n, it + 1) }   // as the transcript names it
@@ -829,13 +830,13 @@ private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> 
     val pal = LocalPrimeMinutesPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
     ) {
         IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_exit_selection), tint = pal.Slate200) }
         Text(
             stringResource(R.string.selection_count, count),
             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
-            modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
+            modifier = Modifier.weight(1f).padding(start = Spacing.xs).semantics { heading() },
         )
         TextButton(onClick = onSelectAll) { Text(stringResource(R.string.select_all), color = pal.Sky, fontWeight = FontWeight.Bold) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = PrimeMinutesPalette.Red) }
@@ -884,9 +885,9 @@ private fun SessionRow(
     Column(
         Modifier
             .fillMaxWidth().padding(horizontal = Gutter)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.large)
             .background(if (selected) pal.ActiveTint else pal.PanelSurface)
-            .border(1.dp, if (selected) pal.Sky else pal.Hairline, RoundedCornerShape(16.dp))
+            .border(1.dp, if (selected) pal.Sky else pal.Hairline, MaterialTheme.shapes.large)
             // Long-press is the only way into selection mode, so TalkBack has to name it; without a
             // label the screen reader announces the row and nothing about the second gesture.
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = longLabel)
@@ -894,7 +895,7 @@ private fun SessionRow(
                 contentDescription = rowDesc
                 if (selectionMode) this.selected = isSelected
             }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Leading glyph doubles as the selection checkbox in selection mode (same 36dp footprint,
@@ -917,7 +918,7 @@ private fun SessionRow(
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(Modifier.weight(1f)) {
                 Text(
                     entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale),
@@ -968,9 +969,9 @@ private fun SessionRow(
 @Composable
 private fun GlyphTile(color: Color, filled: Boolean = false, outlined: Boolean = false, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
+        Modifier.size(36.dp).clip(MaterialTheme.shapes.medium)
             .background(if (filled) color else color.copy(alpha = 0.14f))
-            .then(if (outlined) Modifier.border(1.5.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp)) else Modifier),
+            .then(if (outlined) Modifier.border(1.5.dp, color.copy(alpha = 0.5f), MaterialTheme.shapes.medium) else Modifier),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -993,12 +994,12 @@ private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
         color = if (on) pal.OnSky else pal.Slate400,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
+            .clip(CircleShape)
             .background(if (on) pal.Sky else pal.PanelSurface)
-            .border(1.dp, if (on) pal.Sky else pal.Hairline, RoundedCornerShape(50))
+            .border(1.dp, if (on) pal.Sky else pal.Hairline, CircleShape)
             .clickable(onClick = onClick)
             .semantics { selected = on; role = Role.Tab }   // announce the chip's selected state
-            .heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 12.dp),
+            .heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = Spacing.md),
     )
 }
 
@@ -1006,7 +1007,7 @@ private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
 private fun Chip(text: String, color: Color) {
     Text(
         text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = color,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.13f)).padding(horizontal = 9.dp, vertical = 4.dp),
+        modifier = Modifier.clip(CircleShape).background(color.copy(alpha = 0.13f)).padding(horizontal = 9.dp, vertical = 4.dp),
     )
 }
 
@@ -1015,12 +1016,12 @@ private fun Banner(icon: ImageVector, tint: Color, text: String, onClick: () -> 
     val pal = LocalPrimeMinutesPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 8.dp)
-            .clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.13f)).clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Spacing.sm)
+            .clip(MaterialTheme.shapes.medium).background(tint.copy(alpha = 0.13f)).clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp).padding(horizontal = Spacing.md, vertical = Spacing.md),
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         Text(text, color = pal.Slate200, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
     }
 }

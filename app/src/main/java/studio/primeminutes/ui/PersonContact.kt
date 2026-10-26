@@ -62,6 +62,7 @@ import studio.primeminutes.core.people.PersonEmail
 import studio.primeminutes.core.people.PickedContact
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * A person's contact side on the person page (docs/design/speaker-contacts.md §2, mockup 01): the
@@ -88,7 +89,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(22.dp))
-            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Column(Modifier.weight(1f).padding(start = Spacing.md)) {
                 Text(stringResource(R.string.contact_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold)
                 val c = p.contact
                 Text(
@@ -116,19 +117,19 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
             }
         }
     }
-    Spacer(Modifier.padding(top = 8.dp))
+    Spacer(Modifier.padding(top = Spacing.sm))
     // --- the addresses ---
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Email, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(22.dp))
-            Text(stringResource(R.string.email_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp))
+            Text(stringResource(R.string.email_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = Spacing.md))
         }
         if (p.me) Text(stringResource(R.string.email_me_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
         p.emails.forEachIndexed { i, e -> EmailRow(p, e, isDefault = i == 0, showDefault = p.emails.size > 1) }
-        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).padding(vertical = 8.dp).testTag("email-add"),
+        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).padding(vertical = Spacing.sm).testTag("email-add"),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Text(stringResource(R.string.email_add), color = pal.Sky, fontWeight = FontWeight.SemiBold)
         }
     }
@@ -182,7 +183,7 @@ private fun EmailRow(p: Person, e: PersonEmail, isDefault: Boolean, showDefault:
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
-    HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(top = 8.dp))
+    HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(top = Spacing.sm))
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(e.address, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.core.export.ExportFormat
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -66,13 +67,13 @@ fun ExportSheet(
     val pal = LocalPrimeMinutesPalette.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = Spacing.xxl)) {
             Text(
                 stringResource(R.string.export_sheet_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = pal.Slate200,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).semantics { heading() },
+                modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.sm).semantics { heading() },
             )
 
             ExportGroupCard(
@@ -145,10 +146,10 @@ private fun ExportGroupCard(
             subtitle,
             style = MaterialTheme.typography.bodySmall,
             color = pal.Slate400,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = Spacing.xs),
         )
         if (formats.size > 1) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 formats.forEach { f ->
                     val on = f == selected
                     val chip = RoundedCornerShape(9.dp)

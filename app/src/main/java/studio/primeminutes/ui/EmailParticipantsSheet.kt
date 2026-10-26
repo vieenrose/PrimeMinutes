@@ -86,6 +86,7 @@ import studio.primeminutes.core.share.Recipients
 import studio.primeminutes.core.share.ShareHistory
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 import java.io.File
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
@@ -182,7 +183,7 @@ fun EmailParticipantsSheet(
     fun saveDefaults() { defaults.summary = summary; defaults.minutes = minutes; defaults.only = only; defaults.attach = attach }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().testTag("mail-sheet")) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.lg).imePadding().testTag("mail-sheet")) {
             Text(stringResource(R.string.mail_sheet_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = pal.Slate200,
                 modifier = Modifier.semantics { heading() })
             Text("$title · $dateLabel", color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -220,7 +221,7 @@ fun EmailParticipantsSheet(
             }
             Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).testTag("mail-add-recipient"), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(stringResource(R.string.mail_add_recipient), color = pal.Sky, fontWeight = FontWeight.SemiBold)
             }
             if (!anyMe && rows.isNotEmpty()) Box {
@@ -241,37 +242,37 @@ fun EmailParticipantsSheet(
                     Text(stringResource(R.string.mail_preview))
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Chip(stringResource(R.string.mail_summary), on = summary && !only) { summary = !summary; only = false }
                 Chip(stringResource(R.string.mail_minutes), on = minutes && !only) { minutes = !minutes; only = false }
                 Chip(stringResource(R.string.mail_only_decisions), on = only) { only = !only }
             }
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.AttachFile, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
-                Text(stringResource(R.string.mail_attach), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp, end = 8.dp))
+                Text(stringResource(R.string.mail_attach), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm))
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
                 Chip(stringResource(R.string.mail_attach_none), on = attach == null) { attach = null }
                 Chip("PDF", on = attach == "pdf") { attach = "pdf" }
                 Chip("TXT", on = attach == "txt") { attach = "txt" }
                 if (sessionBytes > 0) Chip(".m4a · " + android.text.format.Formatter.formatShortFileSize(context, sessionBytes), on = attach == "m4a") { attach = "m4a" }
             }
-            if (attach == "m4a" && sessionBytes > 20L * 1024 * 1024) Text(stringResource(R.string.mail_attach_large), color = pal.WarningText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.mail_language), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 8.dp))
+            if (attach == "m4a" && sessionBytes > 20L * 1024 * 1024) Text(stringResource(R.string.mail_attach_large), color = pal.WarningText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = Spacing.xs))
+            Row(Modifier.padding(top = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.mail_language), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = Spacing.sm))
                 Box {
                     OutlinedButton(onClick = { langMenu = true }) {
                         Text(langName(lang) + if (lang == meetingLang) " " + stringResource(R.string.mail_language_meeting) else "")
                     }
                     DropdownMenu(expanded = langMenu, onDismissRequest = { langMenu = false }) {
-                        Text(stringResource(R.string.mail_language_note), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                        Text(stringResource(R.string.mail_language_note), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
                         langs.forEach { l -> DropdownMenuItem(text = { Text(langName(l)) }, onClick = { lang = l; langMenu = false }) }
                     }
                 }
             }
             last?.let { s ->
                 val who = s.recipients.mapNotNull { r -> r.person?.let { doc.byId(it)?.name } ?: r.address }.joinToString(", ")
-                Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(top = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.History, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
                     Text(stringResource(R.string.mail_last_shared, studio.primeminutes.core.library.SessionLibrary.shortDate(context, s.at * 1000, withTime = true), who),
                         color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -281,19 +282,19 @@ fun EmailParticipantsSheet(
             Button(
                 onClick = { saveDefaults(); onSend(request()) },
                 colors = ButtonDefaults.buttonColors(containerColor = pal.Sky, contentColor = pal.OnSky),
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = 52.dp).testTag("mail-open"),
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg).heightIn(min = 52.dp).testTag("mail-open"),
             ) {
                 Icon(Icons.Filled.Email, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(if (n > 0) stringResource(R.string.mail_open_n, n) else stringResource(R.string.mail_open))
             }
-            OutlinedButton(onClick = { saveDefaults(); onShareChat(request()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp)) {
+            OutlinedButton(onClick = { saveDefaults(); onShareChat(request()) }, modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm).heightIn(min = 48.dp)) {
                 Icon(Icons.Filled.IosShare, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(stringResource(R.string.mail_share_other))
             }
             Text(stringResource(R.string.mail_footnote), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 24.dp))
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.md, bottom = Spacing.xxl))
         }
     }
 
@@ -312,7 +313,7 @@ fun EmailParticipantsSheet(
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                     val to = request().to
                     if (to.isNotEmpty()) Text(stringResource(R.string.mail_preview_to, to.joinToString(", ")), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
-                    Text(m.plain, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Default, modifier = Modifier.padding(top = 8.dp).testTag("mail-preview-body"))
+                    Text(m.plain, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Default, modifier = Modifier.padding(top = Spacing.sm).testTag("mail-preview-body"))
                 }
             },
             confirmButton = { TextButton(onClick = { preview = null }) { Text(stringResource(R.string.mail_preview_close)) } },
@@ -340,11 +341,11 @@ private fun Avatar(name: String) {
 @Composable
 private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = MaterialTheme.shapes.small
     Box(
         Modifier.clip(shape).background(if (on) pal.Sky.copy(alpha = 0.15f) else Color.Transparent)
             .border(1.dp, if (on) pal.Sky.copy(alpha = 0.4f) else pal.Hairline, shape)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+            .clickable(onClick = onClick).padding(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Text((if (on) "✓ " else "") + label, color = if (on) pal.Sky else pal.Slate400, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
@@ -421,16 +422,16 @@ private fun AddRecipientDialog(candidates: List<Person>, onDone: (Pair<String?, 
                     }),
                     modifier = Modifier.fillMaxWidth().testTag("mail-add-field"))
                 if (EmailRules.isValid(q)) Text(stringResource(R.string.mail_add_typed, EmailRules.normalize(q)), color = pal.Sky, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(null to EmailRules.normalize(q)) }.heightIn(min = 48.dp).padding(vertical = 12.dp))
+                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(null to EmailRules.normalize(q)) }.heightIn(min = 48.dp).padding(vertical = Spacing.md))
                 hits.forEach { p ->
-                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(p.name to p.emails.first().address) }.heightIn(min = 48.dp).padding(vertical = 8.dp)) {
+                    Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { onDone(p.name to p.emails.first().address) }.heightIn(min = 48.dp).padding(vertical = Spacing.sm)) {
                         Text(p.name, color = pal.Slate200)
                         Text(p.emails.first().address, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.heightIn(min = 48.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pick() }.heightIn(min = 48.dp).padding(vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(stringResource(R.string.contact_choose), color = pal.Sky)
                 }
                 Text(stringResource(R.string.mail_one_off_note), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)

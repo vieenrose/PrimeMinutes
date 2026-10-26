@@ -63,6 +63,7 @@ import studio.primeminutes.core.people.PersonNames
 import studio.primeminutes.core.people.VoiceSuggestion
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 
 /** A speaker of the meeting, as the picker shows it. [person]: the person it is linked to, if any. */
 data class PickerSpeaker(val id: Int, val label: String, val person: String?)
@@ -141,7 +142,7 @@ fun PersonPickerSheet(
     val suggested = suggestions.mapNotNull { s -> doc.byId(s.person)?.let { it to s } }.filter { it.first.id !in exclude && it.first.id !in inMeeting }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).imePadding()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
                     modifier = Modifier.weight(1f).semantics { heading() }, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -162,14 +163,14 @@ fun PersonPickerSheet(
                     if (exact != null) onPick(PersonPick.Existing(exact.person)) else addNew(query)
                 }),
                 colors = primeMinutesTextFieldColors(),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("people-search"),
+                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm).testTag("people-search"),
             )
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                 if (allowContacts && query.isBlank()) item {
                     Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pickContact() }.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("people-contacts"),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Column {
                             Text(stringResource(R.string.contact_choose), color = pal.Sky, fontWeight = FontWeight.SemiBold)
                             Text(stringResource(R.string.contact_choose_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
@@ -203,21 +204,21 @@ fun PersonPickerSheet(
                     }
                 }
                 if (doc.people.isEmpty() && query.isBlank()) item {
-                    Text(stringResource(R.string.people_picker_empty), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
+                    Text(stringResource(R.string.people_picker_empty), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = Spacing.sm))
                 }
                 if (sec.canAdd) item {
-                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { addNew(query) }.padding(vertical = 12.dp).testTag("people-add"), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { addNew(query) }.padding(vertical = Spacing.md).testTag("people-add"), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(R.string.people_add_new, query.trim()), color = pal.Sky, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 if (allowClear && current != null) item {
-                    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = pal.Hairline)
+                    HorizontalDivider(Modifier.padding(vertical = Spacing.xs), color = pal.Hairline)
                     Text(stringResource(R.string.people_clear_name, defaultLabel(current.id)), color = pal.Slate400,
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(PersonPick.Clear) }.padding(vertical = 12.dp))
+                        modifier = Modifier.fillMaxWidth().clickable { onPick(PersonPick.Clear) }.padding(vertical = Spacing.md))
                 }
-                item { Spacer(Modifier.padding(bottom = 16.dp)) }
+                item { Spacer(Modifier.padding(bottom = Spacing.lg)) }
             }
         }
     }

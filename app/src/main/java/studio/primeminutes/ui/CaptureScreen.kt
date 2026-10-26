@@ -67,6 +67,7 @@ import studio.primeminutes.data.speakerLabel
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Full-screen capture — the studio's recording booth. Fixed layout with two GIANT buttons
@@ -106,15 +107,15 @@ fun CaptureScreen(
             .background(pal.Slate900Grad)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = Spacing.lg),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
             }
             if (isRecording) {
                 RecDot()
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
             }
             Text(
                 stringResource(if (isRecording) R.string.status_recording else R.string.capture_title),
@@ -128,35 +129,35 @@ fun CaptureScreen(
             // The engines' load, trailing on the header row (page gutter, same as iOS) rather than
             // floating centered under the timer; only while the mic and the engines run.
             if (isRecording) {
-                HwStatusLine(Modifier.padding(end = 4.dp))
+                HwStatusLine(Modifier.padding(end = Spacing.xs))
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         if (landscape) {
             // Two columns: timer/name/buttons left, live transcript right — stacking them
             // vertically left the transcript panel with zero height on phone landscape.
             Row(Modifier.weight(1f)) {
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     Spacer(Modifier.weight(1f))
                     CaptureButtons(isRecording, onNextTalk, onStop, buttonHeight = 72.dp)
                 }
-                Spacer(Modifier.width(24.dp))
+                Spacer(Modifier.width(Spacing.xxl))
                 Column(Modifier.weight(1.2f).fillMaxHeight()) {
                     LivePanel(utterances, stable, agent, notice)
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
         } else {
             TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             // Live transcript: a first-class panel filling everything between the timer and
             // the buttons — the full running transcript, auto-following the newest line.
             LivePanel(utterances, stable, agent, notice)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
             CaptureButtons(isRecording, onNextTalk, onStop, buttonHeight = 72.dp)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
     }
 }
@@ -186,7 +187,7 @@ private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modi
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,   // tabular: no layout shift per tick
             color = pal.Slate200,
         )
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(Spacing.xl))
         // 2x: at 1x the bars are a speck beside 64sp digits — scale to visually balance them.
         MicLevelBars(micLevel, pal.Sky, scale = 2f)
     }
@@ -216,7 +217,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
     if (utterances.isNotEmpty()) notice?.takeIf { it.isNotBlank() }?.let {
         // Polite live region: TalkBack users hear the download state change without hunting for it.
         Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(vertical = 4.dp).semantics { liveRegion = LiveRegionMode.Polite })
+            modifier = Modifier.padding(vertical = Spacing.xs).semantics { liveRegion = LiveRegionMode.Polite })
     }
     if (utterances.isEmpty()) {
         // Centered waiting state: a corner-anchored one-liner made the big empty panel
@@ -248,7 +249,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
             state = listState,
             modifier = Modifier.fillMaxWidth().weight(1f)
                 .then(if (pal.isEink) Modifier else Modifier.fadeTop(14.dp))
-                .padding(horizontal = 4.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.xs, vertical = Spacing.sm),
         ) {
             items(utterances.size) { i ->
                 val u = utterances[i]
@@ -300,7 +301,7 @@ private fun CaptureButtons(
     // Both buttons end a capture, which was a silent event: felt parity with iOS (record switch
     // `toggle`, saved-meeting `success`).
     val haptics = LocalHapticFeedback.current
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         // ⏭ Next talk — the batch-recording workhorse: auto-save this capture, defer its
         // processing, and roll straight into the next session.
         Button(
@@ -310,9 +311,9 @@ private fun CaptureButtons(
             colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
             modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
             // Minimal padding: on narrow phones the default 24dp sides forced CJK labels to wrap.
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(28.dp))
                 Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
@@ -324,9 +325,9 @@ private fun CaptureButtons(
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),
             modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(28.dp))
                 Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }

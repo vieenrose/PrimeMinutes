@@ -28,6 +28,7 @@ import studio.primeminutes.core.config.TranscriptionConfig
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -67,8 +68,8 @@ fun ConfigSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
+                .padding(horizontal = Spacing.lg)
+                .padding(bottom = Spacing.xxl)
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
@@ -76,7 +77,7 @@ fun ConfigSheet(
                 style = MaterialTheme.typography.titleLarge,
                 color = pal.Slate200,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
+                modifier = Modifier.padding(bottom = Spacing.sm).semantics { heading() },
             )
             SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound, onOpenPeople)
         }

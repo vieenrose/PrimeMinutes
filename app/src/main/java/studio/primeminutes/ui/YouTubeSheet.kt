@@ -46,6 +46,7 @@ import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -96,7 +97,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
         Column(
             // imePadding: the search field is at the top of the sheet, so the keyboard covered it
             // and the results list had nothing left to scroll to.
-            Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(stringResource(R.string.source_youtube), style = MaterialTheme.typography.titleLarge,
@@ -113,7 +114,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
                     colors = primeMinutesTextFieldColors(),
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 GradientButton(
                     if (YouTube.looksLikeUrl(query)) stringResource(R.string.youtube_go) else stringResource(R.string.youtube_search),
                     enabled = query.isNotBlank() && !busy,
@@ -127,7 +128,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
 
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 results.forEach { v ->
                     Surface(
@@ -136,7 +137,7 @@ fun YouTubeSheet(onDismiss: () -> Unit) {
                         border = BorderStroke(1.dp, pal.Hairline),
                         modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { transcribe(v.url, v.title) },
                     ) {
-                        Column(Modifier.padding(12.dp)) {
+                        Column(Modifier.padding(Spacing.md)) {
                             Text(v.title, style = MaterialTheme.typography.bodyMedium,
                                 color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text(

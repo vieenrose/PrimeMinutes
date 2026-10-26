@@ -46,6 +46,7 @@ import studio.primeminutes.R
 import studio.primeminutes.data.DiarizationStats
 import studio.primeminutes.data.speakerColorOn
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Who talked how much: the speaker count, one stacked bar of talk-time shares in the speakers'
@@ -72,14 +73,14 @@ fun SpeakerStatsPanel(
     Column(
         modifier.fillMaxWidth().clickable { showLegend = !showLegend }
             .semantics { stateDescription = legendState },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 pluralStringResource(R.plurals.speaker_count, stats.totalSpeakers, stats.totalSpeakers),
                 style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = pal.Slate400,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Row(Modifier.weight(1f).height(8.dp).clip(CircleShape).background(pal.Slate700)) {
                 shares.forEach { s ->
                     val w = (s.percentage / 100.0).toFloat()
@@ -94,7 +95,7 @@ fun SpeakerStatsPanel(
                 contentDescription = null, tint = pal.Slate400, modifier = Modifier.padding(start = 6.dp).size(18.dp),
             )
         }
-        if (showLegend) FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (showLegend) FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             shares.forEach { s ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(Color(speakerColorOn(s.speaker, pal.isDark))))

@@ -60,6 +60,7 @@ import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.statusColor
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Prime Minutes 2.0 session top bar: back · title · search · ONE overflow. The nine-icon strip is gone —
@@ -107,7 +108,7 @@ fun SessionTopBar(
     Column(Modifier.fillMaxWidth().background(pal.Slate900Grad).statusBarsPadding()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
@@ -116,7 +117,7 @@ fun SessionTopBar(
                 androidx.compose.foundation.Image(
                     bitmap = it,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp).size(26.dp).clip(RoundedCornerShape(7.dp)),
+                    modifier = Modifier.padding(end = Spacing.sm).size(26.dp).clip(RoundedCornerShape(7.dp)),
                 )
             }
             Text(
@@ -185,18 +186,18 @@ fun SessionTopBar(
                 )
                 // The engines' load while this meeting is transcribed / read: on its status row, trailing,
                 // above the progress bar (iOS: the live view's status row). Not when idle.
-                if (running) studio.primeminutes.ui.HwStatusLine(Modifier.padding(start = 8.dp))
+                if (running) studio.primeminutes.ui.HwStatusLine(Modifier.padding(start = Spacing.sm))
             }
         } else if (!running && !statusIsError) {
             // The idle line has faded (or there is none): keep its height so the tabs below
             // don't jump between sessions or tabs.
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
         if (running) {
             LinearProgressIndicator(
                 progress = { progress },
                 color = pal.Sky, trackColor = pal.Slate700,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg),
             )
         }
     }
@@ -258,7 +259,7 @@ private fun OverflowMenu(
 fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     val outer = RoundedCornerShape(14.dp)
-    val seg = RoundedCornerShape(10.dp)
+    val seg = MaterialTheme.shapes.small
     val labels = listOf(
         stringResource(R.string.tab_summary),
         stringResource(R.string.tab_transcript),
@@ -270,7 +271,7 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
             .clip(outer)
             .background(pal.PanelSurface)
             .border(1.dp, pal.Hairline, outer)
-            .padding(4.dp)
+            .padding(Spacing.xs)
             .selectableGroup(),
     ) {
         labels.forEachIndexed { i, label ->

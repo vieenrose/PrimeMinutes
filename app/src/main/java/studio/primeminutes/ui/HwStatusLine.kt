@@ -26,6 +26,7 @@ import studio.primeminutes.R
 import studio.primeminutes.core.hw.hwSamples
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Hardware status as a row of hairline gauges — `CPU ▬▬▭ RAM ▬▭▭ ⚡ ▬▬▬` — while the engines work.
@@ -42,7 +43,7 @@ fun HwStatusLine(modifier: Modifier = Modifier) {
     val cd = stringResource(R.string.hw_status_cd, s.cpuPct, s.ramPct, s.batteryPct)
     Row(
         modifier.clearAndSetSemantics { contentDescription = cd },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Gauge("CPU", s.cpuPct, s.cpuPct > 90)

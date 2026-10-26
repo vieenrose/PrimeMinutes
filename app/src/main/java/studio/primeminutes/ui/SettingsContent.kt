@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +86,7 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesSliderColors
 import studio.primeminutes.ui.theme.primeMinutesSwitchColors
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Settings: appearance, Chinese script, the live speaker delay, stored models (with the summary
@@ -104,7 +104,7 @@ fun SettingsContent(
     onOpenPeople: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.padding(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         val ctx = androidx.compose.ui.platform.LocalContext.current
         // The first-use model download in progress, with Cancel: Settings covers the library while it runs.
         val prefetch by studio.primeminutes.core.models.ModelPrefetch.status.collectAsState()
@@ -162,7 +162,7 @@ fun SettingsContent(
         if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
             androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = 8.dp)
+                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = Spacing.sm)
                     .testTag("settings-people"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -282,7 +282,7 @@ private fun AsrLatencySlider(latencyMs: Int, enabled: Boolean, onSelect: (Int) -
     var draft by remember(latencyMs) { mutableFloatStateOf(stops.indexOf(latencyMs).coerceAtLeast(0).toFloat()) }
     val hints = listOf(R.string.settings_asr_latency_fastest, R.string.settings_asr_latency_fast,
         R.string.settings_asr_latency_balanced, R.string.settings_asr_latency_accurate)
-    Column(Modifier.padding(top = 8.dp).testTag("settings-asr-latency")) {
+    Column(Modifier.padding(top = Spacing.sm).testTag("settings-asr-latency")) {
         SliderRow(
             stringResource(R.string.settings_asr_latency), draft, 0f, (stops.size - 1).toFloat(), enabled,
             steps = stops.size - 2,
@@ -309,7 +309,7 @@ private fun FontScaleSlider(enabled: Boolean) {
     val max = studio.primeminutes.core.config.ThemeStore.FONT_MAX
     // Apply on release, not per drag step: every change re-lays out the whole app under the thumb.
     var draft by remember(font.scale) { mutableFloatStateOf(font.scale) }
-    Column(Modifier.padding(top = 8.dp)) {
+    Column(Modifier.padding(top = Spacing.sm)) {
         SliderRow(
             stringResource(R.string.settings_font_size), draft, min, max, enabled,
             steps = ((max - min) / 0.05f).roundToInt() - 1,
@@ -384,7 +384,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
         Text(
             stringResource(R.string.storage_model_pending, mb),
             style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
-            modifier = Modifier.padding(bottom = 4.dp),
+            modifier = Modifier.padding(bottom = Spacing.xs),
         )
     }
     SearchModelPanel(enabled, onChanged = { version++ })
@@ -396,7 +396,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
     Text(
         stringResource(R.string.storage_total, fmt(models.sumOf { it.bytes })),
         style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
-        modifier = Modifier.padding(bottom = 4.dp),
+        modifier = Modifier.padding(bottom = Spacing.xs),
     )
     // One tap used to delete a model outright — 3.3 GB to download again for the summary model.
     var confirm by remember { mutableStateOf<ModelManager.StoredModel?>(null) }
@@ -481,7 +481,7 @@ private fun SearchModelPanel(enabled: Boolean, onChanged: () -> Unit) {
             onClick = { LibraryIndexer.catchUp(context) },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         ) { Text(stringResource(R.string.settings_index_old), color = pal.Sky) }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         Text(
             if (busy) stringResource(R.string.studio_indexing) + " " + stringResource(R.string.settings_index_pending, pending + indexing.size)
             else if (stale > 0) stringResource(R.string.settings_index_pending, stale) else "",
@@ -550,7 +550,7 @@ private fun BackgroundReliabilityPanel(enabled: Boolean) {
         OutlinedButton(
             enabled = enabled,
             onClick = { BackgroundReliability.requestIgnoreBatteryOptimizations(context) },
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = Spacing.xs),
         ) { Text(stringResource(R.string.bg_allow)) }
     }
     if (BackgroundReliability.isAggressiveOem()) {
@@ -563,7 +563,7 @@ private fun BackgroundReliabilityPanel(enabled: Boolean) {
         OutlinedButton(
             enabled = enabled,
             onClick = { BackgroundReliability.openOemAutoStartSettings(context) },
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = Spacing.xs),
         ) { Text(stringResource(R.string.bg_open_oem)) }
     }
 }
@@ -587,7 +587,7 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
         style = MaterialTheme.typography.bodySmall,
         color = pal.Slate400,
     )
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Spacing.sm))
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = {
             scope.launch {
@@ -611,7 +611,7 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
         style = MaterialTheme.typography.labelSmall,
         color = pal.Slate400,
     )
-    Column(Modifier.padding(top = 4.dp)) {
+    Column(Modifier.padding(top = Spacing.xs)) {
         COMPONENT_LICENSES.forEach { (nameRes, license) ->
             val name = stringResource(nameRes)
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -621,7 +621,7 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
             }
         }
     }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Spacing.sm))
     Text(
         "github.com/vieenrose/PrimeMinutes",
         style = MaterialTheme.typography.bodySmall,
@@ -630,7 +630,7 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
             .clickable(role = androidx.compose.ui.semantics.Role.Button) { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
             .heightIn(min = 48.dp)
             .wrapContentHeight(Alignment.CenterVertically)
-            .padding(vertical = 4.dp),
+            .padding(vertical = Spacing.xs),
     )
 }
 
@@ -651,7 +651,7 @@ private val COMPONENT_LICENSES = listOf(
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(pal.InsetSurface).padding(16.dp),
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(pal.InsetSurface).padding(Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         // Section title marked as a heading: TalkBack's heading swipe jumps card to card on a page
@@ -666,13 +666,13 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 @Composable
 private fun Section(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = LocalPrimeMinutesPalette.current.Sky,
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp).semantics { heading() })
+        fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = Spacing.sm).semantics { heading() })
 }
 
 @Composable
 private fun LabeledRow(label: String, content: @Composable () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(Modifier.padding(vertical = 4.dp)) {
+    Column(Modifier.padding(vertical = Spacing.xs)) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
         content()
     }
@@ -683,7 +683,7 @@ private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, onChang
     val pal = LocalPrimeMinutesPalette.current
     Row(
         // The whole row toggles: tapping the label did nothing, only the small switch did.
-        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
@@ -711,7 +711,7 @@ private fun SliderRow(
     onChange: (Float) -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(Modifier.padding(vertical = 4.dp)) {
+    Column(Modifier.padding(vertical = Spacing.xs)) {
         Text(
             "$label: ${format(value)}",
             style = MaterialTheme.typography.bodyMedium,
