@@ -1396,10 +1396,16 @@ private fun TranscribeScreen(
             autoScrolling = false
         }
     }
-    // Keep the current search match in view as the user steps through.
+    // Keep the current search match in view as the user steps through, and move the player
+    // there too (as iOS does): stepping through matches leaves the playhead behind otherwise,
+    // so Play starts at 0:00 instead of the match on screen.
     LaunchedEffect(matchPos, searchMatches) {
         searchMatches.getOrNull(matchPos)?.let { idx ->
             runCatching { listState.animateScrollToItem(headerCount + idx, scrollOffset = -120) }
+            s.utterances.getOrNull(idx)?.let { u ->
+                positionMs = studio.primeminutes.core.embed.MeetingSearch.parkMs(u.startSec)
+                player?.let { p -> runCatching { p.seekTo(positionMs) } }
+            }
         }
     }
 
