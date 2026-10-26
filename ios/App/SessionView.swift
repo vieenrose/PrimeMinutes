@@ -374,7 +374,7 @@ struct SessionView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless)
+                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
                         Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
                     }
                     Text(Self.marked(l.text, query))
