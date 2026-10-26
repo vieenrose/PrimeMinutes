@@ -433,14 +433,14 @@ struct SessionView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button(L("rename")) { draft = s.title; renamingTitle = true }
+                    Button(L("rename")) { draft = s.title; renamingTitle = true }.disabled(busy)
                     if askMeetingReady { Button { askMeeting = "" } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") } }
-                    Button(L("export_menu_entry")) { showExport = true }
-                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) } }
+                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
+                    Button(L("export_menu_entry")) { showExport = true }.disabled(busy)
+                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) }.disabled(busy) }
                     if s.audio != nil {
-                        Button(L("re_transcribe")) { rerun(s, true) }
-                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }   // nothing to summarize (Android canReSummarize)
+                        Button(L("re_transcribe")) { rerun(s, true) }.disabled(busy)
+                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
                     }
                 } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
             }
