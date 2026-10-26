@@ -127,6 +127,8 @@
     <string name="status_recording">录音中…</string>
     <string name="status_done">完成</string>
     <string name="status_no_speech">未检测到语音</string>
+    <string name="transcript_empty_title">还没有转写文本</string>
+    <string name="transcript_empty">尚无转录文字——处理完成后会显示在这里。</string>
     <string name="status_transcript_lines">转写文本：%d 行</string>
     <string name="status_transcript_lines_speakers">转写文本：%1$d 行，%2$d 位说话人</string>
     <string name="status_error">错误：%1$s</string>

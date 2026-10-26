@@ -1930,11 +1930,24 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
-                        if (utterances.isEmpty() && !s.running) Text(
-                            stringResource(R.string.status_no_speech),
-                            color = pal.Slate400,
-                            modifier = Modifier.padding(top = 24.dp),
-                        )
+                        // A silent meeting and a not-yet-transcribed one are different states: the
+                        // entry's persisted no-speech flag (SpeechCheck at save, like iOS) tells
+                        // them apart once the transcript is in. While it loads, say nothing.
+                        if (utterances.isEmpty() && !s.running && !s.opening && s.transcriptReady) {
+                            val silent = meetingEntry?.noSpeech == true
+                            Column(modifier = Modifier.padding(top = 24.dp)) {
+                                Text(
+                                    stringResource(if (silent) R.string.status_no_speech else R.string.transcript_empty_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = pal.Slate200,
+                                )
+                                if (!silent) Text(
+                                    stringResource(R.string.transcript_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = pal.Slate400,
+                                )
+                            }
+                        }
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f),

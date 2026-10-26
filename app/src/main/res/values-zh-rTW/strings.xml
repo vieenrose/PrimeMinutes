@@ -127,6 +127,8 @@
     <string name="status_recording">錄音中…</string>
     <string name="status_done">完成</string>
     <string name="status_no_speech">未偵測到語音</string>
+    <string name="transcript_empty_title">還沒有逐字稿</string>
+    <string name="transcript_empty">尚無轉錄文字——處理完成後會顯示在這裡。</string>
     <string name="status_transcript_lines">逐字稿：%d 行</string>
     <string name="status_transcript_lines_speakers">逐字稿：%1$d 行，%2$d 位語者</string>
     <string name="status_error">錯誤：%1$s</string>

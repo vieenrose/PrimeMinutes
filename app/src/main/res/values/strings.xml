@@ -131,6 +131,8 @@
     <string name="status_recording">Recording…</string>
     <string name="status_done">Done</string>
     <string name="status_no_speech">No speech detected</string>
+    <string name="transcript_empty_title">No transcript yet</string>
+    <string name="transcript_empty">Nothing transcribed yet — the transcript shows up here after processing.</string>
     <string name="status_transcript_lines">Transcript: %d lines</string>
     <string name="status_transcript_lines_speakers">Transcript: %1$d lines, %2$d speakers</string>
     <string name="status_error">Error: %1$s</string>
