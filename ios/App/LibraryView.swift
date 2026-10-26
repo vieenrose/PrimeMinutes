@@ -125,9 +125,9 @@ struct LibraryView: View {
     private func chip(_ f: Filter) -> some View {
         let n = f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : isDone($0) }.count
         return Button { filter = f } label: {
-            Text(L("filter_" + f.rawValue, n)).font(.subheadline.weight(.semibold))
+            Vox.subhead(L("filter_" + f.rawValue, n))
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(filter == f ? Color.accentColor : Color(.secondarySystemGroupedBackground), in: Capsule())
+                .background(filter == f ? Color.accentColor : Vox.card, in: Capsule())
                 .foregroundStyle(filter == f ? Color.white : Color.primary)
         }.buttonStyle(.plain)
     }
@@ -135,15 +135,14 @@ struct LibraryView: View {
         HStack(spacing: 12) {
             Image(systemName: isNew(s) ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
                 .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                .foregroundStyle(isDone(s) ? Color.green : Color.secondary)
-                .background((isDone(s) ? Color.green : Color.secondary).opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                .foregroundStyle(isDone(s) ? Vox.success : Color.secondary)
+                .voxTint(isDone(s) ? Vox.success : Color.secondary, Vox.radiusSM)
                 .accessibilityLabel(L(isNew(s) ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.title.isEmpty ? L("recent_untitled") : s.title).font(.headline).lineLimit(2)
-                Text("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
-                    .font(.caption).foregroundStyle(.secondary)
+                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(2)
+                Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
                 if !query.isEmpty { passages(s) }
-                if indexer.indexing.contains(s.id) { Text(L("studio_indexing")).font(.caption2).foregroundStyle(.secondary) }
+                if indexer.indexing.contains(s.id) { Vox.micro(L("studio_indexing")) }
             }
             Spacer(minLength: 0)
             if !selected.isEmpty {
@@ -161,9 +160,9 @@ struct LibraryView: View {
             } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
                 .accessibilityLabel(L("more")) }
         }
-        .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.accentColor, lineWidth: selected.contains(s.id) ? 2 : 0))
+        .padding(Vox.inset)
+        .voxCard()
+        .overlay(RoundedRectangle(cornerRadius: Vox.radiusLG).stroke(Color.accentColor, lineWidth: selected.contains(s.id) ? 2 : 0))
         .contentShape(Rectangle())
         .onLongPressGesture { toggle(s) }
         .onTapGesture { activate(s) }
@@ -188,9 +187,9 @@ struct LibraryView: View {
         return HStack(spacing: 12) {
             JobGlyph(m: m, j: j)
             VStack(alignment: .leading, spacing: 2) {
-                Text(j.title ?? L("meeting")).font(.headline).lineLimit(2)
-                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? .red : .secondary).lineLimit(2)
-                if let f = m.dlFraction(j) { ProgressView(value: f).tint(.blue).padding(.top, 4) }
+                Vox.head(j.title ?? L("meeting")).lineLimit(2)
+                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger : .secondary).lineLimit(2)
+                if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info).padding(.top, 4) }
             }
             Spacer(minLength: 0)
             if j.download != nil {
@@ -207,7 +206,7 @@ struct LibraryView: View {
                     label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             }
         }
-        .padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        .padding(Vox.inset).voxCard()
         // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
         .contentShape(Rectangle())
         .onTapGesture { if selected.isEmpty { path.append(.job(j.id)) } }
@@ -217,10 +216,10 @@ struct LibraryView: View {
 
     private func pillar(_ icon: String, _ key: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(.blue).frame(width: 32, height: 32).background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            Image(systemName: icon).foregroundStyle(Vox.info).frame(width: 32, height: 32).voxTint(Vox.info, Vox.radiusSM)
             VStack(alignment: .leading, spacing: 2) {
-                Text(L(key + "_title")).font(.subheadline.weight(.semibold))
-                Text(L(key + "_desc")).font(.caption).foregroundStyle(.secondary)
+                Vox.subhead(L(key + "_title"))
+                Vox.meta(L(key + "_desc"))
             }
         }
     }
@@ -234,15 +233,15 @@ struct LibraryView: View {
                     Spacer()
                     Button(L("select_all")) { selected = Set(shown.map(\.id)) }
                     Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3).tapTarget() }.accessibilityLabel(L("delete"))
-                }.padding(.horizontal, 16).padding(.vertical, 8)
+                }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
             } else {
             HStack {
                 BrandMark(size: 34)
-                Text(L("app_name")).font(.title2.bold())
+                Vox.title(L("app_name"))
                 Spacer()
                 Button(action: onAdd) { Image(systemName: "plus").font(.title3).tapTarget() }.accessibilityLabel(L("import_audio"))
                 Button(action: onSettings) { Image(systemName: "slider.horizontal.3").font(.title3).tapTarget() }.accessibilityLabel(L("settings")).padding(.leading, 12)
-            }.padding(.horizontal, 16).padding(.vertical, 8)
+            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
             }
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -258,27 +257,27 @@ struct LibraryView: View {
                             .frame(minHeight: 44).contentShape(Rectangle())   // the capsule keeps its height; the hit area reaches 44 pt
                     }.buttonStyle(.plain).foregroundStyle(Color.accentColor).accessibilityLabel(L("ask_entry_cd"))
                 }
-            }.padding(12).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
+            }.padding(Vox.inset).voxRow().padding(.horizontal, Vox.gutter)
             .background(GeometryReader { g in Color.clear.preference(key: SearchRowFrameKey.self, value: g.frame(in: .global)) })
             .onPreferenceChange(SearchRowFrameKey.self) { searchRowFrame = $0 }
             if !EmbedHost.ready && !m.library.sessions.isEmpty {
-                if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6) }
-                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, 16).padding(.top, 6) }
+                if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, Vox.gutter).padding(.top, 6) }
+                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, Vox.gutter).padding(.top, 6) }
             }
-            if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, 16).padding(.top, 6) }
+            if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, Vox.gutter).padding(.top, 6) }
             else if resumer.paused > 0 && !m.imports.dlPaused {   // a run's own model download, waiting to resume
                 HStack {
-                    Image(systemName: "pause.circle").foregroundStyle(.orange).accessibilityHidden(true)   // the text beside it carries the state
-                    Text(L("download_paused")).font(.caption).foregroundStyle(.secondary)
+                    Image(systemName: "pause.circle").foregroundStyle(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
+                    Vox.meta(L("download_paused"))
                     Spacer()
                     Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold))
-                }.padding(.horizontal, 16).padding(.top, 6)
+                }.padding(.horizontal, Vox.gutter).padding(.top, 6)
             }
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")).font(.caption).foregroundStyle(.secondary) }.padding(.horizontal, 16).padding(.top, 6)
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack { ForEach(Filter.allCases.filter { $0 == .all || !m.library.sessions.isEmpty && ($0 == .done || m.library.sessions.contains { isNew($0) }) }, id: \.self) { chip($0) } }.padding(.horizontal, 16)
+                HStack { ForEach(Filter.allCases.filter { $0 == .all || !m.library.sessions.isEmpty && ($0 == .done || m.library.sessions.contains { isNew($0) }) }, id: \.self) { chip($0) } }.padding(.horizontal, Vox.gutter)
             }.padding(.vertical, 10)
             PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
             ScrollView {
@@ -287,15 +286,15 @@ struct LibraryView: View {
                         VStack(spacing: 18) {
                             BrandMark(size: 72)
                             Text(L("empty_headline")).font(.title3.bold()).multilineTextAlignment(.center)
-                            Text(L("empty_subtitle")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            Vox.hint(L("empty_subtitle")).multilineTextAlignment(.center)
                             VStack(alignment: .leading, spacing: 12) {
                                 pillar("lock.fill", "pillar_private")
                                 pillar("icloud.slash.fill", "pillar_offline")
                                 pillar("banknote.fill", "pillar_cost")
                             }.padding(.top, 6)
-                            Text(L("library_empty")).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.top, 4)
+                            Vox.fine(L("library_empty")).multilineTextAlignment(.center).padding(.top, 4)
                             if m.downloads.pending.any && m.downloads.prefetchProgress == nil {
-                                Text(L("first_run_download_notice", SizeFormat.bytes(m.downloads.pending.total))).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                Vox.fine(L("first_run_download_notice", SizeFormat.bytes(m.downloads.pending.total))).multilineTextAlignment(.center)
                             }
                         }.frame(maxWidth: .infinity).padding(.top, 40)
                     }
@@ -303,7 +302,7 @@ struct LibraryView: View {
                         if densePending != nil {
                             VStack(spacing: 12) {
                                 ProgressView()
-                                Text(L("studio_searching")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                Vox.hint(L("studio_searching")).multilineTextAlignment(.center)
                             }.frame(maxWidth: .infinity).padding(.top, 40).accessibilityElement(children: .combine)
                         } else {
                             // A no-match with a search and filter chips on was a dead end: the way out was
@@ -323,24 +322,24 @@ struct LibraryView: View {
                         if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
                         ForEach(items) { s in card(s).id(rowKey(s)) }
                     }
-                }.padding(.horizontal, 16)
+                }.padding(.horizontal, Vox.gutter)
             }
             .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
             if m.runner.activeJob != nil {
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
-                    .padding(10).background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).padding(.horizontal, 16)
+                    .padding(Vox.insetTight).voxRow() }.buttonStyle(.plain).padding(.horizontal, Vox.gutter)
             } else {
-                Text(m.screen.status).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 16)
+                Vox.meta(m.screen.status).lineLimit(1).padding(.horizontal, Vox.gutter)
             }
             if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
                 Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
-                    .buttonStyle(.bordered).padding(.horizontal, 16)
+                    .buttonStyle(.bordered).padding(.horizontal, Vox.gutter)
             }
             Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
                 Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
                     .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(m.capture.recording ? Color.red : Color.accentColor, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)
-            }.padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(m.capture.recording ? Vox.danger : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
+            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
         }
         .background(Color(.systemGroupedBackground))
         // A tap anywhere (cards, chips, background, record) resigns the search field, hiding the
@@ -445,14 +444,14 @@ struct JobGlyph: View {
     let j: Job
     var body: some View {
         let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
-        let tint: Color = failed ? .red : dl ? .blue : .orange
+        let tint: Color = failed ? Vox.danger : dl ? Vox.info : Vox.warning
         Group {
-            if failed { Image(systemName: "exclamationmark.circle").font(.title3.weight(.semibold)).foregroundStyle(.red) }
-            else if dl { Image(systemName: m.imports.dlPaused && m.imports.dlId == j.id ? "pause.circle" : "arrow.down.circle").font(.title3.weight(.semibold)).foregroundStyle(.blue) }
+            if failed { Image(systemName: "exclamationmark.circle").font(.title3.weight(.semibold)).foregroundStyle(Vox.danger) }
+            else if dl { Image(systemName: m.imports.dlPaused && m.imports.dlId == j.id ? "pause.circle" : "arrow.down.circle").font(.title3.weight(.semibold)).foregroundStyle(Vox.info) }
             else if active { ProgressView() }
-            else { Image(systemName: "clock").font(.title3.weight(.semibold)).foregroundStyle(.orange) }
+            else { Image(systemName: "clock").font(.title3.weight(.semibold)).foregroundStyle(Vox.warning) }
         }
-        .frame(width: 40, height: 40).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+        .frame(width: 40, height: 40).voxTint(tint, Vox.radiusSM)
         .accessibilityLabel(L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
     }
 }
@@ -515,8 +514,8 @@ struct LiveJobView: View {
                 // SF Symbols carry built-in VoiceOver labels ("exclamation mark", "clock"…): these are
                 // decoration for the status line next to them, so they must not be announced.
                 if let j = job, j.download != nil {
-                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? .red : .blue).accessibilityHidden(true)
-                } else if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(.orange).accessibilityHidden(true) }
+                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? Vox.danger : Vox.info).accessibilityHidden(true)
+                } else if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(Vox.warning).accessibilityHidden(true) }
                 Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
                 Spacer(minLength: 0)
                 if let j = job, j.download?.error != nil { Button(L("retry")) { m.imports.retry(j) }.font(.subheadline.weight(.semibold)) }
@@ -525,19 +524,19 @@ struct LiveJobView: View {
                 if active { HwStatusLine() }
             }
             if active { ProgressView(value: m.runner.jobProgress) }
-            else if let j = job, let f = m.dlFraction(j) { ProgressView(value: f).tint(.blue) }
-            else if let j = job, j.download != nil, j.download?.error == nil, m.imports.dlId == j.id, !m.imports.dlPaused { ProgressView().progressViewStyle(.linear).tint(.blue) }
+            else if let j = job, let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info) }
+            else if let j = job, j.download != nil, j.download?.error == nil, m.imports.dlId == j.id, !m.imports.dlPaused { ProgressView().progressViewStyle(.linear).tint(Vox.info) }
         }
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
+        .voxRow()
     }
     private var transcript: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
-            if m.screen.lines.isEmpty { Text(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).font(.footnote).foregroundStyle(.secondary).padding(.top, 8) }
+            if m.screen.lines.isEmpty { Vox.fine(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).padding(.top, 8) }
             ForEach(m.screen.lines) { l in
                 let c = Self.palette[max(0, l.speaker) % Self.palette.count]
                 HStack(alignment: .top, spacing: 10) {
-                    RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 3)
+                    RoundedRectangle(cornerRadius: Vox.radiusXS).fill(c).frame(width: 3)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             // Naming a speaker of the run: the people picker, as in the finished meeting. The label is
@@ -545,14 +544,14 @@ struct LiveJobView: View {
                             Button { renamingSpeaker = l.speaker } label: {
                                 Text(m.screen.name(max(0, l.speaker))).font(.caption.bold()).foregroundStyle(c)
                             }.buttonStyle(.borderless)
-                            Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
+                            Vox.micro(Export.mmss(l.start))
                         }
                         Text(l.text)
                     }
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 3).padding(.horizontal, 6)
-                .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM))
                 .id(l.id).contentShape(Rectangle())
                 .onTapGesture { if player.available { player.seekPlay(l.start) } }
             }
@@ -566,11 +565,11 @@ struct LiveJobView: View {
                     if showsRun {
                         Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }.pickerStyle(.segmented)
                         if tab == 0 {
-                            if m.screen.agent.state == nil { Text(L("watch_live_hint")).font(.footnote).foregroundStyle(.secondary) }
+                            if m.screen.agent.state == nil { Vox.fine(L("watch_live_hint")) }
                             AgentPanel(agent: m.screen.agent) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } }
                         } else { transcript }
                     } else if let j = job {
-                        Text(L(j.download != nil ? "dl_item_hint" : "watch_live_queued")).font(.footnote).foregroundStyle(.secondary)
+                        Vox.fine(L(j.download != nil ? "dl_item_hint" : "watch_live_queued"))
                     }
                 }.padding(16)
             }
@@ -605,7 +604,7 @@ struct LiveJobView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let toast { Text(toast).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10)
+            if let toast { Vox.hint(toast).padding(.horizontal, Vox.gutter).padding(.vertical, 10)
                 .background(.thinMaterial, in: Capsule()).padding(.bottom, 90)
                 // A toast is visual only: say it out loud too, as in the finished meeting (SessionView).
                 .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
@@ -696,7 +695,7 @@ struct BrandMark: View {
     var body: some View {
         Group {
             if let img = UIImage(named: "AppIcon60x60") { Image(uiImage: img).resizable() }
-            else { Color(red: 0x20 / 255, green: 0x37 / 255, blue: 0x60 / 255) }
+            else { Vox.brand }
         }
         .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .accessibilityHidden(true)
@@ -711,14 +710,14 @@ struct ModelDownloadCard: View {
         if let p = downloads.prefetchProgress {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("\(SizeFormat.bytes(Int64(Double(downloads.prefetchTotal) * p))) / \(SizeFormat.bytes(downloads.prefetchTotal))").font(.subheadline.weight(.semibold))
+                    Vox.subhead("\(SizeFormat.bytes(Int64(Double(downloads.prefetchTotal) * p))) / \(SizeFormat.bytes(downloads.prefetchTotal))")
                     Spacer()
                     if downloads.prefetchPaused { Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.subheadline.weight(.semibold)).padding(.trailing, 8) }
                     Button(L("cancel")) { downloads.cancelPrefetch() }.font(.subheadline)
                 }
                 ProgressView(value: p)
-                Text(downloads.prefetchPaused ? L("download_paused") : L("dl_prefetching") + " \(Int(p * 100)) %").font(.caption).foregroundStyle(.secondary)
-            }.padding(12).background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                Vox.meta(downloads.prefetchPaused ? L("download_paused") : L("dl_prefetching") + " \(Int(p * 100)) %")
+            }.padding(Vox.inset).voxRow()
         }
     }
 }

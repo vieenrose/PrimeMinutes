@@ -68,7 +68,7 @@ struct SettingsView: View {
                     NavigationLink { PeopleScreen(library: m.library, openMeeting: openMeeting) } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L("people_settings_open", people.doc.people.count))
-                            Text(L("people_settings_desc")).font(.caption).foregroundStyle(.secondary)
+                            Vox.meta(L("people_settings_desc"))
                         }
                     }
                 }
@@ -119,11 +119,11 @@ struct SettingsView: View {
                     Toggle(L("settings_show_actions"), isOn: $showActions)
                 } header: { Text(L("settings_experimental")) } footer: { Text(L("settings_show_actions_hint")) }
                 Section {
-                    if !Storage.ready(Prefs.readerTarget) { Text(L("storage_model_pending", SizeFormat.bytes(Prefs.readerTarget.totalBytes))).font(.footnote).foregroundStyle(.secondary) }
+                    if !Storage.ready(Prefs.readerTarget) { Vox.fine(L("storage_model_pending", SizeFormat.bytes(Prefs.readerTarget.totalBytes))) }
                     if models.isEmpty { Text(L("storage_none")).foregroundStyle(.secondary) }
                     ForEach(models) { i in
-                        HStack { VStack(alignment: .leading) { Text(i.label); Text(L(i.kind)).font(.caption2).foregroundStyle(.secondary)
-                            if i.cacheBytes > 0 { Text(L("storage_compile_cache", SizeFormat.bytes(i.cacheBytes))).font(.caption2).foregroundStyle(.secondary) } }; Spacer(); Text(SizeFormat.bytes(i.bytes)).foregroundStyle(.secondary) }
+                        HStack { VStack(alignment: .leading) { Text(i.label); Vox.micro(L(i.kind))
+                            if i.cacheBytes > 0 { Vox.micro(L("storage_compile_cache", SizeFormat.bytes(i.cacheBytes))) } }; Spacer(); Text(SizeFormat.bytes(i.bytes)).foregroundStyle(.secondary) }
                             .swipeActions { if m.runner.activeJob == nil && !m.capture.recording { Button(L("storage_delete"), role: .destructive) { toDelete = i } } }   // not under a run: its models are mmaped
                     }
                 } header: { Text(L("settings_storage")) } footer: { if !models.isEmpty { Text(L("storage_total", SizeFormat.bytes(models.reduce(0) { $0 + $1.bytes }))) } }
