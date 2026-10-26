@@ -61,6 +61,7 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.statusColor
 import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.EinkPolicy
 
 /**
  * Prime Minutes 2.0 session top bar: back · title · search · ONE overflow. The nine-icon strip is gone —
@@ -280,7 +281,7 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
                 Modifier
                     .weight(1f)
                     .clip(seg)
-                    .background(if (on) (if (pal.isEink) pal.Sky else pal.ActiveTint) else Color.Transparent)
+                    .background(if (on) EinkPolicy.selectedFill(pal) else Color.Transparent)
                     .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
@@ -289,7 +290,7 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
                     label,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (on) (if (pal.isEink) Color.White else pal.Sky) else pal.Slate400,
+                    color = if (on) EinkPolicy.selectedInk(pal) else pal.Slate400,
                 )
             }
         }

@@ -59,6 +59,8 @@ import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.EinkPolicy
+import studio.primeminutes.ui.theme.Motion
 
 /** Model-written text as shown: S1, S2 → the transcript's speaker names ([studio.primeminutes.core.reader.SpeakerRefs]).
  *  Provided by the session and capture screens; identity elsewhere (showcases, tests). */
@@ -579,9 +581,9 @@ private fun StateChip(s: AgentState) {
 @Composable
 private fun StatusDot(color: Color, pulsing: Boolean, size: Int = 10) {
     val pal = LocalPrimeMinutesPalette.current
-    val a = if (pulsing && !pal.isEink) {
+    val a = if (pulsing && EinkPolicy.motionAllowed(pal)) {
         val t = rememberInfiniteTransition(label = "agent-dot")
-        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "agent-dot-alpha").value
+        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(Motion.medium4 * 2), RepeatMode.Reverse), label = "agent-dot-alpha").value
     } else 1f
     Box(Modifier.size(size.dp).alpha(a).clip(CircleShape).background(color))
 }

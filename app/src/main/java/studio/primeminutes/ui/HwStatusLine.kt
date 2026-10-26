@@ -21,7 +21,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import studio.primeminutes.R
 import studio.primeminutes.core.hw.hwSamples
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
@@ -63,7 +62,7 @@ private fun Gauge(label: String, pct: Int, alert: Boolean) {
         else -> pal.Slate400
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp,
+        Text(label, style = MaterialTheme.typography.labelSmall,
             color = pal.Slate400.copy(alpha = 0.7f))
         Box(Modifier.size(width = 16.dp, height = 2.dp).clip(RoundedCornerShape(1.dp))
             .background(pal.Slate400.copy(alpha = 0.2f))) {

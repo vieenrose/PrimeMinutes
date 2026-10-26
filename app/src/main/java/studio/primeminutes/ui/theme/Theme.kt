@@ -359,6 +359,80 @@ fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 
     }
 }
 
+/**
+ * Semantic type roles — the three places the audit found hardcoded sizes. Each derives from
+ * an M3 type slot (so the user's font scale, applied to the whole [androidx.compose.material3.Typography]
+ * in [PrimeMinutesTheme], flows through automatically) with a size floor so the role's intent
+ * survives even if the M3 default drifts:
+ *
+ * | Role            | Base slot      | Intent                                        |
+ * |-----------------|----------------|-----------------------------------------------|
+ * | `timer`         | `displayLarge` | capture timer digits: tabular, across-a-table |
+ * | `transcriptBody`| `bodyLarge`    | boundary-tap transcript: generous line height |
+ * | `sectionTitle`  | `titleMedium`  | section headers over grouped content          |
+ */
+object TypeRole {
+    /** Capture timer — tabular monospace digits sized to the display slot. */
+    @androidx.compose.runtime.Composable
+    fun timer(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.displayLarge.copy(
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        )
+
+    /** Boundary-editor transcript body — body slot with a roomy line height for tap targeting. */
+    @androidx.compose.runtime.Composable
+    fun transcriptBody(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.bodyLarge.copy(
+            lineHeight = androidx.compose.material3.MaterialTheme.typography.bodyLarge.lineHeight * 2.5f,
+        )
+
+    /** Section title — title slot for headers over grouped content. */
+    @androidx.compose.runtime.Composable
+    fun sectionTitle(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        )
+}
+
+/**
+ * Central e-ink derivations — every per-screen `if (pal.isEink)` branch that picks a fill or
+ * decides motion should read one of these, so the e-paper policy lives in one place:
+ * solid fills (no translucent wash that bands on e-paper), static indicators (no animation
+ * that ghosts), full-strength ink for status glyphs.
+ */
+object EinkPolicy {
+    /** Fill for a selected segment / chip: solid accent on e-ink, the translucent wash elsewhere. */
+    @androidx.compose.runtime.Composable
+    fun selectedFill(pal: PrimeMinutesColors): androidx.compose.ui.graphics.Color =
+        if (pal.isEink) pal.Sky else pal.AccentWash
+
+    /** Ink drawn on [selectedFill]: white on the solid e-ink accent, the accent itself on the wash. */
+    @androidx.compose.runtime.Composable
+    fun selectedInk(pal: PrimeMinutesColors): androidx.compose.ui.graphics.Color =
+        if (pal.isEink) androidx.compose.ui.graphics.Color.White else pal.Sky
+
+    /** Whether continuous motion (pulses, spinners, fades) is allowed — never on e-ink. */
+    fun motionAllowed(pal: PrimeMinutesColors): Boolean = !pal.isEink
+}
+
+/**
+ * Motion tokens — the M3 duration ladder at one source of truth (durations in ms). Pair with
+ * M3 easing (`short*` → FastOutSlowIn, `medium*` → Emphasized); call sites gate on
+ * [EinkPolicy.motionAllowed] so e-ink never animates. Reading `ANIMATOR_DURATION_SCALE == 0`
+ * (reduced motion) is left to the call site via the platform setting.
+ */
+object Motion {
+    const val short1 = 50
+    const val short2 = 100
+    const val short3 = 150
+    const val short4 = 200
+    const val medium1 = 250
+    const val medium2 = 300
+    const val medium3 = 350
+    const val medium4 = 400
+}
+
 private fun androidx.compose.ui.text.TextStyle.scaled(f: Float) = copy(
     fontSize = fontSize * f,
     lineHeight = lineHeight * f,

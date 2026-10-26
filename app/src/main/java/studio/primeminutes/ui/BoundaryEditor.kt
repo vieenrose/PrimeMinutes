@@ -69,11 +69,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.TypeRole
 import java.util.Locale
 import androidx.compose.ui.semantics.heading
 
@@ -308,7 +308,7 @@ private fun TokenStrip(
     ) {
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 40.sp),
+            style = TypeRole.transcriptBody(),
             onTextLayout = { layout = it },
             modifier = Modifier.fillMaxWidth()
                 .pointerInput(offs) { detectTapGestures { p -> tokenAt(p)?.let(onTap) } }

@@ -60,7 +60,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import studio.primeminutes.R
 import studio.primeminutes.data.speakerColorOn
 import studio.primeminutes.data.speakerLabel
@@ -68,6 +67,9 @@ import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.EinkPolicy
+import studio.primeminutes.ui.theme.Motion
+import studio.primeminutes.ui.theme.TypeRole
 
 /**
  * Full-screen capture — the studio's recording booth. Fixed layout with two GIANT buttons
@@ -166,10 +168,10 @@ fun CaptureScreen(
 @Composable
 private fun RecDot() {
     val pal = LocalPrimeMinutesPalette.current
-    val a = if (pal.isEink) 1f else {
+    val a = if (!EinkPolicy.motionAllowed(pal)) 1f else {
         val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "rec")
         t.animateFloat(1f, 0.25f, androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse), label = "rec-a").value
+            androidx.compose.animation.core.tween(Motion.medium4 + Motion.short4), androidx.compose.animation.core.RepeatMode.Reverse), label = "rec-a").value
     }
     Box(Modifier.size(10.dp).alpha(a).clip(CircleShape).background(PrimeMinutesPalette.Red))
 }
@@ -182,9 +184,7 @@ private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modi
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Text(
             "%d:%02d".format(recSeconds / 60, recSeconds % 60),
-            fontSize = 64.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,   // tabular: no layout shift per tick
+            style = TypeRole.timer(),   // tabular: no layout shift per tick
             color = pal.Slate200,
         )
         Spacer(Modifier.width(Spacing.xl))
