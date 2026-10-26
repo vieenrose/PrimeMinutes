@@ -82,5 +82,5 @@ actor LibraryStore {
 }
 
 /// One speaker → colour mapping for the live capture and the saved session (they differed: speaker 1
-/// turned from red to blue when the recording stopped).
-let speakerPalette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .red, .indigo]
+/// turned from red to blue when the recording stopped). The canonical list lives on `Vox.speaker`.
+var speakerPalette: [Color] { Vox.speaker }

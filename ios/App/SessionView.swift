@@ -179,18 +179,18 @@ struct SessionView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if !notes.isEmpty { resultsHeader(L("ai_notes"), notes.count); ForEach(Array(notes.enumerated()), id: \.offset) { _, r in resultRow(r) } }
                 if !lines.isEmpty { resultsHeader(L("search_results_transcript"), lines.count); ForEach(Array(lines.enumerated()), id: \.offset) { _, r in resultRow(r) } }
-                if rs.count >= MeetingSearch.maxResults { Text(L("search_results_more", MeetingSearch.maxResults)).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.vertical, 4) }
+                if rs.count >= MeetingSearch.maxResults { Vox.micro(L("search_results_more", MeetingSearch.maxResults)).padding(.horizontal, Vox.inset).padding(.vertical, 4) }
                 if askMeetingReady {
                     Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: {
                         Label(L("ask_meeting_query", query.trimmingCharacters(in: .whitespaces)), systemImage: "sparkles").font(.subheadline.weight(.semibold)).lineLimit(1)
-                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, 12).padding(.vertical, 10).accessibilityIdentifier("results-ask-meeting")
+                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, Vox.inset).padding(.vertical, Vox.insetTight).accessibilityIdentifier("results-ask-meeting")
                 }
             }
-        }.frame(maxHeight: 280).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        }.frame(maxHeight: 280).voxRow()
         .accessibilityIdentifier("meeting-search-results")
     }
     private func resultsHeader(_ t: String, _ n: Int) -> some View {
-        Text("\(t) · \(n)").font(.caption.weight(.bold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 2)
+        Text("\(t) · \(n)").font(.caption.weight(.bold)).foregroundStyle(.secondary).padding(.horizontal, Vox.inset).padding(.top, 8).padding(.bottom, 2)
     }
     private func resultRow(_ r: MeetingSearch.Result) -> some View {
         Button { pick(r) } label: {
@@ -199,7 +199,7 @@ struct SessionView: View {
                 if r.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
                 (r.speaker.map { Text(s.name($0) + "  ").font(.caption.weight(.semibold)).foregroundColor(.secondary) } ?? Text(""))
                     + Text(Self.marked(MeetingSearch.snippet(r.text, query), query)).font(.caption)
-            }.lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 6).contentShape(Rectangle())
+            }.lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Vox.inset).padding(.vertical, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
     @State private var semTask: Task<Void, Never>?
@@ -238,8 +238,8 @@ struct SessionView: View {
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) { c() }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        VStack(alignment: .leading, spacing: 8) { c() }.padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
+            .voxCard()
     }
     private var playerBar: some View { PlayerBar(player: player) }
     private var summaryTab: some View {
@@ -247,21 +247,21 @@ struct SessionView: View {
             // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
             if !s.notes.isEmpty { card {
                 HStack {
-                    Circle().fill(Color.green).frame(width: 9, height: 9)
+                    Circle().fill(Vox.success).frame(width: 9, height: 9)
                     VStack(alignment: .leading) {
-                        Text(L("ai_notes")).font(.headline)
-                        Text(L("notes_n", s.notes.count)).font(.caption).foregroundStyle(.secondary)
+                        Vox.head(L("ai_notes"))
+                        Vox.meta(L("notes_n", s.notes.count))
                     }
                     Spacer()
                     Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(Color.green.opacity(0.15), in: Capsule()).foregroundStyle(.green)
+                        .voxChip(Vox.success).foregroundStyle(Vox.success)
                 }
                 // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
                 if showProcess {
                     ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
-                    Text(L("agent_notes_caution")).font(.caption2).foregroundStyle(.secondary)
+                    Vox.micro(L("agent_notes_caution"))
                     // DEV builds: the saved reading's off-protocol counts (model guardrail).
-                    if Dev.on, let g = s.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Color.red : Color.secondary) }
+                    if Dev.on, let g = s.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger : Color.secondary) }
                 }
                 Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
             } }
@@ -274,7 +274,7 @@ struct SessionView: View {
                     Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
                         return .systemAction })
-                    Text(L("ai_disclaimer")).font(.caption2).foregroundStyle(.secondary)
+                    Vox.micro(L("ai_disclaimer"))
                 }
             }
             if showActions, let a = s.actionItems {
@@ -287,7 +287,7 @@ struct SessionView: View {
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
                         return .systemAction })
-                    Text(L("actions_verify_hint")).font(.caption2).foregroundStyle(.orange)
+                    Vox.micro(L("actions_verify_hint")).foregroundStyle(Vox.warning)
                 }
             }
             // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
@@ -301,15 +301,15 @@ struct SessionView: View {
             if peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }) {
                 HStack { Spacer(); Button { mailOpen = true } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
             }
-            if s.summary.isEmpty { Text(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).font(.subheadline).foregroundStyle(.secondary).padding(.top, 12) }
-        }.padding(.horizontal, 16)
+            if s.summary.isEmpty { Vox.hint(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
+        }.padding(.horizontal, Vox.gutter)
     }
     @ViewBuilder private func notesSection(_ header: String, _ items: [String]) -> some View {
         if !items.isEmpty {
             card {
-                Text(header).font(.subheadline.bold())
+                Vox.subhead(header)
                 ForEach(Array(items.enumerated()), id: \.offset) { _, it in
-                    Text(Markdown.render("- " + refs(it), anchors: player.available ? .blue : nil, speakers: names)).font(.subheadline)
+                    Text(Markdown.render("- " + refs(it), anchors: player.available ? Vox.info : nil, speakers: names)).font(.subheadline)
                 }
             }.environment(\.openURL, OpenURLAction { u in
                 if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
@@ -323,7 +323,7 @@ struct SessionView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack { ForEach(speakers, id: \.self) { k in
                         HStack(spacing: 5) { Circle().fill(tint(k)).frame(width: 8, height: 8); Text(s.name(k)).font(.caption.weight(.semibold)) }
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                            .padding(.horizontal, 10).padding(.vertical, 5).background(Vox.card, in: Capsule())
                     } }
                 }
             }
@@ -333,7 +333,7 @@ struct SessionView: View {
                     TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search).autocorrectionDisabled()
                         .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
                     if EmbedHost.ready {
-                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 6)).tapHeight() }
+                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight() }
                             .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
                     }
                     if !query.isEmpty {
@@ -350,16 +350,16 @@ struct SessionView: View {
                             .accessibilityLabel(L("ask_meeting_title")).accessibilityIdentifier("search-ask-meeting")
                     }
                     Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill").tapHeight() }.accessibilityLabel(L("search_close"))
-                }.padding(10).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                }.padding(Vox.insetTight).voxRow()
                 if semantic && semIndexing {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small).accessibilityHidden(true)
-                        Text(L("search_semantic_indexing")).font(.caption).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 12).accessibilityElement(children: .combine).accessibilityIdentifier("search-semantic-indexing")
+                        Vox.meta(L("search_semantic_indexing"))
+                    }.padding(.horizontal, Vox.inset).accessibilityElement(children: .combine).accessibilityIdentifier("search-semantic-indexing")
                 }
                 if resultsOpen && !meetingResults.isEmpty { resultsList }
             }
-            if !s.lines.isEmpty { Text(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))).font(.caption2).foregroundStyle(.secondary) }
+            if !s.lines.isEmpty { Vox.micro(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))) }
             // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
             if s.lines.isEmpty {
                 ContentUnavailableView(L(s.noSpeech ? "status_no_speech" : "transcript_empty_title"), systemImage: s.noSpeech ? "waveform.slash" : "text.alignleft",
@@ -379,8 +379,8 @@ struct SessionView: View {
                     }
                     Text(Self.marked(l.text, query))
                 }
-                .id(l.id).padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Color.yellow.opacity(0.22) : Color(.secondarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 12))
+                .id(l.id).padding(Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
+                .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Vox.highlight.opacity(0.22) : Vox.card), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
                 .contentShape(Rectangle())
                 .onTapGesture { if player.available { player.seekPlay(l.start) } }
                 .contextMenu { if !busy { lineMenu(l) } }
@@ -389,22 +389,22 @@ struct SessionView: View {
                 // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
                 .accessibilityAction(named: L("speaker_move_line")) { if !busy { moveLine = l.id } }
             }
-        }.padding(.horizontal, 16)
+        }.padding(.horizontal, Vox.gutter)
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
-                    if busy { RunStatusRow(id: s.id).padding(.horizontal, 16) }
+                    if busy { RunStatusRow(id: s.id).padding(.horizontal, Vox.gutter) }
                     Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
-                        .pickerStyle(.segmented).padding(.horizontal, 16)
+                        .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
                     if tab == 0 { summaryTab } else { transcriptTab }
                 }.padding(.top, 8)
             }
             .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
             .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
-            .background(Color(.systemGroupedBackground))
+            .background(Vox.page)
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
@@ -501,7 +501,7 @@ struct SessionView: View {
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
             NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, 12)
+                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
@@ -546,7 +546,7 @@ struct SessionView: View {
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
                                     onCancel: { player.endPreview(); seamAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Color(.systemGroupedBackground))
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
             }
         }
         .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
@@ -561,7 +561,7 @@ struct SessionView: View {
                                     onPreview: { player.preview(from: $0, to: $1) },
                                     onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
                                     onCancel: { player.endPreview(); splitAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Color(.systemGroupedBackground))
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
             }
         }
         .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N
@@ -579,13 +579,13 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         .overlay(alignment: .bottom) {
-            if let toast { Text(toast).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
+            if let toast { Text(toast).font(.subheadline).padding(.horizontal, Vox.gutter).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
                 // A toast is visual only: say it out loud too (VoiceOver gets nothing otherwise).
                 .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
         }
         .sheet(isPresented: $editingSummary) {
             NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, 12)
+                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
@@ -597,7 +597,7 @@ struct SessionView: View {
         }
         .sheet(isPresented: $editingActions) {
             NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, 12)
+                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
                     .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
@@ -630,25 +630,25 @@ struct SessionView: View {
         }
         .overlay {
             if exporting {
-                VStack(spacing: 8) { ProgressView(); Text(L("exporting")).font(.headline); Text(L("exporting_hint")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center) }
-                    .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)).padding(40)
+                VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
+                    .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
             }
         }
         .overlay(alignment: .bottom) {
             if let old = undoable {
                 HStack {
-                    Text(L("resummary_done")).font(.subheadline); Spacer()
+                    Vox.hint(L("resummary_done")); Spacer()
                     Button(L("undo")) { s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s); withAnimation { undoable = nil } }.bold()
-                }.padding(14).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 110)
+                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
                     .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { undoable = nil } }
             }
         }
         .overlay(alignment: .bottom) {
             if let u = speakerUndo {
                 HStack {
-                    Text(u.message).font(.subheadline); Spacer()
+                    Vox.hint(u.message); Spacer()
                     Button(L("undo")) { undoSpeakerEdit(u) }.bold().disabled(busy)
-                }.padding(14).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16).padding(.bottom, 110)
+                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
                     .task(id: u.id) {
                         try? await Task.sleep(nanoseconds: 8_000_000_000)
                         guard speakerUndo == u else { return }
@@ -797,15 +797,15 @@ private struct RunStatusRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     // Decoration for the status text next to it (an SF Symbol would read its own name).
-                    if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(.orange).accessibilityHidden(true) }
-                    Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
+                    if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(Vox.warning).accessibilityHidden(true) }
+                    Vox.hint(job.map(m.jobStatus) ?? m.screen.status).lineLimit(3)
                     Spacer(minLength: 0)
                     if active { HwStatusLine() }
                 }
                 if active { ProgressView(value: min(max(m.runner.jobProgress, 0), 1)) }
             }
-            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+            .padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
+            .voxRow()
             .accessibilityIdentifier("session-run-status")
         }
     }
@@ -844,26 +844,26 @@ struct ExportSheet: View {
 
     private func group(_ title: String, _ desc: String, _ fs: [Export.Format]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            Text(desc).font(.footnote).foregroundStyle(.secondary)
+            Vox.head(title)
+            Vox.fine(desc)
             HStack { ForEach(fs) { f in Button(f.rawValue.uppercased()) { onPick(f) }.buttonStyle(.bordered) } }
         }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(L("export_sheet_title")).font(.title2.bold())
+            Vox.title(L("export_sheet_title"))
             group(L("export_group_document"), L("export_group_document_desc"), [.pdf, .md, .txt])
             group(L("export_group_subtitles"), L("export_group_subtitles_desc"), [.srt, .vtt, .lrc])
             if s.audio != nil {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(L("export_group_session")).font(.headline)
-                    Text(L("export_group_session_desc")).font(.footnote).foregroundStyle(.secondary)
+                    Vox.head(L("export_group_session"))
+                    Vox.fine(L("export_group_session_desc"))
                     Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
                 }
             }
             Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success() } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
             Spacer()
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(Vox.gutterWide).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -878,7 +878,7 @@ struct NoteRow: View {
         return ["DECISION", "ACTION", "OPEN-ISSUE", "NUMBER", "PROPOSAL"].first { $0.hasPrefix(t) && !t.isEmpty } ?? t
     }
     private var color: Color {
-        switch full { case "DECISION": return .green; case "ACTION": return .blue; case "OPEN-ISSUE": return .orange
+        switch full { case "DECISION": return Vox.success; case "ACTION": return Vox.info; case "OPEN-ISSUE": return Vox.warning
         // System hues: they adapt to dark mode (raw RGB literals did not).
         case "NUMBER": return .purple; case "PROPOSAL": return .teal; default: return .gray }
     }
@@ -890,8 +890,8 @@ struct NoteRow: View {
         let sec = ReaderProtocol.parseTs(n.ts)
         HStack(alignment: .top, spacing: 6) {
             Button { if let sec { seek(sec) } } label: {
-                Text(n.ts).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(.blue)
-                    .padding(.horizontal, 5).padding(.vertical, 1).background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 6)).tapHeight()
+                Text(n.ts).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(Vox.info)
+                    .padding(.horizontal, 5).padding(.vertical, 1).background(Vox.info.opacity(0.12), in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight()
             }.buttonStyle(.plain)
             if let tag = n.tag, tag != "-" {
                 Text(label).font(.caption2.weight(.semibold)).foregroundStyle(color)
@@ -900,8 +900,8 @@ struct NoteRow: View {
             Text(refs(n.text)).font(.caption).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
             if ["DECISION", "ACTION", "NUMBER"].contains(full), let sec {
                 Button { seek(sec) } label: {
-                    Text(L("agent_verify")).font(.caption2.weight(.semibold)).foregroundStyle(.orange)
-                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Color.orange.opacity(0.5))).tapHeight()
+                    Text(L("agent_verify")).font(.caption2.weight(.semibold)).foregroundStyle(Vox.warning)
+                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Vox.warning.opacity(0.5))).tapHeight()
                 }.buttonStyle(.plain)
             }
         }.padding(.vertical, 3)
@@ -940,8 +940,8 @@ struct SpeakerStats: View {
                     HStack(spacing: 14) {
                         ForEach(sh, id: \.spk) { x in
                             HStack(spacing: 6) {
-                                RoundedRectangle(cornerRadius: 2).fill(palette[x.spk % palette.count]).frame(width: 8, height: 8)
-                                Text("\(Session.name(x.spk, names)) · \(Int(x.pct.rounded()))%").font(.caption).foregroundStyle(.secondary)
+                                RoundedRectangle(cornerRadius: Vox.radiusXS).fill(palette[x.spk % palette.count]).frame(width: 8, height: 8)
+                                Vox.meta("\(Session.name(x.spk, names)) · \(Int(x.pct.rounded()))%")
                             }
                         }
                     }
@@ -1008,6 +1008,6 @@ struct PlayerBar: View {
                     .lineLimit(1).fixedSize()
                 }.frame(minWidth: 96, alignment: .trailing)
             }
-        }.padding(.horizontal, 20).padding(.vertical, 8).background(.bar)
+        }.padding(.horizontal, Vox.gutterWide).padding(.vertical, 8).background(.bar)
     }
 }
