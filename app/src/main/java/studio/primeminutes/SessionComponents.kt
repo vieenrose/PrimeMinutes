@@ -948,7 +948,7 @@ internal fun UtteranceRow(
                             label,
                             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                             color = Color(speakerColorOn(utt.speaker, pal.isDark)),
-                            modifier = if (editable) Modifier.clickable { onBeginSpeakerEdit(utt.speaker) } else Modifier,
+                            modifier = if (editable) Modifier.clickable(role = Role.Button) { onBeginSpeakerEdit(utt.speaker) } else Modifier,
                         )
                         Text(" · ", style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
                     }
