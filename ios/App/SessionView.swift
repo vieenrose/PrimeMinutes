@@ -688,6 +688,10 @@ struct SessionView: View {
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }
 
+    /// Speaker name for the extracted SpeakerStats legend (Session.name's static body, verbatim:
+    /// Session.name resolves to the instance method from here, so the static is not callable by name).
+    static func nameOf(_ spk: Int, _ names: [String: String]?) -> String { names?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
+
 }
 
 extension SessionView {
@@ -859,10 +863,7 @@ struct SpeakerStats: View {
     let palette: [Color]
     @State private var legend = false
     private var shares: [(spk: Int, pct: Double)] {
-        var d = [Int: Double]()
-        for l in lines { d[max(0, l.speaker), default: 0] += max(0, l.end - l.start) }
-        let total = d.values.reduce(0, +)
-        return total > 0 ? d.map { ($0.key, $0.value / total * 100) }.sorted { $0.1 > $1.1 } : []
+        SpeakerStatsModel.shares(lines)
     }
     var body: some View {
         let sh = shares
@@ -870,23 +871,13 @@ struct SpeakerStats: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text(L("speaker_count", sh.count)).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    GeometryReader { g in
-                        HStack(spacing: 0) { ForEach(sh, id: \.spk) { x in palette[x.spk % palette.count].frame(width: g.size.width * x.pct / 100) } }
-                            .clipShape(Capsule())
-                    }.frame(height: 8)
+                    SpeakerStatsBar(shares: sh, palette: palette)
                     // SF Symbols ship their own VoiceOver names; inside this tap target the chevron is
                     // decoration and only added "Chevron Up" noise after the speaker count.
                     Image(systemName: legend ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
                 }
                 if legend {
-                    HStack(spacing: 14) {
-                        ForEach(sh, id: \.spk) { x in
-                            HStack(spacing: 6) {
-                                RoundedRectangle(cornerRadius: Vox.radiusXS).fill(palette[x.spk % palette.count]).frame(width: 8, height: 8)
-                                Vox.meta("\(Session.name(x.spk, names)) · \(Int(x.pct.rounded()))%")
-                            }
-                        }
-                    }
+                    SpeakerStatsLegend(shares: sh, names: names, palette: palette)
                 }
             }
             .padding(.horizontal, 4).contentShape(Rectangle()).onTapGesture { withAnimation { legend.toggle() } }

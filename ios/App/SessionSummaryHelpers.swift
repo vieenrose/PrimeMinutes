@@ -112,3 +112,65 @@ struct SessionNotesSection: View {
     VStack(alignment: .leading, spacing: 8) { c() }.padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
         .voxCard()
 }
+
+/// Talk-time shares per speaker, sorted loudest first. Pure value computation
+/// factored out of SpeakerStats so the bar view below stays a tiny expression.
+enum SpeakerStatsModel {
+    static func shares(_ lines: [Utterance]) -> [(spk: Int, pct: Double)] {
+        var d = [Int: Double]()
+        for l in lines { d[max(0, l.speaker), default: 0] += max(0, l.end - l.start) }
+        let total = d.values.reduce(0, +)
+        return total > 0 ? d.map { ($0.key, $0.value / total * 100) }.sorted { $0.1 > $1.1 } : []
+    }
+}
+
+/// The stacked talk-time bar: one segment per speaker in its colour.
+struct SpeakerStatsBar: View {
+    let shares: [(spk: Int, pct: Double)]
+    let palette: [Color]
+    var body: some View {
+        GeometryReader { g in
+            HStack(spacing: 0) { ForEach(shares, id: \.spk) { x in SpeakerStatsSegment(spk: x.spk, pct: x.pct, palette: palette, width: g.size.width) } }
+                .clipShape(Capsule())
+        }.frame(height: 8)
+    }
+}
+
+/// One segment of the stacked talk-time bar.
+struct SpeakerStatsSegment: View {
+    let spk: Int
+    let pct: Double
+    let palette: [Color]
+    let width: CGFloat
+    var body: some View {
+        palette[spk % palette.count].frame(width: width * pct / 100)
+    }
+}
+
+/// The per-speaker legend under the talk-time bar.
+struct SpeakerStatsLegend: View {
+    let shares: [(spk: Int, pct: Double)]
+    let names: [String: String]?
+    let palette: [Color]
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(shares, id: \.spk) { x in
+                SpeakerStatsLegendRow(spk: x.spk, pct: x.pct, names: names, palette: palette)
+            }
+        }
+    }
+}
+
+/// One legend row: colour chip plus "name · pct%".
+struct SpeakerStatsLegendRow: View {
+    let spk: Int
+    let pct: Double
+    let names: [String: String]?
+    let palette: [Color]
+    var body: some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: Vox.radiusXS).fill(palette[spk % palette.count]).frame(width: 8, height: 8)
+            Vox.meta("\(SessionView.nameOf(spk, names)) · \(Int(pct.rounded()))%")
+        }
+    }
+}
