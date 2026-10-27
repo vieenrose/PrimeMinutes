@@ -778,7 +778,7 @@ private struct RunStatusRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     // Decoration for the status text next to it (an SF Symbol would read its own name).
-                    if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(Vox.warning).accessibilityHidden(true) }
+                    if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").voxFore(Vox.warning).accessibilityHidden(true) }
                     Vox.hint(job.map(m.jobStatus) ?? m.screen.status).lineLimit(3)
                     Spacer(minLength: 0)
                     if active { HwStatusLine() }
@@ -859,7 +859,7 @@ struct NoteRow: View {
         return ["DECISION", "ACTION", "OPEN-ISSUE", "NUMBER", "PROPOSAL"].first { $0.hasPrefix(t) && !t.isEmpty } ?? t
     }
     private var color: Color {
-        switch full { case "DECISION": return Vox.success; case "ACTION": return Vox.info; case "OPEN-ISSUE": return Vox.warning
+        switch full { case "DECISION": return Vox.success.color; case "ACTION": return Vox.info.color; case "OPEN-ISSUE": return Vox.warning.color
         // System hues: they adapt to dark mode (raw RGB literals did not).
         case "NUMBER": return .purple; case "PROPOSAL": return .teal; default: return .gray }
     }
@@ -871,8 +871,8 @@ struct NoteRow: View {
         let sec = ReaderProtocol.parseTs(n.ts)
         HStack(alignment: .top, spacing: 6) {
             Button { if let sec { seek(sec) } } label: {
-                Text(n.ts).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(Vox.info)
-                    .padding(.horizontal, 5).padding(.vertical, 1).background(Vox.info.opacity(0.12), in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight()
+                Text(n.ts).font(.caption2.monospaced().weight(.semibold)).voxFore(Vox.info)
+                    .padding(.horizontal, 5).padding(.vertical, 1).background(Vox.info.color.opacity(0.12), in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight()
             }.buttonStyle(.plain)
             if let tag = n.tag, tag != "-" {
                 Text(label).font(.caption2.weight(.semibold)).foregroundStyle(color)
@@ -881,8 +881,8 @@ struct NoteRow: View {
             Text(refs(n.text)).font(.caption).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
             if ["DECISION", "ACTION", "NUMBER"].contains(full), let sec {
                 Button { seek(sec) } label: {
-                    Text(L("agent_verify")).font(.caption2.weight(.semibold)).foregroundStyle(Vox.warning)
-                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Vox.warning.opacity(0.5))).tapHeight()
+                    Text(L("agent_verify")).font(.caption2.weight(.semibold)).voxFore(Vox.warning)
+                        .padding(.horizontal, 6).padding(.vertical, 1).overlay(Capsule().stroke(Vox.warning.color.opacity(0.5))).tapHeight()
                 }.buttonStyle(.plain)
             }
         }.padding(.vertical, 3)

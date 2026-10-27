@@ -8,8 +8,8 @@ struct CaptureView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Circle().fill(Vox.danger).frame(width: 10, height: 10)
-                Text(L("status_recording")).font(.title3.weight(.bold)).foregroundStyle(Vox.danger)
+                Circle().fill(Vox.danger.color).frame(width: 10, height: 10)
+                Text(L("status_recording")).font(.title3.weight(.bold)).voxFore(Vox.danger)
                 Spacer()
                 // The engines' load, on the header row (trailing, page gutter) rather than floating under the timer.
                 HwStatusLine()
@@ -63,7 +63,7 @@ struct CaptureView: View {
             Button { Haptics.toggle(false); m.capture.toggleRecord() } label: {
                 Label(L("capture_stop"), systemImage: "stop.fill").font(.headline)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(Vox.danger, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
+                    .background(Vox.danger.color, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
             }.padding(.horizontal, Vox.gutterWide).padding(.vertical, Vox.inset)
         }
         .background(Vox.page)
