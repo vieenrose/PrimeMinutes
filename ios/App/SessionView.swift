@@ -443,7 +443,6 @@ struct SessionView: View {
             .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
             .background(Vox.page)
             .onAppear { appear(proxy) }
-            .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             .modifier(SessionInsets(follow: followScroll(proxy), sessionId: s.id, busy: busy, playerAvailable: player.available, playerBar: playerBar))
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
