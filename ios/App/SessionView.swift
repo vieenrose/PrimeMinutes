@@ -171,36 +171,12 @@ struct SessionView: View {
         // At the line's start: a note's whole-second time is before its line, which made the line above the playing one.
         if player.available { player.seek(l.start) }
     }
-    private var resultsList: some View {
-        let rs = meetingResults
-        let notes = rs.filter { $0.kind == .note }, lines = rs.filter { $0.kind == .line }
-        return ScrollView {
-            // A VStack (≤ 50 rows): a LazyVStack nested in the page's own scroll view left rows blank.
-            VStack(alignment: .leading, spacing: 0) {
-                if !notes.isEmpty { resultsHeader(L("ai_notes"), notes.count); ForEach(Array(notes.enumerated()), id: \.offset) { _, r in resultRow(r) } }
-                if !lines.isEmpty { resultsHeader(L("search_results_transcript"), lines.count); ForEach(Array(lines.enumerated()), id: \.offset) { _, r in resultRow(r) } }
-                if rs.count >= MeetingSearch.maxResults { Vox.micro(L("search_results_more", MeetingSearch.maxResults)).padding(.horizontal, Vox.inset).padding(.vertical, 4) }
-                if askMeetingReady {
-                    Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: {
-                        Label(L("ask_meeting_query", query.trimmingCharacters(in: .whitespaces)), systemImage: "sparkles").font(.subheadline.weight(.semibold)).lineLimit(1)
-                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, Vox.inset).padding(.vertical, Vox.insetTight).accessibilityIdentifier("results-ask-meeting")
-                }
-            }
-        }.frame(maxHeight: 280).voxRow()
-        .accessibilityIdentifier("meeting-search-results")
-    }
+    private var resultsList: some View { sessionResultsList }
     private func resultsHeader(_ t: String, _ n: Int) -> some View {
-        Text("\(t) · \(n)").font(.caption.weight(.bold)).foregroundStyle(.secondary).padding(.horizontal, Vox.inset).padding(.top, 8).padding(.bottom, 2)
+        sessionResultsHeader(t, n)
     }
     private func resultRow(_ r: MeetingSearch.Result) -> some View {
-        Button { pick(r) } label: {
-            HStack(alignment: .top, spacing: 6) {
-                Text(Export.mmss(r.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(Color.accentColor).fixedSize().frame(minWidth: 48, alignment: .leading)   // a fixed 48 pt clipped the time at large text sizes
-                if r.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
-                (r.speaker.map { Text(s.name($0) + "  ").font(.caption.weight(.semibold)).foregroundColor(.secondary) } ?? Text(""))
-                    + Text(Self.marked(MeetingSearch.snippet(r.text, query), query)).font(.caption)
-            }.lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Vox.inset).padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        sessionResultRow(r)
     }
     @State private var semTask: Task<Void, Never>?
     /// ≈ is on but this meeting has no index yet (Android TranscriptSearch `indexing`): say so instead of "no matches",
@@ -782,6 +758,31 @@ struct SessionView: View {
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }
 
+}
+
+extension SessionView {
+    /// The unfolded search-results list under the transcript search bar.
+    var sessionResultsList: some View {
+        let q = query
+        return SessionResultsList(
+            results: meetingResults,
+            query: q,
+            askMeetingReady: askMeetingReady,
+            name: { [s] in s.name($0) },
+            pick: { [self] in pick($0) },
+            askMeeting: { [self] in askMeeting = query.trimmingCharacters(in: .whitespaces) }
+        )
+    }
+
+    /// One header line over the notes / transcript result groups.
+    func sessionResultsHeader(_ t: String, _ n: Int) -> some View {
+        SessionResultsHeader(title: t, count: n)
+    }
+
+    /// One tappable result row (time pill, ≈ marker, speaker, marked snippet).
+    func sessionResultRow(_ r: MeetingSearch.Result) -> some View {
+        SessionResultRow(result: r, query: query, name: { [s] in s.name($0) }, pick: { [self] in pick($0) })
+    }
 }
 
 /// A run (re-summarize, re-transcribe) on the open meeting: its status line and progress, as the live view's header
