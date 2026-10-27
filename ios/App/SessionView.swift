@@ -299,7 +299,6 @@ struct SessionView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
-                    if busy { RunStatusRow(id: s.id).padding(.horizontal, Vox.gutter) }
                     Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
                         .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
                     if tab == 0 { summaryTab } else { transcriptTab }
@@ -311,8 +310,8 @@ struct SessionView: View {
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
-            // Pinned run-status slot above the scrollable content (the bar itself
-            // stays in the scroll view until the sticky-bar patch claims this slot).
+            // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
+            // not in it: scrolling either tab kept pushing it off screen.
             .safeAreaInset(edge: .top) { SessionRunStatusTop(id: s.id, busy: busy) }
             // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
             .onChange(of: current) { _, id in if player.playing, query.isEmpty, tab == 1, Date().timeIntervalSince(userScrolledAt) > 4, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
