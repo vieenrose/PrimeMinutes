@@ -232,3 +232,41 @@ struct SessionFollow: ViewModifier {
         if !(s.resultsOpen && s.hasResults), let id = s.matchId { withAnimation { s.onFollow(id) } }
     }
 }
+
+/// VoiceOver route for per-line re-attribution: one row per other speaker,
+/// same reassign as the line menu. Split out of SessionView's sheet.
+struct SessionMoveLineSheet: View {
+    let lineId: UUID
+    let lineSpeaker: Int
+    let speakers: [Int]
+    let tint: (Int) -> Color
+    let name: (Int) -> String
+    let onPick: (Int) -> Void
+    let onCancel: () -> Void
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(speakers.filter { $0 != lineSpeaker }, id: \.self) { k in
+                    SessionMoveLineRow(speaker: k, tint: tint(k), name: name(k), onPick: { onPick(k) })
+                }
+            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } } }
+            .navigationTitle(L("speaker_move_line")).navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium]).presentationDragIndicator(.visible)
+    }
+}
+
+/// One speaker row in the move-line sheet.
+struct SessionMoveLineRow: View {
+    let speaker: Int
+    let tint: Color
+    let name: String
+    let onPick: () -> Void
+    var body: some View {
+        Button { onPick() } label: {
+            HStack(spacing: 8) { Circle().fill(tint).frame(width: 10, height: 10); Text(name) }
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
+}

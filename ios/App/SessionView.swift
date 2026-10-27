@@ -441,19 +441,11 @@ struct SessionView: View {
         // VoiceOver route for per-line re-attribution: one row per other speaker, same reassign as the menu.
         .sheet(isPresented: Binding(get: { moveLine != nil }, set: { if !$0 { moveLine = nil } })) {
             if let id = moveLine, let i = s.lines.firstIndex(where: { $0.id == id }) {
-                NavigationStack {
-                    List {
-                        ForEach(Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != s.lines[i].speaker }, id: \.self) { k in
-                            Button { moveLine = nil; reassign(id, k) } label: {
-                                HStack(spacing: 8) { Circle().fill(tint(k)).frame(width: 10, height: 10); Text(s.name(k)) }
-                                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { moveLine = nil } } }
-                    .navigationTitle(L("speaker_move_line")).navigationBarTitleDisplayMode(.inline)
-                }
-                .presentationDetents([.medium]).presentationDragIndicator(.visible)
+                SessionMoveLineSheet(lineId: id, lineSpeaker: s.lines[i].speaker,
+                    speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
+                    tint: { tint($0) }, name: { s.name($0) },
+                    onPick: { moveLine = nil; reassign(id, $0) },
+                    onCancel: { moveLine = nil })
             }
         }
         .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
