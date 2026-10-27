@@ -487,30 +487,22 @@ struct SessionView: View {
         }
         .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
             if let k = seamAt, k >= 1, k < s.lines.count {
-                let a = s.lines[k - 1], b = s.lines[k], sm = BoundaryEdits.seam(a, b)
-                BoundaryEditorSheet(tokens: sm.tokens, starts: sm.starts, end: sm.end, initialSplit: sm.split,
-                                    colorA: tint(a.speaker), labelA: s.name(a.speaker), colorB: tint(b.speaker), labelB: s.name(b.speaker),
-                                    estimated: BoundaryEdits.estimated(a) || BoundaryEdits.estimated(b),
-                                    canPlay: player.available, demo: Self.devDemo,
-                                    onPreview: { player.preview(from: $0, to: $1) },
-                                    onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
-                                    onCancel: { player.endPreview(); seamAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+                SessionSeamSheet(seam: k, lines: s.lines,
+                    tint: { tint($0) }, name: { s.name($0) },
+                    canPlay: player.available,
+                    onPreview: { player.preview(from: $0, to: $1) },
+                    onApply: { player.endPreview(); seamAt = nil; moveBoundary(k, $0) },
+                    onCancel: { player.endPreview(); seamAt = nil })
             }
         }
         .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
             if let li = splitAt, s.lines.indices.contains(li) {
-                let u = s.lines[li], toks = BoundaryEdits.tokenize(u.text), order = BoundaryEdits.splitCandidates(s.lines, index: li)
-                let known = Set(s.lines.map(\.speaker))
-                BoundaryEditorSheet(tokens: toks, starts: BoundaryEdits.tokenStarts(u, toks), end: u.end, initialSplit: toks.count / 2,
-                                    colorA: tint(u.speaker), labelA: s.name(u.speaker), colorB: tint(order[0]), labelB: s.name(order[0]),
-                                    choices: order.map { SpeakerChoice(id: $0, label: s.name($0), color: tint($0), isNew: !known.contains($0)) },
-                                    estimated: BoundaryEdits.estimated(u),
-                                    canPlay: player.available, demo: Self.devDemo,
-                                    onPreview: { player.preview(from: $0, to: $1) },
-                                    onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
-                                    onCancel: { player.endPreview(); splitAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+                SessionSplitSheet(index: li, lines: s.lines,
+                    tint: { tint($0) }, name: { s.name($0) },
+                    canPlay: player.available,
+                    onPreview: { player.preview(from: $0, to: $1) },
+                    onApply: { player.endPreview(); splitAt = nil; splitLine(li, $0, $1) },
+                    onCancel: { player.endPreview(); splitAt = nil })
             }
         }
         .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N

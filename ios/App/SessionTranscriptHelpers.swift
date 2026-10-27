@@ -447,3 +447,70 @@ struct SessionSpeakerUndoBanner: View {
         }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
     }
 }
+
+/// The boundary-move sheet at seam k: where speaker k-1 stops and k starts.
+/// Split out of SessionView's sheet; same BoundaryEditorSheet, one call.
+struct SessionSeamSheet: View {
+    let seam: Int
+    let lines: [Utterance]
+    let tint: (Int) -> Color
+    let name: (Int) -> String
+    let canPlay: Bool
+    let onPreview: (Double, Double) -> Void
+    let onApply: (Int) -> Void
+    let onCancel: () -> Void
+    var body: some View {
+        let a = lines[seam - 1], b = lines[seam], sm = BoundaryEdits.seam(a, b)
+        return SessionSeamInner(tokens: sm.tokens, starts: sm.starts, end: sm.end, initialSplit: sm.split,
+            colorA: tint(a.speaker), labelA: name(a.speaker), colorB: tint(b.speaker), labelB: name(b.speaker),
+            estimated: BoundaryEdits.estimated(a) || BoundaryEdits.estimated(b),
+            canPlay: canPlay, onPreview: onPreview, onApply: onApply, onCancel: onCancel)
+    }
+}
+
+/// The BoundaryEditorSheet for a seam move, with its detents.
+struct SessionSeamInner: View {
+    let tokens: [String], starts: [Double], end: Double, initialSplit: Int
+    let colorA: Color, labelA: String, colorB: Color, labelB: String
+    let estimated: Bool
+    let canPlay: Bool
+    let onPreview: (Double, Double) -> Void
+    let onApply: (Int) -> Void
+    let onCancel: () -> Void
+    var body: some View {
+        BoundaryEditorSheet(tokens: tokens, starts: starts, end: end, initialSplit: initialSplit,
+                            colorA: colorA, labelA: labelA, colorB: colorB, labelB: labelB,
+                            estimated: estimated,
+                            canPlay: canPlay, demo: SessionView.devDemo,
+                            onPreview: onPreview,
+                            onApply: { split, _ in onApply(split) },
+                            onCancel: onCancel)
+            .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+    }
+}
+
+/// The line-split sheet at index: cut the line, second half to a speaker.
+/// Split out of SessionView's sheet; same BoundaryEditorSheet, one call.
+struct SessionSplitSheet: View {
+    let index: Int
+    let lines: [Utterance]
+    let tint: (Int) -> Color
+    let name: (Int) -> String
+    let canPlay: Bool
+    let onPreview: (Double, Double) -> Void
+    let onApply: (Int, Int) -> Void
+    let onCancel: () -> Void
+    var body: some View {
+        let u = lines[index], toks = BoundaryEdits.tokenize(u.text), order = BoundaryEdits.splitCandidates(lines, index: index)
+        let known = Set(lines.map(\.speaker))
+        return BoundaryEditorSheet(tokens: toks, starts: BoundaryEdits.tokenStarts(u, toks), end: u.end, initialSplit: toks.count / 2,
+                            colorA: tint(u.speaker), labelA: name(u.speaker), colorB: tint(order[0]), labelB: name(order[0]),
+                            choices: order.map { SpeakerChoice(id: $0, label: name($0), color: tint($0), isNew: !known.contains($0)) },
+                            estimated: BoundaryEdits.estimated(u),
+                            canPlay: canPlay, demo: SessionView.devDemo,
+                            onPreview: onPreview,
+                            onApply: { at, spk in onApply(at, spk ?? order[0]) },
+                            onCancel: onCancel)
+            .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+    }
+}
