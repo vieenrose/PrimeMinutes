@@ -311,6 +311,9 @@ struct SessionView: View {
             .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
                 if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
+            // Pinned run-status slot above the scrollable content (the bar itself
+            // stays in the scroll view until the sticky-bar patch claims this slot).
+            .safeAreaInset(edge: .top) { SessionRunStatusTop(id: s.id, busy: busy) }
             // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
             .onChange(of: current) { _, id in if player.playing, query.isEmpty, tab == 1, Date().timeIntervalSince(userScrolledAt) > 4, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
             // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
@@ -709,6 +712,17 @@ extension SessionView {
     /// One tappable result row (time pill, ≈ marker, speaker, marked snippet).
     func sessionResultRow(_ r: MeetingSearch.Result) -> some View {
         SessionResultRow(result: r, query: query, name: { [s] in s.name($0) }, pick: { [self] in pick($0) })
+    }
+}
+
+/// The run-status bar's pinned slot above the scrollable content (safeAreaInset top):
+/// the inset's own tiny view, so the long SessionView body stays out of the solver's
+/// way. Renders nothing while idle; the sticky-bar patch claims this slot.
+private struct SessionRunStatusTop: View {
+    let id: UUID
+    let busy: Bool
+    var body: some View {
+        if busy { RunStatusRow(id: id).padding(.horizontal, Vox.gutter) }
     }
 }
 
