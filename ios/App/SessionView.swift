@@ -302,6 +302,8 @@ struct SessionView: View {
         if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
         if let t = openAt { openAtSeek(t, proxy) }
     }
+    /// Open the transcript search (magnifier): transcript tab, field focused, embedder preloading.
+    private func openSearch() { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() }
     /// An Ask citation tapped: back to the transcript, scroll to the cited line, park the player there.
     private func askCitation(_ t: Double) {
         askMeeting = nil; tab = 1
@@ -380,7 +382,7 @@ struct SessionView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                Button { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
+                Button { openSearch() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
             }
             ToolbarItem(placement: .primaryAction) {
                 SessionMoreMenu(
@@ -425,17 +427,15 @@ struct SessionView: View {
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
         .sheet(isPresented: Binding(get: { renamingSpeaker != nil && !busy }, set: { if !$0 { renamingSpeaker = nil } })) {
             if let k = renamingSpeaker {
-                VoiceSuggested(session: s, speaker: k) { suggestions, note in
-                    SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
-                                    suggestions: suggestions, voiceNote: note,
-                                    onPlaySample: player.available ? { playSample(k) } : nil,
-                                    onLink: { p in renamingSpeaker = nil; link(k, p) },
-                                    onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
-                                    onClear: { renamingSpeaker = nil; clearName(k) },
-                                    onMerge: { into in renamingSpeaker = nil; merge(k, into) },
-                                    onDismiss: { renamingSpeaker = nil })
-                }
-                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                SessionRenameSheet(session: s, speakerKey: k, sessions: Model.shared.library.sessions,
+                    canPlaySample: player.available,
+                    speaker: pickerSpeaker(k), speakers: pickerSpeakers,
+                    onPlaySample: { playSample(k) },
+                    onLink: { renamingSpeaker = nil; link(k, $0) },
+                    onNew: { renamingSpeaker = nil; link(k, PeopleStore.shared.create($0)) },
+                    onClear: { renamingSpeaker = nil; clearName(k) },
+                    onMerge: { renamingSpeaker = nil; merge(k, $0) },
+                    onDismiss: { renamingSpeaker = nil })
             }
         }
         .modifier(VoiceOutlierPrompt())

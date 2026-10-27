@@ -320,3 +320,33 @@ struct SessionMoreMenu: View {
         } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
     }
 }
+
+/// The rename-speaker sheet: voice suggestions around the SpeakerNameFlow
+/// picker. Split out of SessionView's sheet; same callbacks, one call.
+struct SessionRenameSheet: View {
+    let session: Session
+    let speakerKey: Int
+    let sessions: [Session]
+    let canPlaySample: Bool
+    let speaker: PickerSpeaker
+    let speakers: [PickerSpeaker]
+    let onPlaySample: () -> Void
+    let onLink: (Person) -> Void
+    let onNew: (String) -> Void
+    let onClear: () -> Void
+    let onMerge: (Int) -> Void
+    let onDismiss: () -> Void
+    var body: some View {
+        VoiceSuggested(session: session, speaker: speakerKey) { suggestions, note in
+            SpeakerNameFlow(speaker: speaker, speakers: speakers, sessions: sessions,
+                            suggestions: suggestions, voiceNote: note,
+                            onPlaySample: canPlaySample ? onPlaySample : nil,
+                            onLink: onLink,
+                            onNew: onNew,
+                            onClear: onClear,
+                            onMerge: onMerge,
+                            onDismiss: onDismiss)
+        }
+        .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+    }
+}
