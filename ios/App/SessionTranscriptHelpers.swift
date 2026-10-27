@@ -586,3 +586,30 @@ struct SessionExporting: View {
             .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
     }
 }
+
+/// The session's scroll page: tab page plus scroll modifiers, insets and
+/// follow behavior. Split out of SessionView's body so the ScrollView leaves
+/// the body chain (the solver ceiling sat on the ScrollView block itself).
+struct SessionScrollPage<Summary: View, Transcript: View>: View {
+    let proxy: ScrollViewProxy
+    @Binding var tab: Int
+    let summary: Summary
+    let transcript: Transcript
+    let appear: () -> Void
+    let scrolled: () -> Void
+    let follow: SessionFollowScroll
+    let sessionId: UUID
+    let busy: Bool
+    let playerAvailable: Bool
+    let playerBar: PlayerBar
+    var body: some View {
+        ScrollView {
+            SessionTabPage(tab: $tab, summary: summary, transcript: transcript)
+        }
+        .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
+        .modifier(UserScrollWatch { scrolled() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
+        .background(Vox.page)
+        .onAppear { appear() }
+        .modifier(SessionInsets(follow: follow, sessionId: sessionId, busy: busy, playerAvailable: playerAvailable, playerBar: playerBar))
+    }
+}

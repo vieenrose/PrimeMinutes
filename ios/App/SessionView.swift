@@ -455,14 +455,10 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                SessionTabPage(tab: $tab, summary: summaryTab, transcript: transcriptTab)
-            }
-            .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
-            .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
-            .background(Vox.page)
-            .onAppear { appear(proxy) }
-            .modifier(SessionInsets(follow: followScroll(proxy), sessionId: s.id, busy: busy, playerAvailable: player.available, playerBar: playerBar))
+            SessionScrollPage(proxy: proxy, tab: $tab, summary: summaryTab, transcript: transcriptTab,
+                appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
+                follow: followScroll(proxy), sessionId: s.id, busy: busy,
+                playerAvailable: player.available, playerBar: playerBar)
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
@@ -793,7 +789,7 @@ private struct RunStatusRow: View {
 /// Calls `changed` while the user scrolls a scroll view by hand (a programmatic scrollTo does not count). iOS 18 reads
 /// the scroll phase; iOS 17 has no phase, so a drag recognized alongside the scroll stands in (on iOS 18 such a gesture
 /// can hold up the scroll itself, hence not used there).
-private struct UserScrollWatch: ViewModifier {
+struct UserScrollWatch: ViewModifier {
     let changed: () -> Void
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
