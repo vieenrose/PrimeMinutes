@@ -302,6 +302,15 @@ struct SessionView: View {
         if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
         if let t = openAt { openAtSeek(t, proxy) }
     }
+    /// Whether the line-edit Done button is enabled (non-blank draft).
+    private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the line-text edit (like Android: an emptied line is not a save).
+    private func saveLineEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
+            let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
+        editingLine = nil
+    }
     /// A run saved this meeting (JobRunner posts voxSessionSaved): re-read it, drop a
     /// mid-run rename sheet, surface the resummary undo, DEV-dump the resum trace.
     private func sessionSaved(_ n: NotificationCenter.Publisher.Output) {
@@ -433,18 +442,9 @@ struct SessionView: View {
         .modifier(VoiceOutlierPrompt())
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
-                                let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
-                            editingLine = nil }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }   // like Android: an emptied line is not a save
-                    }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
-            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            if editingLine != nil {
+                SessionLineEditSheet(draft: $draft, doneEnabled: lineEditDoneEnabled, onCancel: { editingLine = nil }, onDone: { saveLineEdit() })
+            }
         }
         .confirmationDialog(merging.map { L("speaker_merge_confirm", s.name($0.0), s.name($0.1)) } ?? "",
                             isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
