@@ -302,6 +302,15 @@ struct SessionView: View {
         if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
         if let t = openAt { openAtSeek(t, proxy) }
     }
+    /// An Ask citation tapped: back to the transcript, scroll to the cited line, park the player there.
+    private func askCitation(_ t: Double) {
+        askMeeting = nil; tab = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
+            if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
+            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
+        }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -394,14 +403,7 @@ struct SessionView: View {
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
         .sheet(isPresented: Binding(get: { askMeeting != nil }, set: { if !$0 { askMeeting = nil } })) {
-            AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in
-                askMeeting = nil; tab = 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
-                    if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
-                    if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
-                }
-            }, meeting: s)
+            AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
             EmailParticipantsSheet(session: s, busy: busy, onSend: { r in
