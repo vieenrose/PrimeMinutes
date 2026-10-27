@@ -916,30 +916,17 @@ struct PlayerBar: View {
     @ObservedObject var player: Player
     var body: some View {
         VStack(spacing: 6) {
-            Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration)) { editing in if !editing, !player.playing { player.toggle() } }
-                // VoiceOver otherwise reads a bare percentage of the meeting; say what it is and where playback is.
-                .accessibilityLabel(L("cd_seek")).accessibilityValue(L("cd_seek_value", Export.mmss(player.time), Export.mmss(player.duration)))
+            PlayerSeekSlider(player: player)
             HStack {
                 // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
                 Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     .lineLimit(1).fixedSize().frame(minWidth: 96, alignment: .leading)
                 Spacer()
-                Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
-                Button { player.toggle() } label: {
-                    Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2).foregroundStyle(.white)
-                        .frame(width: 56, height: 56).background(Color.accentColor, in: Circle())
-                }.accessibilityLabel(L(player.playing ? "pause" : "play"))
-                Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
+                PlayerSkipBack(player: player)
+                PlayerPlayPause(player: player)
+                PlayerSkipForward(player: player)
                 Spacer()
-                HStack(spacing: 12) {
-                Menu {
-                    Button { player.muted.toggle() } label: { Label(L(player.muted ? "cd_unmute" : "cd_mute"), systemImage: player.muted ? "speaker.wave.2" : "speaker.slash") }
-                    ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { v in Button("\(Int(v * 100)) %") { player.muted = false; player.volume = Float(v) } }
-                } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).tapTarget() }
-                    .accessibilityLabel(L("cd_volume")).accessibilityValue(player.muted || player.volume == 0 ? L("cd_muted") : "\(Int(player.volume * 100)) %")
-                Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .lineLimit(1).fixedSize()
-                }.frame(minWidth: 96, alignment: .trailing)
+                PlayerVolumeCluster(player: player)
             }
         }.padding(.horizontal, Vox.gutterWide).padding(.vertical, 8).background(.bar)
     }

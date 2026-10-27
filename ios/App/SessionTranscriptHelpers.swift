@@ -123,3 +123,65 @@ struct SessionTranscriptLines: View {
         }
     }
 }
+
+/// The player bar's seek slider with its VoiceOver label. Split out of PlayerBar
+/// (SessionView.swift) so the bar's body stays a tiny composition.
+struct PlayerSeekSlider: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration)) { editing in if !editing, !player.playing { player.toggle() } }
+            // VoiceOver otherwise reads a bare percentage of the meeting; say what it is and where playback is.
+            .accessibilityLabel(L("cd_seek")).accessibilityValue(L("cd_seek_value", Export.mmss(player.time), Export.mmss(player.duration)))
+    }
+}
+
+/// The −5 s skip button of the player bar.
+struct PlayerSkipBack: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
+    }
+}
+
+/// The play/pause button of the player bar.
+struct PlayerPlayPause: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        Button { player.toggle() } label: {
+            Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2).foregroundStyle(.white)
+                .frame(width: 56, height: 56).background(Color.accentColor, in: Circle())
+        }.accessibilityLabel(L(player.playing ? "pause" : "play"))
+    }
+}
+
+/// The +5 s skip button of the player bar.
+struct PlayerSkipForward: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
+    }
+}
+
+/// The volume menu plus total length at the player bar's trailing end.
+struct PlayerVolumeCluster: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        HStack(spacing: 12) {
+            PlayerVolumeMenu(player: player)
+            Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                .lineLimit(1).fixedSize()
+        }.frame(minWidth: 96, alignment: .trailing)
+    }
+}
+
+/// The mute/volume menu of the player bar.
+struct PlayerVolumeMenu: View {
+    @ObservedObject var player: Player
+    var body: some View {
+        Menu {
+            Button { player.muted.toggle() } label: { Label(L(player.muted ? "cd_unmute" : "cd_mute"), systemImage: player.muted ? "speaker.wave.2" : "speaker.slash") }
+            ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { v in Button("\(Int(v * 100)) %") { player.muted = false; player.volume = Float(v) } }
+        } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).tapTarget() }
+            .accessibilityLabel(L("cd_volume")).accessibilityValue(player.muted || player.volume == 0 ? L("cd_muted") : "\(Int(player.volume * 100)) %")
+    }
+}
