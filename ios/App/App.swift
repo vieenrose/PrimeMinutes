@@ -167,4 +167,4 @@ struct DownloadConsent: ViewModifier {
 /// watching the run, transcript and notes as they come, the audio playable meanwhile).
 enum Route: Hashable { case session(Session), job(UUID) }
 
-extension Notification.Name { static let voxSessionSaved = Notification.Name("voxSessionSaved") }
+extension Notification.Name { static let voxSessionSaved = Notification.Name("voxSessionSaved"); static let voxToast = Notification.Name("voxToast") }

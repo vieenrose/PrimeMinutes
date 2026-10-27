@@ -300,7 +300,7 @@
 "cd_unmute" = "取消静音";
 "cd_copy_summary" = "复制摘要";
 "summary_copied" = "已复制摘要";
-"transcript_copied" = "已复制转写文本";
+"transcript_copied" = "已复制逐字稿";
 "action_items_copied" = "已复制待办事项";
 "show_more" = "显示更多";
 "show_less" = "显示较少";

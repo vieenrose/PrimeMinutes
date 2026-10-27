@@ -534,6 +534,7 @@ struct SessionView: View {
             if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
             if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
         .overlay {
             if exporting {
                 VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
@@ -803,7 +804,7 @@ struct ExportSheet: View {
                     Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
                 }
             }
-            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success() } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
+            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success(); NotificationCenter.default.post(name: .voxToast, object: L("transcript_copied")) } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
             Spacer()
         }.padding(Vox.gutterWide).frame(maxWidth: .infinity, alignment: .leading)
     }
