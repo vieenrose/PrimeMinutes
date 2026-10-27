@@ -570,10 +570,7 @@ struct SessionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
         .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
         .overlay {
-            if exporting {
-                VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
-                    .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
-            }
+            if exporting { SessionExporting() }
         }
         .overlay(alignment: .bottom) {
             if undoable != nil {

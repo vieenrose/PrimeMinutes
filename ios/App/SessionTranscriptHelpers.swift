@@ -578,3 +578,11 @@ struct SessionToast: View {
             .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: text); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { onExpire() } }
     }
 }
+
+/// The session-export progress overlay.
+struct SessionExporting: View {
+    var body: some View {
+        VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
+            .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
+    }
+}
