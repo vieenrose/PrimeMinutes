@@ -303,6 +303,8 @@ fun MeetingSearchResults(
     indexing: Boolean = false,
 ) {
     val pal = LocalPrimeMinutesPalette.current
+    // Hoisted: stringResource is @Composable, so it cannot run inside the semantics {} lambda below.
+    val semanticOnlyCd = stringResource(R.string.search_semantic_cd)
     val notes = results.filter { it.kind == MeetingSearch.Kind.NOTE }
     val lines = results.filter { it.kind == MeetingSearch.Kind.LINE }
     LazyColumn(
@@ -325,9 +327,14 @@ fun MeetingSearchResults(
                         ReaderProtocol.formatTs(r.timeSec.toInt()), style = MaterialTheme.typography.labelMedium,
                         color = pal.Sky, modifier = Modifier.width(52.dp),
                     )
+                    // The bare ≈ glyph reads as nothing: expose what it marks (TalkBack), like the
+                    // library passage rows do via their own label.
                     if (r.semanticOnly) Text(
                         stringResource(R.string.search_semantic_marker), color = pal.Sky, fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = Spacing.xs),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = Spacing.xs).semantics {
+                            contentDescription = semanticOnlyCd
+                        },
                     )
                     val who = r.speaker?.let { speakerName(it) + "  " } ?: ""
                     Text(
