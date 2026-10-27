@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +20,7 @@ import studio.primeminutes.R
 import studio.primeminutes.core.models.ModelPrefetch
 import studio.primeminutes.core.models.SizeFormat
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * The first-use model download (ModelPrefetch) while it runs: percent, bytes so far over the total, and
@@ -31,7 +31,7 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 fun ModelDownloadCard(status: ModelPrefetch.Status, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val pal = LocalPrimeMinutesPalette.current
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(pal.Sky.copy(alpha = 0.10f))
+        modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(pal.Sky.copy(alpha = 0.10f))
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -46,7 +46,7 @@ fun ModelDownloadCard(status: ModelPrefetch.Status, onCancel: () -> Unit, modifi
         }
         if (status.paused) {
             // Interrupted (network lost, phone asleep): the partial files stay and it continues by itself.
-            DownloadStatusBar(R.string.dl_paused, status.fraction, Modifier.padding(end = 8.dp))
-        } else DownloadStatusBar(R.string.dl_prefetching, status.fraction, Modifier.padding(end = 8.dp))
+            DownloadStatusBar(R.string.dl_paused, status.fraction, Modifier.padding(end = Spacing.sm))
+        } else DownloadStatusBar(R.string.dl_prefetching, status.fraction, Modifier.padding(end = Spacing.sm))
     }
 }

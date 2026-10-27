@@ -58,9 +58,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
@@ -242,6 +240,7 @@ import studio.primeminutes.ui.theme.ThemeController
 import studio.primeminutes.ui.theme.PrimeMinutesTheme
 import studio.primeminutes.ui.theme.primeMinutesSliderColors
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 import studio.primeminutes.core.config.ThemeMode
 import studio.primeminutes.core.config.ThemeStore
 import androidx.compose.runtime.CompositionLocalProvider
@@ -693,7 +692,7 @@ private fun TranscribeScreen(
                 },
                 onDismiss = { updateDismissed = true },
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
         }
     }
     // Session tabs (portrait): 0 = Summary, 1 = Transcript. Each session opens on Summary when one
@@ -1564,7 +1563,7 @@ private fun TranscribeScreen(
                         else -> R.string.summary_missing_hint
                     }),
                     color = pal.Slate400,
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier.padding(top = Spacing.xxl),
                 )
             }
         }
@@ -1816,7 +1815,7 @@ private fun TranscribeScreen(
                         Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = Spacing.lg),
                     ) {
                         PlayerBar(
                             utterances = utterances,
@@ -1853,7 +1852,7 @@ private fun TranscribeScreen(
             Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Spacing.lg),
         ) {
             Spacer(Modifier.height(10.dp))
             updateBannerSlot()
@@ -1867,12 +1866,12 @@ private fun TranscribeScreen(
                 )
             } else if (s.downloadEntryId != null && utterances.isEmpty() && !s.running) {
                 // A podcast / YouTube item not downloaded yet: its download card alone (no tabs, nothing to read yet).
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) { summaryCards() }
             } else if (twoPane) {
                 // Landscape: two panes — the overview on the left scrolls independently of the
                 // transcript on the right.
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     Column(
                         Modifier
@@ -1881,9 +1880,9 @@ private fun TranscribeScreen(
                             .verticalScroll(rememberScrollState()),
                     ) {
                         overviewCards()
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Spacing.sm))
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(Spacing.md))
                     Column(Modifier.weight(0.60f).fillMaxHeight()) {
                         if (s.searchActive) TranscriptSearchBar(
                             query = s.searchQuery, onQuery = { vm.setSearchQuery(it) },
@@ -1910,11 +1909,11 @@ private fun TranscribeScreen(
                 // Portrait: Summary · Transcript tabs — each job gets a shallow room
                 // instead of one long scroll (Prime Minutes 2.0).
                 SessionTabs(selected = sessTab, onSelect = { sessTab = it })
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 when (sessTab) {
                     0 -> Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                    ) { summaryCards(); Spacer(Modifier.height(8.dp)) }
+                    ) { summaryCards(); Spacer(Modifier.height(Spacing.sm)) }
                     else -> {
                         if (s.searchActive) TranscriptSearchBar(
                             query = s.searchQuery, onQuery = { vm.setSearchQuery(it) },
@@ -1930,12 +1929,13 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
+<<<<<<< HEAD
                         // A silent meeting and a not-yet-transcribed one are different states: the
                         // entry's persisted no-speech flag (SpeechCheck at save, like iOS) tells
                         // them apart once the transcript is in. While it loads, say nothing.
                         if (utterances.isEmpty() && !s.running && !s.opening && s.transcriptReady) {
                             val silent = meetingEntry?.noSpeech == true
-                            Column(modifier = Modifier.padding(top = 24.dp)) {
+                            Column(modifier = Modifier.padding(top = Spacing.xxl)) {
                                 Text(
                                     stringResource(if (silent) R.string.status_no_speech else R.string.transcript_empty_title),
                                     style = MaterialTheme.typography.titleSmall,
@@ -1948,6 +1948,13 @@ private fun TranscribeScreen(
                                 )
                             }
                         }
+=======
+                        if (utterances.isEmpty() && !s.running) Text(
+                            stringResource(R.string.status_no_speech),
+                            color = pal.Slate400,
+                            modifier = Modifier.padding(top = Spacing.xxl),
+                        )
+>>>>>>> origin/ui-android-aesthetic
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f),

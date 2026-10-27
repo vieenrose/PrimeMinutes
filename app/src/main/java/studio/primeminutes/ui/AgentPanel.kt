@@ -58,6 +58,9 @@ import studio.primeminutes.core.models.ModelCard
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.EinkPolicy
+import studio.primeminutes.ui.theme.Motion
 
 /** Model-written text as shown: S1, S2 → the transcript's speaker names ([studio.primeminutes.core.reader.SpeakerRefs]).
  *  Provided by the session and capture screens; identity elsewhere (showcases, tests). */
@@ -261,7 +264,7 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
     // show an empty timeline (the notes gone) and an "activity (0)" log, so it isn't offered.
     val hasProcess = agent.windowsRead > 0 || agent.log.isNotEmpty()
     if (!hasProcess) detailed = false
-    Column(modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         Row(
             Modifier.fillMaxWidth().clickable { expanded = !expanded },
             verticalAlignment = Alignment.CenterVertically,
@@ -304,7 +307,7 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
             style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
             color = if (agent.guardExceeded || g.exceeds(ModelCard.DEFAULT.reader.guard)) PrimeMinutesPalette.Red else pal.Slate400,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xl)) {
             if (done) Text(
                 stringResource(R.string.agent_hide_process),
                 style = MaterialTheme.typography.labelLarge, color = pal.Sky,
@@ -323,7 +326,7 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
         }
         if (detailed && showLog) {
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(pal.InsetSurface).padding(10.dp),
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(pal.InsetSurface).padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 agent.log.asReversed().take(60).forEach { l ->
@@ -347,7 +350,7 @@ fun AgentPanel(agent: AgentUiState, onSeek: ((Int) -> Unit)? = null, modifier: M
 private fun SimpleBody(agent: AgentUiState, st: AgentEvent.State, onSeek: ((Int) -> Unit)?) {
     val pal = LocalPrimeMinutesPalette.current
     val cur = agent.steps.lastOrNull { !it.restart }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         when (st.state) {
             AgentState.LISTENING -> {
                 if (agent.beforeFirstReading) FirstReadingText(agent, MaterialTheme.typography.bodyMedium)
@@ -371,7 +374,7 @@ private fun SimpleBody(agent: AgentUiState, st: AgentEvent.State, onSeek: ((Int)
 private fun Gauges(agent: AgentUiState, st: AgentEvent.State) {
     val cur = agent.steps.lastOrNull { !it.restart }
     // Stacked, not side by side: at large font scales two half-width labels were cut ("Conte…").
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Gauge(
             label = stringResource(R.string.agent_gauge_window),
             value = cur?.tokens ?: 0, max = agent.windowMax,
@@ -388,10 +391,10 @@ private fun Gauges(agent: AgentUiState, st: AgentEvent.State) {
 @Composable
 private fun Gauge(label: String, value: Int, max: Int, active: Boolean, modifier: Modifier) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = pal.Slate400, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Text(
                 "%,d / %,d".format(value.coerceAtMost(max), max),
                 style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = pal.Slate400,
@@ -485,7 +488,7 @@ private fun Timeline(agent: AgentUiState, st: AgentEvent.State, onSeek: ((Int) -
                     ReplyPreview(agent.reply)
                 }
                 if (showNotes) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                     notes.asReversed().forEach { NoteCard(it, onSeek) }
                 }
             }
@@ -500,7 +503,7 @@ private fun TimelineRow(color: Color, pulsing: Boolean, last: Boolean, content: 
         Column(Modifier.width(20.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(5.dp))
             StatusDot(color, pulsing)
-            if (!last) Box(Modifier.padding(top = 4.dp).width(2.dp).weight(1f).background(pal.Hairline))
+            if (!last) Box(Modifier.padding(top = Spacing.xs).width(2.dp).weight(1f).background(pal.Hairline))
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).padding(bottom = if (last) 0.dp else 14.dp)) { content() }
@@ -535,7 +538,7 @@ private fun NoteCard(n: Note, onSeek: ((Int) -> Unit)?) {
                 stringResource(R.string.agent_verify),
                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
                 color = pal.WarningText,
-                modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, PrimeMinutesPalette.Warning.copy(alpha = 0.5f), RoundedCornerShape(50))
+                modifier = Modifier.clip(CircleShape).border(1.dp, PrimeMinutesPalette.Warning.copy(alpha = 0.5f), CircleShape)
                     .clickable { ReaderProtocol.parseTs(n.ts)?.let { onSeek?.invoke(it * 1000) } }
                     .padding(horizontal = 6.dp, vertical = 1.dp),
             )
@@ -549,7 +552,7 @@ private fun TagChip(tag: String) {
     Text(
         tagLabel(tag),
         style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = c,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.copy(alpha = 0.14f))
+        modifier = Modifier.clip(CircleShape).background(c.copy(alpha = 0.14f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
 }
@@ -569,7 +572,7 @@ private fun StateChip(s: AgentState) {
             },
         ),
         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = c,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.copy(alpha = 0.14f))
+        modifier = Modifier.clip(CircleShape).background(c.copy(alpha = 0.14f))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
@@ -578,9 +581,9 @@ private fun StateChip(s: AgentState) {
 @Composable
 private fun StatusDot(color: Color, pulsing: Boolean, size: Int = 10) {
     val pal = LocalPrimeMinutesPalette.current
-    val a = if (pulsing && !pal.isEink) {
+    val a = if (pulsing && EinkPolicy.motionAllowed(pal)) {
         val t = rememberInfiniteTransition(label = "agent-dot")
-        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "agent-dot-alpha").value
+        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(Motion.medium4 * 2), RepeatMode.Reverse), label = "agent-dot-alpha").value
     } else 1f
     Box(Modifier.size(size.dp).alpha(a).clip(CircleShape).background(color))
 }
@@ -686,9 +689,9 @@ private fun ReplyPreview(reply: String) {
     val lines = replyLines(reply).takeLast(5)
     if (lines.isEmpty()) return
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(pal.InsetSurface)
-            .border(1.dp, pal.Hairline, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(pal.InsetSurface)
+            .border(1.dp, pal.Hairline, MaterialTheme.shapes.small).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         // Newest (the line being written) on top, like the notes list.
         lines.asReversed().forEachIndexed { i, l -> ReplyLineRow(l, typing = i == 0) }
@@ -746,14 +749,14 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
     val st = agent.state ?: return
     val cur = agent.steps.lastOrNull { !it.restart }
     Column(
-        modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp))
-            .background(pal.InsetSurface).border(1.dp, pal.Hairline, RoundedCornerShape(12.dp))
+        modifier.fillMaxWidth().padding(vertical = 6.dp).clip(MaterialTheme.shapes.medium)
+            .background(pal.InsetSurface).border(1.dp, pal.Hairline, MaterialTheme.shapes.medium)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(stateColor(st.state), pulsing = agent.working, size = 8)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Text(
                 stringResource(R.string.agent_title),
                 style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
@@ -764,7 +767,7 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
                     pluralStringResource(R.plurals.agent_notes_count, agent.notes.size, agent.notes.size),
                     style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
             }
             StateChip(st.state)
         }
@@ -782,7 +785,7 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
                 ReplyLineRow(replyLines(agent.reply).last(), typing = true)
             note != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(note.ts, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = pal.Sky)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 note.tag?.takeIf { it != "-" }?.let { TagChip(it); Spacer(Modifier.width(6.dp)) }
                 Text(
                     LocalSpeakerRefs.current(note.text),

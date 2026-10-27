@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -76,8 +76,13 @@ import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+<<<<<<< HEAD
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
+import studio.primeminutes.ui.theme.Spacing
+=======
+import studio.primeminutes.ui.theme.Spacing
+>>>>>>> origin/ui-android-aesthetic
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -151,7 +156,7 @@ fun AskSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = Spacing.lg).padding(bottom = Spacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Title and chip on one line, the meeting's name under them (in-meeting); the actions keep the right.
                 Column(Modifier.weight(1f)) {
@@ -165,7 +170,7 @@ fun AskSheet(
                         Text(
                             stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold, color = pal.WarningText,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).background(pal.WarningText.copy(alpha = 0.13f))
+                            modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
                                 .padding(horizontal = 9.dp, vertical = 4.dp),
                         )
                     }
@@ -216,7 +221,7 @@ fun AskSheet(
                 // The earlier questions (saved), then this opening's; the saved ones are only shown.
                 (history + turns).forEachIndexed { n, t ->
                     if (n == history.size && history.isNotEmpty()) androidx.compose.material3.HorizontalDivider(
-                        Modifier.padding(top = 12.dp), color = pal.Hairline,
+                        Modifier.padding(top = Spacing.md), color = pal.Hairline,
                     )
                     Text(
                         t.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
@@ -260,7 +265,8 @@ fun AskSheet(
                     AskEngine.Phase.Idle -> null
                 }
                 if (status != null) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
-                    if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+<<<<<<< HEAD
+                    if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(Spacing.sm)) }
                     // Polite live region: the stage and its seconds change under a streaming answer,
                     // so a TalkBack user hears "searching 3 s" → "reading 5 s" → the failure without
                     // hunting for the line (the transcript search's counter does the same).
@@ -269,18 +275,22 @@ fun AskSheet(
                         color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
+=======
+                    if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(Spacing.sm)) }
+                    Text(status, style = MaterialTheme.typography.bodySmall, color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400)
+>>>>>>> origin/ui-android-aesthetic
                 }
                 Text(
                     stringResource(R.string.ask_disclaimer), style = MaterialTheme.typography.labelSmall,
-                    color = pal.Slate400, modifier = Modifier.padding(top = 12.dp),
+                    color = pal.Slate400, modifier = Modifier.padding(top = Spacing.md),
                 )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                    .clip(RoundedCornerShape(12.dp)).background(pal.PanelSurface)
-                    .border(1.dp, pal.Hairline, RoundedCornerShape(12.dp))
-                    .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)
+                    .clip(MaterialTheme.shapes.medium).background(pal.PanelSurface)
+                    .border(1.dp, pal.Hairline, MaterialTheme.shapes.medium)
+                    .heightIn(min = 44.dp).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 BasicTextField(
                     value = followUp, onValueChange = { followUp = it }, singleLine = true,

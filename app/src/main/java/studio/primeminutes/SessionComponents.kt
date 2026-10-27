@@ -235,6 +235,7 @@ import studio.primeminutes.ui.theme.ThemeController
 import studio.primeminutes.ui.theme.PrimeMinutesTheme
 import studio.primeminutes.ui.theme.primeMinutesSliderColors
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 import studio.primeminutes.core.config.ThemeMode
 import studio.primeminutes.core.config.ThemeStore
 
@@ -250,10 +251,10 @@ internal fun ExportingOverlay(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
-        Surface(shape = RoundedCornerShape(16.dp), color = pal.PanelSurface, tonalElevation = 6.dp) {
-            Row(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = MaterialTheme.shapes.large, color = pal.PanelSurface, tonalElevation = 6.dp) {
+            Row(Modifier.padding(horizontal = Spacing.xxl, vertical = Spacing.xl), verticalAlignment = Alignment.CenterVertically) {
                 WorkingIndicator()
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(Spacing.lg))
                 Column {
                     Text(stringResource(R.string.exporting), color = pal.Slate200, style = MaterialTheme.typography.titleSmall)
                     Text(stringResource(R.string.exporting_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
@@ -269,7 +270,7 @@ internal fun ExportingOverlay(onDismiss: () -> Unit) {
 internal fun WorkingIndicator(size: Dp = 28.dp) {
     val pal = LocalPrimeMinutesPalette.current
     if (pal.isEink) {
-        Box(Modifier.size(size).clip(RoundedCornerShape(50)).background(pal.ActiveBar))
+        Box(Modifier.size(size).clip(CircleShape).background(pal.ActiveBar))
     } else {
         CircularProgressIndicator(strokeWidth = 3.dp, modifier = Modifier.size(size))
     }
@@ -284,10 +285,10 @@ internal fun OpeningOverlay() {
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
     ) {
-        Surface(shape = RoundedCornerShape(16.dp), color = pal.PanelSurface, tonalElevation = 6.dp) {
-            Row(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = MaterialTheme.shapes.large, color = pal.PanelSurface, tonalElevation = 6.dp) {
+            Row(Modifier.padding(horizontal = Spacing.xxl, vertical = Spacing.xl), verticalAlignment = Alignment.CenterVertically) {
                 WorkingIndicator()
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(Spacing.lg))
                 Text(stringResource(R.string.opening_session), color = pal.Slate200, style = MaterialTheme.typography.titleSmall)
             }
         }
@@ -399,7 +400,7 @@ internal fun CollapsibleMarkdown(
             style = MaterialTheme.typography.labelMedium,
             color = pal.Slate400,
             // Role + 48dp minimum: the bare label was a ~16dp-high tap target that TalkBack read as plain text.
-            modifier = Modifier.padding(top = 4.dp)
+            modifier = Modifier.padding(top = Spacing.xs)
                 .minimumInteractiveComponentSize()
                 .clickable(role = Role.Button) { expanded = !expanded },
         )
@@ -435,7 +436,7 @@ internal fun SummaryCard(
                 EditPencil(onBeginEdit)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         if (isEditing) {
             UtteranceTextEditor(initial = summary, onSave = onSave, onCancel = onCancel, minLines = 4)
         } else {
@@ -481,7 +482,7 @@ internal fun ActionItemsCard(
                 EditPencil(onBeginEdit)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         if (isEditing) {
             UtteranceTextEditor(initial = text, onSave = onSave, onCancel = onCancel, minLines = 3)
         } else {
@@ -586,12 +587,12 @@ internal fun SectionCard(content: @Composable androidx.compose.foundation.layout
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = pal.PanelSurface),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         border = BorderStroke(1.dp, pal.Hairline),
         // Hairline border + a whisper of shadow: 8 dp read as heavy floating slabs on the light theme.
         elevation = CardDefaults.cardElevation(defaultElevation = if (pal.isDark) 0.dp else 1.dp),
     ) {
-        Column(Modifier.padding(16.dp), content = content)
+        Column(Modifier.padding(Spacing.lg), content = content)
     }
 }
 
@@ -723,7 +724,7 @@ internal fun VolumeControl(
                     shadowElevation = 8.dp,
                 ) {
                     Row(
-                        Modifier.padding(start = 4.dp, end = 16.dp),
+                        Modifier.padding(start = Spacing.xs, end = Spacing.lg),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(onClick = onToggleMute, modifier = Modifier.size(48.dp)) {
@@ -759,7 +760,7 @@ internal fun TimelineStrip(
     val seekLabel = stringResource(R.string.cd_seek_bar)
     Canvas(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(MaterialTheme.shapes.extraSmall)
             .background(pal.Slate800)
             // A Canvas has no semantics: TalkBack skipped the scrubber. Expose it as a slider
             // (position read out as time, volume keys / swipe step by 1/20 of the meeting).
@@ -979,7 +980,7 @@ internal fun UtteranceTextEditor(initial: String, onSave: (String) -> Unit, onCa
     var text by remember(initial) { mutableStateOf(initial) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = Spacing.xs)) {
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
@@ -988,7 +989,7 @@ internal fun UtteranceTextEditor(initial: String, onSave: (String) -> Unit, onCa
             colors = primeMinutesTextFieldColors(),
             minLines = minLines,
         )
-        Row(Modifier.padding(top = 4.dp)) {
+        Row(Modifier.padding(top = Spacing.xs)) {
             Button(
                 onClick = { onSave(text.trim()) },
                 enabled = text.trim().isNotEmpty(),
@@ -1045,7 +1046,7 @@ internal fun SpeakerTag(
     if (!editing) {
         Surface(
             color = bg,
-            shape = RoundedCornerShape(50),
+            shape = CircleShape,
             border = BorderStroke(1.dp, color.copy(alpha = 0.6f)),
         ) {
             Text(

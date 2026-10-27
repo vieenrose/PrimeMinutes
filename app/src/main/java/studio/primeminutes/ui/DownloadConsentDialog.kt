@@ -18,6 +18,7 @@ import studio.primeminutes.R
 import studio.primeminutes.core.models.DownloadPlan
 import studio.primeminutes.core.models.SizeFormat
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Before the first-use model downloads: what will be fetched and how big it is (from the model
@@ -38,13 +39,13 @@ fun DownloadConsentDialog(
         text = {
             Column {
                 Text(stringResource(R.string.dl_consent_total, SizeFormat.bytes(pending.total)), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 if (pending.speechBytes > 0) Text(stringResource(R.string.dl_consent_speech, SizeFormat.bytes(pending.speechBytes)))
                 if (pending.readerBytes > 0) Text(stringResource(R.string.dl_consent_reader, SizeFormat.bytes(pending.readerBytes)))
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(stringResource(R.string.dl_consent_body), style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                 if (!unmetered) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(stringResource(R.string.dl_consent_metered), color = pal.WarningText, fontWeight = FontWeight.SemiBold)
                 }
             }

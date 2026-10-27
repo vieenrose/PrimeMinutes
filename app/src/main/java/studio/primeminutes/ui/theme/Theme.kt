@@ -64,6 +64,15 @@ data class PrimeMinutesColors(
      *  [Slate900] is the app's ground, i.e. the contrasting ink of each theme (near-black ink on the
      *  dark accent, off-white on the light and e-ink accents) — the same ink [GradientButton] uses. */
     val OnSky: Color = Slate900,
+    /** Tonal wash: accent-tinted container for selected chips, tonal buttons and pills. Mapped
+     *  from the Sky palette per theme (not the M3 lavender default) so `secondaryContainer` and
+     *  `tertiary` roles stay in the palette's hue family. */
+    val AccentWash: Color,
+    /** Muted accent for secondary tonal surfaces (progress tracks, inactive ticks). */
+    val AccentMuted: Color,
+    /** Error ink per theme: pure red reads on dark grounds but washes out on white, so the
+     *  light and e-ink themes deepen it. */
+    val ErrorText: Color,
 )
 
 /**
@@ -109,6 +118,9 @@ val DarkColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF7DA2FF).copy(alpha = 0.16f),
     ActiveBar = Color(0xFF7DA2FF),
     WarningText = Color(0xFFE08A0B),
+    AccentWash = Color(0xFF7DA2FF).copy(alpha = 0.16f),
+    AccentMuted = Color(0xFF9DB8FF),
+    ErrorText = Color(0xFFFF7A7A),
 )
 
 /**
@@ -137,6 +149,9 @@ val LightColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF2F6BFF).copy(alpha = 0.12f),
     ActiveBar = Color(0xFF2F6BFF),
     WarningText = Color(0xFF9A5B00),
+    AccentWash = Color(0xFF2F6BFF).copy(alpha = 0.12f),
+    AccentMuted = Color(0xFF1E4FD6),
+    ErrorText = Color(0xFFB3261E),
 )
 
 /**
@@ -170,6 +185,9 @@ val EinkColors = PrimeMinutesColors(
     ActiveTint = Color(0xFF0B5CAD).copy(alpha = 0.12f),
     ActiveBar = Color(0xFF0B5CAD),
     WarningText = Color(0xFF000000),
+    AccentWash = Color(0xFF0B5CAD).copy(alpha = 0.12f),
+    AccentMuted = Color(0xFF3730A3),
+    ErrorText = Color(0xFF8B0000),
 )
 
 /** Ambient palette. Defaults to dark so previews / stray reads outside [PrimeMinutesTheme] still resolve. */
@@ -225,16 +243,75 @@ private fun schemeFor(pal: PrimeMinutesColors): ColorScheme {
         surfaceTint = androidx.compose.ui.graphics.Color.Transparent,
         surfaceVariant = pal.Slate700,
         onSurfaceVariant = pal.Slate400,
-        error = PrimeMinutesPalette.Red,
+        // Tonal roles follow the Sky palette per theme — never the M3 lavender default, which
+        // clashes with the deep-blue / white / paper grounds. On-tonal ink is the theme's
+        // primary text (Slate200, ~13:1 on the wash in every theme).
+        secondaryContainer = pal.AccentWash,
+        onSecondaryContainer = pal.Slate200,
+        tertiary = pal.AccentMuted,
+        onTertiary = pal.Slate900,
+        tertiaryContainer = pal.AccentWash,
+        onTertiaryContainer = pal.Slate200,
+        error = pal.ErrorText,
+        onError = pal.Slate900,
         outline = pal.Slate600,
     )
 }
 
+/**
+ * Spacing scale — the 8pt grid the whole app composes from. All layout paddings, gaps
+ * (`spacedBy`), `Spacer` ticks and `contentPadding` use these; raw dp literals in layout
+ * position are rhythm drift. Sizing roles (touch targets, icon sizes, dividers, fixed widths,
+ * offsets, elevation) keep plain dp — they are geometry, not rhythm.
+ *
+ * Values stay fixed dp (Compose `dp` already scales with screen density; only fonts follow the
+ * user's font scale, which [PrimeMinutesTheme] applies via typography).
+ */
+object Spacing {
+    val xxs = 2.dp
+    val xs = 4.dp
+    val sm = 8.dp
+    val md = 12.dp
+    val lg = 16.dp
+    val xl = 20.dp
+    val xxl = 24.dp
+}
+
+/**
+ * Radius tokens — every radius in the app maps onto the existing M3 shape scale in
+ * [PrimeMinutesShapes], so one edit changes the whole shape language:
+ *
+ * Call sites keep reading `MaterialTheme.shapes.*` (a composable-free lookup); these
+ * aliases exist so the shape language has pronounceable names in code review:
+ *
+ * | Alias      | Shape slot    | Radius | Use                                     |
+ * |------------|---------------|--------|-----------------------------------------|
+ * | Chip       | `extraSmall`  | 8.dp   | chips, tags, thumbnails, rails          |
+ * | Card       | `small`       | 10.dp  | inset cards, input containers           |
+ * | Dialog     | `medium`      | 12.dp  | dialogs, buttons, tiles                 |
+ * | Sheet      | `large`       | 16.dp  | sheets, panels, banners                 |
+ * | Pill       | `CircleShape` | —      | pills, dots, avatars, toggle thumbs     |
+ *
+ * `extraLarge` keeps the M3 default 28.dp: nothing in the app used a hardcoded 28.dp, and
+ * drifting from the spec default would break M3 shape monotonicity for zero gain.
+ * Hairline 1–3.dp radii (progress rails, dividers' end caps) are geometry, not shape language,
+ * and stay raw dp at the call site.
+ *
+ * NOTE: `MaterialTheme.shapes.*` is @Composable, so it cannot back a top-level `val`. Keep
+ * these as plain dp and construct shapes at the call site via `MaterialTheme.shapes.*`.
+ */
+object Radius {
+    val Chip = 8.dp
+    val Card = 10.dp
+    val Dialog = 12.dp
+    val Sheet = 16.dp
+}
+
 private val PrimeMinutesShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
+    extraSmall = RoundedCornerShape(Radius.Chip),
+    small = RoundedCornerShape(Radius.Card),
+    medium = RoundedCornerShape(Radius.Dialog),
+    large = RoundedCornerShape(Radius.Sheet),
 )
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -280,6 +357,80 @@ fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 
             )
         }
     }
+}
+
+/**
+ * Semantic type roles — the three places the audit found hardcoded sizes. Each derives from
+ * an M3 type slot (so the user's font scale, applied to the whole [androidx.compose.material3.Typography]
+ * in [PrimeMinutesTheme], flows through automatically) with a size floor so the role's intent
+ * survives even if the M3 default drifts:
+ *
+ * | Role            | Base slot      | Intent                                        |
+ * |-----------------|----------------|-----------------------------------------------|
+ * | `timer`         | `displayLarge` | capture timer digits: tabular, across-a-table |
+ * | `transcriptBody`| `bodyLarge`    | boundary-tap transcript: generous line height |
+ * | `sectionTitle`  | `titleMedium`  | section headers over grouped content          |
+ */
+object TypeRole {
+    /** Capture timer — tabular monospace digits sized to the display slot. */
+    @androidx.compose.runtime.Composable
+    fun timer(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.displayLarge.copy(
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        )
+
+    /** Boundary-editor transcript body — body slot with a roomy line height for tap targeting. */
+    @androidx.compose.runtime.Composable
+    fun transcriptBody(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.bodyLarge.copy(
+            lineHeight = androidx.compose.material3.MaterialTheme.typography.bodyLarge.lineHeight * 2.5f,
+        )
+
+    /** Section title — title slot for headers over grouped content. */
+    @androidx.compose.runtime.Composable
+    fun sectionTitle(): androidx.compose.ui.text.TextStyle =
+        androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        )
+}
+
+/**
+ * Central e-ink derivations — every per-screen `if (pal.isEink)` branch that picks a fill or
+ * decides motion should read one of these, so the e-paper policy lives in one place:
+ * solid fills (no translucent wash that bands on e-paper), static indicators (no animation
+ * that ghosts), full-strength ink for status glyphs.
+ */
+object EinkPolicy {
+    /** Fill for a selected segment / chip: solid accent on e-ink, the translucent wash elsewhere. */
+    @androidx.compose.runtime.Composable
+    fun selectedFill(pal: PrimeMinutesColors): androidx.compose.ui.graphics.Color =
+        if (pal.isEink) pal.Sky else pal.AccentWash
+
+    /** Ink drawn on [selectedFill]: white on the solid e-ink accent, the accent itself on the wash. */
+    @androidx.compose.runtime.Composable
+    fun selectedInk(pal: PrimeMinutesColors): androidx.compose.ui.graphics.Color =
+        if (pal.isEink) androidx.compose.ui.graphics.Color.White else pal.Sky
+
+    /** Whether continuous motion (pulses, spinners, fades) is allowed — never on e-ink. */
+    fun motionAllowed(pal: PrimeMinutesColors): Boolean = !pal.isEink
+}
+
+/**
+ * Motion tokens — the M3 duration ladder at one source of truth (durations in ms). Pair with
+ * M3 easing (`short*` → FastOutSlowIn, `medium*` → Emphasized); call sites gate on
+ * [EinkPolicy.motionAllowed] so e-ink never animates. Reading `ANIMATOR_DURATION_SCALE == 0`
+ * (reduced motion) is left to the call site via the platform setting.
+ */
+object Motion {
+    const val short1 = 50
+    const val short2 = 100
+    const val short3 = 150
+    const val short4 = 200
+    const val medium1 = 250
+    const val medium2 = 300
+    const val medium3 = 350
+    const val medium4 = 400
 }
 
 private fun androidx.compose.ui.text.TextStyle.scaled(f: Float) = copy(

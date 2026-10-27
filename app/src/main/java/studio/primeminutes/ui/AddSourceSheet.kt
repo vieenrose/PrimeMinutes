@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -55,13 +56,13 @@ fun AddSourceSheet(
         containerColor = pal.Slate800,
     ) {
         // Scrollable so every source stays reachable on a short (landscape) viewport.
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = Spacing.xxl)) {
             Text(
                 stringResource(R.string.add_audio),
                 style = MaterialTheme.typography.titleLarge,
                 color = pal.Slate200,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).semantics { heading() },
+                modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.sm).semantics { heading() },
             )
             SourceRow(Icons.Filled.FolderOpen, stringResource(R.string.source_audio_file), stringResource(R.string.source_audio_file_desc)) { onDismiss(); onPickFile() }
             SourceRow(Icons.Filled.Podcasts, stringResource(R.string.source_podcast), stringResource(R.string.source_podcast_desc)) { onDismiss(); onPodcast() }

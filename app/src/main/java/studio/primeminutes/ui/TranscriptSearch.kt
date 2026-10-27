@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import studio.primeminutes.core.embed.MeetingSearch
@@ -67,6 +66,7 @@ import androidx.compose.material.icons.filled.Check
 import studio.primeminutes.R
 import androidx.compose.ui.graphics.Color
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Find-in-page over the current transcript: a slim bar (shown above the list when search is active)
@@ -130,11 +130,11 @@ fun TranscriptSearchBar(
         else stringResource(R.string.search_match_count, matchPos + 1, matchCount)
     Column(Modifier.fillMaxWidth()) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         BasicTextField(
             value = query,
             onValueChange = onQuery,
@@ -306,8 +306,8 @@ fun MeetingSearchResults(
     val notes = results.filter { it.kind == MeetingSearch.Kind.NOTE }
     val lines = results.filter { it.kind == MeetingSearch.Kind.LINE }
     LazyColumn(
-        modifier.fillMaxWidth().heightIn(max = 280.dp).padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp)).background(pal.PanelSurface).testTag("meeting-search-results"),
+        modifier.fillMaxWidth().heightIn(max = 280.dp).padding(horizontal = Spacing.md, vertical = Spacing.xs)
+            .clip(MaterialTheme.shapes.medium).background(pal.PanelSurface).testTag("meeting-search-results"),
     ) {
         fun header(label: Int, n: Int) = item(key = "h$label") {
             Text(
@@ -327,7 +327,7 @@ fun MeetingSearchResults(
                     )
                     if (r.semanticOnly) Text(
                         stringResource(R.string.search_semantic_marker), color = pal.Sky, fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 4.dp),
+                        style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = Spacing.xs),
                     )
                     val who = r.speaker?.let { speakerName(it) + "  " } ?: ""
                     Text(
@@ -343,7 +343,7 @@ fun MeetingSearchResults(
         if (indexing) item(key = "indexing") {
             Text(
                 stringResource(R.string.search_semantic_indexing), style = MaterialTheme.typography.labelSmall,
-                color = pal.Slate400, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                color = pal.Slate400, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             )
         }
         if (notes.isNotEmpty()) { header(R.string.search_results_notes, notes.size); rows(notes) }
@@ -351,7 +351,7 @@ fun MeetingSearchResults(
         if (results.size >= MeetingSearch.MAX_RESULTS) item(key = "more") {
             Text(
                 stringResource(R.string.search_results_more, MeetingSearch.MAX_RESULTS), style = MaterialTheme.typography.labelSmall,
-                color = pal.Slate400, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = pal.Slate400, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
             )
         }
         if (onAsk != null) item(key = "ask") {
@@ -360,7 +360,7 @@ fun MeetingSearchResults(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, tint = pal.Sky, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(
                     stringResource(R.string.ask_meeting_query, query.trim()), style = MaterialTheme.typography.bodySmall,
                     color = pal.Sky, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,

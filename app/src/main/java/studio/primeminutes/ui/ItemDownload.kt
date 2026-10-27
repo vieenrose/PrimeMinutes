@@ -27,6 +27,7 @@ import studio.primeminutes.core.models.SizeFormat
 import studio.primeminutes.online.ImportDownloads
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /** The running download of [entry], or null (waiting its turn, failed, or not a download item). */
 fun runningDownload(entry: SessionLibrary.Entry, state: ImportDownloads.State): ImportDownloads.State.Running? =
@@ -73,7 +74,7 @@ fun ItemDownloadCard(
         color = pal.PanelSurface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, pal.Hairline),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Text(
                 downloadLine(entry, state),
                 color = if (d.error != null) PrimeMinutesPalette.Red else pal.Slate200,

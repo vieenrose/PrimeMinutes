@@ -49,6 +49,7 @@ import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Podcast search/browse/download — Android counterpart of the web app's Podcast tab.
@@ -71,8 +72,8 @@ fun PodcastPanel(onStarted: () -> Unit) {
     Column(
         // Scrollable: series/episode lists routinely run past one screenful, and without this the
         // rows below the fold were unreachable (the sheet itself doesn't scroll its content).
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().padding(vertical = Spacing.xs).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         val search: () -> Unit = {
             if (query.isNotBlank() && !busy) scope.launch {
@@ -95,7 +96,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
                 colors = primeMinutesTextFieldColors(),
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             GradientButton(
                 stringResource(R.string.podcast_search),
                 enabled = query.isNotBlank() && !busy,
@@ -125,7 +126,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
                         busy = false
                     }
                 }) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(Spacing.md)) {
                         Text(s.title, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200)
                         Text("${s.artist} · ${pluralStringResource(R.plurals.podcast_episodes, s.episodeCount, s.episodeCount)}",
                             style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
@@ -145,7 +146,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
             episodes.forEach { e ->
                 RowCard(onClick = null) {
                     Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
+                        Modifier.fillMaxWidth().padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -154,7 +155,7 @@ fun PodcastPanel(onStarted: () -> Unit) {
                                 Text(e.durationText, style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                             }
                         }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         GradientButton(stringResource(R.string.podcast_transcribe), enabled = !busy, onClick = {
                             error = null
                             // The item appears in the library at once and shows its own download.

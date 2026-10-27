@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -27,7 +28,7 @@ fun PodcastSheet(onDismiss: () -> Unit) {
     ) {
         Column(
             // imePadding: the sheet's URL field sat under the keyboard (no scroll past the last row).
-            Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            Modifier.fillMaxWidth().imePadding().padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl),
         ) {
             androidx.compose.material3.Text(
                 androidx.compose.ui.res.stringResource(studio.primeminutes.R.string.source_podcast),

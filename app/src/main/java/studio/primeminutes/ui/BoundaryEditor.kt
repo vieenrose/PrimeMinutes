@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -71,10 +69,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import studio.primeminutes.R
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.TypeRole
 import java.util.Locale
 import androidx.compose.ui.semantics.heading
 
@@ -99,8 +98,8 @@ fun SpeakerSeam(colorA: Color, colorB: Color, labelA: String, labelB: String, on
             .background(Brush.horizontalGradient(listOf(colorA.copy(alpha = 0.55f), colorB.copy(alpha = 0.55f)))))
         Box(
             Modifier.padding(start = 6.dp).size(width = 28.dp, height = 20.dp)
-                .clip(RoundedCornerShape(10.dp)).background(pal.Slate800)
-                .border(BorderStroke(1.dp, pal.Slate400.copy(alpha = 0.5f)), RoundedCornerShape(10.dp)),
+                .clip(MaterialTheme.shapes.small).background(pal.Slate800)
+                .border(BorderStroke(1.dp, pal.Slate400.copy(alpha = 0.5f)), MaterialTheme.shapes.small),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.UnfoldMore, null, tint = pal.Slate400, modifier = Modifier.size(16.dp)) }
     }
@@ -179,10 +178,10 @@ fun BoundaryEditorSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = pal.Slate900) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp).padding(bottom = Spacing.md)) {
             Text(stringResource(if (choices != null) R.string.boundary_split_title else R.string.boundary_title),
                 style = MaterialTheme.typography.titleMedium, color = pal.Slate200, modifier = Modifier.semantics { heading() })
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SpeakerDot(colorA); Text(" $labelA", color = colorA, fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.labelLarge)
@@ -205,25 +204,25 @@ fun BoundaryEditorSheet(
             )
             Text(stringResource(R.string.boundary_hint, lB), style = MaterialTheme.typography.bodySmall,
                 color = pal.Slate400, modifier = Modifier.padding(top = 2.dp))
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             // One-handed control row: thumbs reach the bottom of the sheet.
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 modifier = Modifier.fillMaxWidth()) {
                 FilledTonalIconButton(onClick = { set(split - 1) }, modifier = Modifier.size(52.dp), colors = nudgeColors()) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cd_boundary_earlier))
                 }
                 OutlinedButton(onClick = { onPreview(maxOf(0.0, t - 2.0), t) }, enabled = canPlay,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 2, textAlign = TextAlign.Center) }
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)) { Text("◀| " + stringResource(R.string.boundary_before), maxLines = 2, textAlign = TextAlign.Center) }
                 OutlinedButton(onClick = { onPreview(t, minOf(t + 2.0, end)) }, enabled = canPlay,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 2, textAlign = TextAlign.Center) }
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)) { Text(stringResource(R.string.boundary_after) + " |▶", maxLines = 2, textAlign = TextAlign.Center) }
                 FilledTonalIconButton(onClick = { set(split + 1) }, modifier = Modifier.size(52.dp), colors = nudgeColors()) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cd_boundary_later))
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.cancel)) }
                 Button(onClick = { onApply(split, pick?.id) }, enabled = choices != null || split != initialSplit,
                     modifier = Modifier.weight(1f)) { Text(stringResource(R.string.boundary_apply)) }
@@ -295,7 +294,7 @@ private fun TokenStrip(
     val state = stringResource(R.string.boundary_state, labelB, tokens.getOrNull(split)?.trim().orEmpty())
     Box(
         modifier
-            .clip(RoundedCornerShape(10.dp)).background(pal.Slate800)
+            .clip(MaterialTheme.shapes.small).background(pal.Slate800)
             .verticalScroll(rememberScrollState())
             .semantics {
                 contentDescription = desc
@@ -305,11 +304,11 @@ private fun TokenStrip(
                     CustomAccessibilityAction(later) { stepLater(); true },
                 )
             }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
     ) {
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 40.sp),
+            style = TypeRole.transcriptBody(),
             onTextLayout = { layout = it },
             modifier = Modifier.fillMaxWidth()
                 .pointerInput(offs) { detectTapGestures { p -> tokenAt(p)?.let(onTap) } }

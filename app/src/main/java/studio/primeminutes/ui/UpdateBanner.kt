@@ -13,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
@@ -35,6 +34,7 @@ import studio.primeminutes.R
 import studio.primeminutes.ui.components.DownloadStatusBar
 import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * Dismissible "a newer version is available" card. While downloading it shows the progress bar
@@ -54,15 +54,15 @@ fun UpdateBanner(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = pal.PanelSurface),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         border = BorderStroke(1.dp, pal.Hairline),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = pal.Sky,
                     modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(
                     stringResource(R.string.update_available, versionTag),
                     style = MaterialTheme.typography.titleSmall,
@@ -90,7 +90,7 @@ fun UpdateBanner(
             if (progress != null) {
                 DownloadStatusBar(R.string.update_downloading, progress)
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                     GradientButton(text = stringResource(R.string.update_now), icon = Icons.Filled.Download, onClick = onUpdate)
                     TextButton(onClick = onDismiss) {
                         Text(stringResource(R.string.update_later), color = pal.Slate400)

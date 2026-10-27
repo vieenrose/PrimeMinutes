@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
+import studio.primeminutes.ui.theme.Spacing
 
 /**
  * A status line + progress bar for a multi-stage fetch (search → resolve → download). Pass the
@@ -23,7 +24,7 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 @Composable
 fun DownloadStatusBar(statusRes: Int, progress: Float?, modifier: Modifier = Modifier) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         if (progress == null) {
             LinearProgressIndicator(
                 color = pal.Sky,
