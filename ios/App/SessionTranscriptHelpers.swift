@@ -532,3 +532,17 @@ struct SessionInsets: ViewModifier {
             .modifier(SessionFollow(scroll: follow))
     }
 }
+
+/// The "Email participants" sheet. Split out of SessionView's sheet so the
+/// four closures leave the body chain.
+struct SessionMailSheet: View {
+    let session: Session
+    let busy: Bool
+    let onSend: (MailRequest) -> Void
+    let onShareChat: (MailRequest) -> Void
+    let onNameSpeaker: (Int) -> Void
+    let onDismiss: () -> Void
+    var body: some View {
+        EmailParticipantsSheet(session: session, busy: busy, onSend: onSend, onShareChat: onShareChat, onNameSpeaker: onNameSpeaker, onDismiss: onDismiss)
+    }
+}

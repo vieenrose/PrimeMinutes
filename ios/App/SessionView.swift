@@ -363,6 +363,10 @@ struct SessionView: View {
         try? await Task.sleep(nanoseconds: 8_000_000_000)
         expireSpeakerUndo(u)
     }
+    // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
+    private func indexingLanded(_ ids: Set<UUID>) {
+        if semIndexing, !ids.contains(s.id), hasIndex { semSearch() }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -438,7 +442,9 @@ struct SessionView: View {
             AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
-            EmailParticipantsSheet(session: s, busy: busy, onSend: { sendMail($0) }, onShareChat: { shareMailChat($0) }, onNameSpeaker: { nameMailSpeaker($0) }, onDismiss: { mailOpen = false })
+            SessionMailSheet(session: s, busy: busy,
+                onSend: { sendMail($0) }, onShareChat: { shareMailChat($0) },
+                onNameSpeaker: { nameMailSpeaker($0) }, onDismiss: { mailOpen = false })
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
@@ -580,8 +586,7 @@ struct SessionView: View {
             }
         }
         .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
-        // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
-        .onReceive(LibraryIndexer.shared.$indexing) { ids in if semIndexing, !ids.contains(s.id), hasIndex { semSearch() } }
+        .onReceive(LibraryIndexer.shared.$indexing) { indexingLanded($0) }
         .onDisappear { player.stop() }
     }
 
