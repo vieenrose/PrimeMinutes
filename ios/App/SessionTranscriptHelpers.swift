@@ -418,3 +418,32 @@ struct SessionTabPicker: View {
             .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
     }
 }
+
+/// The resummary-undo banner over the session: restores the pre-run summary.
+/// Takes the session as a binding so the undo writes through.
+struct SessionResummaryUndo: View {
+    @Binding var session: Session
+    let onUndo: () -> Void
+    let onExpire: () -> Void
+    var body: some View {
+        HStack {
+            Vox.hint(L("resummary_done")); Spacer()
+            Button(L("undo")) { onUndo() }.bold()
+        }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
+            .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { onExpire() } }
+    }
+}
+
+/// The speaker-edit undo banner over the session.
+struct SessionSpeakerUndoBanner: View {
+    let message: String
+    let busy: Bool
+    let onUndo: () -> Void
+    let onExpire: () -> Void
+    var body: some View {
+        HStack {
+            Vox.hint(message); Spacer()
+            Button(L("undo")) { onUndo() }.bold().disabled(busy)
+        }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
+    }
+}

@@ -346,6 +346,23 @@ struct SessionView: View {
         mailOpen = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
     }
+    /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
+    private func undoResummary() {
+        guard let old = undoable else { return }
+        s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s)
+        withAnimation { undoable = nil }
+    }
+    /// The speaker-undo banner timed out: clear it, and ask "re-summarize?" if the edit changed what was said.
+    private func expireSpeakerUndo(_ u: SpeakerUndo) {
+        guard speakerUndo == u else { return }
+        withAnimation { speakerUndo = nil }
+        if (!s.summary.isEmpty || s.actionItems != nil) && !u.nameOnly { transcriptDirty = true }
+    }
+    /// Wait out the speaker-undo banner, then expire it (cancelled by a newer banner's task id).
+    private func expireSpeakerUndoAfter(_ u: SpeakerUndo) async {
+        try? await Task.sleep(nanoseconds: 8_000_000_000)
+        expireSpeakerUndo(u)
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -562,26 +579,15 @@ struct SessionView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let old = undoable {
-                HStack {
-                    Vox.hint(L("resummary_done")); Spacer()
-                    Button(L("undo")) { s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s); withAnimation { undoable = nil } }.bold()
-                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
-                    .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { undoable = nil } }
+            if undoable != nil {
+                SessionResummaryUndo(session: $s, onUndo: { undoResummary() }, onExpire: { undoable = nil })
             }
         }
         .overlay(alignment: .bottom) {
             if let u = speakerUndo {
-                HStack {
-                    Vox.hint(u.message); Spacer()
-                    Button(L("undo")) { undoSpeakerEdit(u) }.bold().disabled(busy)
-                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
-                    .task(id: u.id) {
-                        try? await Task.sleep(nanoseconds: 8_000_000_000)
-                        guard speakerUndo == u else { return }
-                        withAnimation { speakerUndo = nil }
-                        if (!s.summary.isEmpty || s.actionItems != nil) && !u.nameOnly { transcriptDirty = true }
-                    }
+                SessionSpeakerUndoBanner(message: u.message, busy: busy, onUndo: { undoSpeakerEdit(u) },
+                    onExpire: { expireSpeakerUndo(u) })
+                    .task(id: u.id) { await expireSpeakerUndoAfter(u) }
             }
         }
         .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
