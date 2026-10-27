@@ -539,9 +539,9 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         .overlay(alignment: .bottom) {
-            if let toast { Text(toast).font(.subheadline).padding(.horizontal, Vox.gutter).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
-                // A toast is visual only: say it out loud too (VoiceOver gets nothing otherwise).
-                .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
+            if let toast {
+                SessionToast(text: toast, onExpire: { self.toast = nil })
+            }
         }
         .sheet(isPresented: $editingSummary) {
             SessionTextEditSheet(draft: $draft, title: L("tab_summary"), doneEnabled: summaryEditDoneEnabled,

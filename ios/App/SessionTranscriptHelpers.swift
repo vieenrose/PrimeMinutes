@@ -566,3 +566,15 @@ struct SessionTextEditSheet: View {
         }
     }
 }
+
+/// The bottom toast: capsule text that also announces itself to VoiceOver,
+/// then clears after a beat. Split out of SessionView's overlay.
+struct SessionToast: View {
+    let text: String
+    let onExpire: () -> Void
+    var body: some View {
+        Text(text).font(.subheadline).padding(.horizontal, Vox.gutter).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
+            // A toast is visual only: say it out loud too (VoiceOver gets nothing otherwise).
+            .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: text); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { onExpire() } }
+    }
+}
