@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Design tokens: the app's shared color, radius, spacing and type vocabulary (HIG).
 ///
@@ -24,7 +25,7 @@ enum Vox {
         /// normal system hue, or the Increase-Contrast variant for the current
         /// interface style when the user turns on Increase Contrast.
         func resolve(in e: EnvironmentValues) -> Color {
-            guard e.accessibilityContrast == .increased else { return normal }
+            guard e.voxHighContrast else { return normal }
             return e.colorScheme == .dark ? hcDark : hcLight
         }
         /// The normal-appearance variant (tints, charts, capsule fills without environment).
@@ -163,20 +164,34 @@ extension Vox.Tint {
     /// Resolve without a view (previews, snapshot tests): the HC variant, light or dark.
     func resolve(highContrast: Bool, dark: Bool = false) -> Color {
         var e = EnvironmentValues()
-        e.accessibilityContrast = highContrast ? .increased : .normal
+        e.voxHighContrast = highContrast
         e.colorScheme = dark ? .dark : .light
         return resolve(in: e)
+    }
+}
+
+/// Whether the user turned on Increase Contrast (Settings → Accessibility → Display & Text Size).
+/// A custom key because this SDK's SwiftUI has no `accessibilityContrast` environment value;
+/// the default reads `UIAccessibility.isDarkerSystemColorsEnabled`, which reflects the setting.
+private struct VoxHighContrastKey: EnvironmentKey {
+    static var defaultValue: Bool { UIAccessibility.isDarkerSystemColorsEnabled }
+}
+
+extension EnvironmentValues {
+    var voxHighContrast: Bool {
+        get { self[VoxHighContrastKey.self] }
+        set { self[VoxHighContrastKey.self] = newValue }
     }
 }
 
 /// Resolves a `Vox.Tint` against the Increase-Contrast setting and interface style.
 private struct VoxFore: ViewModifier {
     let tint: Vox.Tint
-    @Environment(\.accessibilityContrast) private var contrast
+    @Environment(\.voxHighContrast) private var contrast
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
         var e = EnvironmentValues()
-        e.accessibilityContrast = contrast
+        e.voxHighContrast = contrast
         e.colorScheme = scheme
         return content.foregroundStyle(tint.resolve(in: e))
     }
