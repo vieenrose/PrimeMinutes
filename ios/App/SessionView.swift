@@ -387,6 +387,21 @@ struct SessionView: View {
         editingActions = false
         if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) }
     }
+    // DEV: VOX_RESUM re-runs the summary on appear (README-animation harness).
+    private func devResumTask() { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
+    // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N.
+    private func devBoundaryTask() async {
+        guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        tab = 1
+        if let n = Dev.env["VOX_SPLIT"].flatMap(Int.init) { splitAt = min(max(0, n), s.lines.count - 1) }
+        else if let n = Dev.env["VOX_BOUNDARY"].flatMap(Int.init) { openDevSeam(n) }
+    }
+    /// DEV: open the N-th speaker-change seam in the boundary editor.
+    private func openDevSeam(_ n: Int) {
+        let seams = s.lines.indices.dropFirst().filter { s.lines[$0].speaker != s.lines[$0 - 1].speaker }
+        if seams.indices.contains(n) { seamAt = seams[n] }
+    }
     // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s.
     private func devMergeTask() async {
         guard let mode = Dev.env["VOX_MERGE"] else { return }
@@ -540,16 +555,7 @@ struct SessionView: View {
                     onCancel: { player.endPreview(); splitAt = nil })
             }
         }
-        .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N
-            guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            tab = 1
-            if let n = Dev.env["VOX_SPLIT"].flatMap(Int.init) { splitAt = min(max(0, n), s.lines.count - 1) }
-            else if let n = Dev.env["VOX_BOUNDARY"].flatMap(Int.init) {
-                let seams = s.lines.indices.dropFirst().filter { s.lines[$0].speaker != s.lines[$0 - 1].speaker }
-                if seams.indices.contains(n) { seamAt = seams[n] }
-            }
-        }
+        .task { await devBoundaryTask() }
         .alert(L("transcript_changed_resummarize"), isPresented: Binding(get: { transcriptDirty && !busy }, set: { transcriptDirty = $0 })) {
             if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
             Button(L("cancel"), role: .cancel) {}
@@ -571,7 +577,7 @@ struct SessionView: View {
             Button(L("re_summarize")) { rerun(s, false) }
             Button(L("cancel"), role: .cancel) {}
         }
-        .task { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
+        .task { devResumTask() }
         .task { await devMergeTask() }
         .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
