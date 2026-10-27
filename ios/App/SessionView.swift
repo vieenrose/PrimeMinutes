@@ -383,6 +383,15 @@ struct SessionView: View {
         editingActions = false
         if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) }
     }
+    // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s.
+    private func devMergeTask() async {
+        guard let mode = Dev.env["VOX_MERGE"] else { return }
+        var ids: [Int] = []; for l in s.lines where !ids.contains(l.speaker) { ids.append(l.speaker) }
+        guard ids.count >= 2 else { return }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
+        else { merging = (ids[0], ids[1]) }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -556,14 +565,7 @@ struct SessionView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         .task { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
-        .task {   // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s
-            guard let mode = Dev.env["VOX_MERGE"] else { return }
-            var ids: [Int] = []; for l in s.lines where !ids.contains(l.speaker) { ids.append(l.speaker) }
-            guard ids.count >= 2 else { return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
-            else { merging = (ids[0], ids[1]) }
-        }
+        .task { await devMergeTask() }
         .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
         .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
