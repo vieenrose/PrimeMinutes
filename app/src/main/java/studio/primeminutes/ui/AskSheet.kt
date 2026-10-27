@@ -76,13 +76,9 @@ import studio.primeminutes.core.library.SessionLibrary
 import studio.primeminutes.core.reader.ReaderProtocol
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
-<<<<<<< HEAD
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import studio.primeminutes.ui.theme.Spacing
-=======
-import studio.primeminutes.ui.theme.Spacing
->>>>>>> origin/ui-android-aesthetic
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
@@ -265,7 +261,6 @@ fun AskSheet(
                     AskEngine.Phase.Idle -> null
                 }
                 if (status != null) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
-<<<<<<< HEAD
                     if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(Spacing.sm)) }
                     // Polite live region: the stage and its seconds change under a streaming answer,
                     // so a TalkBack user hears "searching 3 s" → "reading 5 s" → the failure without
@@ -275,10 +270,6 @@ fun AskSheet(
                         color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
-=======
-                    if (busy) { CircularProgressIndicator(Modifier.size(14.dp), color = pal.Sky, strokeWidth = 2.dp); Spacer(Modifier.width(Spacing.sm)) }
-                    Text(status, style = MaterialTheme.typography.bodySmall, color = if (phase is AskEngine.Phase.Failed) PrimeMinutesPalette.Red else pal.Slate400)
->>>>>>> origin/ui-android-aesthetic
                 }
                 Text(
                     stringResource(R.string.ask_disclaimer), style = MaterialTheme.typography.labelSmall,

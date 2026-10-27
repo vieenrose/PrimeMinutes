@@ -46,12 +46,8 @@ import studio.primeminutes.ui.components.GradientButton
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
-<<<<<<< HEAD
 import androidx.compose.ui.semantics.Role
 import studio.primeminutes.ui.theme.Spacing
-=======
-import studio.primeminutes.ui.theme.Spacing
->>>>>>> origin/ui-android-aesthetic
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 

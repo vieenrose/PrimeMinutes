@@ -1929,7 +1929,6 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
-<<<<<<< HEAD
                         // A silent meeting and a not-yet-transcribed one are different states: the
                         // entry's persisted no-speech flag (SpeechCheck at save, like iOS) tells
                         // them apart once the transcript is in. While it loads, say nothing.
@@ -1948,13 +1947,6 @@ private fun TranscribeScreen(
                                 )
                             }
                         }
-=======
-                        if (utterances.isEmpty() && !s.running) Text(
-                            stringResource(R.string.status_no_speech),
-                            color = pal.Slate400,
-                            modifier = Modifier.padding(top = Spacing.xxl),
-                        )
->>>>>>> origin/ui-android-aesthetic
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f),

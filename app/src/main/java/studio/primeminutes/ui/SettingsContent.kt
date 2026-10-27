@@ -163,12 +163,8 @@ fun SettingsContent(
         if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
             androidx.compose.foundation.layout.Row(
-<<<<<<< HEAD
                 Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onOpenPeople)
                     .padding(vertical = Spacing.sm)
-=======
-                Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onOpenPeople).padding(vertical = Spacing.sm)
->>>>>>> origin/ui-android-aesthetic
                     .testTag("settings-people"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

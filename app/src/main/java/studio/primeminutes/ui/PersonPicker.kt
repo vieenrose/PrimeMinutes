@@ -216,12 +216,8 @@ fun PersonPickerSheet(
                 if (allowClear && current != null) item {
                     HorizontalDivider(Modifier.padding(vertical = Spacing.xs), color = pal.Hairline)
                     Text(stringResource(R.string.people_clear_name, defaultLabel(current.id)), color = pal.Slate400,
-<<<<<<< HEAD
                         modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(PersonPick.Clear) }
                             .heightIn(min = 48.dp).padding(vertical = Spacing.md))
-=======
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(PersonPick.Clear) }.padding(vertical = Spacing.md))
->>>>>>> origin/ui-android-aesthetic
                 }
                 item { Spacer(Modifier.padding(bottom = Spacing.lg)) }
             }

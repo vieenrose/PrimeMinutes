@@ -183,13 +183,8 @@ private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modi
     // the vertical space goes to the live transcript instead of empty padding.
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Text(
-<<<<<<< HEAD
             studio.primeminutes.fmtSec(recSeconds),
             style = TypeRole.timer(),   // tabular: no layout shift per tick
-=======
-            "%d:%02d".format(recSeconds / 60, recSeconds % 60),
-            style = TypeRole.timer(),   // tabular: no layout shift per tick
->>>>>>> origin/ui-android-aesthetic
             color = pal.Slate200,
         )
         Spacer(Modifier.width(Spacing.xl))
