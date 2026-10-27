@@ -392,6 +392,10 @@ struct SessionView: View {
         if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
         else { merging = (ids[0], ids[1]) }
     }
+    /// The reading model changed under this summary (settings): offer a re-summarize.
+    private func checkSummaryStale() {
+        if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -566,7 +570,7 @@ struct SessionView: View {
         }
         .task { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
         .task { await devMergeTask() }
-        .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
+        .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
         .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
         .overlay {
