@@ -139,8 +139,8 @@ struct LibraryView: View {
         HStack(spacing: 12) {
             Image(systemName: isNew(s) ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
                 .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                .foregroundStyle(isDone(s) ? Vox.success : Color.secondary)
-                .voxTint(isDone(s) ? Vox.success : Color.secondary, Vox.radiusSM)
+                .foregroundStyle(isDone(s) ? Vox.success.color : Color.secondary)
+                .voxTint(isDone(s) ? Vox.success.color : Color.secondary, Vox.radiusSM)
                 .accessibilityLabel(L(isNew(s) ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
             VStack(alignment: .leading, spacing: 2) {
                 Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(2)
@@ -192,8 +192,8 @@ struct LibraryView: View {
             JobGlyph(m: m, j: j)
             VStack(alignment: .leading, spacing: 2) {
                 Vox.head(j.title ?? L("meeting")).lineLimit(2)
-                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger : .secondary).lineLimit(2)
-                if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info).padding(.top, 4) }
+                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger.color : .secondary).lineLimit(2)
+                if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color).padding(.top, 4) }
             }
             Spacer(minLength: 0)
             if j.download != nil {
@@ -220,7 +220,7 @@ struct LibraryView: View {
 
     private func pillar(_ icon: String, _ key: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(Vox.info).frame(width: 32, height: 32).voxTint(Vox.info, Vox.radiusSM)
+            Image(systemName: icon).voxFore(Vox.info).frame(width: 32, height: 32).voxTint(Vox.info, Vox.radiusSM)
             VStack(alignment: .leading, spacing: 2) {
                 Vox.subhead(L(key + "_title"))
                 Vox.meta(L(key + "_desc"))
@@ -271,7 +271,7 @@ struct LibraryView: View {
             if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, Vox.gutter).padding(.top, 6) }
             else if resumer.paused > 0 && !m.imports.dlPaused {   // a run's own model download, waiting to resume
                 HStack {
-                    Image(systemName: "pause.circle").foregroundStyle(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
+                    Image(systemName: "pause.circle").voxFore(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
                     Vox.meta(L("download_paused"))
                     Spacer()
                     Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold))
@@ -342,7 +342,7 @@ struct LibraryView: View {
             Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
                 Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
                     .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(m.capture.recording ? Vox.danger : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
+                    .background(m.capture.recording ? Vox.danger.color : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
             }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
         }
         .background(Color(.systemGroupedBackground))
@@ -448,12 +448,12 @@ struct JobGlyph: View {
     let j: Job
     var body: some View {
         let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
-        let tint: Color = failed ? Vox.danger : dl ? Vox.info : Vox.warning
+        let tint: Color = failed ? Vox.danger.color : dl ? Vox.info.color : Vox.warning.color
         Group {
-            if failed { Image(systemName: "exclamationmark.circle").font(.title3.weight(.semibold)).foregroundStyle(Vox.danger) }
-            else if dl { Image(systemName: m.imports.dlPaused && m.imports.dlId == j.id ? "pause.circle" : "arrow.down.circle").font(.title3.weight(.semibold)).foregroundStyle(Vox.info) }
+            if failed { Image(systemName: "exclamationmark.circle").font(.title3.weight(.semibold)).voxFore(Vox.danger) }
+            else if dl { Image(systemName: m.imports.dlPaused && m.imports.dlId == j.id ? "pause.circle" : "arrow.down.circle").font(.title3.weight(.semibold)).voxFore(Vox.info) }
             else if active { ProgressView() }
-            else { Image(systemName: "clock").font(.title3.weight(.semibold)).foregroundStyle(Vox.warning) }
+            else { Image(systemName: "clock").font(.title3.weight(.semibold)).voxFore(Vox.warning) }
         }
         .frame(width: 40, height: 40).voxTint(tint, Vox.radiusSM)
         .accessibilityLabel(L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
@@ -518,8 +518,8 @@ struct LiveJobView: View {
                 // SF Symbols carry built-in VoiceOver labels ("exclamation mark", "clock"…): these are
                 // decoration for the status line next to them, so they must not be announced.
                 if let j = job, j.download != nil {
-                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? Vox.danger : Vox.info).accessibilityHidden(true)
-                } else if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").foregroundStyle(Vox.warning).accessibilityHidden(true) }
+                    Image(systemName: j.download?.error != nil ? "exclamationmark.circle" : "arrow.down.circle").foregroundStyle(j.download?.error != nil ? Vox.danger.color : Vox.info.color).accessibilityHidden(true)
+                } else if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").voxFore(Vox.warning).accessibilityHidden(true) }
                 Text(job.map(m.jobStatus) ?? m.screen.status).font(.subheadline).lineLimit(3)
                 Spacer(minLength: 0)
                 if let j = job, j.download?.error != nil { Button(L("retry")) { m.imports.retry(j) }.font(.subheadline.weight(.semibold)) }
@@ -528,8 +528,8 @@ struct LiveJobView: View {
                 if active { HwStatusLine() }
             }
             if active { ProgressView(value: m.runner.jobProgress) }
-            else if let j = job, let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info) }
-            else if let j = job, j.download != nil, j.download?.error == nil, m.imports.dlId == j.id, !m.imports.dlPaused { ProgressView().progressViewStyle(.linear).tint(Vox.info) }
+            else if let j = job, let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color) }
+            else if let j = job, j.download != nil, j.download?.error == nil, m.imports.dlId == j.id, !m.imports.dlPaused { ProgressView().progressViewStyle(.linear).tint(Vox.info.color) }
         }
         .padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
         .voxRow()

@@ -27,21 +27,21 @@ struct SessionSummaryTab: View {
             // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
             if !session.notes.isEmpty { SessionCard {
                 HStack {
-                    Circle().fill(Vox.success).frame(width: 9, height: 9)
+                    Circle().fill(Vox.success.color).frame(width: 9, height: 9)
                     VStack(alignment: .leading) {
                         Vox.head(L("ai_notes"))
                         Vox.meta(L("notes_n", session.notes.count))
                     }
                     Spacer()
                     Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .voxChip(Vox.success).foregroundStyle(Vox.success)
+                        .voxChip(Vox.success).voxFore(Vox.success)
                 }
                 // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
                 if showProcess {
                     ForEach(session.notes) { n in NoteRow(n: n) { sec in onSeekPlay(Double(sec)) } }
                     Vox.micro(L("agent_notes_caution"))
                     // DEV builds: the saved reading's off-protocol counts (model guardrail).
-                    if Dev.on, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger : Color.secondary) }
+                    if Dev.on, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger.color : Color.secondary) }
                 }
                 Button(L(showProcess ? "hide_process" : "show_process")) { onToggleProcess() }.font(.subheadline)
             } }
@@ -67,7 +67,7 @@ struct SessionSummaryTab: View {
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                         return .systemAction })
-                    Vox.micro(L("actions_verify_hint")).foregroundStyle(Vox.warning)
+                    Vox.micro(L("actions_verify_hint")).voxFore(Vox.warning)
                 }
             }
             // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
@@ -98,7 +98,7 @@ struct SessionNotesSection: View {
             SessionCard {
                 Vox.subhead(header)
                 ForEach(Array(items.enumerated()), id: \.offset) { _, it in
-                    Text(Markdown.render("- " + refs(it), anchors: playerAvailable ? Vox.info : nil, speakers: names)).font(.subheadline)
+                    Text(Markdown.render("- " + refs(it), anchors: playerAvailable ? Vox.info.color : nil, speakers: names)).font(.subheadline)
                 }
             }.environment(\.openURL, OpenURLAction { u in
                 if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }

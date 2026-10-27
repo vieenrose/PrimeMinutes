@@ -3,24 +3,56 @@ import SwiftUI
 /// Design tokens: the app's shared color, radius, spacing and type vocabulary (HIG).
 ///
 /// Why code, not an asset catalog: `ios/App/Resources/Assets.xcassets` holds only the app
-/// icon; every color in the app is a system/semantic color or a `Color(.uiKit)` bridge, all of
-/// which adapt to dark mode by construction. High-contrast differences come from the system's
-/// `accessibilityContrast` environment, read at the use site (a static token cannot see it).
+/// icon; every color in the app is a system/semantic color, a `Color(.uiKit)` bridge, or a
+/// `Vox.Tint`-aware pair — all dark-mode adapting by construction. The status colors
+/// are `Vox Tint`s, not plain `Color`s: they resolve the normal or the Increase-Contrast
+/// variant from the environment (the code equivalent of an asset catalog's
+/// high-contrast appearance). Call sites that only have a `Color` (tints, charts, capsule
+/// strokes) use the normal variant; text and glyphs read `.resolve(in:)` so Increase
+/// Contrast users get the 4.5:1 pair.
 ///
 /// Rules for new UI: reach for `Vox.*` first. A literal (`Color.red`, `cornerRadius: 10`,
 /// `.font(.caption)`) is fine only where the call site documents why it differs.
 enum Vox {
-    // MARK: - Status colors (dark-mode adapting system hues; raw RGB literals did not)
+    // MARK: - Status colors (dark-mode adapting; Increase-Contrast variants at 4.5:1 on card/page)
+
+    /// An environment-aware status color: normal system hue, or its Increase-Contrast
+    /// variant (same hue family, verified ≥ 4.5:1 on `Vox.card` and `Vox.page`, light and
+    /// dark) when the user turns on Increase Contrast.
+    struct Tint {
+        /// Resolves in the given view environment (text, glyphs, capsule strokes):
+        /// normal system hue, or the Increase-Contrast variant for the current
+        /// interface style when the user turns on Increase Contrast.
+        func resolve(in e: EnvironmentValues) -> Color {
+            guard e.accessibilityContrast == .increased else { return normal }
+            return e.colorScheme == .dark ? hcDark : hcLight
+        }
+        /// The normal-appearance variant (tints, charts, capsule fills without environment).
+        var color: Color { normal }
+        private let normal: Color, hcLight: Color, hcDark: Color
+        fileprivate init(_ normal: Color, hcLight: Color, hcDark: Color) {
+            self.normal = normal; self.hcLight = hcLight; self.hcDark = hcDark
+        }
+    }
 
     /// A failed / destructive / recording state.
-    static let danger = Color.red
+    static let danger = Tint(.red,
+        hcLight: Color(red: 0xA8 / 255, green: 0x00 / 255, blue: 0x00 / 255),
+        hcDark: Color(red: 0xFF / 255, green: 0x70 / 255, blue: 0x70 / 255))
     /// An in-flight state: downloading, indexing, listening.
-    static let info = Color.blue
+    static let info = Tint(.blue,
+        hcLight: Color(red: 0x00 / 255, green: 0x4E / 255, blue: 0xCC / 255),
+        hcDark: Color(red: 0x66 / 255, green: 0xA3 / 255, blue: 0xFF / 255))
     /// A waiting state: queued, paused, "verify this".
-    static let warning = Color.orange
+    static let warning = Tint(.orange,
+        hcLight: Color(red: 0x7A / 255, green: 0x3A / 255, blue: 0x00 / 255),
+        hcDark: Color(red: 0xFF / 255, green: 0xB3 / 255, blue: 0x40 / 255))
     /// A finished / healthy state.
-    static let success = Color.green
+    static let success = Tint(.green,
+        hcLight: Color(red: 0x0A / 255, green: 0x6B / 255, blue: 0x00 / 255),
+        hcDark: Color(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255))
     /// A search hit in the transcript (the yellow wash behind the matched line).
+    /// No text is ever set in it, so it keeps the single system hue in both modes.
     static let highlight = Color.yellow
 
     // MARK: - Surfaces
@@ -99,16 +131,54 @@ extension View {
         background(Vox.card, in: RoundedRectangle(cornerRadius: radius))
     }
     /// Status tint wash: a translucent status color behind a glyph or pill.
+    /// Takes the normal `Color` (washes carry no text); text beside it resolves the tint.
     func voxTint(_ c: Color, _ radius: CGFloat = Vox.radiusMD) -> some View {
         background(c.opacity(0.14), in: RoundedRectangle(cornerRadius: radius))
+    }
+    /// Status tint wash from a `Vox.Tint` (normal variant; see `voxTint(_:)`).
+    func voxTint(_ t: Vox.Tint, _ radius: CGFloat = Vox.radiusMD) -> some View {
+        voxTint(t.color, radius)
     }
     /// Chip wash: a translucent status color behind a capsule pill.
     func voxChip(_ c: Color) -> some View {
         background(c.opacity(0.14), in: Capsule())
     }
+    /// Chip wash from a `Vox.Tint` (normal variant; see `voxChip(_:)`).
+    func voxChip(_ t: Vox.Tint) -> some View {
+        voxChip(t.color)
+    }
     /// Selected wash: the accent tint behind a selected transcript line.
     func voxSelected() -> some View {
         background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
+    }
+    /// Environment-aware status foreground: normal system hue, or the Increase-Contrast
+    /// variant (verified ≥ 4.5:1 on card and page, light and dark) when the user turns on
+    /// Increase Contrast. Reads the environment itself, so call sites need no plumbing.
+    func voxFore(_ t: Vox.Tint) -> some View {
+        modifier(VoxFore(tint: t))
+    }
+}
+
+extension Vox.Tint {
+    /// Resolve without a view (previews, snapshot tests): the HC variant, light or dark.
+    func resolve(highContrast: Bool, dark: Bool = false) -> Color {
+        var e = EnvironmentValues()
+        e.accessibilityContrast = highContrast ? .increased : .normal
+        e.colorScheme = dark ? .dark : .light
+        return resolve(in: e)
+    }
+}
+
+/// Resolves a `Vox.Tint` against the Increase-Contrast setting and interface style.
+private struct VoxFore: ViewModifier {
+    let tint: Vox.Tint
+    @Environment(\.accessibilityContrast) private var contrast
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        var e = EnvironmentValues()
+        e.accessibilityContrast = contrast
+        e.colorScheme = scheme
+        return content.foregroundStyle(tint.resolve(in: e))
     }
 }
 
@@ -118,7 +188,10 @@ struct VoxTokensPreview: View {
     var body: some View {
         List {
             Section("Status") {
-                HStack { Circle().fill(Vox.danger); Circle().fill(Vox.info); Circle().fill(Vox.warning); Circle().fill(Vox.success); Circle().fill(Vox.highlight) }
+                HStack { Circle().fill(Vox.danger.color); Circle().fill(Vox.info.color); Circle().fill(Vox.warning.color); Circle().fill(Vox.success.color); Circle().fill(Vox.highlight) }
+            }
+            Section("Increase Contrast") {
+                HStack { Circle().fill(Vox.danger.resolve(highContrast: true)); Circle().fill(Vox.info.resolve(highContrast: true)); Circle().fill(Vox.warning.resolve(highContrast: true)); Circle().fill(Vox.success.resolve(highContrast: true)) }
             }
             Section("Speakers") { HStack { ForEach(Vox.speaker, id: \.self) { Circle().fill($0) } } }
             Section("Type") {
