@@ -367,6 +367,22 @@ struct SessionView: View {
     private func indexingLanded(_ ids: Set<UUID>) {
         if semIndexing, !ids.contains(s.id), hasIndex { semSearch() }
     }
+    /// Whether the summary-edit Done button is enabled (non-blank draft).
+    private var summaryEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the summary edit.
+    private func saveSummaryEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingSummary = false
+        if t != s.summary { s.summary = t; save(s) }
+    }
+    /// Whether the actions-edit Done button is enabled (non-blank draft).
+    private var actionsEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the action-items edit (empty means cleared: stored as "-").
+    private func saveActionsEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingActions = false
+        if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -528,28 +544,12 @@ struct SessionView: View {
                 .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
         }
         .sheet(isPresented: $editingSummary) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
-                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
-                            editingSummary = false
-                            if t != s.summary { s.summary = t; save(s) } }.disabled(t.isEmpty) }
-                    }.navigationTitle(L("tab_summary")).navigationBarTitleDisplayMode(.inline)
-            }
+            SessionTextEditSheet(draft: $draft, title: L("tab_summary"), doneEnabled: summaryEditDoneEnabled,
+                onCancel: { editingSummary = false }, onDone: { saveSummaryEdit() })
         }
         .sheet(isPresented: $editingActions) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
-                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
-                            editingActions = false
-                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } }.disabled(t.isEmpty) }
-                    }.navigationTitle(L("card_action_items")).navigationBarTitleDisplayMode(.inline)
-            }
+            SessionTextEditSheet(draft: $draft, title: L("card_action_items"), doneEnabled: actionsEditDoneEnabled,
+                onCancel: { editingActions = false }, onDone: { saveActionsEdit() })
         }
         .alert(L("summary_settings_changed"), isPresented: $summaryStale) {
             Button(L("re_summarize")) { rerun(s, false) }

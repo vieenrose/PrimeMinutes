@@ -546,3 +546,23 @@ struct SessionMailSheet: View {
         EmailParticipantsSheet(session: session, busy: busy, onSend: onSend, onShareChat: onShareChat, onNameSpeaker: onNameSpeaker, onDismiss: onDismiss)
     }
 }
+
+/// A plain text-edit sheet (summary, action items): editor plus cancel/done.
+/// Split out of SessionView's two sheets; same layout, one view.
+struct SessionTextEditSheet: View {
+    @Binding var draft: String
+    let title: String
+    let doneEnabled: Bool
+    let onCancel: () -> Void
+    let onDone: () -> Void
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $draft).padding(.horizontal, Vox.inset)
+                .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } }
+                    ToolbarItem(placement: .confirmationAction) { Button(L("done")) { onDone() }.disabled(!doneEnabled) }
+                }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
