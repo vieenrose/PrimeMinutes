@@ -354,11 +354,7 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: 12) {
-                    Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
-                        .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
-                    if tab == 0 { summaryTab } else { transcriptTab }
-                }.padding(.top, 8)
+                SessionTabPage(tab: $tab, summary: summaryTab, transcript: transcriptTab)
             }
             .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
             .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
@@ -373,27 +369,17 @@ struct SessionView: View {
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !undoSteps.isEmpty || !redoSteps.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo || busy).accessibilityLabel(L("undo"))
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { redoEdit() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo || busy).accessibilityLabel(L("redo"))
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button { openSearch() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
-            }
-            ToolbarItem(placement: .primaryAction) {
-                SessionMoreMenu(
-                    hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
-                    askMeetingReady: askMeetingReady, busy: busy, title: s.title,
-                    shareText: Export.text(s, .txt),
-                    onRename: { draft = s.title; renamingTitle = true },
-                    onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
-                    onExport: { showExport = true },
-                    onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
-            }
+            SessionToolbar(
+                showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
+                canUndo: canUndo, canRedo: canRedo, busy: busy,
+                hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
+                askMeetingReady: askMeetingReady, title: s.title,
+                shareText: Export.text(s, .txt),
+                onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
+                onRename: { draft = s.title; renamingTitle = true },
+                onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
+                onExport: { showExport = true },
+                onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
         }
         .sheet(isPresented: $showExport) {
             ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") } } }

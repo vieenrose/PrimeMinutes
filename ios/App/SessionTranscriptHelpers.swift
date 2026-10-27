@@ -350,3 +350,71 @@ struct SessionRenameSheet: View {
         .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
 }
+
+/// The session toolbar: undo/redo, transcript search, ⋯ menu. Split out of
+/// SessionView's toolbar; takes plain values and closures.
+struct SessionToolbar: ToolbarContent {
+    let showUndo: Bool
+    let canUndo: Bool
+    let canRedo: Bool
+    let busy: Bool
+    let hasLines: Bool
+    let hasAudio: Bool
+    let noSpeech: Bool
+    let askMeetingReady: Bool
+    let title: String
+    let shareText: String
+    let onUndo: () -> Void
+    let onRedo: () -> Void
+    let onSearch: () -> Void
+    let onRename: () -> Void
+    let onAsk: () -> Void
+    let onMail: () -> Void
+    let onExport: () -> Void
+    let onRetranscribe: () -> Void
+    let onResummarize: () -> Void
+    var body: some ToolbarContent {
+        if showUndo {
+            ToolbarItem(placement: .primaryAction) {
+                Button { onUndo() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo || busy).accessibilityLabel(L("undo"))
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { onRedo() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo || busy).accessibilityLabel(L("redo"))
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { onSearch() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
+        }
+        ToolbarItem(placement: .primaryAction) {
+            SessionMoreMenu(
+                hasLines: hasLines, hasAudio: hasAudio, noSpeech: noSpeech,
+                askMeetingReady: askMeetingReady, busy: busy, title: title,
+                shareText: shareText,
+                onRename: onRename, onAsk: onAsk, onMail: onMail, onExport: onExport,
+                onRetranscribe: onRetranscribe, onResummarize: onResummarize)
+        }
+    }
+}
+
+/// The tab page: segmented picker plus the selected tab. Split out of
+/// SessionView's ScrollView so the Picker labels leave the body chain.
+struct SessionTabPage<Summary: View, Transcript: View>: View {
+    @Binding var tab: Int
+    let summary: Summary
+    let transcript: Transcript
+    var body: some View {
+        VStack(spacing: 12) {
+            SessionTabPicker(tab: $tab)
+            if tab == 0 { summary } else { transcript }
+        }.padding(.top, 8)
+    }
+}
+
+/// The summary/transcript segmented picker.
+struct SessionTabPicker: View {
+    @Binding var tab: Int
+    var body: some View {
+        Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
+            .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
+    }
+}
