@@ -214,83 +214,38 @@ struct SessionView: View {
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) { c() }.padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
-            .voxCard()
+        SessionCard(c)
     }
     private var playerBar: some View { PlayerBar(player: player) }
     private var summaryTab: some View {
-        VStack(spacing: 12) {
-            // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
-            if !s.notes.isEmpty { card {
-                HStack {
-                    Circle().fill(Vox.success).frame(width: 9, height: 9)
-                    VStack(alignment: .leading) {
-                        Vox.head(L("ai_notes"))
-                        Vox.meta(L("notes_n", s.notes.count))
-                    }
-                    Spacer()
-                    Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .voxChip(Vox.success).foregroundStyle(Vox.success)
-                }
-                // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
-                if showProcess {
-                    ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
-                    Vox.micro(L("agent_notes_caution"))
-                    // DEV builds: the saved reading's off-protocol counts (model guardrail).
-                    if Dev.on, let g = s.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger : Color.secondary) }
-                }
-                Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
-            } }
-            if !s.summary.isEmpty {
-                card {
-                    // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
-                    HStack(spacing: 16) { Spacer()
-                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
-                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit")) }
-                    Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                        if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                        return .systemAction })
-                    Vox.micro(L("ai_disclaimer"))
-                }
-            }
-            if showActions, let a = s.actionItems {
-                card {
-                    HStack(spacing: 16) {
-                        Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
-                        Button { draft = a; editingActions = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit"))
-                    }
-                    Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                        if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                        return .systemAction })
-                    Vox.micro(L("actions_verify_hint")).foregroundStyle(Vox.warning)
-                }
-            }
-            // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
-            if let n = s.legacyNotes.flatMap(MeetingNotes.parse) {
-                notesSection(L("notes_decisions"), n.decisions)
-                notesSection(L("notes_open"), n.open)
-                notesSection(L("notes_topics"), n.topics)
-                ForEach(n.extra) { notesSection($0.key, $0.lines) }
-            }
-            if !s.lines.isEmpty { SpeakerStats(lines: s.lines, names: s.speakerNames, palette: Self.palette).id("stats") }
-            if peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }) {
-                HStack { Spacer(); Button { mailOpen = true } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
-            }
-            if s.summary.isEmpty { Vox.hint(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
-        }.padding(.horizontal, Vox.gutter)
+        SessionSummaryTab(
+            session: s,
+            showActions: showActions,
+            showProcess: showProcess,
+            hasMailRecipients: peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }),
+            palette: Self.palette,
+            names: names,
+            refs: { refs($0) },
+            playerAvailable: player.available,
+            onSeekPlay: { player.seekPlay($0) },
+            onCopySummary: { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() },
+            onEditSummary: { draft = s.summary; editingSummary = true },
+            onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } },
+            onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
+            onToggleProcess: { withAnimation { showProcess.toggle() } },
+            onOpenMail: { mailOpen = true },
+            notesSection: { AnyView(notesSection($0, $1)) }
+        )
     }
     @ViewBuilder private func notesSection(_ header: String, _ items: [String]) -> some View {
-        if !items.isEmpty {
-            card {
-                Vox.subhead(header)
-                ForEach(Array(items.enumerated()), id: \.offset) { _, it in
-                    Text(Markdown.render("- " + refs(it), anchors: player.available ? Vox.info : nil, speakers: names)).font(.subheadline)
-                }
-            }.environment(\.openURL, OpenURLAction { u in
-                if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                return .systemAction })
-        }
+        SessionNotesSection(
+            header: header,
+            items: items,
+            names: names,
+            refs: { refs($0) },
+            playerAvailable: player.available,
+            onSeekPlay: { player.seekPlay($0) }
+        )
     }
     private var transcriptTab: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
