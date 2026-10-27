@@ -171,36 +171,12 @@ struct SessionView: View {
         // At the line's start: a note's whole-second time is before its line, which made the line above the playing one.
         if player.available { player.seek(l.start) }
     }
-    private var resultsList: some View {
-        let rs = meetingResults
-        let notes = rs.filter { $0.kind == .note }, lines = rs.filter { $0.kind == .line }
-        return ScrollView {
-            // A VStack (≤ 50 rows): a LazyVStack nested in the page's own scroll view left rows blank.
-            VStack(alignment: .leading, spacing: 0) {
-                if !notes.isEmpty { resultsHeader(L("ai_notes"), notes.count); ForEach(Array(notes.enumerated()), id: \.offset) { _, r in resultRow(r) } }
-                if !lines.isEmpty { resultsHeader(L("search_results_transcript"), lines.count); ForEach(Array(lines.enumerated()), id: \.offset) { _, r in resultRow(r) } }
-                if rs.count >= MeetingSearch.maxResults { Vox.micro(L("search_results_more", MeetingSearch.maxResults)).padding(.horizontal, Vox.inset).padding(.vertical, 4) }
-                if askMeetingReady {
-                    Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: {
-                        Label(L("ask_meeting_query", query.trimmingCharacters(in: .whitespaces)), systemImage: "sparkles").font(.subheadline.weight(.semibold)).lineLimit(1)
-                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, Vox.inset).padding(.vertical, Vox.insetTight).accessibilityIdentifier("results-ask-meeting")
-                }
-            }
-        }.frame(maxHeight: 280).voxRow()
-        .accessibilityIdentifier("meeting-search-results")
-    }
+    private var resultsList: some View { sessionResultsList }
     private func resultsHeader(_ t: String, _ n: Int) -> some View {
-        Text("\(t) · \(n)").font(.caption.weight(.bold)).foregroundStyle(.secondary).padding(.horizontal, Vox.inset).padding(.top, 8).padding(.bottom, 2)
+        sessionResultsHeader(t, n)
     }
     private func resultRow(_ r: MeetingSearch.Result) -> some View {
-        Button { pick(r) } label: {
-            HStack(alignment: .top, spacing: 6) {
-                Text(Export.mmss(r.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(Color.accentColor).fixedSize().frame(minWidth: 48, alignment: .leading)   // a fixed 48 pt clipped the time at large text sizes
-                if r.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
-                (r.speaker.map { Text(s.name($0) + "  ").font(.caption.weight(.semibold)).foregroundColor(.secondary) } ?? Text(""))
-                    + Text(Self.marked(MeetingSearch.snippet(r.text, query), query)).font(.caption)
-            }.lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Vox.inset).padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        sessionResultRow(r)
     }
     @State private var semTask: Task<Void, Never>?
     /// ≈ is on but this meeting has no index yet (Android TranscriptSearch `indexing`): say so instead of "no matches",
@@ -238,242 +214,286 @@ struct SessionView: View {
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) { c() }.padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
-            .voxCard()
+        SessionCard(c)
     }
     private var playerBar: some View { PlayerBar(player: player) }
     private var summaryTab: some View {
-        VStack(spacing: 12) {
-            // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
-            if !s.notes.isEmpty { card {
-                HStack {
-                    Circle().fill(Vox.success).frame(width: 9, height: 9)
-                    VStack(alignment: .leading) {
-                        Vox.head(L("ai_notes"))
-                        Vox.meta(L("notes_n", s.notes.count))
-                    }
-                    Spacer()
-                    Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .voxChip(Vox.success).foregroundStyle(Vox.success)
-                }
-                // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
-                if showProcess {
-                    ForEach(s.notes) { n in NoteRow(n: n) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } } }
-                    Vox.micro(L("agent_notes_caution"))
-                    // DEV builds: the saved reading's off-protocol counts (model guardrail).
-                    if Dev.on, let g = s.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger : Color.secondary) }
-                }
-                Button(L(showProcess ? "hide_process" : "show_process")) { withAnimation { showProcess.toggle() } }.font(.subheadline)
-            } }
-            if !s.summary.isEmpty {
-                card {
-                    // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
-                    HStack(spacing: 16) { Spacer()
-                        Button { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
-                        Button { draft = s.summary; editingSummary = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit")) }
-                    Collapsible(lines: 12) { Text(Markdown.render(refs(s.summary), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                        if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                        return .systemAction })
-                    Vox.micro(L("ai_disclaimer"))
-                }
-            }
-            if showActions, let a = s.actionItems {
-                card {
-                    HStack(spacing: 16) {
-                        Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
-                        Button { draft = a; editingActions = true } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit"))
-                    }
-                    Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: player.available ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                        if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                        return .systemAction })
-                    Vox.micro(L("actions_verify_hint")).foregroundStyle(Vox.warning)
-                }
-            }
-            // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
-            if let n = s.legacyNotes.flatMap(MeetingNotes.parse) {
-                notesSection(L("notes_decisions"), n.decisions)
-                notesSection(L("notes_open"), n.open)
-                notesSection(L("notes_topics"), n.topics)
-                ForEach(n.extra) { notesSection($0.key, $0.lines) }
-            }
-            if !s.lines.isEmpty { SpeakerStats(lines: s.lines, names: s.speakerNames, palette: Self.palette).id("stats") }
-            if peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }) {
-                HStack { Spacer(); Button { mailOpen = true } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
-            }
-            if s.summary.isEmpty { Vox.hint(L(s.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
-        }.padding(.horizontal, Vox.gutter)
+        SessionSummaryTab(
+            session: s,
+            busy: busy,
+            showActions: showActions,
+            showProcess: showProcess,
+            hasMailRecipients: peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }),
+            palette: Self.palette,
+            names: names,
+            refs: { refs($0) },
+            playerAvailable: player.available,
+            onSeekPlay: { player.seekPlay($0) },
+            onCopySummary: { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() },
+            onEditSummary: { draft = s.summary; editingSummary = true },
+            onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } },
+            onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
+            onToggleProcess: { withAnimation { showProcess.toggle() } },
+            onOpenMail: { mailOpen = true },
+            notesSection: { AnyView(notesSection($0, $1)) }
+        )
     }
     @ViewBuilder private func notesSection(_ header: String, _ items: [String]) -> some View {
-        if !items.isEmpty {
-            card {
-                Vox.subhead(header)
-                ForEach(Array(items.enumerated()), id: \.offset) { _, it in
-                    Text(Markdown.render("- " + refs(it), anchors: player.available ? Vox.info : nil, speakers: names)).font(.subheadline)
-                }
-            }.environment(\.openURL, OpenURLAction { u in
-                if u.scheme == "vox", let t = Double(u.host ?? "") { player.seek(t); if !player.playing { player.toggle() }; return .handled }
-                return .systemAction })
-        }
+        SessionNotesSection(
+            header: header,
+            items: items,
+            names: names,
+            refs: { refs($0) },
+            playerAvailable: player.available,
+            onSeekPlay: { player.seekPlay($0) }
+        )
     }
     private var transcriptTab: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
-            let speakers = Array(Set(s.lines.map(\.speaker))).sorted()
-            if speakers.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack { ForEach(speakers, id: \.self) { k in
-                        HStack(spacing: 5) { Circle().fill(tint(k)).frame(width: 8, height: 8); Text(s.name(k)).font(.caption.weight(.semibold)) }
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(Vox.card, in: Capsule())
-                    } }
-                }
-            }
+            SessionSpeakerStrip(
+                speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
+                tint: { tint($0) },
+                name: { s.name($0) }
+            )
             if searching {
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                    TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search).autocorrectionDisabled()
-                        .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
-                    if EmbedHost.ready {
-                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight() }
-                            .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
-                    }
-                    if !query.isEmpty {
-                        Text(hits.isEmpty ? L(semantic && semIndexing ? "studio_indexing" : "search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Button { stepMatch(-1) } label: { Image(systemName: "chevron.up").tapHeight() }.accessibilityLabel(L("search_prev"))
-                        Button { stepMatch(1) } label: { Image(systemName: "chevron.down").tapHeight() }.accessibilityLabel(L("search_next"))
-                    }
-                    if !query.isEmpty && !meetingResults.isEmpty {
-                        Button { resultsOpen.toggle() } label: { Image(systemName: resultsOpen ? "chevron.up.square" : "list.bullet").tapHeight() }
-                            .accessibilityLabel(L(resultsOpen ? "search_results_hide" : "search_results_show"))
-                    }
-                    if askMeetingReady {
-                        Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: { Image(systemName: "sparkles").tapHeight() }
-                            .accessibilityLabel(L("ask_meeting_title")).accessibilityIdentifier("search-ask-meeting")
-                    }
-                    Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill").tapHeight() }.accessibilityLabel(L("search_close"))
-                }.padding(Vox.insetTight).voxRow()
-                if semantic && semIndexing {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small).accessibilityHidden(true)
-                        Vox.meta(L("search_semantic_indexing"))
-                    }.padding(.horizontal, Vox.inset).accessibilityElement(children: .combine).accessibilityIdentifier("search-semantic-indexing")
-                }
-                if resultsOpen && !meetingResults.isEmpty { resultsList }
+                SessionSearchBar(
+                    query: $query,
+                    match: $match,
+                    resultsOpen: $resultsOpen,
+                    semantic: $semantic,
+                    searchFocus: $searchFocus,
+                    semIndexing: semIndexing,
+                    hasResults: !meetingResults.isEmpty,
+                    askMeetingReady: askMeetingReady,
+                    onQueryChange: { match = 0; resultsOpen = true; semSearch() },
+                    onToggleSemantic: { semantic.toggle(); semSearch() },
+                    onStep: { stepMatch($0) },
+                    onToggleResults: { resultsOpen.toggle() },
+                    onAskMeeting: { askMeeting = query.trimmingCharacters(in: .whitespaces) },
+                    onClose: { searching = false; query = "" },
+                    matchText: hits.isEmpty ? L(semantic && semIndexing ? "studio_indexing" : "search_no_matches") : L("search_match_count", match + 1, hits.count),
+                    resultsView: AnyView(resultsList)
+                )
             }
-            if !s.lines.isEmpty { Vox.micro(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))) }
-            // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
-            if s.lines.isEmpty {
-                ContentUnavailableView(L(s.noSpeech ? "status_no_speech" : "transcript_empty_title"), systemImage: s.noSpeech ? "waveform.slash" : "text.alignleft",
-                                       description: s.noSpeech ? nil : Text(L("transcript_empty"))).padding(.top, 24)
-            }
-            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
-                // A seam handle between two speakers: adjust where one stops and the next starts.
-                if idx > 0, shown[idx - 1].speaker != l.speaker, !busy {
-                    SpeakerSeam(colorA: tint(shown[idx - 1].speaker), colorB: tint(l.speaker), labelA: s.name(shown[idx - 1].speaker), labelB: s.name(l.speaker)) { seamAt = idx }
-                        .padding(.vertical, -4)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
-                        Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Text(Self.marked(l.text, query))
-                }
-                .id(l.id).padding(Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
-                .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Vox.highlight.opacity(0.22) : Vox.card), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
-                .contentShape(Rectangle())
-                .onTapGesture { if player.available { player.seekPlay(l.start) } }
-                .contextMenu { if !busy { lineMenu(l) } }
-                .accessibilityAction { if player.available { player.seekPlay(l.start) } }   // VoiceOver's default action: play from this line
-                .accessibilityAction(named: L("cd_line_actions")) { if !busy { editingLine = l.id; draft = l.text } }
-                // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
-                .accessibilityAction(named: L("speaker_move_line")) { if !busy { moveLine = l.id } }
-            }
+            SessionTranscriptLines(
+                lines: shown,
+                noSpeech: s.noSpeech,
+                busy: busy,
+                currentId: current,
+                query: query,
+                matchId: hits.indices.contains(match) ? hits[match].id : nil,
+                tint: { tint($0) },
+                name: { s.name($0) },
+                marked: { Self.marked($0, $1) },
+                onSeekPlay: { if player.available { player.seekPlay($0) } },
+                onRenameSpeaker: { renamingSpeaker = $0 },
+                onEditLine: { editingLine = $0; draft = $1 },
+                onMoveLine: { moveLine = $0 },
+                onSeam: { seamAt = $0 },
+                lineMenu: { AnyView(lineMenu($0)) }
+            )
         }.padding(.horizontal, Vox.gutter)
+    }
+
+    /// onAppear work, out of the body chain so the solver sees one call, not three closures.
+    private func appear(_ proxy: ScrollViewProxy) {
+        if searching, semantic, !query.isEmpty { semSearch() }
+        if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }
+        if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
+        if let t = openAt { openAtSeek(t, proxy) }
+    }
+    /// Open the transcript search (magnifier): transcript tab, field focused, embedder preloading.
+    private func openSearch() { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() }
+    /// An Ask citation tapped: back to the transcript, scroll to the cited line, park the player there.
+    private func askCitation(_ t: Double) {
+        askMeeting = nil; tab = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
+            if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
+            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
+        }
+    }
+    /// Export-format picked: write the file, then hand it to the share sheet (or toast on failure).
+    private func pickExport(_ f: Export.Format) {
+        showExport = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") }
+        }
+    }
+    /// "Save session" picked: export the .primeminutes bundle, then share it (or toast on failure).
+    private func saveSessionExport() {
+        showExport = false; exporting = true
+        Task {
+            let u = await SessionFile.export(s); exporting = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") }
+        }
+    }
+    /// Mail "send" picked: close the sheet, then send after the dismiss animation.
+    private func sendMail(_ r: MailRequest) {
+        mailOpen = false
+        let cur = s
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
+    }
+    /// Mail "share chat" picked: close the sheet, then share after the dismiss animation.
+    private func shareMailChat(_ r: MailRequest) {
+        mailOpen = false
+        let cur = s
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
+    }
+    /// Mail "name speaker" picked: close the sheet, then open the rename sheet for k.
+    private func nameMailSpeaker(_ k: Int) {
+        mailOpen = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
+    }
+    /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
+    private func undoResummary() {
+        guard let old = undoable else { return }
+        s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s)
+        withAnimation { undoable = nil }
+    }
+    /// The speaker-undo banner timed out: clear it, and ask "re-summarize?" if the edit changed what was said.
+    private func expireSpeakerUndo(_ u: SpeakerUndo) {
+        guard speakerUndo == u else { return }
+        withAnimation { speakerUndo = nil }
+        if (!s.summary.isEmpty || s.actionItems != nil) && !u.nameOnly { transcriptDirty = true }
+    }
+    /// Wait out the speaker-undo banner, then expire it (cancelled by a newer banner's task id).
+    private func expireSpeakerUndoAfter(_ u: SpeakerUndo) async {
+        try? await Task.sleep(nanoseconds: 8_000_000_000)
+        expireSpeakerUndo(u)
+    }
+    /// A toast posted (export copy, mail send): show it.
+    private func showToast(_ n: NotificationCenter.Publisher.Output) { if let t = n.object as? String { toast = t } }
+    // A run started on this meeting: the "re-summarize?" question is moot (the run re-reads the meeting).
+    private func busyChanged(_ b: Bool) { if b { transcriptDirty = false } }
+    // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
+    private func indexingLanded(_ ids: Set<UUID>) {
+        if semIndexing, !ids.contains(s.id), hasIndex { semSearch() }
+    }
+    /// Whether the summary-edit Done button is enabled (non-blank draft).
+    private var summaryEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the summary edit.
+    private func saveSummaryEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingSummary = false
+        if t != s.summary { s.summary = t; save(s) }
+    }
+    /// Whether the actions-edit Done button is enabled (non-blank draft).
+    private var actionsEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the action-items edit (empty means cleared: stored as "-").
+    private func saveActionsEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingActions = false
+        if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) }
+    }
+    // DEV: VOX_RESUM re-runs the summary on appear (README-animation harness).
+    private func devResumTask() { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
+    // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N.
+    private func devBoundaryTask() async {
+        guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        tab = 1
+        if let n = Dev.env["VOX_SPLIT"].flatMap(Int.init) { splitAt = min(max(0, n), s.lines.count - 1) }
+        else if let n = Dev.env["VOX_BOUNDARY"].flatMap(Int.init) { openDevSeam(n) }
+    }
+    /// DEV: open the N-th speaker-change seam in the boundary editor.
+    private func openDevSeam(_ n: Int) {
+        let seams = s.lines.indices.dropFirst().filter { s.lines[$0].speaker != s.lines[$0 - 1].speaker }
+        if seams.indices.contains(n) { seamAt = seams[n] }
+    }
+    // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s.
+    private func devMergeTask() async {
+        guard let mode = Dev.env["VOX_MERGE"] else { return }
+        var ids: [Int] = []; for l in s.lines where !ids.contains(l.speaker) { ids.append(l.speaker) }
+        guard ids.count >= 2 else { return }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
+        else { merging = (ids[0], ids[1]) }
+    }
+    /// The reading model changed under this summary (settings): offer a re-summarize.
+    private func checkSummaryStale() {
+        if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true }
+    }
+    /// The session toolbar, out of the body chain so the solver sees one call.
+    @ToolbarContentBuilder private func toolbar() -> some ToolbarContent {
+        SessionToolbar(
+            showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
+            canUndo: canUndo, canRedo: canRedo, busy: busy,
+            hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
+            askMeetingReady: askMeetingReady, title: s.title,
+            shareText: Export.text(s, .txt),
+            onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
+            onRename: { draft = s.title; renamingTitle = true },
+            onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
+            onExport: { showExport = true },
+            onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
+    }
+    /// The scroll page, out of the body chain so the solver sees one call.
+    private func scrollPage(_ proxy: ScrollViewProxy) -> some View {
+        SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab), transcript: AnyView(transcriptTab),
+            appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
+            follow: followScroll(proxy), sessionId: s.id, busy: busy,
+            playerAvailable: player.available, playerBar: AnyView(playerBar))
+    }
+    /// Whether the line-edit Done button is enabled (non-blank draft).
+    private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Save the line-text edit (like Android: an emptied line is not a save).
+    private func saveLineEdit() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
+            let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
+        editingLine = nil
+    }
+    /// A run saved this meeting (JobRunner posts voxSessionSaved): re-read it, drop a
+    /// mid-run rename sheet, surface the resummary undo, DEV-dump the resum trace.
+    private func sessionSaved(_ n: NotificationCenter.Publisher.Output) {
+        guard let new = n.object as? Session, new.id == s.id else { return }
+        if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
+        s = new
+        if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
+        if Dev.env["VOX_RESUM"] != nil { sessionSavedDump(n, new) }
+    }
+    /// DEV VOX_RESUM trace: what the run saved, for the README-animation harness.
+    private func sessionSavedDump(_ n: NotificationCenter.Publisher.Output, _ new: Session) {
+        if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
+    }
+    /// Snapshot of the follow-scroll state for the SessionFollow modifier (one call in the chain, not four closures).
+    private func followScroll(_ proxy: ScrollViewProxy) -> SessionFollowScroll {
+        SessionFollowScroll(proxy: proxy, playing: player.playing, queryEmpty: query.isEmpty, tab: tab, userScrolledAt: userScrolledAt,
+            current: current, match: match, matchId: hits.indices.contains(match) ? hits[match].id : nil, jumpTo: jumpTo,
+            firstHitId: hits.first?.id, resultsOpen: resultsOpen, hasResults: !meetingResults.isEmpty,
+            onFollow: { proxy.scrollTo($0, anchor: .center) })
+    }
+    /// openAt deep-link: scroll to the line at t and park the player there.
+    private func openAtSeek(_ t: Double, _ proxy: ScrollViewProxy) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
+            if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }
+            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
+        }
     }
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 12) {
-                    if busy { RunStatusRow(id: s.id).padding(.horizontal, Vox.gutter) }
-                    Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
-                        .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
-                    if tab == 0 { summaryTab } else { transcriptTab }
-                }.padding(.top, 8)
-            }
-            .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
-            .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
-            .background(Vox.page)
-            .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
-                if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
-            .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
-            // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
-            .onChange(of: current) { _, id in if player.playing, query.isEmpty, tab == 1, Date().timeIntervalSince(userScrolledAt) > 4, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
-            // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
-            .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
-            .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
-            // Not while the results list is open: the bar and the list sit in this scroll view, and jumping to the
-            // first hit as the query was typed (or the ≈ passages landed) scrolled them off screen (14 Pro Max).
-            .onChange(of: hits.first?.id) { _, _ in if !(resultsOpen && !meetingResults.isEmpty), hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
+            scrollPage(proxy)
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !undoSteps.isEmpty || !redoSteps.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo || busy).accessibilityLabel(L("undo"))
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { redoEdit() } label: { Image(systemName: "arrow.uturn.forward") }.disabled(!canRedo || busy).accessibilityLabel(L("redo"))
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button(L("rename")) { draft = s.title; renamingTitle = true }.disabled(busy)
-                    if askMeetingReady { Button { askMeeting = "" } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
-                    Button(L("export_menu_entry")) { showExport = true }.disabled(busy)
-                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) }.disabled(busy) }
-                    if s.audio != nil {
-                        Button(L("re_transcribe")) { rerun(s, true) }.disabled(busy)
-                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
-                    }
-                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
-            }
-        }
+        .toolbar { toolbar() }
         .sheet(isPresented: $showExport) {
-            ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") } } }
+            ExportSheet(s: s, onPick: { pickExport($0) }, onSession: { saveSessionExport() })
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
         .sheet(isPresented: Binding(get: { askMeeting != nil }, set: { if !$0 { askMeeting = nil } })) {
-            AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in
-                askMeeting = nil; tab = 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
-                    if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
-                    if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
-                }
-            }, meeting: s)
+            AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
-            EmailParticipantsSheet(session: s, busy: busy, onSend: { r in
-                mailOpen = false
-                let cur = s
-                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
-            }, onShareChat: { r in
-                mailOpen = false
-                let cur = s
-                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
-            }, onNameSpeaker: { k in
-                mailOpen = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
-            }, onDismiss: { mailOpen = false })
+            SessionMailSheet(session: s, busy: busy,
+                onSend: { sendMail($0) }, onShareChat: { shareMailChat($0) },
+                onNameSpeaker: { nameMailSpeaker($0) }, onDismiss: { mailOpen = false })
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
@@ -484,34 +504,23 @@ struct SessionView: View {
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.
         .sheet(isPresented: Binding(get: { renamingSpeaker != nil && !busy }, set: { if !$0 { renamingSpeaker = nil } })) {
             if let k = renamingSpeaker {
-                VoiceSuggested(session: s, speaker: k) { suggestions, note in
-                    SpeakerNameFlow(speaker: pickerSpeaker(k), speakers: pickerSpeakers, sessions: Model.shared.library.sessions,
-                                    suggestions: suggestions, voiceNote: note,
-                                    onPlaySample: player.available ? { playSample(k) } : nil,
-                                    onLink: { p in renamingSpeaker = nil; link(k, p) },
-                                    onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
-                                    onClear: { renamingSpeaker = nil; clearName(k) },
-                                    onMerge: { into in renamingSpeaker = nil; merge(k, into) },
-                                    onDismiss: { renamingSpeaker = nil })
-                }
-                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                SessionRenameSheet(session: s, speakerKey: k, sessions: Model.shared.library.sessions,
+                    canPlaySample: player.available,
+                    speaker: pickerSpeaker(k), speakers: pickerSpeakers,
+                    onPlaySample: { playSample(k) },
+                    onLink: { renamingSpeaker = nil; link(k, $0) },
+                    onNew: { renamingSpeaker = nil; link(k, PeopleStore.shared.create($0)) },
+                    onClear: { renamingSpeaker = nil; clearName(k) },
+                    onMerge: { renamingSpeaker = nil; merge(k, $0) },
+                    onDismiss: { renamingSpeaker = nil })
             }
         }
         .modifier(VoiceOutlierPrompt())
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingLine = nil } }
-                        ToolbarItem(placement: .confirmationAction) { Button(L("done")) {
-                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
-                                let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
-                            editingLine = nil }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }   // like Android: an emptied line is not a save
-                    }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
-            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            if editingLine != nil {
+                SessionLineEditSheet(draft: $draft, doneEnabled: lineEditDoneEnabled, onCancel: { editingLine = nil }, onDone: { saveLineEdit() })
+            }
         }
         .confirmationDialog(merging.map { L("speaker_merge_confirm", s.name($0.0), s.name($0.1)) } ?? "",
                             isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
@@ -521,145 +530,77 @@ struct SessionView: View {
         // VoiceOver route for per-line re-attribution: one row per other speaker, same reassign as the menu.
         .sheet(isPresented: Binding(get: { moveLine != nil }, set: { if !$0 { moveLine = nil } })) {
             if let id = moveLine, let i = s.lines.firstIndex(where: { $0.id == id }) {
-                NavigationStack {
-                    List {
-                        ForEach(Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != s.lines[i].speaker }, id: \.self) { k in
-                            Button { moveLine = nil; reassign(id, k) } label: {
-                                HStack(spacing: 8) { Circle().fill(tint(k)).frame(width: 10, height: 10); Text(s.name(k)) }
-                                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { moveLine = nil } } }
-                    .navigationTitle(L("speaker_move_line")).navigationBarTitleDisplayMode(.inline)
-                }
-                .presentationDetents([.medium]).presentationDragIndicator(.visible)
+                SessionMoveLineSheet(lineId: id, lineSpeaker: s.lines[i].speaker,
+                    speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
+                    tint: { tint($0) }, name: { s.name($0) },
+                    onPick: { moveLine = nil; reassign(id, $0) },
+                    onCancel: { moveLine = nil })
             }
         }
         .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
             if let k = seamAt, k >= 1, k < s.lines.count {
-                let a = s.lines[k - 1], b = s.lines[k], sm = BoundaryEdits.seam(a, b)
-                BoundaryEditorSheet(tokens: sm.tokens, starts: sm.starts, end: sm.end, initialSplit: sm.split,
-                                    colorA: tint(a.speaker), labelA: s.name(a.speaker), colorB: tint(b.speaker), labelB: s.name(b.speaker),
-                                    estimated: BoundaryEdits.estimated(a) || BoundaryEdits.estimated(b),
-                                    canPlay: player.available, demo: Self.devDemo,
-                                    onPreview: { player.preview(from: $0, to: $1) },
-                                    onApply: { split, _ in player.endPreview(); seamAt = nil; moveBoundary(k, split) },
-                                    onCancel: { player.endPreview(); seamAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+                SessionSeamSheet(seam: k, lines: s.lines,
+                    tint: { tint($0) }, name: { s.name($0) },
+                    canPlay: player.available,
+                    onPreview: { player.preview(from: $0, to: $1) },
+                    onApply: { player.endPreview(); seamAt = nil; moveBoundary(k, $0) },
+                    onCancel: { player.endPreview(); seamAt = nil })
             }
         }
         .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
             if let li = splitAt, s.lines.indices.contains(li) {
-                let u = s.lines[li], toks = BoundaryEdits.tokenize(u.text), order = BoundaryEdits.splitCandidates(s.lines, index: li)
-                let known = Set(s.lines.map(\.speaker))
-                BoundaryEditorSheet(tokens: toks, starts: BoundaryEdits.tokenStarts(u, toks), end: u.end, initialSplit: toks.count / 2,
-                                    colorA: tint(u.speaker), labelA: s.name(u.speaker), colorB: tint(order[0]), labelB: s.name(order[0]),
-                                    choices: order.map { SpeakerChoice(id: $0, label: s.name($0), color: tint($0), isNew: !known.contains($0)) },
-                                    estimated: BoundaryEdits.estimated(u),
-                                    canPlay: player.available, demo: Self.devDemo,
-                                    onPreview: { player.preview(from: $0, to: $1) },
-                                    onApply: { at, spk in player.endPreview(); splitAt = nil; splitLine(li, at, spk ?? order[0]) },
-                                    onCancel: { player.endPreview(); splitAt = nil })
-                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
+                SessionSplitSheet(index: li, lines: s.lines,
+                    tint: { tint($0) }, name: { s.name($0) },
+                    canPlay: player.available,
+                    onPreview: { player.preview(from: $0, to: $1) },
+                    onApply: { player.endPreview(); splitAt = nil; splitLine(li, $0, $1) },
+                    onCancel: { player.endPreview(); splitAt = nil })
             }
         }
-        .task {   // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N
-            guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            tab = 1
-            if let n = Dev.env["VOX_SPLIT"].flatMap(Int.init) { splitAt = min(max(0, n), s.lines.count - 1) }
-            else if let n = Dev.env["VOX_BOUNDARY"].flatMap(Int.init) {
-                let seams = s.lines.indices.dropFirst().filter { s.lines[$0].speaker != s.lines[$0 - 1].speaker }
-                if seams.indices.contains(n) { seamAt = seams[n] }
-            }
-        }
+        .task { await devBoundaryTask() }
         .alert(L("transcript_changed_resummarize"), isPresented: Binding(get: { transcriptDirty && !busy }, set: { transcriptDirty = $0 })) {
             if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
             Button(L("cancel"), role: .cancel) {}
         }
         .overlay(alignment: .bottom) {
-            if let toast { Text(toast).font(.subheadline).padding(.horizontal, Vox.gutter).padding(.vertical, 10).background(.thinMaterial, in: Capsule()).padding(.bottom, 110)
-                // A toast is visual only: say it out loud too (VoiceOver gets nothing otherwise).
-                .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
+            if let toast {
+                SessionToast(text: toast, onExpire: { self.toast = nil })
+            }
         }
         .sheet(isPresented: $editingSummary) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingSummary = false } }
-                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
-                            editingSummary = false
-                            if t != s.summary { s.summary = t; save(s) } }.disabled(t.isEmpty) }
-                    }.navigationTitle(L("tab_summary")).navigationBarTitleDisplayMode(.inline)
-            }
+            SessionTextEditSheet(draft: $draft, title: L("tab_summary"), doneEnabled: summaryEditDoneEnabled,
+                onCancel: { editingSummary = false }, onDone: { saveSummaryEdit() })
         }
         .sheet(isPresented: $editingActions) {
-            NavigationStack {
-                TextEditor(text: $draft).padding(.horizontal, Vox.inset)
-                    .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { editingActions = false } }
-                        ToolbarItem(placement: .confirmationAction) { let t = draft.trimmingCharacters(in: .whitespacesAndNewlines); Button(L("done")) {
-                            editingActions = false
-                            if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) } }.disabled(t.isEmpty) }
-                    }.navigationTitle(L("card_action_items")).navigationBarTitleDisplayMode(.inline)
-            }
+            SessionTextEditSheet(draft: $draft, title: L("card_action_items"), doneEnabled: actionsEditDoneEnabled,
+                onCancel: { editingActions = false }, onDone: { saveActionsEdit() })
         }
         .alert(L("summary_settings_changed"), isPresented: $summaryStale) {
             Button(L("re_summarize")) { rerun(s, false) }
             Button(L("cancel"), role: .cancel) {}
         }
-        .task { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
-        .task {   // DEV: VOX_MERGE=confirm asks to merge the first speaker into the second; =apply merges, then undoes after 5 s
-            guard let mode = Dev.env["VOX_MERGE"] else { return }
-            var ids: [Int] = []; for l in s.lines where !ids.contains(l.speaker) { ids.append(l.speaker) }
-            guard ids.count >= 2 else { return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
-            else { merging = (ids[0], ids[1]) }
-        }
-        .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
-        .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
-            guard let new = n.object as? Session, new.id == s.id else { return }
-            if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
-            s = new
-            if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
-            if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
-        }
+        .task { devResumTask() }
+        .task { await devMergeTask() }
+        .task { checkSummaryStale() }
+        .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
+        .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { showToast($0) }
         .overlay {
-            if exporting {
-                VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
-                    .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
-            }
+            if exporting { SessionExporting() }
         }
         .overlay(alignment: .bottom) {
-            if let old = undoable {
-                HStack {
-                    Vox.hint(L("resummary_done")); Spacer()
-                    Button(L("undo")) { s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s); withAnimation { undoable = nil } }.bold()
-                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
-                    .task { try? await Task.sleep(nanoseconds: 8_000_000_000); withAnimation { undoable = nil } }
+            if undoable != nil {
+                SessionResummaryUndo(session: $s, onUndo: { undoResummary() }, onExpire: { undoable = nil })
             }
         }
         .overlay(alignment: .bottom) {
             if let u = speakerUndo {
-                HStack {
-                    Vox.hint(u.message); Spacer()
-                    Button(L("undo")) { undoSpeakerEdit(u) }.bold().disabled(busy)
-                }.padding(Vox.inset).background(.thinMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusMD)).padding(.horizontal, Vox.gutter).padding(.bottom, 110)
-                    .task(id: u.id) {
-                        try? await Task.sleep(nanoseconds: 8_000_000_000)
-                        guard speakerUndo == u else { return }
-                        withAnimation { speakerUndo = nil }
-                        if (!s.summary.isEmpty || s.actionItems != nil) && !u.nameOnly { transcriptDirty = true }
-                    }
+                SessionSpeakerUndoBanner(message: u.message, busy: busy, onUndo: { undoSpeakerEdit(u) },
+                    onExpire: { expireSpeakerUndo(u) })
+                    .task(id: u.id) { await expireSpeakerUndoAfter(u) }
             }
         }
-        .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
-        // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
-        .onReceive(LibraryIndexer.shared.$indexing) { ids in if semIndexing, !ids.contains(s.id), hasIndex { semSearch() } }
+        .onChange(of: busy) { _, b in busyChanged(b) }
+        .onReceive(LibraryIndexer.shared.$indexing) { indexingLanded($0) }
         .onDisappear { player.stop() }
     }
 
@@ -782,6 +723,46 @@ struct SessionView: View {
     }
     private func highlight(_ id: UUID) -> Color? { id == current ? Color.accentColor.opacity(0.18) : nil }
 
+    /// Speaker name for the extracted SpeakerStats legend (Session.name's static body, verbatim:
+    /// Session.name resolves to the instance method from here, so the static is not callable by name).
+    static func nameOf(_ spk: Int, _ names: [String: String]?) -> String { names?[String(spk)].flatMap { $0.isEmpty ? nil : $0 } ?? L("speaker_n", spk + 1) }
+
+}
+
+extension SessionView {
+    /// The unfolded search-results list under the transcript search bar.
+    var sessionResultsList: some View {
+        let q = query
+        return SessionResultsList(
+            results: meetingResults,
+            query: q,
+            askMeetingReady: askMeetingReady,
+            name: { [s] in s.name($0) },
+            pick: { [self] in pick($0) },
+            askMeeting: { [self] in askMeeting = query.trimmingCharacters(in: .whitespaces) }
+        )
+    }
+
+    /// One header line over the notes / transcript result groups.
+    func sessionResultsHeader(_ t: String, _ n: Int) -> some View {
+        SessionResultsHeader(title: t, count: n)
+    }
+
+    /// One tappable result row (time pill, ≈ marker, speaker, marked snippet).
+    func sessionResultRow(_ r: MeetingSearch.Result) -> some View {
+        SessionResultRow(result: r, query: query, name: { [s] in s.name($0) }, pick: { [self] in pick($0) })
+    }
+}
+
+/// The run-status bar's pinned slot above the scrollable content (safeAreaInset top):
+/// the inset's own tiny view, so the long SessionView body stays out of the solver's
+/// way. Renders nothing while idle; the sticky-bar patch claims this slot.
+struct SessionRunStatusTop: View {
+    let id: UUID
+    let busy: Bool
+    var body: some View {
+        if busy { RunStatusRow(id: id).padding(.horizontal, Vox.gutter) }
+    }
 }
 
 /// A run (re-summarize, re-transcribe) on the open meeting: its status line and progress, as the live view's header
@@ -814,7 +795,7 @@ private struct RunStatusRow: View {
 /// Calls `changed` while the user scrolls a scroll view by hand (a programmatic scrollTo does not count). iOS 18 reads
 /// the scroll phase; iOS 17 has no phase, so a drag recognized alongside the scroll stands in (on iOS 18 such a gesture
 /// can hold up the scroll itself, hence not used there).
-private struct UserScrollWatch: ViewModifier {
+struct UserScrollWatch: ViewModifier {
     let changed: () -> Void
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
@@ -861,7 +842,7 @@ struct ExportSheet: View {
                     Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
                 }
             }
-            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success() } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
+            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success(); NotificationCenter.default.post(name: .voxToast, object: L("transcript_copied")) } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
             Spacer()
         }.padding(Vox.gutterWide).frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -917,10 +898,7 @@ struct SpeakerStats: View {
     let palette: [Color]
     @State private var legend = false
     private var shares: [(spk: Int, pct: Double)] {
-        var d = [Int: Double]()
-        for l in lines { d[max(0, l.speaker), default: 0] += max(0, l.end - l.start) }
-        let total = d.values.reduce(0, +)
-        return total > 0 ? d.map { ($0.key, $0.value / total * 100) }.sorted { $0.1 > $1.1 } : []
+        SpeakerStatsModel.shares(lines)
     }
     var body: some View {
         let sh = shares
@@ -928,23 +906,13 @@ struct SpeakerStats: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text(L("speaker_count", sh.count)).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    GeometryReader { g in
-                        HStack(spacing: 0) { ForEach(sh, id: \.spk) { x in palette[x.spk % palette.count].frame(width: g.size.width * x.pct / 100) } }
-                            .clipShape(Capsule())
-                    }.frame(height: 8)
+                    SpeakerStatsBar(shares: sh, palette: palette)
                     // SF Symbols ship their own VoiceOver names; inside this tap target the chevron is
                     // decoration and only added "Chevron Up" noise after the speaker count.
                     Image(systemName: legend ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
                 }
                 if legend {
-                    HStack(spacing: 14) {
-                        ForEach(sh, id: \.spk) { x in
-                            HStack(spacing: 6) {
-                                RoundedRectangle(cornerRadius: Vox.radiusXS).fill(palette[x.spk % palette.count]).frame(width: 8, height: 8)
-                                Vox.meta("\(Session.name(x.spk, names)) · \(Int(x.pct.rounded()))%")
-                            }
-                        }
-                    }
+                    SpeakerStatsLegend(shares: sh, names: names, palette: palette)
                 }
             }
             .padding(.horizontal, 4).contentShape(Rectangle()).onTapGesture { withAnimation { legend.toggle() } }
@@ -983,30 +951,17 @@ struct PlayerBar: View {
     @ObservedObject var player: Player
     var body: some View {
         VStack(spacing: 6) {
-            Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0...max(1, player.duration)) { editing in if !editing, !player.playing { player.toggle() } }
-                // VoiceOver otherwise reads a bare percentage of the meeting; say what it is and where playback is.
-                .accessibilityLabel(L("cd_seek")).accessibilityValue(L("cd_seek_value", Export.mmss(player.time), Export.mmss(player.duration)))
+            PlayerSeekSlider(player: player)
             HStack {
                 // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
                 Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     .lineLimit(1).fixedSize().frame(minWidth: 96, alignment: .leading)
                 Spacer()
-                Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
-                Button { player.toggle() } label: {
-                    Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2).foregroundStyle(.white)
-                        .frame(width: 56, height: 56).background(Color.accentColor, in: Circle())
-                }.accessibilityLabel(L(player.playing ? "pause" : "play"))
-                Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
+                PlayerSkipBack(player: player)
+                PlayerPlayPause(player: player)
+                PlayerSkipForward(player: player)
                 Spacer()
-                HStack(spacing: 12) {
-                Menu {
-                    Button { player.muted.toggle() } label: { Label(L(player.muted ? "cd_unmute" : "cd_mute"), systemImage: player.muted ? "speaker.wave.2" : "speaker.slash") }
-                    ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { v in Button("\(Int(v * 100)) %") { player.muted = false; player.volume = Float(v) } }
-                } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).tapTarget() }
-                    .accessibilityLabel(L("cd_volume")).accessibilityValue(player.muted || player.volume == 0 ? L("cd_muted") : "\(Int(player.volume * 100)) %")
-                Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .lineLimit(1).fixedSize()
-                }.frame(minWidth: 96, alignment: .trailing)
+                PlayerVolumeCluster(player: player)
             }
         }.padding(.horizontal, Vox.gutterWide).padding(.vertical, 8).background(.bar)
     }

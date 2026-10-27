@@ -387,8 +387,8 @@ private struct PersonPage: View {
             Button(L("cancel"), role: .cancel) { splitting = nil }
         }
         .alert(L("people_delete_title", p.name), isPresented: $deleting) {
-            Button(L("people_delete"), role: .destructive) { Task { await store.delete(p.id, clearNames: false) } }
-            if !meetings.isEmpty { Button(L("people_delete_clear", meetings.count), role: .destructive) { Task { await store.delete(p.id, clearNames: true) } } }
+            Button(L("people_delete"), role: .destructive) { Task { await store.delete(p.id, clearNames: false) }; Haptics.destructive() }
+            if !meetings.isEmpty { Button(L("people_delete_clear", meetings.count), role: .destructive) { Task { await store.delete(p.id, clearNames: true) }; Haptics.destructive() } }
             Button(L("cancel"), role: .cancel) {}
         } message: { Text(L("people_delete_text")) }
         .alert(L("people_merge_pick", p.name), isPresented: Binding(get: { mergeConfirm != nil }, set: { if !$0 { mergeConfirm = nil } }), presenting: mergeConfirm) { o in
