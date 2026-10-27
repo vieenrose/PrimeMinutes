@@ -363,6 +363,10 @@ struct SessionView: View {
         try? await Task.sleep(nanoseconds: 8_000_000_000)
         expireSpeakerUndo(u)
     }
+    /// A toast posted (export copy, mail send): show it.
+    private func showToast(_ n: NotificationCenter.Publisher.Output) { if let t = n.object as? String { toast = t } }
+    // A run started on this meeting: the "re-summarize?" question is moot (the run re-reads the meeting).
+    private func busyChanged(_ b: Bool) { if b { transcriptDirty = false } }
     // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
     private func indexingLanded(_ ids: Set<UUID>) {
         if semIndexing, !ids.contains(s.id), hasIndex { semSearch() }
@@ -571,7 +575,7 @@ struct SessionView: View {
         .task { await devMergeTask() }
         .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
-        .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
+        .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { showToast($0) }
         .overlay {
             if exporting { SessionExporting() }
         }
@@ -587,7 +591,7 @@ struct SessionView: View {
                     .task(id: u.id) { await expireSpeakerUndoAfter(u) }
             }
         }
-        .onChange(of: busy) { _, b in if b { transcriptDirty = false } }   // the run re-reads the meeting: the question is moot
+        .onChange(of: busy) { _, b in busyChanged(b) }
         .onReceive(LibraryIndexer.shared.$indexing) { indexingLanded($0) }
         .onDisappear { player.stop() }
     }
