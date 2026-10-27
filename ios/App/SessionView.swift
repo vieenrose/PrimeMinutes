@@ -313,6 +313,22 @@ struct SessionView: View {
             if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
         }
     }
+    /// Export-format picked: write the file, then hand it to the share sheet (or toast on failure).
+    private func pickExport(_ f: Export.Format) {
+        showExport = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") }
+        }
+    }
+    /// "Save session" picked: export the .primeminutes bundle, then share it (or toast on failure).
+    private func saveSessionExport() {
+        showExport = false; exporting = true
+        Task {
+            let u = await SessionFile.export(s); exporting = false
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") }
+        }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -382,7 +398,7 @@ struct SessionView: View {
                 onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
         }
         .sheet(isPresented: $showExport) {
-            ExportSheet(s: s) { f in showExport = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") } } } onSession: { showExport = false; exporting = true; Task { let u = await SessionFile.export(s); exporting = false; try? await Task.sleep(nanoseconds: 400_000_000); if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") } } }
+            ExportSheet(s: s, onPick: { pickExport($0) }, onSession: { saveSessionExport() })
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
