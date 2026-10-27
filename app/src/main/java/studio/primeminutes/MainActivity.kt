@@ -214,6 +214,7 @@ import studio.primeminutes.service.TranscriptionService
 import studio.primeminutes.ui.AddSourceSheet
 import studio.primeminutes.ui.ExportSheet
 import studio.primeminutes.ui.CaptureScreen
+import studio.primeminutes.ui.RunStatusRow
 import studio.primeminutes.ui.SessionTabs
 import studio.primeminutes.ui.SessionTopBar
 import studio.primeminutes.ui.StudioScreen
@@ -1884,6 +1885,14 @@ private fun TranscribeScreen(
                     }
                     Spacer(Modifier.width(Spacing.md))
                     Column(Modifier.weight(0.60f).fillMaxHeight()) {
+                        // Pinned run-status (same row as portrait): the two-pane transcript pane
+                        // must also say processing continues once lines have arrived mid-run.
+                        if (s.running) RunStatusRow(
+                            status = s.status,
+                            progress = s.progress,
+                            transcriptAvailable = utterances.isNotEmpty(),
+                            statusIsError = s.statusIsError,
+                        )
                         if (s.searchActive) TranscriptSearchBar(
                             query = s.searchQuery, onQuery = { vm.setSearchQuery(it) },
                             matchCount = searchMatches.size, matchPos = matchPos,
@@ -1898,6 +1907,15 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
+                        // Pinned run-status: while the run is in flight the top-bar status may
+                        // have scrolled out of mind, so the phase + progress stay visible above
+                        // the transcript. Idle layout is unchanged.
+                        if (s.running) RunStatusRow(
+                            status = s.status,
+                            progress = s.progress,
+                            transcriptAvailable = utterances.isNotEmpty(),
+                            statusIsError = s.statusIsError,
+                        )
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -1910,6 +1928,14 @@ private fun TranscribeScreen(
                 // instead of one long scroll (Prime Minutes 2.0).
                 SessionTabs(selected = sessTab, onSelect = { sessTab = it })
                 Spacer(Modifier.height(Spacing.sm))
+                // Pinned run-status (same row as the transcript tab): the summary scroll must
+                // also say processing continues once its cards have arrived mid-run.
+                if (s.running) RunStatusRow(
+                    status = s.status,
+                    progress = s.progress,
+                    transcriptAvailable = utterances.isNotEmpty(),
+                    statusIsError = s.statusIsError,
+                )
                 when (sessTab) {
                     0 -> Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
