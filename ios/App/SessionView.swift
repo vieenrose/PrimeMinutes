@@ -302,6 +302,19 @@ struct SessionView: View {
         if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
         if let t = openAt { openAtSeek(t, proxy) }
     }
+    /// A run saved this meeting (JobRunner posts voxSessionSaved): re-read it, drop a
+    /// mid-run rename sheet, surface the resummary undo, DEV-dump the resum trace.
+    private func sessionSaved(_ n: NotificationCenter.Publisher.Output) {
+        guard let new = n.object as? Session, new.id == s.id else { return }
+        if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
+        s = new
+        if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
+        if Dev.env["VOX_RESUM"] != nil { sessionSavedDump(n, new) }
+    }
+    /// DEV VOX_RESUM trace: what the run saved, for the README-animation harness.
+    private func sessionSavedDump(_ n: NotificationCenter.Publisher.Output, _ new: Session) {
+        if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
+    }
     /// Snapshot of the follow-scroll state for the SessionFollow modifier (one call in the chain, not four closures).
     private func followScroll(_ proxy: ScrollViewProxy) -> SessionFollowScroll {
         SessionFollowScroll(proxy: proxy, playing: player.playing, queryEmpty: query.isEmpty, tab: tab, userScrolledAt: userScrolledAt,
@@ -533,13 +546,7 @@ struct SessionView: View {
             else { merging = (ids[0], ids[1]) }
         }
         .task { if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true } }
-        .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
-            guard let new = n.object as? Session, new.id == s.id else { return }
-            if busy { renamingSpeaker = nil }   // a run re-reads the meeting: a mid-run name is moot, drop the sheet
-            s = new
-            if let old = n.userInfo?["undo"] as? Session, !old.summary.isEmpty { withAnimation { undoable = old } }
-            if Dev.env["VOX_RESUM"] != nil { try? "undo=\(n.userInfo?["undo"] != nil) names=\(new.speakerNames ?? [:]) reader=\(new.reader ?? "-") summary=\(new.summary.prefix(80))".write(to: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("resum.txt"), atomically: true, encoding: .utf8) }
-        }
+        .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
         .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { n in if let t = n.object as? String { toast = t } }
         .overlay {
             if exporting {
