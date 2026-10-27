@@ -398,10 +398,10 @@ struct SessionToolbar: ToolbarContent {
 
 /// The tab page: segmented picker plus the selected tab. Split out of
 /// SessionView's ScrollView so the Picker labels leave the body chain.
-struct SessionTabPage<Summary: View, Transcript: View>: View {
+struct SessionTabPage: View {
     @Binding var tab: Int
-    let summary: Summary
-    let transcript: Transcript
+    let summary: AnyView
+    let transcript: AnyView
     var body: some View {
         VStack(spacing: 12) {
             SessionTabPicker(tab: $tab)
@@ -522,7 +522,7 @@ struct SessionInsets: ViewModifier {
     let sessionId: UUID
     let busy: Bool
     let playerAvailable: Bool
-    let playerBar: PlayerBar
+    let playerBar: AnyView
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom) { if playerAvailable { playerBar } }
@@ -590,18 +590,18 @@ struct SessionExporting: View {
 /// The session's scroll page: tab page plus scroll modifiers, insets and
 /// follow behavior. Split out of SessionView's body so the ScrollView leaves
 /// the body chain (the solver ceiling sat on the ScrollView block itself).
-struct SessionScrollPage<Summary: View, Transcript: View>: View {
+struct SessionScrollPage: View {
     let proxy: ScrollViewProxy
     @Binding var tab: Int
-    let summary: Summary
-    let transcript: Transcript
+    let summary: AnyView
+    let transcript: AnyView
     let appear: () -> Void
     let scrolled: () -> Void
     let follow: SessionFollowScroll
     let sessionId: UUID
     let busy: Bool
     let playerAvailable: Bool
-    let playerBar: PlayerBar
+    let playerBar: AnyView
     var body: some View {
         ScrollView {
             SessionTabPage(tab: $tab, summary: summary, transcript: transcript)

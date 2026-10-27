@@ -415,6 +415,27 @@ struct SessionView: View {
     private func checkSummaryStale() {
         if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true }
     }
+    /// The session toolbar, out of the body chain so the solver sees one call.
+    @ToolbarContentBuilder private func toolbar() -> some ToolbarContent {
+        SessionToolbar(
+            showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
+            canUndo: canUndo, canRedo: canRedo, busy: busy,
+            hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
+            askMeetingReady: askMeetingReady, title: s.title,
+            shareText: Export.text(s, .txt),
+            onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
+            onRename: { draft = s.title; renamingTitle = true },
+            onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
+            onExport: { showExport = true },
+            onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
+    }
+    /// The scroll page, out of the body chain so the solver sees one call.
+    private func scrollPage(_ proxy: ScrollViewProxy) -> some View {
+        SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab), transcript: AnyView(transcriptTab),
+            appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
+            follow: followScroll(proxy), sessionId: s.id, busy: busy,
+            playerAvailable: player.available, playerBar: AnyView(playerBar))
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -455,26 +476,11 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            SessionScrollPage(proxy: proxy, tab: $tab, summary: summaryTab, transcript: transcriptTab,
-                appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
-                follow: followScroll(proxy), sessionId: s.id, busy: busy,
-                playerAvailable: player.available, playerBar: playerBar)
+            scrollPage(proxy)
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            SessionToolbar(
-                showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
-                canUndo: canUndo, canRedo: canRedo, busy: busy,
-                hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
-                askMeetingReady: askMeetingReady, title: s.title,
-                shareText: Export.text(s, .txt),
-                onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
-                onRename: { draft = s.title; renamingTitle = true },
-                onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
-                onExport: { showExport = true },
-                onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
-        }
+        .toolbar { toolbar() }
         .sheet(isPresented: $showExport) {
             ExportSheet(s: s, onPick: { pickExport($0) }, onSession: { saveSessionExport() })
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
