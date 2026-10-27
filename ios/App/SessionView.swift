@@ -220,6 +220,7 @@ struct SessionView: View {
     private var summaryTab: some View {
         SessionSummaryTab(
             session: s,
+            busy: busy,
             showActions: showActions,
             showProcess: showProcess,
             hasMailRecipients: peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }),

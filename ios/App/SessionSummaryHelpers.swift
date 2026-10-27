@@ -6,6 +6,7 @@ import UIKit
 /// and closures; SessionView keeps thin forwarders with identical parameters.
 struct SessionSummaryTab: View {
     let session: Session
+    let busy: Bool
     let showActions: Bool
     let showProcess: Bool
     let hasMailRecipients: Bool
@@ -80,7 +81,7 @@ struct SessionSummaryTab: View {
             if hasMailRecipients {
                 HStack { Spacer(); Button { onOpenMail() } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
             }
-            if session.summary.isEmpty { Vox.hint(L(session.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
+            if session.summary.isEmpty { Vox.hint(L(busy ? "summary_pending_hint" : session.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
         }.padding(.horizontal, Vox.gutter)
     }
 }
