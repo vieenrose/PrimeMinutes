@@ -295,6 +295,29 @@ struct SessionView: View {
         }.padding(.horizontal, Vox.gutter)
     }
 
+    /// onAppear work, out of the body chain so the solver sees one call, not three closures.
+    private func appear(_ proxy: ScrollViewProxy) {
+        if searching, semantic, !query.isEmpty { semSearch() }
+        if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }
+        if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
+        if let t = openAt { openAtSeek(t, proxy) }
+    }
+    /// Snapshot of the follow-scroll state for the SessionFollow modifier (one call in the chain, not four closures).
+    private func followScroll(_ proxy: ScrollViewProxy) -> SessionFollowScroll {
+        SessionFollowScroll(proxy: proxy, playing: player.playing, queryEmpty: query.isEmpty, tab: tab, userScrolledAt: userScrolledAt,
+            current: current, match: match, matchId: hits.indices.contains(match) ? hits[match].id : nil, jumpTo: jumpTo,
+            firstHitId: hits.first?.id, resultsOpen: resultsOpen, hasResults: !meetingResults.isEmpty,
+            onFollow: { proxy.scrollTo($0, anchor: .center) })
+    }
+    /// openAt deep-link: scroll to the line at t and park the player there.
+    private func openAtSeek(_ t: Double, _ proxy: ScrollViewProxy) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
+            if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }
+            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -307,20 +330,12 @@ struct SessionView: View {
             .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
             .modifier(UserScrollWatch { userScrolledAt = Date() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
             .background(Vox.page)
-            .onAppear { if searching, semantic, !query.isEmpty { semSearch() }; if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }; if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
-                if let t = openAt { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t); if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }; if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) } } } }
+            .onAppear { appear(proxy) }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
             // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
             // not in it: scrolling either tab kept pushing it off screen.
             .safeAreaInset(edge: .top) { SessionRunStatusTop(id: s.id, busy: busy) }
-            // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
-            .onChange(of: current) { _, id in if player.playing, query.isEmpty, tab == 1, Date().timeIntervalSince(userScrolledAt) > 4, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
-            // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
-            .onChange(of: match) { _, _ in if hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
-            .onChange(of: jumpTo) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
-            // Not while the results list is open: the bar and the list sit in this scroll view, and jumping to the
-            // first hit as the query was typed (or the ≈ passages landed) scrolled them off screen (14 Pro Max).
-            .onChange(of: hits.first?.id) { _, _ in if !(resultsOpen && !meetingResults.isEmpty), hits.indices.contains(match) { withAnimation { proxy.scrollTo(hits[match].id, anchor: .center) } } }
+            .modifier(SessionFollow(scroll: followScroll(proxy)))
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)

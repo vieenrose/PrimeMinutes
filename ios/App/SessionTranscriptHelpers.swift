@@ -185,3 +185,50 @@ struct PlayerVolumeMenu: View {
             .accessibilityLabel(L("cd_volume")).accessibilityValue(player.muted || player.volume == 0 ? L("cd_muted") : "\(Int(player.volume * 100)) %")
     }
 }
+
+/// Plain values the follow-scroll modifier reads: one snapshot per body pass,
+/// so the modifier's own onChanges stay tiny expressions.
+struct SessionFollowScroll {
+    let proxy: ScrollViewProxy
+    let playing: Bool
+    let queryEmpty: Bool
+    let tab: Int
+    let userScrolledAt: Date
+    let current: UUID?
+    let match: Int
+    let matchId: UUID?
+    let jumpTo: UUID?
+    let firstHitId: UUID?
+    let resultsOpen: Bool
+    let hasResults: Bool
+    let onFollow: (UUID) -> Void
+}
+
+/// Follows the playing line and the search hits (SessionView body): the four
+/// onChange handlers as one modifier, each a small explicit function.
+struct SessionFollow: ViewModifier {
+    let scroll: SessionFollowScroll
+    func body(content: Content) -> some View {
+        content
+            // Follow the playing line only while it plays, not while a search is open, and not right after a manual scroll.
+            .onChange(of: scroll.current) { _, id in followCurrent(id) }
+            // Search: the current hit scrolls into view as the query changes and on Next/Prev (Android TranscriptSearchBar), not only once the player plays.
+            .onChange(of: scroll.match) { _, _ in followMatch() }
+            .onChange(of: scroll.jumpTo) { _, id in if let id { withAnimation { scroll.onFollow(id) } } }
+            // Not while the results list is open: the bar and the list sit in this scroll view, and jumping to the
+            // first hit as the query was typed (or the ≈ passages landed) scrolled them off screen (14 Pro Max).
+            .onChange(of: scroll.firstHitId) { _, _ in followFirstHit() }
+    }
+    private func followCurrent(_ id: UUID?) {
+        let s = scroll
+        if s.playing, s.queryEmpty, s.tab == 1, Date().timeIntervalSince(s.userScrolledAt) > 4, let id { withAnimation { s.onFollow(id) } }
+    }
+    private func followMatch() {
+        let s = scroll
+        if let id = s.matchId { withAnimation { s.onFollow(id) } }
+    }
+    private func followFirstHit() {
+        let s = scroll
+        if !(s.resultsOpen && s.hasResults), let id = s.matchId { withAnimation { s.onFollow(id) } }
+    }
+}
