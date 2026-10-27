@@ -289,3 +289,34 @@ struct SessionLineEditSheet: View {
         }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
 }
+
+/// The session's ⋯ menu (rename, Ask, mail, export, share, re-run). Split out
+/// of SessionView's toolbar; takes plain values and closures.
+struct SessionMoreMenu: View {
+    let hasLines: Bool
+    let hasAudio: Bool
+    let noSpeech: Bool
+    let askMeetingReady: Bool
+    let busy: Bool
+    let title: String
+    let shareText: String
+    let onRename: () -> Void
+    let onAsk: () -> Void
+    let onMail: () -> Void
+    let onExport: () -> Void
+    let onRetranscribe: () -> Void
+    let onResummarize: () -> Void
+    var body: some View {
+        Menu {
+            Button(L("rename")) { onRename() }.disabled(busy)
+            if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
+            if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
+            Button(L("export_menu_entry")) { onExport() }.disabled(busy)
+            if hasLines { ShareLink(item: shareText, subject: Text(title)) { Text(L("export_share_transcript")) }.disabled(busy) }
+            if hasAudio {
+                Button(L("re_transcribe")) { onRetranscribe() }.disabled(busy)
+                if !noSpeech { Button(L("re_summarize")) { onResummarize() }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
+            }
+        } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
+    }
+}

@@ -383,17 +383,14 @@ struct SessionView: View {
                 Button { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel(L("search_transcript"))
             }
             ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button(L("rename")) { draft = s.title; renamingTitle = true }.disabled(busy)
-                    if askMeetingReady { Button { askMeeting = "" } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-                    if !s.lines.isEmpty { Button { mailOpen = true } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
-                    Button(L("export_menu_entry")) { showExport = true }.disabled(busy)
-                    if !s.lines.isEmpty { ShareLink(item: Export.text(s, .txt), subject: Text(s.title)) { Text(L("export_share_transcript")) }.disabled(busy) }
-                    if s.audio != nil {
-                        Button(L("re_transcribe")) { rerun(s, true) }.disabled(busy)
-                        if !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
-                    }
-                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
+                SessionMoreMenu(
+                    hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
+                    askMeetingReady: askMeetingReady, busy: busy, title: s.title,
+                    shareText: Export.text(s, .txt),
+                    onRename: { draft = s.title; renamingTitle = true },
+                    onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
+                    onExport: { showExport = true },
+                    onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
             }
         }
         .sheet(isPresented: $showExport) {
