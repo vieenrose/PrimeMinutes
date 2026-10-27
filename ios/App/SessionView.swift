@@ -411,10 +411,7 @@ struct SessionView: View {
             .background(Vox.page)
             .onAppear { appear(proxy) }
             .safeAreaInset(edge: .bottom) { if player.available { playerBar } }
-            // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
-            // not in it: scrolling either tab kept pushing it off screen.
-            .safeAreaInset(edge: .top) { SessionRunStatusTop(id: s.id, busy: busy) }
-            .modifier(SessionFollow(scroll: followScroll(proxy)))
+            .modifier(SessionInsets(follow: followScroll(proxy), sessionId: s.id, busy: busy, playerAvailable: player.available, playerBar: playerBar))
         }
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
@@ -741,7 +738,7 @@ extension SessionView {
 /// The run-status bar's pinned slot above the scrollable content (safeAreaInset top):
 /// the inset's own tiny view, so the long SessionView body stays out of the solver's
 /// way. Renders nothing while idle; the sticky-bar patch claims this slot.
-private struct SessionRunStatusTop: View {
+struct SessionRunStatusTop: View {
     let id: UUID
     let busy: Bool
     var body: some View {

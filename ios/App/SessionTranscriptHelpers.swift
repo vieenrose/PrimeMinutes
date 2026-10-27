@@ -514,3 +514,21 @@ struct SessionSplitSheet: View {
             .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationBackground(Vox.page)
     }
 }
+
+/// The ScrollView's trailing modifiers: pinned player bar, pinned run status,
+/// follow-scroll. One modifier so the body chain stays short.
+struct SessionInsets: ViewModifier {
+    let follow: SessionFollowScroll
+    let sessionId: UUID
+    let busy: Bool
+    let playerAvailable: Bool
+    let playerBar: PlayerBar
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom) { if playerAvailable { playerBar } }
+            // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
+            // not in it: scrolling either tab kept pushing it off screen.
+            .safeAreaInset(edge: .top) { SessionRunStatusTop(id: sessionId, busy: busy) }
+            .modifier(SessionFollow(scroll: follow))
+    }
+}
