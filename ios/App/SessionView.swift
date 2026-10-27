@@ -249,77 +249,48 @@ struct SessionView: View {
     }
     private var transcriptTab: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
-            let speakers = Array(Set(s.lines.map(\.speaker))).sorted()
-            if speakers.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack { ForEach(speakers, id: \.self) { k in
-                        HStack(spacing: 5) { Circle().fill(tint(k)).frame(width: 8, height: 8); Text(s.name(k)).font(.caption.weight(.semibold)) }
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(Vox.card, in: Capsule())
-                    } }
-                }
-            }
+            SessionSpeakerStrip(
+                speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
+                tint: { tint($0) },
+                name: { s.name($0) }
+            )
             if searching {
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                    TextField(L("search_transcript_hint"), text: $query).focused($searchFocus).submitLabel(.search).autocorrectionDisabled()
-                        .onChange(of: query) { _, _ in match = 0; resultsOpen = true; semSearch() }
-                    if EmbedHost.ready {
-                        Button { semantic.toggle(); semSearch() } label: { Text("≈").font(.headline).padding(.horizontal, 6).padding(.vertical, 2).background(semantic ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM)).tapHeight() }
-                            .buttonStyle(.plain).accessibilityLabel(L("search_semantic_cd")).accessibilityAddTraits(semantic ? .isSelected : [])
-                    }
-                    if !query.isEmpty {
-                        Text(hits.isEmpty ? L(semantic && semIndexing ? "studio_indexing" : "search_no_matches") : L("search_match_count", match + 1, hits.count)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Button { stepMatch(-1) } label: { Image(systemName: "chevron.up").tapHeight() }.accessibilityLabel(L("search_prev"))
-                        Button { stepMatch(1) } label: { Image(systemName: "chevron.down").tapHeight() }.accessibilityLabel(L("search_next"))
-                    }
-                    if !query.isEmpty && !meetingResults.isEmpty {
-                        Button { resultsOpen.toggle() } label: { Image(systemName: resultsOpen ? "chevron.up.square" : "list.bullet").tapHeight() }
-                            .accessibilityLabel(L(resultsOpen ? "search_results_hide" : "search_results_show"))
-                    }
-                    if askMeetingReady {
-                        Button { askMeeting = query.trimmingCharacters(in: .whitespaces) } label: { Image(systemName: "sparkles").tapHeight() }
-                            .accessibilityLabel(L("ask_meeting_title")).accessibilityIdentifier("search-ask-meeting")
-                    }
-                    Button { searching = false; query = "" } label: { Image(systemName: "xmark.circle.fill").tapHeight() }.accessibilityLabel(L("search_close"))
-                }.padding(Vox.insetTight).voxRow()
-                if semantic && semIndexing {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small).accessibilityHidden(true)
-                        Vox.meta(L("search_semantic_indexing"))
-                    }.padding(.horizontal, Vox.inset).accessibilityElement(children: .combine).accessibilityIdentifier("search-semantic-indexing")
-                }
-                if resultsOpen && !meetingResults.isEmpty { resultsList }
+                SessionSearchBar(
+                    query: $query,
+                    match: $match,
+                    resultsOpen: $resultsOpen,
+                    semantic: $semantic,
+                    searchFocus: $searchFocus,
+                    semIndexing: semIndexing,
+                    hasResults: !meetingResults.isEmpty,
+                    askMeetingReady: askMeetingReady,
+                    onQueryChange: { match = 0; resultsOpen = true; semSearch() },
+                    onToggleSemantic: { semantic.toggle(); semSearch() },
+                    onStep: { stepMatch($0) },
+                    onToggleResults: { resultsOpen.toggle() },
+                    onAskMeeting: { askMeeting = query.trimmingCharacters(in: .whitespaces) },
+                    onClose: { searching = false; query = "" },
+                    matchText: hits.isEmpty ? L(semantic && semIndexing ? "studio_indexing" : "search_no_matches") : L("search_match_count", match + 1, hits.count),
+                    resultsView: AnyView(resultsList)
+                )
             }
-            if !s.lines.isEmpty { Vox.micro(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))) }
-            // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
-            if s.lines.isEmpty {
-                ContentUnavailableView(L(s.noSpeech ? "status_no_speech" : "transcript_empty_title"), systemImage: s.noSpeech ? "waveform.slash" : "text.alignleft",
-                                       description: s.noSpeech ? nil : Text(L("transcript_empty"))).padding(.top, 24)
-            }
-            ForEach(Array(shown.enumerated()), id: \.element.id) { idx, l in
-                // A seam handle between two speakers: adjust where one stops and the next starts.
-                if idx > 0, shown[idx - 1].speaker != l.speaker, !busy {
-                    SpeakerSeam(colorA: tint(shown[idx - 1].speaker), colorB: tint(l.speaker), labelA: s.name(shown[idx - 1].speaker), labelB: s.name(l.speaker)) { seamAt = idx }
-                        .padding(.vertical, -4)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                        Button { renamingSpeaker = l.speaker } label: { Text(s.name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
-                        Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Text(Self.marked(l.text, query))
-                }
-                .id(l.id).padding(Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
-                .background(l.id == current ? Color.accentColor.opacity(0.18) : (hits.indices.contains(match) && hits[match].id == l.id ? Vox.highlight.opacity(0.22) : Vox.card), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
-                .contentShape(Rectangle())
-                .onTapGesture { if player.available { player.seekPlay(l.start) } }
-                .contextMenu { if !busy { lineMenu(l) } }
-                .accessibilityAction { if player.available { player.seekPlay(l.start) } }   // VoiceOver's default action: play from this line
-                .accessibilityAction(named: L("cd_line_actions")) { if !busy { editingLine = l.id; draft = l.text } }
-                // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
-                .accessibilityAction(named: L("speaker_move_line")) { if !busy { moveLine = l.id } }
-            }
+            SessionTranscriptLines(
+                lines: shown,
+                noSpeech: s.noSpeech,
+                busy: busy,
+                currentId: current,
+                query: query,
+                matchId: hits.indices.contains(match) ? hits[match].id : nil,
+                tint: { tint($0) },
+                name: { s.name($0) },
+                marked: { Self.marked($0, $1) },
+                onSeekPlay: { if player.available { player.seekPlay($0) } },
+                onRenameSpeaker: { renamingSpeaker = $0 },
+                onEditLine: { editingLine = $0; draft = $1 },
+                onMoveLine: { moveLine = $0 },
+                onSeam: { seamAt = $0 },
+                lineMenu: { AnyView(lineMenu($0)) }
+            )
         }.padding(.horizontal, Vox.gutter)
     }
 
