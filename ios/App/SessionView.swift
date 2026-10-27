@@ -329,6 +329,23 @@ struct SessionView: View {
             if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") }
         }
     }
+    /// Mail "send" picked: close the sheet, then send after the dismiss animation.
+    private func sendMail(_ r: MailRequest) {
+        mailOpen = false
+        let cur = s
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
+    }
+    /// Mail "share chat" picked: close the sheet, then share after the dismiss animation.
+    private func shareMailChat(_ r: MailRequest) {
+        mailOpen = false
+        let cur = s
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
+    }
+    /// Mail "name speaker" picked: close the sheet, then open the rename sheet for k.
+    private func nameMailSpeaker(_ k: Int) {
+        mailOpen = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
+    }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
@@ -407,18 +424,7 @@ struct SessionView: View {
             AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
         }
         .sheet(isPresented: $mailOpen) {
-            EmailParticipantsSheet(session: s, busy: busy, onSend: { r in
-                mailOpen = false
-                let cur = s
-                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
-            }, onShareChat: { r in
-                mailOpen = false
-                let cur = s
-                Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
-            }, onNameSpeaker: { k in
-                mailOpen = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
-            }, onDismiss: { mailOpen = false })
+            EmailParticipantsSheet(session: s, busy: busy, onSend: { sendMail($0) }, onShareChat: { shareMailChat($0) }, onNameSpeaker: { nameMailSpeaker($0) }, onDismiss: { mailOpen = false })
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
