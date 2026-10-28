@@ -33,6 +33,19 @@ class OpenCcConverterTest {
         assertEquals("這個軟體的資訊很完整", cc.convert("这个软件的信息很完整"))
     }
 
+    @Test fun particleLeIsNotReadAsLiaojie() {
+        val tr = OpenCcConverter.getTranscriptTraditional(InstrumentationRegistry.getInstrumentation().targetContext)
+        for (c in listOf(cc, tr)) {
+            assertEquals("會議討論了解決方案", c.convert("会议讨论了解决方案"))
+            assertEquals("說明了解約流程", c.convert("说明了解约流程"))
+            assertEquals("會議討論了解決方案", c.convert("會議討論了解決方案"))
+            assertEquals("說明了解約流程", c.convert("說明了解約流程"))
+            assertEquals("明瞭", c.convert("明瞭"))
+            assertEquals("一目瞭然", c.convert("一目瞭然"))
+        }
+        assertEquals("会议讨论了解决方案", t2s.convert("會議討論了解決方案"))
+    }
+
     @Test fun stageOneStillConvertsPlainSimplified() {
         assertEquals("電腦", cc.convert("电脑"))   // STPhrases s2t, no Taiwan-specific swap
     }
