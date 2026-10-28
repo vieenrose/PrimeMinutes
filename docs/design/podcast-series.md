@@ -215,6 +215,18 @@ v1 的檢查只有兩種觸發，全部在使用者眼前：
 
 **M3 — v2 自動（獨立評估後）**：`auto` 旗標上線（預設 off）——只搭既有唤醒來源（Android 前景/運行中的下載迴圈；iOS `didBecomeActive`/`NWPathMonitor`），24 h 節流、`dlConsent` 僅限 Wi‑Fi、每節目最新 1 集、每唤醒 ≤3 集、「立即下載」覆寫；屆時才評估配額設定。v2 不動 M1 的任何管線。
 
+**M4 — 真正的背景檢查（v0.54 之後，2026-10-29 使用者核可加入計畫）**：M3 只搭既有唤醒來源，App 沒被打開就不會檢查；M4 讓 App 未啟動時也能發現新集數。
+1. **階段一：每日背景檢查＋通知**（預設 off，設定「訂閱 → 背景檢查新集數」開關）
+   * Android：WorkManager `PeriodicWorkRequest`（24 h，約束 `UNMETERED` 網路 + 電量不低），重開機後自動恢復；只做 RSS 條件式 GET（ETag/Last-Modified）與 guid 差比，**不下載音訊**；有新集時發本機通知「《節目》2 集新」，點按開節目頁。需 `POST_NOTIFICATIONS` 執行期權限（Android 13+），拒絕時開關說明「只更新徽章」。
+   * iOS：`BGAppRefreshTask`（`earliestBeginDate` 24 h，Info.plist `BGTaskSchedulerPermittedIdentifiers`），每次執行後重排；時機由系統決定、**不保證**、使用者滑掉 App 後不會喚醒——文案如實寫「iOS 會在適當時機檢查，不保證準時」。同樣只檢查、發 `UNUserNotificationCenter` 本機通知。
+   * 兩平台共用：檢查邏輯沿用 M1 的 `Subscriptions` 檢查（暫停訂閱跳過、301/308 換鍵、失敗分類退避），每次全 App 時間盒 ≤ 30 s、訂閱序列化；無網路費用承諾（僅限 Wi‑Fi）。
+2. **階段二（選用）：自動下載新集**＝啟用資料模型已預留的 `auto` 旗標（每訂閱，預設 off）
+   * Android：由背景工作把新集交給既有 `ImportDownloads`（前景服務），沿用空間預檢、`空間不足 · 等待空間`、去重；每節目最新 1 集、每次 ≤ 3 集。
+   * iOS：單集改走 `BackgroundDownloader`（ec45b1ae 的 background URLSession，`PartPlan.merge` 沿用），下載可在 App 暫停時完成；**轉錄仍要 App 開啟**（引擎不在背景跑），通知文案寫「已下載 · 開 App 轉錄」。
+   * 這一步會碰匯入管線，需另行評審後才動工。
+* 驗收：Android 用 `adb shell cmd jobscheduler run` / WorkManager 測試驅動強制執行；iOS 用 `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:]` 於 Xcode 除錯器觸發；兩機各驗「新集→通知→點按開節目頁」與「暫停訂閱不通知」。
+* 隱私／電量：不上傳任何資料，只對使用者已訂閱的 feed 發 GET；README/指南的「訂閱＝儲存節目連結，不付費、無背景連線」在開啟此開關時改寫為「開啟背景檢查後，每天在 Wi‑Fi 下讀取已訂閱節目的 RSS」。
+
 **優先序**：M1 內若時間吃緊，依序保 1–5（解析/存放/來源標記/檢查/空間）與 6 的最小 UI（＋列、訂閱勾選、節目清單＋節目頁）；7 的 `.part` 清理屬同版安全項，不拆。6 之中：**暫停訂閱與 3xx 搬家換鍵屬資料正確性，不拆**；分享節目連結／貼上 RSS 連結是最低優先尾巴，時間吃緊可整項延到 M2（純增益功能，不影響 1–5 出貨，OPML 已另列 M2）。
 
 **出貨**：Android v0.54.0 APK（versionCode 200+）；iOS TestFlight build 14+（`~/work/testflight.sh`，Organizer 上傳）。指南更新：§4 新增「Podcast 訂閱」節點（加入音訊 → Podcast → 節目 → 訂閱此節目 → 節目頁 → 新集下載並轉錄）、mermaid 畫面結構補節點、驗證矩陣重新對日期（現行最後全面驗證為 v0.47.0，落後 PeerTube），並加入「訂閱＝儲存節目連結，不付費、無背景連線」註解；README 特色行 → 「匯入音訊檔、Podcast（單集或訂閱節目）、YouTube、PeerTube」。媒體（emulator、淺色主題、EN 程式+EN 會議 / ZH 程式+ZH 會議，依既有規則）：`43-subs-list.png`（節目清單）、`44-subs-show.png`（節目頁）、`45-subs-new.png`（新集清單）、重拍 `07-add-source.png`（五列）與 `08-podcast.png`（訂閱此節目）。
