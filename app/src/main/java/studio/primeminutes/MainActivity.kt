@@ -1131,16 +1131,24 @@ private fun TranscribeScreen(
             section(context.getString(R.string.notes_topics), n.topics)
             n.extra.forEach { (k, v) -> section(k, v) }
         }
-        // Reader journal (the "AI notes" panel): one bullet per note, as the iOS export does.
-        if (s.meetingNotes == null && agent.notes.isNotEmpty()) {
-            out.append(h(context.getString(R.string.agent_title))).append("\n")
-            agent.notes.forEach { out.append("- ").append(studio.primeminutes.core.reader.ReaderProtocol.render(it)).append("\n") }
-            out.append("\n")
-        }
         return refs(out.toString().trim().ifEmpty { null })
     }
 
-    fun transcriptText(): String = TranscriptExport.plainText(s.utterances, speakerLabel, refs(s.title), refs(s.summary), exportExtras(markdown = false), null)
+    // Reader journal (the "AI notes" panel), grouped by type under the panel's own tag labels.
+    fun exportNotes(): studio.primeminutes.core.export.ExportNotes.Section? =
+        if (s.meetingNotes != null || agent.notes.isEmpty()) null
+        else studio.primeminutes.core.export.ExportNotes.section(context.getString(R.string.agent_title), agent.notes.toList(), { t ->
+            when (t) {
+                "DECISION" -> context.getString(R.string.agent_tag_decision)
+                "ACTION" -> context.getString(R.string.agent_tag_action)
+                "OPEN-ISSUE" -> context.getString(R.string.agent_tag_open)
+                "NUMBER" -> context.getString(R.string.agent_tag_number)
+                "PROPOSAL" -> context.getString(R.string.agent_tag_proposal)
+                else -> null
+            }
+        }) { refs(it) ?: it }
+    fun transcriptText(): String = TranscriptExport.plainText(s.utterances, speakerLabel, refs(s.title), refs(s.summary), exportExtras(markdown = false), null,
+        exportNotes(), context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript))
     fun exportBaseName(): String =
         s.title?.take(48)?.replace(Regex("[^\\p{L}\\p{N} _-]"), "_")?.trim()?.ifEmpty { null } ?: "transcript"
     fun writeDoc(uri: Uri?, content: String) {
@@ -1162,19 +1170,19 @@ private fun TranscribeScreen(
     val mdSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) {
         writeDoc(it, TranscriptExport.markdown(s.utterances, speakerLabel, refs(s.title), refs(s.summary),
             context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript),
-            exportExtras(markdown = true), null))
+            exportExtras(markdown = true), null, exportNotes()))
     }
     // PDF is binary, so it bypasses writeDoc() and streams from PdfExport directly to the SAF document.
     val pdfSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val utts = s.utterances; val t = refs(s.title); val sm = refs(s.summary)
         val sumH = context.getString(R.string.export_heading_summary); val txH = context.getString(R.string.export_heading_transcript)
-        val extras = exportExtras(markdown = false)
+        val extras = exportExtras(markdown = false); val notes = exportNotes()
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { os ->
-                        studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sm, sumH, txH, extras, null, context.resources.configuration.locales[0])
+                        studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sm, sumH, txH, extras, null, context.resources.configuration.locales[0], notes)
                     } != null
                 }.getOrDefault(false)
             }
@@ -1189,12 +1197,12 @@ private fun TranscribeScreen(
     fun exportText(f: ExportFormat): String {
         val utts = s.utterances
         return when (f) {
-            ExportFormat.TEXT -> TranscriptExport.plainText(utts, speakerLabel, refs(s.title), refs(s.summary), exportExtras(markdown = false), null)
+            ExportFormat.TEXT -> transcriptText()
             ExportFormat.MARKDOWN -> TranscriptExport.markdown(
                 utts, speakerLabel, refs(s.title), refs(s.summary),
                 context.getString(R.string.export_heading_summary),
                 context.getString(R.string.export_heading_transcript),
-                exportExtras(markdown = true), null,
+                exportExtras(markdown = true), null, exportNotes(),
             )
             ExportFormat.SRT -> TranscriptExport.srt(utts, speakerLabel)
             ExportFormat.VTT -> TranscriptExport.vtt(utts, speakerLabel)
@@ -1213,6 +1221,7 @@ private fun TranscribeScreen(
         // showActionItems with the "-" filter inside, plus notes sections) — not the raw action string.
         val body = if (f == ExportFormat.PDF) null else exportText(f)
         val extras = if (f == ExportFormat.PDF) exportExtras(markdown = false) else null
+        val notes = if (f == ExportFormat.PDF) exportNotes() else null
         scope.launch {
             val file = withContext(Dispatchers.IO) {
                 runCatching {
@@ -1223,7 +1232,7 @@ private fun TranscribeScreen(
                     File(dir, "${exportBaseName()}.${f.ext}").also { out ->
                         if (f == ExportFormat.PDF) {
                             out.outputStream().use { os ->
-                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, extras, null, context.resources.configuration.locales[0])
+                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, extras, null, context.resources.configuration.locales[0], notes)
                             }
                         } else {
                             out.writeText(body.orEmpty())
@@ -2195,7 +2204,7 @@ private fun TranscribeScreen(
     }
     if (mailOpen && s.utterances.isNotEmpty()) studio.primeminutes.ui.EmailParticipantsFlow(
         s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,
-        exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras,
+        exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras, exportNotes = ::exportNotes,
         refs = { refs(it) }, notify = { vm.notify(it) },
         // Like the transcript's speaker names: off while a run relabels the speakers.
         onNameSpeaker = if (s.running) null else ({ sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) }),

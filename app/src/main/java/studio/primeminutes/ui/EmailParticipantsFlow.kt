@@ -52,6 +52,7 @@ fun EmailParticipantsFlow(
     exportBaseName: () -> String,
     transcriptText: () -> String,
     exportExtras: (Boolean) -> String?,
+    exportNotes: () -> studio.primeminutes.core.export.ExportNotes.Section? = { null },
     refs: (String?) -> String?,
     notify: (String) -> Unit,
     /** Null while a run is in flight (see [EmailParticipantsSheet]). */
@@ -120,7 +121,7 @@ fun EmailParticipantsFlow(
                 "pdf" -> out.outputStream().use { os ->
                     studio.primeminutes.core.export.PdfExport.write(os, s.utterances, speakerLabel, refs(s.title), refs(s.summary),
                         context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript),
-                        exportExtras(false), null, context.resources.configuration.locales[0])
+                        exportExtras(false), null, context.resources.configuration.locales[0], exportNotes())
                 }
                 "m4a" -> entry?.let { SessionLibrary.shareableCopy(context, it, out) } ?: return@runCatching null
             }
