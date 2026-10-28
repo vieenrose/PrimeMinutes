@@ -27,12 +27,6 @@ struct LibraryView: View {
     @State private var asking: String?
     /// False until the library's first count change: that one is the launch load, not a finished meeting.
     @State private var countArmed = false
-    /// Focus of the studio search field (Android parity: never focused on screen open;
-    /// a tap outside the field resigns it, which hides the keyboard).
-    @FocusState private var searchFocused: Bool
-    /// Frame of the search row in global coordinates: the root tap gesture keeps the keyboard up
-    /// for taps inside the row and resigns it for taps anywhere else (Android parity).
-    @State private var searchRowFrame: CGRect = .zero
     /// Fused search over the library, debounced; lexical at once, semantic once the embedder answers.
     private func runSearch() {
         searchTask?.cancel()
@@ -169,13 +163,7 @@ struct LibraryView: View {
     private func toggle(_ s: Session) { if selected.contains(s.id) { selected.remove(s.id) } else { selected.insert(s.id) } }
 
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
-    /// The row's Rename: the user's title, marked so no run replaces it (a blank one restores the automatic title).
-    /// `renameTarget` outlives the alert's binding, which may already be cleared when Done runs.
-    private func commitRename() {
-        guard let id = renameTarget ?? renaming?.id, var s = m.library.sessions.first(where: { $0.id == id }) else { return }
-        renameTarget = nil; s.rename(draft); m.library.update(s)
-    }
-    private func devOnAppear() { searchFocused = false; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+    private func devOnAppear() { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     var body: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 0).onAppear { devOnAppear() }
@@ -188,27 +176,9 @@ struct LibraryView: View {
                     Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3).tapTarget() }.accessibilityLabel(L("delete"))
                 }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
             }
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions"), text: $query).submitLabel(askReady ? .send : .search).autocorrectionDisabled()
-                    .focused($searchFocused)
-                    .onSubmit { searchFocused = false; if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
-                    .onChange(of: query) { _, _ in runSearch() }
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).tapTarget() }.accessibilityLabel(L("cd_clear_search")) }
-                if askReady {   // labeled, always there: an empty search opens Ask with an empty question
-                    Button { searchFocused = false; asking = query.trimmingCharacters(in: .whitespaces) } label: {
-                        Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 10).padding(.vertical, 6).background(Color.accentColor.opacity(0.14), in: Capsule())
-                            .frame(minHeight: 44).contentShape(Rectangle())   // the capsule keeps its height; the hit area reaches 44 pt
-                    }.buttonStyle(.plain).foregroundStyle(Color.accentColor).accessibilityLabel(L("ask_entry_cd"))
-                }
-            }.padding(Vox.inset).voxRow().padding(.horizontal, Vox.gutter)
-            .background(GeometryReader { g in Color.clear.preference(key: SearchRowFrameKey.self, value: g.frame(in: .global)) })
-            .onPreferenceChange(SearchRowFrameKey.self) { searchRowFrame = $0 }
-            LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter)
-            LibraryList(m: m, days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
+            LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
                         filtered: filter != .all || personFilter != nil, row: row, rowKey: rowKey, job: { jobCard($0) },
-                        clearFilters: { query = ""; filter = .all; personFilter = nil; searchFocused = false })
+                        clearFilters: { query = ""; filter = .all; personFilter = nil })
             .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
             if m.runner.activeJob != nil {
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
@@ -227,12 +197,14 @@ struct LibraryView: View {
             }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
         }
         .background(Color(.systemGroupedBackground))
-        // A tap anywhere (cards, chips, background, record) resigns the search field, hiding the
-        // keyboard; taps inside the search row keep it. simultaneousGesture so it fires alongside
-        // the cards' own tap gestures. Android parity: outside tap clears focus.
-        .simultaneousGesture(SpatialTapGesture().onEnded { v in
-            if !searchRowFrame.insetBy(dx: -12, dy: -12).contains(v.location) { searchFocused = false }
-        })
+        // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
+        .searchSuggestions { if askReady && query.isEmpty { LibraryAskSuggestion { asking = "" } } }
+        .submitLabel(askReady ? .send : .search)
+        .autocorrectionDisabled()
+        .onSubmit(of: .search) { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
+        .onChange(of: query) { _, _ in runSearch() }
+        .toolbar { if askReady { LibraryAskToolbar { asking = query.trimmingCharacters(in: .whitespaces) } } }
         // A meeting that finished processing lands in the library: confirm it by touch (a removal stays silent).
         .onChange(of: m.library.sessions.count) { prev, now in
             defer { countArmed = true }
@@ -257,12 +229,6 @@ struct LibraryView: View {
             Button(L("delete"), role: .destructive) { if let id = dlDeleteAsk, let j = m.runner.waiting.first(where: { $0.id == id }) { m.imports.remove(j); Haptics.destructive() }; dlDeleteAsk = nil }
         }
     }
-}
-
-/// Global frame of the studio search row, for the outside-tap keyboard dismissal.
-private struct SearchRowFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 /// "Add audio" bottom sheet (Android AddSourceSheet, without the YouTube row: not offered on iOS).
@@ -854,6 +820,7 @@ struct LibraryNoMatch: View {
 /// The scrolling part of the library: empty state, no-match, queued jobs, then the sessions by day.
 struct LibraryList: View {
     @ObservedObject var m: Model
+    let header: LibraryHeader
     let days: [(Date, [Session])]
     let label: (Date) -> String
     let searching: Bool
@@ -865,6 +832,7 @@ struct LibraryList: View {
     let clearFilters: () -> Void
     var body: some View {
         ScrollView {
+            header
             LazyVStack(alignment: .leading, spacing: 10) {
                 if m.library.sessions.isEmpty && m.runner.waiting.isEmpty { LibraryEmpty(downloads: m.downloads).padding(.top, 40) }
                 if !m.library.sessions.isEmpty && days.isEmpty {
@@ -877,6 +845,25 @@ struct LibraryList: View {
                     ForEach(items) { s in row(s).id(rowKey(s)) }
                 }
             }.padding(.horizontal, Vox.gutter)
+        }
+    }
+}
+
+/// Ask, offered in the search drawer while the field is empty and focused (the toolbar keeps it always reachable).
+struct LibraryAskSuggestion: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { Label(L("ask_entry_cd"), systemImage: "bubble.left.and.text.bubble.right") }
+    }
+}
+
+/// Ask in the nav bar: a question about all the meetings (the search text, if any, becomes the question).
+struct LibraryAskToolbar: ToolbarContent {
+    let action: () -> Void
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(action: action) { Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").labelStyle(.titleAndIcon) }
+                .accessibilityLabel(L("ask_entry_cd"))
         }
     }
 }
