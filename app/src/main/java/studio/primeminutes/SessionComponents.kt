@@ -52,6 +52,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -395,15 +397,17 @@ internal fun CollapsibleMarkdown(
         modifier = Modifier.fillMaxWidth().clickable { onBeginEdit() },
     )
     if (overflowed || expanded) {
-        Text(
-            stringResource(if (expanded) R.string.show_less else R.string.show_more),
-            style = MaterialTheme.typography.labelMedium,
-            color = pal.Slate400,
-            // Role + 48dp minimum: the bare label was a ~16dp-high tap target that TalkBack read as plain text.
-            modifier = Modifier.padding(top = Spacing.xs)
-                .minimumInteractiveComponentSize()
-                .clickable(role = Role.Button) { expanded = !expanded },
-        )
+        // M3 expander: a TextButton with a chevron, not a bare web-style text link.
+        androidx.compose.material3.TextButton(
+            onClick = { expanded = !expanded },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Spacing.sm),
+        ) {
+            Text(stringResource(if (expanded) R.string.show_less else R.string.show_more), style = MaterialTheme.typography.labelLarge)
+            androidx.compose.material3.Icon(
+                if (expanded) androidx.compose.material.icons.Icons.Filled.ExpandLess else androidx.compose.material.icons.Icons.Filled.ExpandMore,
+                contentDescription = null, modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
