@@ -201,4 +201,17 @@ final class ContactsMailUITests: XCTestCase {
         shot("oc-3-contacts", tree: true)
         contacts.terminate()
     }
+
+    /// "This is me in Contacts…" on the Me person page (PM_PERSON): picks the first contact, then unlinks it.
+    func testMeContact() {
+        launch(["VOX_SETTINGS": "1", "VOX_PEOPLE": env["PM_PERSON"] ?? "PMTEST Cy"])
+        sleep(3); shot("me-1-page", tree: true)
+        let b = app.buttons["contact-me"]
+        if b.waitForExistence(timeout: 5) { b.tap() } else { XCTFail("no This is me button"); return }
+        sleep(3); shot("me-2-picker")
+        if let c = app.cells.allElementsBoundByIndex.first(where: { $0.isHittable }) { c.tap() } else { XCTFail("no contact") }
+        sleep(3); shot("me-3-linked", tree: true)
+        if let u = button(["Unlink", "取消連結", "取消关联"]) { u.tap(); sleep(2) } else { XCTFail("no Unlink") }
+        shot("me-4-unlinked", tree: true)
+    }
 }
