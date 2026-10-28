@@ -80,6 +80,7 @@
 "filter_all" = "全部（%d）";
 "filter_new" = "新（%d）";
 "filter_done" = "已完成（%d）";
+"cd_filter" = "筛选";
 "search_sessions" = "搜索场次…";
 "empty_title" = "暂无场次";
 "empty_hint" = "录音或用 + 添加音频。";

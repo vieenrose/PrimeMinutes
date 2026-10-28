@@ -80,6 +80,7 @@
 "filter_all" = "All (%d)";
 "filter_new" = "New (%d)";
 "filter_done" = "Done (%d)";
+"cd_filter" = "Filter";
 "search_sessions" = "Search sessions…";
 "empty_title" = "No sessions yet";
 "empty_hint" = "Record a meeting or add audio with +.";

@@ -122,18 +122,11 @@ struct LibraryView: View {
         if Calendar.current.isDateInYesterday(d) { return L("yesterday") }
         return d.formatted(date: .abbreviated, time: .omitted)
     }
-    private func chip(_ f: Filter) -> some View {
-        let n = f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : isDone($0) }.count
-        return Button { filter = f } label: {
-            Vox.subhead(L("filter_" + f.rawValue, n))
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(filter == f ? Color.accentColor : Vox.card, in: Capsule())
-                .foregroundStyle(filter == f ? Color.white : Color.primary)
-                // The capsule stays compact; the tap area reaches the 44 pt HIG minimum.
-                .frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-        // VoiceOver only saw the colour change; say which filter is on.
-        .accessibilityAddTraits(filter == f ? .isSelected : [])
+    /// The filters on offer with their counts (New only while a meeting is unread, none on an empty library).
+    private var filterOptions: [(Filter, String)] {
+        Filter.allCases.filter { $0 == .all || !m.library.sessions.isEmpty && ($0 == .done || m.library.sessions.contains { isNew($0) }) }.map { f in
+            (f, L("filter_" + f.rawValue, f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : isDone($0) }.count))
+        }
     }
     private func card(_ s: Session) -> some View {
         HStack(spacing: 12) {
@@ -227,9 +220,11 @@ struct LibraryView: View {
             }
         }
     }
+    /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
+    private func devOnAppear() { searchFocused = false; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     var body: some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { searchFocused = false; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+            Color.clear.frame(height: 0).onAppear { devOnAppear() }
             if !selected.isEmpty {
                 HStack(spacing: 16) {
                     Button { selected = [] } label: { Image(systemName: "xmark").font(.title3).tapTarget() }.accessibilityLabel(L("cd_exit_selection"))
@@ -280,9 +275,7 @@ struct LibraryView: View {
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack { ForEach(Filter.allCases.filter { $0 == .all || !m.library.sessions.isEmpty && ($0 == .done || m.library.sessions.contains { isNew($0) }) }, id: \.self) { chip($0) } }.padding(.horizontal, Vox.gutter)
-            }.padding(.vertical, 10)
+            if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter).padding(.horizontal, Vox.gutter).padding(.vertical, 10) }
             PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
@@ -777,5 +770,16 @@ func pausedText(_ b: (Int64, Int64)?) -> String {
                 try? o.joined(separator: "\n").write(to: URL(fileURLWithPath: NSHomeDirectory() + "/Documents/ids.txt"), atomically: true, encoding: .utf8)
             }
         }
+    }
+}
+
+/// The library's All / New / Done filter as a native segmented control; each segment keeps its count.
+struct LibraryFilterPicker: View {
+    let options: [(LibraryView.Filter, String)]
+    @Binding var selection: LibraryView.Filter
+    var body: some View {
+        Picker(L("cd_filter"), selection: $selection) {
+            ForEach(options, id: \.0) { o in Text(o.1).tag(o.0) }
+        }.pickerStyle(.segmented)
     }
 }
