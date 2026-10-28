@@ -119,7 +119,7 @@ struct LibraryView: View {
                    indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
                    onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = $0 },
-                   onRename: { draft = s.title; renaming = s }, onDelete: { deleting = s })
+                   onRename: { draft = s.title; renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
     }
     private func activate(_ s: Session) {
         Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
@@ -163,6 +163,12 @@ struct LibraryView: View {
     }
 
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
+    /// The row's Rename: the user's title, marked so no run replaces it (a blank one restores the automatic title).
+    /// `renameTarget` outlives the alert's binding, which may already be cleared when Done runs.
+    private func commitRename() {
+        guard let id = renameTarget ?? renaming?.id, var s = m.library.sessions.first(where: { $0.id == id }) else { return }
+        renameTarget = nil; s.rename(draft); m.library.update(s)
+    }
     private func devOnAppear() { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     var body: some View {
         LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
