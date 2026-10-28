@@ -252,7 +252,16 @@ object PeopleStore {
         init(context)
         if (!ContactsProvider.granted(context)) return
         val before = doc.value
-        val states = before.people.filter { it.contact?.platform == "android" }.associate { it.id to ContactsProvider.resolve(context, it.contact) }
+        val profile by lazy { ContactsProvider.profile(context) }
+        val states = before.people.mapNotNull { p ->
+            when {
+                // "Me" is the owner's profile card when there is one (never a contact named "Me").
+                p.me && (p.contact == null || p.contact.key.startsWith(ContactsProvider.PROFILE_PREFIX)) ->
+                    profile?.let { p.id to LinkState.Linked(it) } ?: if (p.contact != null) p.id to LinkState.Missing else null
+                p.contact?.platform == "android" -> p.id to ContactsProvider.resolve(context, p.contact)
+                else -> null
+            }
+        }.toMap()
         if (states.isEmpty()) return
         val after = mutate(context) { d -> states.entries.fold(d) { acc, (id, st) -> ContactLinks.apply(acc, id, st, now()) } }
         for (p in after.people) {

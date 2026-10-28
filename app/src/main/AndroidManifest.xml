@@ -35,6 +35,8 @@
          app only offers plain speaker labels. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <!-- "Me" = the owner's profile card (granted with the contacts group). -->
+    <uses-permission android:name="android.permission.READ_PROFILE" />
 
     <!-- "Email participants": is there an e-mail app to hand the mail to (Android 11+ package
          visibility)? Not a sensitive declaration. -->

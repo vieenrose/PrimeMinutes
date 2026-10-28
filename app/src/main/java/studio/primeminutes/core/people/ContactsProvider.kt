@@ -88,6 +88,22 @@ object ContactsProvider {
             "${Email.IS_SUPER_PRIMARY} DESC, ${Email.IS_PRIMARY} DESC")
             ?.use { c -> buildList { while (c.moveToNext()) c.getString(0)?.let { add(it) } } }.orEmpty()
 
+    /** The device owner's profile card ("Me" in the Contacts app), or null when there is none. */
+    fun profile(context: Context): OsContact? = runCatching {
+        val cr = context.contentResolver
+        val c = cr.query(ContactsContract.Profile.CONTENT_URI, CONTACT_PROJ, null, null, null)?.use { c ->
+            if (!c.moveToFirst()) null else OsContact(c.getLong(0), PROFILE_PREFIX + (c.getString(1) ?: ""), c.getString(2)?.trim().orEmpty())
+        } ?: return@runCatching null
+        if (c.name.isEmpty()) return@runCatching null
+        val emails = cr.query(Uri.withAppendedPath(ContactsContract.Profile.CONTENT_URI, ContactsContract.Contacts.Data.CONTENT_DIRECTORY),
+            arrayOf(Email.ADDRESS), "${ContactsContract.Data.MIMETYPE}=?", arrayOf(Email.CONTENT_ITEM_TYPE), null)
+            ?.use { e -> buildList { while (e.moveToNext()) e.getString(0)?.let { add(it) } } }.orEmpty()
+        c.copy(emails = emails)
+    }.onFailure { Log.w(TAG, "profile unreadable", it) }.getOrNull()
+
+    /** Lookup keys of the profile card carry this prefix, so they never collide with a contact's. */
+    const val PROFILE_PREFIX = "profile:"
+
     fun resolve(context: Context, link: ContactLink?): LinkState =
         ContactLinks.resolve(link, { byKey(context, it) }, { byId(context, it) })
 
@@ -111,7 +127,8 @@ object ContactsProvider {
     /** "Edit in Contacts": the system editor on this contact (null when it cannot be resolved). */
     fun editIntent(link: ContactLink): Intent? {
         val id = link.id ?: return null
-        val uri = ContactsContract.Contacts.getLookupUri(id, link.key)
+        val uri = if (link.key.startsWith(PROFILE_PREFIX)) ContactsContract.Profile.CONTENT_URI
+            else ContactsContract.Contacts.getLookupUri(id, link.key)
         return Intent(Intent.ACTION_EDIT).setDataAndType(uri, ContactsContract.Contacts.CONTENT_ITEM_TYPE)
             .putExtra("finishActivityOnSaveCompleted", true)
     }
