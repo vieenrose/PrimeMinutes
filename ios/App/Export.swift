@@ -125,17 +125,43 @@ enum Export {
         } catch { return nil }
     }
 
+    /// A transcript turn line of the txt body: `[clock] Speaker: ` (group 2 = the label the body hangs under).
+    private static let turnRe = try! NSRegularExpression(pattern: #"^\[(\d{2}:\d{2}(?::\d{2})?)\] ([^:\n]*?: )"#)
+
     static func pdf(_ body: String, title: String) -> Data {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842), inset = page.insetBy(dx: 40, dy: 48)
         let para = NSMutableParagraphStyle(); para.lineSpacing = 3
         let text = NSMutableAttributedString(string: body, attributes: [.font: UIFont.systemFont(ofSize: 11), .paragraphStyle: para])
         let ns = body as NSString
+        let clockFont = UIFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular), hidden = UIFont.systemFont(ofSize: 0.01)
+        let grey = UIColor(red: 0x5A / 255, green: 0x69 / 255, blue: 0x82 / 255, alpha: 1), bodyFont = UIFont.systemFont(ofSize: 11)
+        func width<S: StringProtocol>(_ t: S, _ f: UIFont) -> CGFloat { (String(t) as NSString).size(withAttributes: [.font: f]).width }
+        var hang: NSParagraphStyle?
         // Title line (bold 18) and section headings (bold 13), matching the text layout the PDF renders.
         if !title.isEmpty { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: min((title as NSString).length, ns.length))) }
         ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: [.byLines, .substringNotRequired]) { _, r, _, _ in
             let line = ns.substring(with: r)
             if !title.isEmpty, r.location == 0 { return }   // the title line is already styled above
             if line == L("export_heading_actions") || line == L("export_heading_summary") || line == L("agent_title") { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 13), range: r) }
+            // Transcript turns (design A): the clock in a grey left gutter, its brackets invisible (still in the copied
+            // text), the body hanging under the text after the speaker label; continuation lines hang the same way.
+            if let m = turnRe.firstMatch(in: line, range: NSRange(location: 0, length: r.length)) {
+                let clock = (line as NSString).substring(with: m.range(at: 1)), who = (line as NSString).substring(with: m.range(at: 2))
+                let gutter = width("00:00:00".prefix(clock.count), clockFont) + 10
+                text.addAttributes([.font: hidden, .foregroundColor: UIColor.clear], range: NSRange(location: r.location, length: 1))
+                text.addAttributes([.font: clockFont, .foregroundColor: grey], range: NSRange(location: r.location + 1, length: m.range(at: 1).length))
+                text.addAttributes([.font: hidden, .foregroundColor: UIColor.clear], range: NSRange(location: r.location + 1 + m.range(at: 1).length, length: 1))
+                // The space after `]` pads the clock out to the gutter edge.
+                let sp = NSRange(location: r.location + m.range(at: 1).length + 2, length: 1)
+                text.addAttribute(.kern, value: gutter - width(clock, clockFont) - width(" ", bodyFont), range: sp)
+                let ps = NSMutableParagraphStyle(); ps.lineSpacing = 3; ps.headIndent = gutter + width(who, bodyFont)
+                text.addAttribute(.paragraphStyle, value: ps, range: r); hang = ps
+            } else if let h = hang, line.hasPrefix("  ") {
+                let lead = line.prefix { $0 == " " }.count
+                text.addAttribute(.font, value: hidden, range: NSRange(location: r.location, length: lead))
+                let ps = NSMutableParagraphStyle(); ps.lineSpacing = 3; ps.headIndent = h.headIndent; ps.firstLineHeadIndent = h.headIndent
+                text.addAttribute(.paragraphStyle, value: ps, range: r)
+            } else { hang = nil }
         }
         let setter = CTFramesetterCreateWithAttributedString(text)
         var at = 0
