@@ -29,6 +29,7 @@ import studio.primeminutes.service.RunRegistry
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -345,6 +346,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge to edge on every API level (Android 15+ forces it anyway with targetSdk 35): the
+        // screens draw behind transparent bars and pad themselves with the window insets. The bar
+        // icon colours follow the app theme (PrimeMinutesTheme), not the system dark mode.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         maybeRequestNotifications()
         // First launch (and after an update / on a new SoC): measure how many threads this phone scales to.

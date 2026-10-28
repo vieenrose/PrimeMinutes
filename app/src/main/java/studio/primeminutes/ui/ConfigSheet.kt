@@ -6,10 +6,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
 /**
- * Settings — a [ModalBottomSheet] hosting [SettingsContent], opened by the header gear.
+ * Settings — a full-screen page (large collapsing top bar, back arrow) hosting [SettingsContent],
+ * opened by the header gear. It used to be a bottom sheet: a long preferences page is a destination.
  * Download-readiness is probed once off the main thread (cheap File.exists checks) so the
  * model rows can show a downloaded vs will-download badge.
  */
@@ -49,7 +59,6 @@ fun ConfigSheet(
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var readyLlm by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(Unit) {
@@ -60,25 +69,39 @@ fun ConfigSheet(
         readyLlm = res
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = pal.Slate800,
-    ) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+    val barScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(
+        modifier = Modifier.fillMaxSize().nestedScroll(barScroll.nestedScrollConnection).testTag("settings-screen"),
+        containerColor = pal.Slate800,   // the cards (InsetSurface) were drawn for this surface
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() })
+                },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = pal.Slate800, scrolledContainerColor = pal.Slate800,
+                    titleContentColor = pal.Slate200, navigationIconContentColor = pal.Slate200,
+                ),
+                scrollBehavior = barScroll,
+            )
+        },
+    ) { inner ->
         Column(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(inner)
+                .consumeWindowInsets(inner)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.lg)
-                .padding(bottom = Spacing.xxl)
-                .verticalScroll(rememberScrollState()),
+                .padding(bottom = Spacing.xxl),
         ) {
-            Text(
-                stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = pal.Slate200,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = Spacing.sm).semantics { heading() },
-            )
             SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound, onOpenPeople)
         }
     }

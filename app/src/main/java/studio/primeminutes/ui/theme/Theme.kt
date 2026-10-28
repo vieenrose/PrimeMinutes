@@ -327,12 +327,13 @@ fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Both bars follow the palette: the XML theme is Material.Light, so without this the
-            // dark palettes kept a light navigation bar (and dark icons on it).
-            @Suppress("DEPRECATION")
-            window.statusBarColor = pal.Slate900.toArgb()
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = pal.Slate900.toArgb()
+            // Edge to edge (MainActivity.enableEdgeToEdge): the bars are transparent and show the
+            // screen behind them, so only the icon colour follows the palette. No contrast scrim on
+            // the 3-button bar: it is a grey veil on e-ink and on the high-contrast palettes.
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                window.isNavigationBarContrastEnforced = false
+                window.isStatusBarContrastEnforced = false
+            }
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !pal.isDark
                 isAppearanceLightNavigationBars = !pal.isDark

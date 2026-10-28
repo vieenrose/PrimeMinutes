@@ -47,6 +47,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.platform.testTag
 import android.os.Build
@@ -64,6 +66,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -162,18 +166,15 @@ fun SettingsContent(
         // The people directory (names shared by all meetings; voice recognition lives there too).
         if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
-            androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onOpenPeople)
-                    .padding(vertical = Spacing.sm)
+            androidx.compose.material3.ListItem(
+                headlineContent = { Text(stringResource(R.string.people_settings_open, people.people.size)) },
+                supportingContent = { Text(stringResource(R.string.people_settings_desc)) },
+                leadingContent = { Icon(Icons.Filled.Person, contentDescription = null) },
+                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                colors = settingsListItemColors(),
+                modifier = Modifier.bleed().fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onOpenPeople)
                     .testTag("settings-people"),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.people_settings_open, people.people.size), color = pal.Slate200, style = MaterialTheme.typography.bodyLarge)
-                    Text(stringResource(R.string.people_settings_desc), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
-                }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
-            }
+            )
         }
 
         Section(stringResource(R.string.settings_reader_model)) {
@@ -624,15 +625,12 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
         }
     }
     Spacer(Modifier.height(Spacing.sm))
-    Text(
-        "github.com/vieenrose/PrimeMinutes",
-        style = MaterialTheme.typography.bodySmall,
-        color = pal.Sky,
-        modifier = Modifier
-            .clickable(role = androidx.compose.ui.semantics.Role.Button) { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") }
-            .heightIn(min = 48.dp)
-            .wrapContentHeight(Alignment.CenterVertically)
-            .padding(vertical = Spacing.xs),
+    androidx.compose.material3.ListItem(
+        headlineContent = { Text("github.com/vieenrose/PrimeMinutes") },
+        leadingContent = { Icon(Icons.Filled.Description, contentDescription = null) },
+        colors = settingsListItemColors(headline = pal.Sky),
+        modifier = Modifier.bleed().fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { uriHandler.openUri("https://github.com/vieenrose/PrimeMinutes") },
     )
 }
 
@@ -680,27 +678,42 @@ private fun LabeledRow(label: String, content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * A [androidx.compose.material3.ListItem] keeps its own 16 dp side padding; inside a settings card
+ * (already padded) that indented the rows past the card's other text. Bleed the row over the card
+ * padding so the label lines up and the ripple spans the card.
+ */
+private fun Modifier.bleed(x: androidx.compose.ui.unit.Dp = 16.dp) = layout { m, c ->
+    val px = x.roundToPx()
+    val p = m.measure(c.copy(minWidth = c.minWidth + 2 * px, maxWidth = c.maxWidth + 2 * px))
+    layout(p.width - 2 * px, p.height) { p.place(-px, 0) }
+}
+
+/** The settings rows are M3 list items on the card surface: transparent container, palette text. */
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
-    val pal = LocalPrimeMinutesPalette.current
-    Row(
-        // The whole row toggles: tapping the label did nothing, only the small switch did.
-        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
-            modifier = Modifier.weight(1f))
-        Switch(
-            checked = checked, onCheckedChange = onChange, enabled = enabled,
-            colors = primeMinutesSwitchColors(),
-            // Name the switch after its row. A bare Row contributes no semantics node, so the label
-            // and the switch land as unrelated siblings of the scrolling Column: TalkBack announced
-            // an unlabelled "switch", and nothing could tell one row's switch from another's.
-            // (Merging the Row does NOT fix it — a Switch is itself a merging node, so it stays
-            // separate instead of folding into the row.)
-            modifier = Modifier.semantics { contentDescription = label },
+private fun settingsListItemColors(headline: androidx.compose.ui.graphics.Color = LocalPrimeMinutesPalette.current.Slate200) =
+    LocalPrimeMinutesPalette.current.let { pal ->
+        androidx.compose.material3.ListItemDefaults.colors(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            headlineColor = headline, supportingColor = pal.Slate400,
+            leadingIconColor = pal.Slate400, trailingIconColor = pal.Slate400,
         )
     }
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    androidx.compose.material3.ListItem(
+        headlineContent = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+        // The Switch has no callback of its own: the whole row is ONE toggleable node (role Switch),
+        // so tapping the label toggles it and TalkBack reads "label, switch, on" as a single item.
+        trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled, colors = primeMinutesSwitchColors()) },
+        colors = settingsListItemColors(),
+        modifier = Modifier.bleed().fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch) { on ->
+            if (on) haptic.toggleOn() else haptic.toggleOff()
+            onChange(on)
+        },
+    )
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
