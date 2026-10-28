@@ -172,7 +172,8 @@ import Foundation
         guard PersonNames.isPersonName(n), let key = OSContacts.create(n) else { return nil }
         let p = create(n)
         linkContact(p.id, PickedContact(name: n, emails: [], key: key))
-        askEmailFor = p.id   // "Add an e-mail for X?" (optional)
+        let id = p.id   // "Add an e-mail for X?" (optional), once the naming sheet is gone (an alert under a closing sheet is dropped)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { self.askEmailFor = id }
         return doc.byId(p.id) ?? p
     }
     /// The person "Add an e-mail for X?" is asked about (NewPersonEmailPrompt), nil when none.
