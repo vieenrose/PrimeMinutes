@@ -20,13 +20,15 @@ enum class ChineseScript { TRADITIONAL, SIMPLIFIED }
  *
  * Span gating: the text is split on punctuation and whitespace, and a span is converted only if it holds
  * a character of the source script ([gate]: one the S→T character table changes for S→T, one the T→S
- * table changes for T→S). Text already in the target script passes through untouched, so phrase
+ * table changes for T→S), or one of the [force] words (STForce.txt / TSForce.txt: 放松, 信息, 一目瞭然… are
+ * written with characters valid in both scripts but belong to one). Text already in the target script passes through untouched, so phrase
  * entries can no longer rewrite it (說明了 → 說明瞭, 干涉 → 幹涉 on Traditional input).
  */
 class OpenCcConverter private constructor(
     private val stages: List<Map<String, String>>,
     private val maxKey: Int,
     private val gate: Set<Int>,
+    private val force: List<String>,
 ) {
     fun convert(text: String): String {
         // Skip non-Chinese text. OpenCC maps shared Han characters to Traditional variants, which mangles
@@ -62,6 +64,7 @@ class OpenCcConverter private constructor(
             gated = cp in gate
             i += Character.charCount(cp)
         }
+        if (!gated) gated = force.any { span.contains(it) }
         sb.append(if (gated) convertSpan(span) else span)
     }
 
@@ -134,13 +137,13 @@ class OpenCcConverter private constructor(
             val t2s = HashMap<String, String>(8192)
             loadInto(open, "opencc/TSPhrases.txt", t2s)
             loadInto(open, "opencc/TSCharacters.txt", t2s)
-            return build(listOf(t2s), traditionalOnly(open))
+            return build(listOf(t2s), traditionalOnly(open), tsForce(open))
         }
 
         private fun buildTraditionalConservative(open: (String) -> InputStream): OpenCcConverter {
             val twChars = HashMap<String, String>(2048)
             loadInto(open, "opencc/TWVariants.txt", twChars)
-            return build(listOf(s2tStage(open), twChars), simplifiedOnly(open))
+            return build(listOf(s2tStage(open), twChars), simplifiedOnly(open), stForce(open))
         }
 
         /**
@@ -274,7 +277,7 @@ class OpenCcConverter private constructor(
             loadInto(open, "opencc/TWVariants.txt", tw)
             loadInto(open, "opencc/TWVariantsPhrases.txt", tw)
             loadInto(open, LEXICON, tw)
-            return build(listOf(s2tStage(open), tw), simplifiedOnly(open))
+            return build(listOf(s2tStage(open), tw), simplifiedOnly(open), stForce(open))
         }
 
         /**
@@ -297,7 +300,7 @@ class OpenCcConverter private constructor(
             val t2s = HashMap<String, String>(8192)
             loadInto(open, "opencc/TSPhrases.txt", t2s)
             loadInto(open, "opencc/TSCharacters.txt", t2s)
-            return build(listOf(twRev, t2s), traditionalOnly(open))
+            return build(listOf(twRev, t2s), traditionalOnly(open), tsForce(open))
         }
 
         /** OpenCC `*Rev` dictionary: every target of a line maps back to its source; earlier files win. */
@@ -323,9 +326,22 @@ class OpenCcConverter private constructor(
             }
         }
 
-        private fun build(stages: List<Map<String, String>>, gate: Set<Int>): OpenCcConverter {
+        private fun build(stages: List<Map<String, String>>, gate: Set<Int>, force: List<String>): OpenCcConverter {
             val maxKey = stages.asSequence().flatMap { it.keys.asSequence() }.maxOfOrNull { it.length } ?: 1
-            return OpenCcConverter(stages, maxKey, gate)
+            return OpenCcConverter(stages, maxKey, gate, force)
+        }
+
+        private fun stForce(open: (String) -> InputStream) = wordList(open, "opencc/STForce.txt")
+        private fun tsForce(open: (String) -> InputStream) = wordList(open, "opencc/TSForce.txt")
+
+        /** One word per line, # comments: spans holding one convert even without a script-specific character. */
+        private fun wordList(open: (String) -> InputStream, asset: String): List<String> = try {
+            open(asset).use { raw ->
+                raw.bufferedReader(Charsets.UTF_8).readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith('#') }
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("OpenCcConverter", "failed loading $asset", e)
+            emptyList()
         }
 
         /**

@@ -32,12 +32,12 @@ class OpenCcLiaojieTest {
         "这一目了然" to "這一目瞭然",
         // Span gating: no character the S→T table changes, so already valid Traditional and left alone.
         "明了" to "明了",
-        "一目了然" to "一目了然",
+        "一目了然" to "一目瞭然",   // ...unless it holds an STForce word
         "我们需要了解客户" to "我們需要了解客戶",
         "据了解" to "據了解",
         "讨论了如何推进" to "討論了如何推進",
         "做完了然后再说" to "做完了然後再說",
-        "了如指掌" to "了如指掌",   // span gating, as 明了 above
+        "了如指掌" to "瞭如指掌",   // STForce
         "他对这了如指掌" to "他對這瞭如指掌",
         "这证明了解法可行" to "這證明了解法可行",
     )
@@ -51,7 +51,7 @@ class OpenCcLiaojieTest {
         assertEquals("说明了解约流程", toSimplified.convert("說明了解約流程"))
         assertEquals("我们需要了解客户", toSimplified.convert("我們需要瞭解客戶"))
         assertEquals("这一目了然", toSimplified.convert("這一目瞭然"))
-        assertEquals("一目瞭然", toSimplified.convert("一目瞭然"))   // no character the T→S table changes: left alone
+        assertEquals("一目了然", toSimplified.convert("一目瞭然"))   // TSForce
     }
 
 }
