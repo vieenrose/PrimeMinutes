@@ -93,7 +93,8 @@ struct ContentView: View {
     var body: some View {
         NavigationStack(path: $path) {
             LibraryView(m: m, path: $path, onAdd: { showAdd = true }, onSettings: { showSettings = true })
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle(L("app_name")).navigationBarTitleDisplayMode(.large)
+            .toolbar { LibraryToolbar(onAdd: { showAdd = true }, onSettings: { showSettings = true }) }
             .navigationDestination(for: Route.self) { r in
                 switch r {
                 case .session(let x): SessionView(session: m.library.sessions.first { $0.id == x.id } ?? x, save: { m.library.update($0) }, rerun: { m.runner.rerun($0, transcribe: $1) }, openAt: m.openAt?.0 == x.id ? m.openAt?.1 : nil, busy: m.runner.activeJob == x.id || m.runner.waiting.contains { $0.id == x.id })

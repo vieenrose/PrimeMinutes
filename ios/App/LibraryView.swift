@@ -233,14 +233,6 @@ struct LibraryView: View {
                     Button(L("select_all")) { selected = Set(shown.map(\.id)) }
                     Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3).tapTarget() }.accessibilityLabel(L("delete"))
                 }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
-            } else {
-            HStack {
-                BrandMark(size: 34)
-                Vox.title(L("app_name"))
-                Spacer()
-                Button(action: onAdd) { Image(systemName: "plus").font(.title3).tapTarget() }.accessibilityLabel(L("import_audio"))
-                Button(action: onSettings) { Image(systemName: "slider.horizontal.3").font(.title3).tapTarget() }.accessibilityLabel(L("settings")).padding(.leading, 12)
-            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
             }
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -776,5 +768,17 @@ struct LibraryFilterPicker: View {
         Picker(L("cd_filter"), selection: $selection) {
             ForEach(options, id: \.0) { o in Text(o.1).tag(o.0) }
         }.pickerStyle(.segmented)
+    }
+}
+
+/// The library's nav-bar buttons (the screen title is the app name, large): add a source, then Settings.
+struct LibraryToolbar: ToolbarContent {
+    let onAdd: () -> Void
+    let onSettings: () -> Void
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button(action: onAdd) { Image(systemName: "plus") }.accessibilityLabel(L("import_audio"))
+            Button(action: onSettings) { Image(systemName: "gearshape") }.accessibilityLabel(L("settings"))
+        }
     }
 }
