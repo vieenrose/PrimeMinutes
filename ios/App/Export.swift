@@ -23,11 +23,11 @@ enum Export {
         s.notes = s0.notes.map { var n = $0; n.text = refs($0.text, s0); return n }
         switch f {
         case .srt:
-            return cues(s.lines).enumerated().map { i, l in "\(i + 1)\n\(clock(l.start, comma: true)) --> \(clock(endOf(l), comma: true))\n\(oneCue(s.name(l.speaker))): \(l.text)\n" }.joined(separator: "\n")
+            return cues(s.lines).enumerated().map { i, l in "\(i + 1)\n\(clock(l.start, comma: true)) --> \(clock(endOf(l), comma: true))\n\(oneCue(s.name(l.speaker))): \(oneCue(l.text))\n" }.joined(separator: "\n")
         case .vtt:
             return "WEBVTT\n\n" + cues(s.lines).map { "\(clock($0.start)) --> \(clock(endOf($0)))\n\(vtt(oneCue(s.name($0.speaker)))): \(vtt($0.text))\n" }.joined(separator: "\n")
         case .lrc:
-            let head = s.title.isEmpty ? "" : "[ti:\(s.title)]\n"
+            let head = s.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "[ti:\(s.title)]\n"
             return head + s.lines.compactMap { l in
                 let x = l.text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces); guard !x.isEmpty else { return nil }
                 let cs = Int(max(0, l.start) * 100)
@@ -36,13 +36,13 @@ enum Export {
             var o = s.title + "\n\n"
             if !s.summary.isEmpty { o += s.summary + "\n\n" }
             if Prefs.showActions, let a = acts { o += L("export_heading_actions") + "\n" + a + "\n\n" }
-            if !s.notes.isEmpty { o += s.notes.map { ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
+            if !s.notes.isEmpty { o += L("agent_title") + "\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
             return o + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "[\(hms(l.start))] \(s.name(l.speaker)): \(x)" }.joined(separator: "\n")
         case .md:
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
             if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + s.summary + "\n\n" }
             if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
-            if !s.notes.isEmpty { o += "## " + L("agent") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
+            if !s.notes.isEmpty { o += "## " + L("agent_title") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
             return o + "## " + L("export_heading_transcript") + "\n\n" + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "- `\(hms(l.start))` **\(s.name(l.speaker))** \(x)" }.joined(separator: "\n") + "\n"
         }
     }
@@ -102,7 +102,14 @@ enum Export {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842), inset = page.insetBy(dx: 40, dy: 48)
         let para = NSMutableParagraphStyle(); para.lineSpacing = 3
         let text = NSMutableAttributedString(string: body, attributes: [.font: UIFont.systemFont(ofSize: 11), .paragraphStyle: para])
-        text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: (title as NSString).length))
+        let ns = body as NSString
+        // Title line (bold 18) and section headings (bold 13), matching the text layout the PDF renders.
+        if !title.isEmpty { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: min((title as NSString).length, ns.length))) }
+        ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: [.byLines, .substringNotRequired]) { _, r, _, _ in
+            let line = ns.substring(with: r)
+            if !title.isEmpty, r.location == 0 { return }   // the title line is already styled above
+            if line == L("export_heading_actions") || line == L("export_heading_summary") || line == L("agent_title") { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 13), range: r) }
+        }
         let setter = CTFramesetterCreateWithAttributedString(text)
         var at = 0
         return UIGraphicsPDFRenderer(bounds: page).pdfData { ctx in
