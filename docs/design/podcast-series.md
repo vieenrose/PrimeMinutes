@@ -100,7 +100,7 @@ Status: 定案計畫 2026-10-20；**2026-10-29 依 origin/android（52292c6b，v
 **来源標記（provenance）**——v2 去重與「已匯入」判定的持久鍵（移植 A 的 source.json 構想，落地為 meta.json 欄位）：
 
 * Android：`SessionLibrary.PendingDownload` 新增 `seriesId`/`guid`（寫入 `download.json`，`toJson` 選讀）；**實作改為建立項目時寫 `source.json`（kind/sourceUrl/seriesId/guid，永久保留）**，不動 `meta.json` 格式（今日 `download.json` 在下载完成即刪除，單集的 enclosure URL 就此失落，去重必須活得比它久）。`createDownloadEntry` 增加選填參數，舊 `meta.json` 照常解析。
-* iOS：`Job` 新增 `seriesId: String?`、`guid: String?`（`jobs.json` 以 `decodeIfPresent` 讀，舊檔照常解碼）；完成時 `sourceUrl` 記入库記錄。既有以 URL 雜湊命名的 `.part`（`podcast_<fnv1a(url)>.part`）天然續傳同一集。
+* iOS：**實作改為 `Application Support/episode_sources.json`**（jobId/sourceUrl/guid/seriesId；場次 id＝job id，故作業結束後仍可對應），`Job` 與場次格式都不動。既有以 URL 雜湊命名的 `.part`（`podcast_<fnv1a(url)>.part`）天然續傳同一集。
 
 **共用管線**：訂閱只產生 `(title, audioUrl, durationSec, seriesId, guid)` 四元組，交給今日同一個提交點：
 
