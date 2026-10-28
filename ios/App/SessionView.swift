@@ -250,11 +250,6 @@ struct SessionView: View {
     }
     private var transcriptTab: some View {
         LazyVStack(alignment: .leading, spacing: 8) {
-            SessionSpeakerStrip(
-                speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
-                tint: { tint($0) },
-                name: { s.name($0) }
-            )
             if searching {
                 SessionSearchBar(
                     query: $query,
@@ -434,7 +429,11 @@ struct SessionView: View {
         SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab), transcript: AnyView(transcriptTab),
             appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
             follow: followScroll(proxy), sessionId: s.id, busy: busy,
-            playerAvailable: player.available, playerBar: AnyView(playerBar))
+            playerAvailable: player.available, playerBar: AnyView(playerBar), header: AnyView(stickyHeader))
+    }
+    /// The pinned tabs + speaker strip (SessionInsets' top inset).
+    private var stickyHeader: some View {
+        SessionStickyHeader(tab: $tab, speakers: Array(Set(s.lines.map(\.speaker))).sorted(), tint: { tint($0) }, name: { s.name($0) })
     }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

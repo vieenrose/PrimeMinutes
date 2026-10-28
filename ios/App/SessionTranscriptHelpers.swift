@@ -404,9 +404,22 @@ struct SessionTabPage: View {
     let transcript: AnyView
     var body: some View {
         VStack(spacing: 12) {
-            SessionTabPicker(tab: $tab)
             if tab == 0 { summary } else { transcript }
-        }.padding(.top, 8)
+        }.padding(.top, 4)
+    }
+}
+
+/// The pinned header over the scroll page: the tab picker, then (transcript tab) the speaker strip.
+struct SessionStickyHeader: View {
+    @Binding var tab: Int
+    let speakers: [Int]
+    let tint: (Int) -> Color
+    let name: (Int) -> String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SessionTabPicker(tab: $tab)
+            if tab == 1 { SessionSpeakerStrip(speakers: speakers, tint: tint, name: name).padding(.horizontal, Vox.gutter) }
+        }
     }
 }
 
@@ -523,12 +536,17 @@ struct SessionInsets: ViewModifier {
     let busy: Bool
     let playerAvailable: Bool
     let playerBar: AnyView
+    let header: AnyView
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom) { if playerAvailable { playerBar } }
             // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
             // not in it: scrolling either tab kept pushing it off screen.
-            .safeAreaInset(edge: .top) { SessionRunStatusTop(id: sessionId, busy: busy) }
+            // So do the Summary/Transcript tabs and the speaker strip (a pinned header, as in native iOS apps).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 8) { SessionRunStatusTop(id: sessionId, busy: busy); header }
+                    .padding(.vertical, 8).frame(maxWidth: .infinity).background(Vox.page)
+            }
             .modifier(SessionFollow(scroll: follow))
     }
 }
@@ -602,6 +620,7 @@ struct SessionScrollPage: View {
     let busy: Bool
     let playerAvailable: Bool
     let playerBar: AnyView
+    let header: AnyView
     var body: some View {
         ScrollView {
             SessionTabPage(tab: $tab, summary: summary, transcript: transcript)
@@ -610,6 +629,6 @@ struct SessionScrollPage: View {
         .modifier(UserScrollWatch { scrolled() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
         .background(Vox.page)
         .onAppear { appear() }
-        .modifier(SessionInsets(follow: follow, sessionId: sessionId, busy: busy, playerAvailable: playerAvailable, playerBar: playerBar))
+        .modifier(SessionInsets(follow: follow, sessionId: sessionId, busy: busy, playerAvailable: playerAvailable, playerBar: playerBar, header: header))
     }
 }
