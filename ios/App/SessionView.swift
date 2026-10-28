@@ -938,9 +938,28 @@ struct Collapsible<C: View>: View {
                     .background(GeometryReader { g in Color.clear.onAppear { full = g.size.height }.onChange(of: g.size.height) { _, h in full = h } }))
             if expanded || full > folded + 1 {
                 // A caption-size text button was a ~16 pt tall target; give it the 44 pt height without widening it.
-                Button { withAnimation { expanded.toggle() } } label: { Text(L(expanded ? "show_less" : "show_more")).tapHeight() }.font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                ChevronToggle(title: L(expanded ? "show_less" : "show_more"), expanded: expanded) { withAnimation { expanded.toggle() } }
             }
         }
+    }
+}
+
+/// The iOS disclosure affordance: an accent borderless button, a label and a chevron that points where the
+/// content goes. Shared by Show more / Show less and Show process / Hide process.
+struct ChevronToggle: View {
+    let title: String
+    let expanded: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { Label(title, systemImage: expanded ? "chevron.up" : "chevron.down").labelStyle(TrailingIconLabel()).tapHeight() }
+            .buttonStyle(.borderless).font(.subheadline)
+    }
+}
+
+/// Title then icon, the order iOS uses for disclosure links.
+struct TrailingIconLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.title; configuration.icon.imageScale(.small) }
     }
 }
 

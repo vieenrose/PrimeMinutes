@@ -43,7 +43,7 @@ struct SessionSummaryTab: View {
                     // DEV builds: the saved reading's off-protocol counts (model guardrail).
                     if Dev.on, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger.color : Color.secondary) }
                 }
-                Button(L(showProcess ? "hide_process" : "show_process")) { onToggleProcess() }.font(.subheadline)
+                ChevronToggle(title: L(showProcess ? "hide_process" : "show_process"), expanded: showProcess) { onToggleProcess() }
             } }
             if !session.summary.isEmpty {
                 SessionCard {
