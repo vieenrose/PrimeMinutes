@@ -218,7 +218,7 @@ final class ContactsMailUITests: XCTestCase {
     /// A NEW person (PM_NAME, default "PMTEST Nia") → "Add an e-mail for X" right away → typed + Save → the contact has it
     /// (Contacts app search), and the meeting's mail sheet lists it as a recipient.
     func testNewPersonEmail() {
-        let name = env["PM_NAME"] ?? "PMTEST Nia", addr = env["PM_ADDR"] ?? "nia.pmtest@example.com"
+        let name = env["PM_NAME"] ?? "PMTEST N\(Int(Date().timeIntervalSince1970) % 100000)", addr = env["PM_ADDR"] ?? "nia.pmtest@example.com"
         launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "2", "VOX_PICKAUTO": name])
         let f = app.textFields["new-person-email"]
         XCTAssertTrue(f.waitForExistence(timeout: 12), "the add-e-mail prompt follows the new person")
