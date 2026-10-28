@@ -123,7 +123,7 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
         }
         do {   // contactMigrationMatching: e-mail first, then a unique exact name, else a new contact
             func C(_ k: String, _ n: String, _ e: [String] = []) -> ContactMatch.Candidate { .init(key: k, name: n, emails: e) }
-            var mark = person("a", "Mark"); mark.emails = [PersonEmail(address: "Mark@X.org")]
+            var mark = person("a", "Mark"); mark.emails = [PersonEmail(address: "mark@X.org")]
             let lin = person("b", "陳經理"), eve = person("c", "Eve"), eve2 = person("d", "Eve"), zoe = person("e", "Zoe")
             let cs = [C("k1", "Marcus Chen", ["mark@x.org"]), C("k2", "陈经理"), C("k3", "Eve"), C("k4", "Zoe"), C("k5", "Zoe"), C("k6", "Mark")]
             let plan = ContactMatch.plan([mark, lin, eve, eve2, zoe], cs, fold: fold)
