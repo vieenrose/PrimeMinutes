@@ -177,7 +177,8 @@ struct LibraryView: View {
         .environment(\.editMode, $editMode)
         .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
         .onAppear { devOnAppear() }
-        .safeAreaInset(edge: .bottom) { if !editing { LibraryFooter(m: m, path: $path) } }
+        // At AX5 the footer took half the screen: capped so the list keeps room to scroll.
+        .safeAreaInset(edge: .bottom) { if !editing { LibraryFooter(m: m, path: $path).dynamicTypeSize(...DynamicTypeSize.accessibility1) } }
         .toolbar { LibrarySelectToolbar(editing: editing, any: !m.library.sessions.isEmpty, count: selected.count,
                                         onEdit: { setEditing(!editing) }, onSelectAll: { selected = Set(shown.map(\.id)) }, onDelete: { deletingMany = true }) }
         // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
@@ -200,16 +201,21 @@ struct LibraryView: View {
             Button(L("done")) { commitRename() }
             Button(L("cancel"), role: .cancel) {}
         }
-        .confirmationDialog(L("delete_confirm_many", selected.count), isPresented: $deletingMany, titleVisibility: .visible) {
+        // Alerts, not confirmation dialogs: on iOS 26 a dialog from the List became a popover pinned to the
+        // search field, far from the row, with no Cancel button.
+        .alert(L("delete_confirm_many", selected.count), isPresented: $deletingMany) {
             Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; setEditing(false); Haptics.destructive() }
+            Button(L("cancel"), role: .cancel) {}
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
-        .confirmationDialog(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+        .alert(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
+            Button(L("cancel"), role: .cancel) {}
         }
-        .confirmationDialog(L("download_delete_confirm"), isPresented: Binding(get: { dlDeleteAsk != nil }, set: { if !$0 { dlDeleteAsk = nil } }), titleVisibility: .visible) {
+        .alert(L("download_delete_confirm"), isPresented: Binding(get: { dlDeleteAsk != nil }, set: { if !$0 { dlDeleteAsk = nil } })) {
             Button(L("delete"), role: .destructive) { if let id = dlDeleteAsk, let j = m.runner.waiting.first(where: { $0.id == id }) { m.imports.remove(j); Haptics.destructive() }; dlDeleteAsk = nil }
+            Button(L("cancel"), role: .cancel) {}
         }
     }
 }
