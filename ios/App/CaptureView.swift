@@ -4,6 +4,9 @@ import SwiftUI
 struct CaptureView: View {
     @ObservedObject var m: Model
     private static let palette = speakerPalette
+    /// The timer face scales with Dynamic Type, capped: 76 pt at the default size, never past 110 pt (AX sizes would
+    /// push the transcript off screen); the digits still shrink to one line on narrow phones.
+    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 76
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,9 +17,10 @@ struct CaptureView: View {
                 // The engines' load, on the header row (trailing, page gutter) rather than floating under the timer.
                 HwStatusLine()
             }.padding(.horizontal, Vox.gutterWide).padding(.top, Vox.gutter)
-            // The 76 pt display face is the point of this row (it is meant to be read from across a
-            // table), so it stays fixed — but VoiceOver gets the elapsed time as words, not as digits.
-            Text(Export.mmss(Double(m.capture.elapsed))).font(.system(size: 76, weight: .bold, design: .rounded).monospacedDigit())
+            // The display face is the point of this row (it is meant to be read from across a table); VoiceOver
+            // gets the elapsed time as words, not as digits.
+            Text(Export.mmss(Double(m.capture.elapsed))).font(.system(size: min(timerSize, 110), weight: .bold, design: .rounded).monospacedDigit())
+                .lineLimit(1).minimumScaleFactor(0.5)
                 .accessibilityLabel(L("a11y_elapsed", Export.mmss(Double(m.capture.elapsed))))
                 .padding(.vertical, 12)
             // The summarizing agent works alongside ASR + diarization: its status stays pinned on top (Android LivePanel).

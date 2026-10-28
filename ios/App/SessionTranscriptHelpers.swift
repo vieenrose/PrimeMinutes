@@ -103,7 +103,9 @@ struct SessionTranscriptLines: View {
                 SpeakerSeam(colorA: tint(lines[idx - 1].speaker), colorB: tint(l.speaker), labelA: name(lines[idx - 1].speaker), labelB: name(l.speaker)) { onSeam(idx) }
                     .padding(.vertical, -4)
             }
-            VStack(alignment: .leading, spacing: 2) {
+            // A Button, not a tap gesture: press highlight, the VoiceOver button trait (play from this line),
+            // Full Keyboard Access. The speaker name inside stays its own (borderless) button.
+            Button { onSeekPlay(l.start) } label: { VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
                     Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
@@ -113,10 +115,9 @@ struct SessionTranscriptLines: View {
             }
             .id(l.id).padding(Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
             .background(l.id == currentId ? Color.accentColor.opacity(0.18) : (matchId != nil && matchId == l.id ? Vox.highlight.opacity(0.22) : Vox.card), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
-            .contentShape(Rectangle())
-            .onTapGesture { onSeekPlay(l.start) }
+            .contentShape(Rectangle()) }
+            .buttonStyle(.plain)
             .contextMenu { if !busy { lineMenu(l) } }
-            .accessibilityAction { onSeekPlay(l.start) }   // VoiceOver's default action: play from this line
             .accessibilityAction(named: L("cd_line_actions")) { if !busy { onEditLine(l.id, l.text) } }
             // The line menu (move/merge) is long-press only, unreachable to VoiceOver: a named action opens the same move.
             .accessibilityAction(named: L("speaker_move_line")) { if !busy { onMoveLine(l.id) } }
@@ -279,8 +280,17 @@ struct SessionLineEditSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } }
                     ToolbarItem(placement: .confirmationAction) { Button(L("done")) { onDone() }.disabled(!doneEnabled) }   // like Android: an emptied line is not a save
-                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("done")) { focused = false } }   // hide the keyboard, keep editing
-                }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
+                }
+                // Hide the keyboard, keep editing. Not a .keyboard toolbar: like Ask's composer, it never showed in this
+                // sheet on iOS 26.5; a keyboard-down button sits on the editor's bottom edge while it has focus.
+                .safeAreaInset(edge: .bottom) {
+                    if focused {
+                        HStack { Spacer(); Button { focused = false } label: { Image(systemName: "keyboard.chevron.compact.down").tapTarget() }
+                            .accessibilityLabel(L("done")) }.padding(.horizontal, Vox.inset)
+                    }
+                }
+                .onAppear { focused = true }
+                .navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
         }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
 }
@@ -588,8 +598,17 @@ struct SessionTextEditSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } }
                     ToolbarItem(placement: .confirmationAction) { Button(L("done")) { onDone() }.disabled(!doneEnabled) }
-                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("done")) { focused = false } }   // hide the keyboard, keep editing
-                }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+                }
+                // Hide the keyboard, keep editing. Not a .keyboard toolbar: like Ask's composer, it never showed in this
+                // sheet on iOS 26.5; a keyboard-down button sits on the editor's bottom edge while it has focus.
+                .safeAreaInset(edge: .bottom) {
+                    if focused {
+                        HStack { Spacer(); Button { focused = false } label: { Image(systemName: "keyboard.chevron.compact.down").tapTarget() }
+                            .accessibilityLabel(L("done")) }.padding(.horizontal, Vox.inset)
+                    }
+                }
+                .onAppear { focused = true }
+                .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
         }
     }
 }

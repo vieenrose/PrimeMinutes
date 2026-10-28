@@ -785,12 +785,14 @@ struct SessionRunStatusTop: View {
 private struct RunStatusRow: View {
     @ObservedObject private var m = Model.shared
     let id: UUID
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         let active = m.runner.activeJob == id
         let job = m.runner.waiting.first(where: { $0.id == id })
         if active || job != nil {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+                // At AX sizes the engine load goes under the status instead of squeezing it.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))) {
                     // Decoration for the status text next to it (an SF Symbol would read its own name).
                     if active { ProgressView().controlSize(.small).accessibilityHidden(true) } else { Image(systemName: "clock").voxFore(Vox.warning).accessibilityHidden(true) }
                     Vox.hint(job.map(m.jobStatus) ?? m.screen.status).lineLimit(3)
@@ -917,7 +919,7 @@ struct SpeakerStats: View {
     var body: some View {
         let sh = shares
         if !sh.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            Button { withAnimation { legend.toggle() } } label: { VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text(L("speaker_count", sh.count)).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                     SpeakerStatsBar(shares: sh, palette: palette)
@@ -929,11 +931,9 @@ struct SpeakerStats: View {
                     SpeakerStatsLegend(shares: sh, names: names, palette: palette)
                 }
             }
-            .padding(.horizontal, 4).contentShape(Rectangle()).onTapGesture { withAnimation { legend.toggle() } }
-            // The tap is invisible to VoiceOver: say it is a button, name what the tap does (the chevron's
-            // job for sighted users), and offer the same action.
+            .padding(.horizontal, 4).contentShape(Rectangle()) }.buttonStyle(.plain)
+            // A Button (button trait, press highlight); the value names what the tap does (the chevron's job for sighted users).
             .accessibilityValue(L(legend ? "show_less" : "show_more"))
-            .accessibilityAddTraits(.isButton).accessibilityAction { withAnimation { legend.toggle() } }
         }
     }
 }

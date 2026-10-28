@@ -6,13 +6,14 @@ import UIKit
 struct SpeakerSeam: View {
     let colorA: Color, colorB: Color, labelA: String, labelB: String
     let onOpen: () -> Void
+    @ScaledMetric(relativeTo: .caption2) private var glyph: CGFloat = 11   // the grip follows Dynamic Type
     var body: some View {
         Button(action: onOpen) {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [colorA.opacity(0.55), colorB.opacity(0.55)], startPoint: .leading, endPoint: .trailing)
                     .frame(height: 1.5).padding(.leading, 36).padding(.trailing, 10)
-                Image(systemName: "arrow.up.and.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                    .frame(width: 28, height: 20)
+                Image(systemName: "arrow.up.and.down").font(.system(size: glyph, weight: .semibold)).foregroundStyle(.secondary)
+                    .frame(width: max(28, glyph * 2.5), height: max(20, glyph * 1.8))
                     .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.35), lineWidth: 1))
                     .padding(.leading, 6)

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Home screen (Android library): search, filter chips, sessions grouped by day as cards, row menu, queue link, record button.
 struct LibraryView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ObservedObject var m: Model
     @Binding var path: [Route]
     let onAdd: () -> Void
@@ -135,13 +136,20 @@ struct LibraryView: View {
     private func jobCardBody(_ j: Job) -> some View {
         let active = j.id == m.runner.activeJob, failedDl = j.download?.error != nil
         return HStack(spacing: 12) {
-            JobGlyph(m: m, j: j)
-            VStack(alignment: .leading, spacing: 2) {
-                Vox.head(j.title ?? L("meeting")).lineLimit(2)
-                Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger.color : .secondary).lineLimit(2)
-                if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color).padding(.top, 4) }
-            }
-            Spacer(minLength: 0)
+            // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
+            // A Button, not a tap gesture: press highlight, VoiceOver button trait, Full Keyboard Access. The menu stays outside it.
+            Button { if !editing { path.append(.job(j.id)) } } label: {
+                // At AX sizes the glyph goes above the text, which then keeps the full row width.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
+                    JobGlyph(m: m, j: j)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Vox.head(j.title ?? L("meeting")).lineLimit(2)
+                        Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger.color : .secondary).lineLimit(2)
+                        if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color).padding(.top, 4) }
+                    }
+                    Spacer(minLength: 0)
+                }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
             if j.download != nil {
                 Menu { DownloadActions(m: m, j: j, askDelete: { dlDeleteAsk = j.id }) }
                     label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
@@ -156,10 +164,6 @@ struct LibraryView: View {
                     label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             }
         }
-        // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
-        .contentShape(Rectangle())
-        .onTapGesture { if !editing { path.append(.job(j.id)) } }
-        .accessibilityAddTraits(.isButton).accessibilityAction { path.append(.job(j.id)) }
     }
 
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
@@ -374,7 +378,8 @@ struct LiveJobView: View {
             if m.screen.lines.isEmpty { Vox.fine(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).padding(.top, 8) }
             ForEach(m.screen.lines) { l in
                 let c = Self.palette[max(0, l.speaker) % Self.palette.count]
-                HStack(alignment: .top, spacing: 10) {
+                // A Button: press highlight and the VoiceOver button trait (play from this line); the speaker name inside stays its own button.
+                Button { if player.available { player.seekPlay(l.start) } } label: { HStack(alignment: .top, spacing: 10) {
                     RoundedRectangle(cornerRadius: Vox.radiusXS).fill(c).frame(width: 3)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
@@ -391,8 +396,8 @@ struct LiveJobView: View {
                 }
                 .padding(.vertical, 3).padding(.horizontal, 6)
                 .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM))
-                .id(l.id).contentShape(Rectangle())
-                .onTapGesture { if player.available { player.seekPlay(l.start) } }
+                .contentShape(Rectangle()) }
+                .buttonStyle(.plain).id(l.id)
             }
         }
     }
@@ -658,6 +663,7 @@ struct LibraryRow: View {
     let onShare: (URL) -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
     private func snippet(_ p: LibrarySearch.Passage) -> String {
         if p.kind == .chunk { return p.snippet }
@@ -678,7 +684,8 @@ struct LibraryRow: View {
         }
     }
     private var content: some View {
-        HStack(spacing: 12) {
+        // At AX sizes the status glyph goes above the title, which then keeps the full row width.
+        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
             Image(systemName: isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
                 .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
                 .foregroundStyle(done ? Vox.success.color : Color.secondary)
@@ -698,7 +705,7 @@ struct LibraryRow: View {
     var body: some View {
         Group {
             if editing { content }   // the list selects on tap
-            else { content.onTapGesture { onActivate() }.accessibilityAddTraits(.isButton).accessibilityAction { onActivate() } }
+            else { Button(action: onActivate) { content }.buttonStyle(.plain) }   // press highlight, button trait, Full Keyboard Access
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) { onDelete() } label: { Label(L("delete"), systemImage: "trash") }
@@ -747,8 +754,9 @@ struct LibraryHeader: View {
 
 /// A run's own model download, waiting to resume.
 struct LibraryPausedRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        HStack {
+        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout())) {
             Image(systemName: "pause.circle").voxFore(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
             Vox.meta(L("download_paused"))
             Spacer()
