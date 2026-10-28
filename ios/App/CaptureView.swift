@@ -62,9 +62,10 @@ struct CaptureView: View {
             }.padding(.horizontal, Vox.gutterWide)
             Button { Haptics.toggle(false); m.capture.toggleRecord() } label: {
                 Label(L("capture_stop"), systemImage: "stop.fill").font(.headline)
-                    .frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(Vox.danger.color, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
-            }.padding(.horizontal, Vox.gutterWide).padding(.vertical, Vox.inset)
+                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: Vox.radiusXL)).tint(Vox.danger.color)
+            .padding(.horizontal, Vox.gutterWide).padding(.vertical, Vox.inset)
         }
         .background(Vox.page)
         // VoiceOver hears start-up progress and errors (models loading, mic error) without hunting for them.

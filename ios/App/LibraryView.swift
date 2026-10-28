@@ -850,14 +850,17 @@ struct LibraryFooter: View {
                 Vox.meta(m.screen.status).lineLimit(1).padding(.horizontal, Vox.gutter)
             }
             if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
-                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
-                    .buttonStyle(.bordered).padding(.horizontal, Vox.gutter)
+                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").fontWeight(.semibold).frame(maxWidth: .infinity) }
+                    .buttonStyle(.bordered).controlSize(.large).padding(.horizontal, Vox.gutter)
             }
             Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
                 Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(m.capture.recording ? Vox.danger.color : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
-            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: Vox.radiusXL))
+            .tint(m.capture.recording ? Vox.danger.color : Color.accentColor)
+            .padding(.horizontal, Vox.gutter).padding(.bottom, 8)
         }
         .padding(.top, 8)
         .background(.bar)
