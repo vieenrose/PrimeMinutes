@@ -118,6 +118,38 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
         check(Recipients.rows([0: me], anyMe: false)[0].checked, "no Me yet: checked")
         check(Recipients.to(rows, extra: ["Y@x.com", "z@x.com"]) == ["y@x.com", "Y@x.com", "z@x.com"], "to")
 
+        // Design B (plain/chat: one cite per sentence, at its end, glued) + C (HTML pills). Android MeetingMailTest.
+        check(MeetingMail.clauseEndCites("新辦公室預計於三月十號正式上班 [0:00]。會議決定採用中間報價 [0:18, 0:35]，前提是打包自行完成 [0:40]。")
+              == "新辦公室預計於三月十號正式上班。\u{2060}[0:00]會議決定採用中間報價，前提是打包自行完成。\u{2060}[0:18, 0:35]", "zh clause-end cites")
+        check(MeetingMail.clauseEndCites("We move on March 7 [0:12]. The budget is 3.5 percent over [0:12]. No cite here.")
+              == "We move on March 7.\u{00A0}[0:12] The budget is 3.5 percent over. No cite here.", "en clause-end cites")
+        let han = String(repeating: "搬", count: 60), long = MeetingMail.clauseEndCites(han + " [1:12]。")
+        check(long == han + "。\u{2060}[1:12]" && !long.contains(" ["), "long Han sentence keeps its cite glued")
+        check(MeetingMail.itemCite("確保包含損壞賠償條款", "1:12") == "。\u{2060}[1:12]" && MeetingMail.itemCite("確保包含損壞賠償條款。", "1:12") == "\u{2060}[1:12]"
+              && MeetingMail.itemCite("Alice sends the deck", "0:05") == "\u{00A0}[0:05]" && MeetingMail.itemCite("x", nil) == "", "item cites")
+        let tsRe = try! NSRegularExpression(pattern: #"\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、]\s*\d+:\d{2}(?::\d{2})?)*)\]"#)
+        let itemRe = try! NSRegularExpression(pattern: #"^-\s*(.*?)\s*(?:\[(\d+:\d{2}(?::\d{2})?)\])?\s*$"#)
+        func all(_ re: NSRegularExpression, _ t: String) -> [String] { re.matches(in: t, range: NSRange(location: 0, length: (t as NSString).length)).map { (t as NSString).substring(with: $0.range(at: 1)) } }
+        for (name, lang) in [("move", "zh-Hant"), ("is1009c", "en")] {
+            let bullet = (MeetingMail.Templates.shipped.strings[lang] as? [String: Any])?["bullet"] as? String ?? "-"
+            let itemTs = input(name).sections.flatMap { $0.items.compactMap(\.ts) }
+            let txt = plain(name, lang, .init())
+            for b in [txt, plain(name, lang, MeetingMail.Options(summary: false), chat: true)] {
+                check(!b.contains("]["), "\(name): no ][ adjacency")
+                check(!b.components(separatedBy: "\n").contains { let l = $0.trimmingCharacters(in: .whitespaces); return l.hasPrefix("[") && tsRe.firstMatch(in: l, range: NSRange(location: 0, length: (l as NSString).length))?.range.location == 0 }, "\(name): no cite at a line start")
+                for l in b.components(separatedBy: "\n") where l.hasPrefix(bullet) && !all(tsRe, l).isEmpty {
+                    let x = "-" + l.dropFirst(bullet.count)
+                    let m = itemRe.firstMatch(in: x, range: NSRange(location: 0, length: (x as NSString).length))
+                    check(m != nil && m!.range(at: 2).location != NSNotFound, "\(name): ITEM parses \(l)")
+                }
+            }
+            let cites = Set(all(tsRe, txt))
+            for c in itemTs { check(cites.contains(c), "\(name): item cite \(c) kept") }
+            let h = html(name, lang, .init())
+            check(h.contains(MeetingMail.pill), "\(name): pill style")
+            let text = h.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            for c in itemTs { check(text.contains("[\(c)]"), "\(name): html keeps [\(c)]") }
+        }
         print(failures == 0 ? "meeting mail: all passed" : "meeting mail: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

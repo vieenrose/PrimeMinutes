@@ -214,10 +214,83 @@ enum MeetingMail {
     private static func fill(_ t: String, _ kv: [(String, Any)]) -> String {
         var s = t; for (k, v) in kv { s = s.replacingOccurrences(of: "{\(k)}", with: "\(v)") }; return s
     }
+    /// Design C (HTML only): each cite a small pill; the `[ts]` characters stay in the source so copy-paste and the
+    /// tsRe / Markdown anchor parsers still see them. A multi-cite becomes one pill per time (hair space between).
     private static func htmlTs(_ t: String) -> String {
-        let e = MiniMustache.escapeHtml(t)
-        return tsRe.stringByReplacingMatches(in: e, range: NSRange(location: 0, length: (e as NSString).length),
-                                             withTemplate: #"<span style="color:#5A6982;font-size:13px;white-space:nowrap;">[$1]</span>"#)
+        let e = MiniMustache.escapeHtml(t), ns = e as NSString
+        var out = "", pos = 0
+        for m in tsRe.matches(in: e, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: pos, length: m.range.location - pos))
+            out += ns.substring(with: m.range(at: 1)).components(separatedBy: CharacterSet(charactersIn: ",，、"))
+                .map { "<span style=\"\(pill)\">[\($0.trimmingCharacters(in: .whitespaces))]</span>" }.joined(separator: "\u{200A}")
+            pos = m.range.location + m.range.length
+        }
+        return out + ns.substring(from: pos)
+    }
+    static let pill = "color:#5A6982;font-size:13px;background:#EEF1EC;border-radius:8px;padding:0 6px;white-space:nowrap;"
+
+    // MARK: design B: cites at the clause end (plain text + chat)
+
+    private static let wj = "\u{2060}", term: Set<Character> = ["。", "！", "？", "!", "?"], closers: Set<Character> = ["」", "』", "）", ")", "\"", "'"]
+    private static func isHan(_ c: Character?) -> Bool {
+        guard let v = c?.unicodeScalars.first?.value else { return false }
+        return (0x3400...0x9FFF).contains(v) || (0x3000...0x303F).contains(v) || (0xFF00...0xFFEF).contains(v)
+    }
+    /// The glue before a trailing cite: U+2060 after Han / fullwidth text (never a space, never a break), a no-break
+    /// space after Latin text — the `[…]` never wraps alone to the next line.
+    private static func glue(_ before: String) -> String { isHan(before.last) ? wj : "\u{00A0}" }
+
+    /// A minutes item's trailing cite: `…條款。⁠[1:12]` (a Han item gets its full stop back).
+    static func itemCite(_ text: String, _ ts: String?) -> String {
+        guard let ts else { return "" }
+        let stop = isHan(text.last) && !term.contains(text.last!) && !"」』）".contains(text.last!) ? "。" : ""
+        return stop + glue(text + stop) + "[\(ts)]"
+    }
+
+    /// Sentences of `p`, each with its terminator and following whitespace. A `.` ends one only before whitespace /
+    /// the end (not `3.5`); closing brackets/quotes stay with their sentence; nothing ends inside a `[…]`.
+    private static func sentences(_ p: String) -> [String] {
+        let c = Array(p)
+        var out: [String] = [], start = 0, i = 0, open = false
+        while i < c.count {
+            if c[i] == "[" { open = true } else if c[i] == "]" { open = false }
+            let ends = term.contains(c[i]) || (c[i] == "." && (i + 1 == c.count || c[i + 1].isWhitespace))
+            if ends && !open {
+                var j = i + 1
+                while j < c.count && (term.contains(c[j]) || closers.contains(c[j])) { j += 1 }
+                while j < c.count && c[j].isWhitespace { j += 1 }
+                out.append(String(c[start..<j])); start = j; i = j; continue
+            }
+            i += 1
+        }
+        if start < c.count { out.append(String(c[start...])) }
+        return out
+    }
+
+    private static let spacedTs = try! NSRegularExpression(pattern: "[ \\t]*" + tsRe.pattern)
+
+    /// Design B for prose: keep the FIRST cite of each sentence (`[0:18, 0:35]` stays one cite), move it after the
+    /// sentence's full stop, glued; drop an exact repeat of the previous sentence's cite. Bracket/separator shape
+    /// untouched, so tsRe / the anchors / repairTimestamps still parse it. Android MeetingMail.clauseEndCites.
+    static func clauseEndCites(_ p: String) -> String {
+        var out = "", last: String?
+        for sen in sentences(p) {
+            let ns = sen as NSString
+            guard let m = tsRe.firstMatch(in: sen, range: NSRange(location: 0, length: ns.length)) else { out += sen; continue }
+            let cite = ns.substring(with: m.range)
+            let body = spacedTs.stringByReplacingMatches(in: sen, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+            var core = body; while core.last?.isWhitespace == true { core.removeLast() }
+            let ws = String(body.dropFirst(core.count))
+            var k = core.endIndex
+            while k > core.startIndex, case let ch = core[core.index(before: k)], term.contains(ch) || ch == "." || closers.contains(ch) { k = core.index(before: k) }
+            var head = String(core[..<k]); while head.last?.isWhitespace == true { head.removeLast() }
+            let tail = String(core[k...])
+            out += head + tail
+            if cite != last { out += glue(head + tail) + cite }
+            last = cite
+            out += ws
+        }
+        return out
     }
 
     private final class Block {
@@ -277,7 +350,7 @@ enum MeetingMail {
                 if by[o] == nil { by[o] = []; order.append(o) }
                 var t = i["text"] as! String
                 if let owner, t.hasPrefix(owner) { t = String(t.dropFirst(owner.count)); while t.hasPrefix(" ") { t.removeFirst() } }
-                var it: [String: Any] = ["text": t]; if let ts = i["ts"] { it["ts"] = ts }
+                var it: [String: Any] = ["text": t, "cite": itemCite(t, i["ts"] as? String)]; if let ts = i["ts"] { it["ts"] = ts }
                 by[o]!.append(it)
             }
             let sorted = order.filter { $0 != none } + (by[none] != nil ? [none] : [])
@@ -288,12 +361,12 @@ enum MeetingMail {
             var secs: [[String: Any]] = []
             for b in blocks {
                 if b.kind == "summary" {
-                    if !b.paragraphs.isEmpty { model["summary"] = ["heading": plainHeading(b.heading), "paragraphs": b.paragraphs.map { ["text": $0, "html": htmlTs($0)] }] as [String: Any] }
+                    if !b.paragraphs.isEmpty { model["summary"] = ["heading": plainHeading(b.heading), "paragraphs": b.paragraphs.map { ["text": clauseEndCites($0), "html": htmlTs($0)] }] as [String: Any] }
                     continue
                 }
                 if b.items.isEmpty { continue }
                 let items: [[String: Any]] = b.items.map { i in
-                    var d: [String: Any] = ["text": refs(i.text)]
+                    var d: [String: Any] = ["text": refs(i.text), "cite": itemCite(refs(i.text), i.ts)]
                     if let ts = i.ts { d["ts"] = ts }
                     if b.tag == "ACTION", let o = ownerOf(i.text, names) { d["owner"] = o }
                     return d
