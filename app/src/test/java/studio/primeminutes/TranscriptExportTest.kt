@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.export.TranscriptExport
+import studio.primeminutes.core.reader.ReaderProtocol
 
 /**
  * Pins the portable-export serialisers — SRT/VTT timestamp formatting (the part most likely to be
@@ -139,5 +140,74 @@ class TranscriptExportTest {
         assertTrue("≤64 Latin chars per cue", cues.all { it.text.length <= 64 })
         assertEquals("every piece is whole words", text, cues.joinToString(" ") { it.text })
         assertEquals(9.6, cues.last().endSec, 1e-9)
+    }
+
+    // --- design A: gutter + turn grouping (txt / md; the PDF draws the same TranscriptExport.turns) ---
+
+    private val turnsSample = listOf(
+        u(0, "Hello there", 1.0, 2.5, 0),
+        u(1, "   ", 2.5, 3.0, 1),                       // blank → dropped, does not break the turn logic
+        u(2, "我們開始吧", 65.2, 70.0, 1),
+        u(3, "接著討論預算，包括搬家公司報價、紙箱發放、座位表、客戶通知信與停車位抽籤的所有細節安排與時程確認", 67.0, 80.0, 1),
+        u(4, "OK, let's go with the middle quote.", 81.0, 83.0, 0),
+    )
+
+    @Test fun plainTextGroupsTurnsWithHangingIndentGolden() {
+        val txt = TranscriptExport.plainText(turnsSample, label, null, null)
+        assertEquals(
+            "[00:01] Speaker 1: Hello there\n" +
+                "\n" +
+                "[01:05] Speaker 2: 我們開始吧\n" +
+                "        接著討論預算，包括搬家公司報價、紙箱發放、座位表、客戶通知信與停車位抽籤的所有細節安排與時程確認\n" +
+                "\n" +
+                "[01:21] Speaker 1: OK, let's go with the middle quote.\n",
+            txt,
+        )
+        assertEveryStampedLineParses(txt)
+    }
+
+    @Test fun markdownGroupsTurnsGolden() {
+        val md = TranscriptExport.markdown(turnsSample, label, "T", null, "Summary", "Transcript")
+        assertEquals(
+            "# T\n\n## Transcript\n\n" +
+                "- `00:01` **Speaker 1** Hello there\n" +
+                "\n" +
+                "- `01:05` **Speaker 2** 我們開始吧\n" +
+                "  接著討論預算，包括搬家公司報價、紙箱發放、座位表、客戶通知信與停車位抽籤的所有細節安排與時程確認\n" +
+                "\n" +
+                "- `01:21` **Speaker 1** OK, let's go with the middle quote.\n",
+            md,
+        )
+    }
+
+    @Test fun hourClockIsZeroPaddedAcrossTheWholeDocument() {
+        val long = listOf(u(0, "start", 5.0, 6.0, 0), u(1, "一小時後", 3723.0, 3725.0, 1))
+        val txt = TranscriptExport.plainText(long, label, null, null)
+        assertEquals("[00:00:05] Speaker 1: start\n\n[01:02:03] Speaker 2: 一小時後\n", txt)
+        assertEveryStampedLineParses(txt)
+        assertTrue(TranscriptExport.markdown(long, label, null, null, "S", "Tr").contains("- `01:02:03` **Speaker 2** 一小時後"))
+        assertEquals(3723, ReaderProtocol.parseLine("[01:02:03] Speaker 2: 一小時後")!!.startS)
+    }
+
+    @Test fun unknownSpeakersNeverMergeAndKeepTheirClock() {
+        val anon = listOf(u(0, "one", 1.0, 2.0), u(1, "two", 3.0, 4.0))
+        assertEquals("[00:01] one\n\n[00:03] two\n", TranscriptExport.plainText(anon, label, null, null))
+    }
+
+    @Test fun bilingualSpeakerChangeAndSubtitlesUnchanged() {
+        // SRT / VTT / LRC are standards: grouping must not touch them (one cue / line per utterance).
+        val srt = TranscriptExport.srt(turnsSample, label)
+        assertTrue(srt.contains("2\n00:01:05,200 --> 00:01:10,000\nSpeaker 2: 我們開始吧\n\n"))
+        val lrc = TranscriptExport.lrc(turnsSample, label, null)
+        assertEquals(4, lrc.lines().count { it.startsWith("[") })
+        assertTrue(lrc.contains("[01:07.00]Speaker 2: 接著討論預算"))
+        assertTrue(TranscriptExport.vtt(turnsSample, label).contains("00:01:21.000 --> 00:01:23.000\nSpeaker 1: OK, let's"))
+    }
+
+    private fun assertEveryStampedLineParses(txt: String) {
+        for (l in txt.lines().filter { it.startsWith("[") }) {
+            val p = ReaderProtocol.parseLine(l)
+            assertTrue("parseLine: $l", p != null && p.text.isNotEmpty())
+        }
     }
 }

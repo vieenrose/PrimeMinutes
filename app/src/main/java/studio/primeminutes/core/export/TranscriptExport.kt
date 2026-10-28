@@ -15,7 +15,12 @@ import java.util.Locale
  */
 object TranscriptExport {
 
-    /** Plain text: optional title + summary + action items, then `[mm:ss] Speaker: text` per line. */
+    /**
+     * Plain text: optional title + summary + action items, then the transcript as speaker turns —
+     * `[mm:ss] Speaker: text` opens a turn, a blank line separates turns, and a further utterance of
+     * the same speaker hangs under the text (indented by the gutter width, no repeated label).
+     * The `[mm:ss]` token stays byte-identical to what `ReaderProtocol.LINE` / `Markdown.ANCHOR_RE` parse.
+     */
     fun plainText(
         utterances: List<TranscriptEvent.Utterance>,
         label: (Int) -> String,
@@ -31,10 +36,11 @@ object TranscriptExport {
             actionsHeading?.let { h -> append(h).append("\n") }
             append(it).append("\n\n")
         }
-        for (u in utterances) {
-            val text = u.text.replace('\n', ' ').trim()
-            if (text.isEmpty()) continue
-            append('[').append(clock(u.startSec)).append("] ")
+        val pad = gutterWidth(utterances)
+        for ((u, text, cont) in turns(utterances)) {
+            if (cont) { append(" ".repeat(pad + 3)).append(text).append('\n'); continue }
+            if (length > 0 && !endsWith("\n\n")) append('\n')
+            append('[').append(clock(u.startSec, pad)).append("] ")
             u.speaker?.let { append(label(it)).append(": ") }
             append(text).append('\n')
         }
@@ -61,10 +67,13 @@ object TranscriptExport {
             append(it).append("\n\n")
         }
         append("## ").append(transcriptHeading).append("\n\n")
-        for (u in utterances) {
-            val text = u.text.replace('\n', ' ').trim()
-            if (text.isEmpty()) continue
-            append("- `").append(clock(u.startSec)).append("` ")
+        val pad = gutterWidth(utterances)
+        var first = true
+        for ((u, text, cont) in turns(utterances)) {
+            if (cont) { append("  ").append(text).append('\n'); continue }
+            if (!first) append('\n')
+            first = false
+            append("- `").append(clock(u.startSec, pad)).append("` ")
             u.speaker?.let { append("**").append(label(it)).append("** ") }
             append(text).append('\n')
         }
@@ -184,11 +193,31 @@ object TranscriptExport {
     private fun endOf(u: TranscriptEvent.Utterance): Double =
         if (u.endSec > u.startSec) u.endSec else u.startSec + 1.0
 
-    /** Human-readable [h:]mm:ss. */
-    private fun clock(sec: Double): String {
+    /** One transcript line of a document export: [cont] = same (known) speaker as the previous line. */
+    internal data class Line(val u: TranscriptEvent.Utterance, val text: String, val cont: Boolean)
+
+    /** Non-blank utterances (newlines flattened) grouped into speaker turns. Unknown speakers never merge. */
+    internal fun turns(utterances: List<TranscriptEvent.Utterance>): List<Line> {
+        val out = ArrayList<Line>()
+        var prev: Int? = null
+        for (u in utterances) {
+            val text = u.text.replace('\n', ' ').trim()
+            if (text.isEmpty()) continue
+            out += Line(u, text, u.speaker != null && u.speaker == prev && out.isNotEmpty())
+            prev = u.speaker
+        }
+        return out
+    }
+
+    /** Clock width for the whole document: 5 (`mm:ss`) or 8 (`hh:mm:ss`) so the gutter aligns. */
+    internal fun gutterWidth(utterances: List<TranscriptEvent.Utterance>): Int =
+        if (utterances.any { it.startSec >= 3600 }) 8 else 5
+
+    /** Zero-padded `mm:ss`, or `hh:mm:ss` when [width] is 8 — still matches `\d+:\d{2}(?::\d{2})?`. */
+    internal fun clock(sec: Double, width: Int = 5): String {
         val t = if (sec > 0) sec.toInt() else 0
         val h = t / 3600; val m = (t % 3600) / 60; val s = t % 60
-        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+        return if (h > 0 || width >= 8) String.format(Locale.US, "%02d:%02d:%02d", h, m, s)
         else String.format(Locale.US, "%02d:%02d", m, s)
     }
 
