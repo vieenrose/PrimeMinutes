@@ -143,6 +143,14 @@ enum MeetingMail {
     private static let itemRe = try! NSRegularExpression(pattern: #"^-\s*(.*?)\s*(?:\[(\d+:\d{2}(?::\d{2})?)\])?\s*$"#)
     private static let headRe = try! NSRegularExpression(pattern: #"^【(.+)】$"#)
     private static let empty: Set<String> = ["無", "无", "None", "-", ""]
+    /// An item with nothing to say: an empty marker, or no letter at all (only digits / punctuation, e.g. "3").
+    static func trivial(_ t: String) -> Bool { empty.contains(t) || !t.contains(where: \.isLetter) }
+
+    /// One raw `- text [m:ss]` line (the minutes / action-items format); nil when it does not match.
+    static func itemLine(_ line: String) -> Item? {
+        guard let g = groups(itemRe, line.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return Item(text: g[1] ?? "", ts: g[2].flatMap { $0.isEmpty ? nil : $0 })
+    }
 
     private static func groups(_ re: NSRegularExpression, _ s: String) -> [String?]? {
         let ns = s as NSString
@@ -160,7 +168,7 @@ enum MeetingMail {
             if let g = groups(headRe, line), let h = g[1] { out.append((h, [])); continue }
             if line.hasPrefix("-"), !out.isEmpty, let g = groups(itemRe, line) {
                 let text = g[1] ?? ""
-                if empty.contains(text) { continue }
+                if trivial(text) { continue }
                 out[out.count - 1].1.append(Item(text: text, ts: g[2].flatMap { $0.isEmpty ? nil : $0 }))
             }
         }
@@ -173,7 +181,7 @@ enum MeetingMail {
             let items = notes.filter { $0.tag?.uppercased() == tag }.map { n -> Item in
                 var t = n.text; while t.hasSuffix("。") { t.removeLast() }
                 return Item(text: t, ts: n.ts)
-            }.filter { !empty.contains($0.text) }
+            }.filter { !trivial($0.text) }
             return items.isEmpty ? nil : Section(heading: heading(h), tag: tag, items: items)
         }
     }
@@ -274,7 +282,8 @@ enum MeetingMail {
     /// untouched, so tsRe / the anchors / repairTimestamps still parse it. Android MeetingMail.clauseEndCites.
     static func clauseEndCites(_ p: String) -> String {
         var out = "", last: String?
-        for sen in sentences(p) {
+        let sens = sentences(p)
+        for (si, sen) in sens.enumerated() {
             let ns = sen as NSString
             guard let m = tsRe.firstMatch(in: sen, range: NSRange(location: 0, length: ns.length)) else { out += sen; continue }
             let cite = ns.substring(with: m.range)
@@ -286,7 +295,8 @@ enum MeetingMail {
             var head = String(core[..<k]); while head.last?.isWhitespace == true { head.removeLast() }
             let tail = String(core[k...])
             out += head + tail
-            if cite != last { out += glue(head + tail) + cite }
+            // A moved cite is followed by a space when its sentence had none and more text follows.
+            if cite != last { out += glue(head + tail) + cite; if ws.isEmpty && si + 1 < sens.count { out += " " } }
             last = cite
             out += ws
         }
