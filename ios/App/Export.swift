@@ -27,7 +27,7 @@ enum Export {
         case .vtt:
             return "WEBVTT\n\n" + cues(s.lines).map { "\(clock($0.start)) --> \(clock(endOf($0)))\n\(vtt(oneCue(s.name($0.speaker)))): \(vtt($0.text))\n" }.joined(separator: "\n")
         case .lrc:
-            let head = s.title.isEmpty ? "" : "[ti:\(s.title)]\n"
+            let head = s.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : "[ti:\(s.title)]\n"
             return head + s.lines.compactMap { l in
                 let x = l.text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces); guard !x.isEmpty else { return nil }
                 let cs = Int(max(0, l.start) * 100)
