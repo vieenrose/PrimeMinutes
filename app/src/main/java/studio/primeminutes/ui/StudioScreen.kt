@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -459,7 +461,9 @@ fun StudioScreen(
             val showDone = doneCount > 0 && doneCount < entries.size
             if (showNew || showDone) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm),
+                    // Scrolls sideways at large font scales instead of squeezing the last chip to a column.
+                    Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                        .padding(start = Gutter, end = Gutter, top = Spacing.sm),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     FilterChip(stringResource(R.string.filter_all, entries.size), statusFilter == StatusFilter.ALL) { statusFilter = StatusFilter.ALL }
@@ -992,18 +996,24 @@ private fun WaveBars(color: Color) {
 
 @Composable
 private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
+    // The M3 FilterChip (selected checkmark, tonal fill, 48 dp touch target) instead of a styled Text.
     val pal = LocalPrimeMinutesPalette.current
-    Text(
-        label,
-        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-        color = if (on) pal.OnSky else pal.Slate400,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (on) pal.Sky else pal.PanelSurface)
-            .border(1.dp, if (on) pal.Sky else pal.Hairline, CircleShape)
-            .clickable(onClick = onClick)
-            .semantics { selected = on; role = Role.Tab }   // announce the chip's selected state
-            .heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically).padding(horizontal = Spacing.md),
+    androidx.compose.material3.FilterChip(
+        selected = on,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelLarge) },
+        leadingIcon = if (on) {
+            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
+        } else null,
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            labelColor = pal.Slate400,
+            selectedContainerColor = pal.Sky.copy(alpha = 0.18f),
+            selectedLabelColor = pal.Sky,
+            selectedLeadingIconColor = pal.Sky,
+        ),
+        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+            enabled = true, selected = on, borderColor = pal.Hairline, selectedBorderColor = Color.Transparent,
+        ),
     )
 }
 

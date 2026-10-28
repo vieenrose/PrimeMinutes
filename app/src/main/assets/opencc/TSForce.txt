@@ -1,0 +1,18 @@
+# Prime Minutes T->S force list: a span with no character the T->S table changes is still converted when it
+# contains one of these words (written with characters valid in both scripts, but Traditional only).
+# One word per line, Traditional form. Same file on Android and iOS.
+一目瞭然
+瞭如指掌
+瞭若指掌
+明瞭
+瞭解
+反覆
+回覆
+藉口
+沈默
+沈重
+沈思
+沈迷
+沈浸
+沈睡
+甦醒

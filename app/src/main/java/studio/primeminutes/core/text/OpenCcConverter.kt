@@ -10,16 +10,25 @@ enum class ChineseScript { TRADITIONAL, SIMPLIFIED }
  * Minimal on-device OpenCC converter, both directions, used to keep ALL output text (transcript,
  * summary, title, speaker names → and the lyrics built from them) in one consistent script:
  *  - [ChineseScript.TRADITIONAL] = Simplified→Traditional, Taiwan standard with phrases (`s2twp`):
- *    stage 1 maps S→T (STPhrases then STCharacters); stage 2 applies the Taiwan localisation
- *    (TWVariants + TWVariantsPhrases + TWPhrases) so vocabulary reads native — 資訊 not 信息, 影片 not
- *    視頻, 軟體 not 軟件.
+ *    stage 1 maps S→T (STPhrases then STCharacters, plus STGuard exceptions); stage 2 applies the
+ *    Taiwan localisation (TWVariants + TWVariantsPhrases + our curated TWLexicon) so vocabulary reads
+ *    native — 資訊 not 信息, 影片 not 視頻, 軟體 not 軟件 — without OpenCC TWPhrases' over-localisation
+ *    (文件→檔案, 權限→許可權, 優化→最佳化, 數據→資料, 項目→專案, 發布→釋出).
  *  - [ChineseScript.SIMPLIFIED]  = Traditional→Simplified (`t2s`): TSPhrases then TSCharacters.
  * Longest-match over the bundled OpenCC dictionaries (Apache-2.0, in assets/opencc/). One instance per
  * script, built once and cached, reused. Good enough for script consistency; not a full idiom engine.
+ *
+ * Span gating: the text is split on punctuation and whitespace, and a span is converted only if it holds
+ * a character of the source script ([gate]: one the S→T character table changes for S→T, one the T→S
+ * table changes for T→S), or one of the [force] words (STForce.txt / TSForce.txt: 放松, 信息, 一目瞭然… are
+ * written with characters valid in both scripts but belong to one). Text already in the target script passes through untouched, so phrase
+ * entries can no longer rewrite it (說明了 → 說明瞭, 干涉 → 幹涉 on Traditional input).
  */
 class OpenCcConverter private constructor(
     private val stages: List<Map<String, String>>,
     private val maxKey: Int,
+    private val gate: Set<Int>,
+    private val force: List<String>,
 ) {
     fun convert(text: String): String {
         // Skip non-Chinese text. OpenCC maps shared Han characters to Traditional variants, which mangles
@@ -27,6 +36,39 @@ class OpenCcConverter private constructor(
         // cross-lingual target-language case). Latin text has no Han chars so it's untouched anyway; this
         // guards the CJK-but-not-Chinese case where conversion would corrupt the text.
         if (hasKanaOrHangul(text)) return text
+        if (gate.isEmpty()) return convertSpan(text)
+        val sb = StringBuilder(text.length)
+        var start = 0
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            val w = Character.charCount(cp)
+            if (isDelimiter(cp)) {
+                appendSpan(sb, text, start, i)
+                sb.appendCodePoint(cp)
+                start = i + w
+            }
+            i += w
+        }
+        appendSpan(sb, text, start, text.length)
+        return sb.toString()
+    }
+
+    private fun appendSpan(sb: StringBuilder, text: String, from: Int, to: Int) {
+        if (from >= to) return
+        val span = text.substring(from, to)
+        var gated = false
+        var i = 0
+        while (i < span.length && !gated) {
+            val cp = span.codePointAt(i)
+            gated = cp in gate
+            i += Character.charCount(cp)
+        }
+        if (!gated) gated = force.any { span.contains(it) }
+        sb.append(if (gated) convertSpan(span) else span)
+    }
+
+    private fun convertSpan(text: String): String {
         var out = text
         for (dict in stages) out = applyStage(out, dict)
         return out
@@ -88,19 +130,20 @@ class OpenCcConverter private constructor(
          */
         fun getTranscriptSimplified(context: Context): OpenCcConverter =
             transcriptSimplified ?: synchronized(this) {
-                transcriptSimplified ?: run {
-                    val open: (String) -> InputStream = context.assets::open
-                    val t2s = HashMap<String, String>(8192)
-                    loadInto(open, "opencc/TSPhrases.txt", t2s)
-                    loadInto(open, "opencc/TSCharacters.txt", t2s)
-                    build(listOf(t2s))
-                }.also { transcriptSimplified = it }
+                transcriptSimplified ?: buildTranscriptSimplified(context.assets::open).also { transcriptSimplified = it }
             }
+
+        private fun buildTranscriptSimplified(open: (String) -> InputStream): OpenCcConverter {
+            val t2s = HashMap<String, String>(8192)
+            loadInto(open, "opencc/TSPhrases.txt", t2s)
+            loadInto(open, "opencc/TSCharacters.txt", t2s)
+            return build(listOf(t2s), traditionalOnly(open), tsForce(open))
+        }
 
         private fun buildTraditionalConservative(open: (String) -> InputStream): OpenCcConverter {
             val twChars = HashMap<String, String>(2048)
             loadInto(open, "opencc/TWVariants.txt", twChars)
-            return build(listOf(s2tStage(open), twChars))
+            return build(listOf(s2tStage(open), twChars), simplifiedOnly(open), stForce(open))
         }
 
         /**
@@ -118,6 +161,7 @@ class OpenCcConverter private constructor(
                     loadInto(open, "opencc/STCharacters.txt", m)
                     S2T_DROP.forEach(m::remove)
                     m.putAll(S2T_GUARD)
+                    loadInto(open, "opencc/STGuard.txt", m)
                     s2t = m
                 }
             }
@@ -149,6 +193,47 @@ class OpenCcConverter private constructor(
             }
         }
 
+        @Volatile private var simpOnly: Set<Int>? = null
+        @Volatile private var tradOnly: Set<Int>? = null
+
+        /**
+         * Characters the S→T character table changes (first candidate differs: 们, 发, 据, 后, 干…): a span
+         * holding one is treated as Simplified. 后/干/里 also occur in Traditional words, which is why the
+         * phrase tables' identity rows (皇后, 干涉, 公里) are kept.
+         */
+        private fun simplifiedOnly(open: (String) -> InputStream): Set<Int> =
+            simpOnly ?: synchronized(this) { simpOnly ?: scriptOnly(open, "opencc/STCharacters.txt").also { simpOnly = it } }
+
+        /** Characters the T→S character table changes (們, 發, 後, 乾, 瞭…): a span holding one is Traditional. */
+        private fun traditionalOnly(open: (String) -> InputStream): Set<Int> =
+            tradOnly ?: synchronized(this) { tradOnly ?: scriptOnly(open, "opencc/TSCharacters.txt").also { tradOnly = it } }
+
+        private fun scriptOnly(open: (String) -> InputStream, asset: String): Set<Int> {
+            val out = HashSet<Int>(4096)
+            try {
+                open(asset).use { raw ->
+                    raw.bufferedReader(Charsets.UTF_8).useLines { seq ->
+                        seq.forEach { line ->
+                            if (line.isBlank() || line.startsWith('#')) return@forEach
+                            val tab = line.indexOf('\t')
+                            if (tab <= 0) return@forEach
+                            val key = line.substring(0, tab)
+                            if (key.codePointCount(0, key.length) != 1) return@forEach
+                            if (line.substring(tab + 1).substringBefore(' ').trim() != key) out.add(key.codePointAt(0))
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("OpenCcConverter", "failed loading $asset", e)
+            }
+            return out
+        }
+
+        /** Span boundaries for gating: whitespace and CJK/ASCII punctuation. */
+        private fun isDelimiter(cp: Int): Boolean = Character.isWhitespace(cp) || cp == 0x3000 || cp in DELIMS
+
+        private val DELIMS: Set<Int> = "，。！？、；：,.!?;:「」『』（）()《》〈〉“”‘’\"'…—·[]【】".codePoints().toArray().toHashSet()
+
         @Volatile private var tsChars: CharArray? = null
 
         /**
@@ -174,6 +259,8 @@ class OpenCcConverter private constructor(
         internal fun forTest(open: (String) -> InputStream): Triple<OpenCcConverter, OpenCcConverter, OpenCcConverter> =
             Triple(buildTraditional(open), buildTraditionalConservative(open), buildSimplified(open))
 
+        internal fun transcriptSimplifiedForTest(open: (String) -> InputStream): OpenCcConverter = buildTranscriptSimplified(open)
+
         /** Build once per script (call off the main thread); later calls return the cached instance. */
         fun get(context: Context, script: ChineseScript): OpenCcConverter = when (script) {
             ChineseScript.TRADITIONAL ->
@@ -183,57 +270,43 @@ class OpenCcConverter private constructor(
         }
 
         // s2twp: stage 1 S→T (phrases then chars merged — longest-match prefers the phrase entries);
-        // stage 2 the Taiwan-localisation pass (variant dicts first, phrase dict LAST so TW vocabulary
+        // stage 2 the Taiwan-localisation pass (variant dicts first, the lexicon LAST so TW vocabulary
         // wins on any key clash). Stage-2 keys are in Traditional form (post stage 1).
         private fun buildTraditional(open: (String) -> InputStream): OpenCcConverter {
             val tw = HashMap<String, String>(2048)
             loadInto(open, "opencc/TWVariants.txt", tw)
             loadInto(open, "opencc/TWVariantsPhrases.txt", tw)
-            loadInto(open, "opencc/TWPhrases.txt", tw)
-            PROSE_KEEP.forEach(tw::remove)
-            return build(listOf(s2tStage(open), tw))
+            loadInto(open, LEXICON, tw)
+            return build(listOf(s2tStage(open), tw), simplifiedOnly(open), stForce(open))
         }
 
         /**
-         * TWPhrases entries that are software vocabulary, applied by OpenCC to any text: in meeting
-         * prose they turn 擴展性 into 擴充套件性, 權限 into 許可權, 類型 into 型別, 項目 into 專案 (seen in
-         * generated summaries). Both words are ordinary Taiwan Chinese, so the plain s2t result stays.
-         * Only the forward (s2twp) stage drops them; tw2sp still maps the TW word back.
+         * Curated Taiwan vocabulary (~270 rows, mainland word in s2t form → Taiwan word), replacing OpenCC
+         * TWPhrases, whose software vocabulary rewrote ordinary meeting prose (文件→檔案, 權限→許可權,
+         * 擴展→擴充套件, 優化→最佳化, 數據→資料, 項目→專案, 發布→釋出). Identity rows are guards
+         * (軟體動物, 程序委員會, 地點選…). The same file ships on iOS.
          */
-        internal val PROSE_KEEP = listOf("擴展", "權限", "類型", "項目", "對象", "文件", "參數", "實例", "字段", "函數")
+        internal const val LEXICON = "opencc/TWLexicon.txt"
 
-        // tw2sp, OpenCC's own Taiwan→Simplified-with-phrases chain: stage 1 undoes the Taiwan
-        // localisation (TWPhrasesRev + TWVariantsRevPhrases + TWVariantsRev, the reverse of the
-        // dictionaries s2twp uses), stage 2 is t2s (TSPhrases + TSCharacters). The summary model
-        // writes Taiwan Traditional; plain t2s would leave 資訊/軟體/搜尋 untouched. Simplified input
-        // passes through unchanged (every stage-1 key is Traditional).
+        // tw2sp: stage 1 undoes the Taiwan localisation (lexicon reversed, first row wins — so 介面 → 界面,
+        // 預設 → 默认 — then TWVariantsRevPhrases + TWVariantsRev), stage 2 is t2s (TSPhrases +
+        // TSCharacters). The summary model writes Taiwan Traditional; plain t2s would leave 資訊/軟體
+        // untouched. Simplified input passes through unchanged (span gating, and every key is Traditional).
         private fun buildSimplified(open: (String) -> InputStream): OpenCcConverter {
             val twRev = HashMap<String, String>(2048)
-            loadReverseInto(open, "opencc/TWPhrases.txt", twRev)
+            loadReverseInto(open, LEXICON, twRev, keepIdentity = true)
             loadReverseInto(open, "opencc/TWVariantsPhrases.txt", twRev)
             loadReverseInto(open, "opencc/TWVariants.txt", twRev)
-            // "點選" (Taiwan for "click") also ends a common noun: 地點選在… is 地點 + 選在, not
-            // 地 + 點選 (seen live: "地点击在信义区"). Longest match from the left prefers these
-            // longer keys, which stay as they are for t2s.
-            NOUN_THEN_SELECT.forEach { twRev[it] = it }
-            // 執行 is "carry out" (a plan, a decision) far more often than "run" (a program) in a
-            // meeting, and mainland Chinese says 执行 too: "執行細節" became "运行细节".
-            twRev["執行"] = "執行"
-            // 介面 reverses to the FIRST TWPhrases line that targets it, 接口 (an API), but in meeting
-            // prose it is the user interface: 會議介面 became 会议接口; 界面 is the mainland word.
-            twRev["介面"] = "界面"
             val t2s = HashMap<String, String>(8192)
             loadInto(open, "opencc/TSPhrases.txt", t2s)
             loadInto(open, "opencc/TSCharacters.txt", t2s)
-            return build(listOf(twRev, t2s))
+            return build(listOf(twRev, t2s), traditionalOnly(open), tsForce(open))
         }
 
-        private val NOUN_THEN_SELECT = listOf(
-            "地點選", "重點選", "景點選", "觀點選", "優點選", "缺點選", "起點選", "終點選", "站點選", "據點選", "時點選", "焦點選",
-        )
-
         /** OpenCC `*Rev` dictionary: every target of a line maps back to its source; earlier files win. */
-        private fun loadReverseInto(open: (String) -> InputStream, asset: String, into: MutableMap<String, String>) {
+        private fun loadReverseInto(
+            open: (String) -> InputStream, asset: String, into: MutableMap<String, String>, keepIdentity: Boolean = false,
+        ) {
             try {
                 open(asset).use { raw ->
                     raw.bufferedReader(Charsets.UTF_8).useLines { seq ->
@@ -243,7 +316,7 @@ class OpenCcConverter private constructor(
                             if (tab <= 0) return@forEach
                             val src = line.substring(0, tab)
                             line.substring(tab + 1).split(' ').forEach { v ->
-                                if (v.isNotEmpty() && v != src) into.putIfAbsent(v, src)
+                                if (v.isNotEmpty() && (v != src || keepIdentity)) into.putIfAbsent(v, src)
                             }
                         }
                     }
@@ -253,12 +326,29 @@ class OpenCcConverter private constructor(
             }
         }
 
-        private fun build(stages: List<Map<String, String>>): OpenCcConverter {
+        private fun build(stages: List<Map<String, String>>, gate: Set<Int>, force: List<String>): OpenCcConverter {
             val maxKey = stages.asSequence().flatMap { it.keys.asSequence() }.maxOfOrNull { it.length } ?: 1
-            return OpenCcConverter(stages, maxKey)
+            return OpenCcConverter(stages, maxKey, gate, force)
         }
 
-        /** OpenCC line: "src<TAB>tgt[ tgt2 …]" — take the first target; skip blank/# lines. */
+        private fun stForce(open: (String) -> InputStream) = wordList(open, "opencc/STForce.txt")
+        private fun tsForce(open: (String) -> InputStream) = wordList(open, "opencc/TSForce.txt")
+
+        /** One word per line, # comments: spans holding one convert even without a script-specific character. */
+        private fun wordList(open: (String) -> InputStream, asset: String): List<String> = try {
+            open(asset).use { raw ->
+                raw.bufferedReader(Charsets.UTF_8).readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith('#') }
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("OpenCcConverter", "failed loading $asset", e)
+            emptyList()
+        }
+
+        /**
+         * OpenCC line: "src<TAB>tgt[ tgt2 …]" — take the first target; skip blank/# lines. Identity rows
+         * (干涉→干涉, 皇后→皇后, 公里→公里 in STPhrases) are kept: they are how OpenCC stops the
+         * character table (干→幹, 后→後, 里→裡) inside those words.
+         */
         private fun loadInto(open: (String) -> InputStream, asset: String, into: MutableMap<String, String>) {
             try {
                 open(asset).use { raw ->
@@ -269,7 +359,7 @@ class OpenCcConverter private constructor(
                             if (tab <= 0) return@forEach
                             val src = line.substring(0, tab)
                             val first = line.substring(tab + 1).substringBefore(' ').trim()
-                            if (first.isNotEmpty() && first != src) into[src] = first
+                            if (first.isNotEmpty()) into[src] = first
                         }
                     }
                 }

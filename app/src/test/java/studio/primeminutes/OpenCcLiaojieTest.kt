@@ -28,13 +28,17 @@ class OpenCcLiaojieTest {
         "說明了解約流程" to "說明了解約流程",
         "明瞭" to "明瞭",
         "一目瞭然" to "一目瞭然",
-        "明了" to "明瞭",
-        "一目了然" to "一目瞭然",
+        "这很明了" to "這很明瞭",
+        "这一目了然" to "這一目瞭然",
+        // Span gating: no character the S→T table changes, so already valid Traditional and left alone.
+        "明了" to "明了",
+        "一目了然" to "一目瞭然",   // ...unless it holds an STForce word
         "我们需要了解客户" to "我們需要了解客戶",
         "据了解" to "據了解",
         "讨论了如何推进" to "討論了如何推進",
         "做完了然后再说" to "做完了然後再說",
-        "了如指掌" to "瞭如指掌",
+        "了如指掌" to "瞭如指掌",   // STForce
+        "他对这了如指掌" to "他對這瞭如指掌",
         "这证明了解法可行" to "這證明了解法可行",
     )
 
@@ -46,7 +50,8 @@ class OpenCcLiaojieTest {
         assertEquals("会议讨论了解决方案", toSimplified.convert("會議討論了解決方案"))
         assertEquals("说明了解约流程", toSimplified.convert("說明了解約流程"))
         assertEquals("我们需要了解客户", toSimplified.convert("我們需要瞭解客戶"))
-        assertEquals("一目了然", toSimplified.convert("一目瞭然"))
+        assertEquals("这一目了然", toSimplified.convert("這一目瞭然"))
+        assertEquals("一目了然", toSimplified.convert("一目瞭然"))   // TSForce
     }
 
 }

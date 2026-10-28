@@ -31,7 +31,7 @@ flowchart TD
     Open --> Session
     Session --> Summary["摘要分頁<br/>AI 筆記卡片・摘要・語者比例"]
     Settings --> People["說話者名錄<br/>辨識聲音・人物頁"]
-    People --> Contact["人物頁：聯絡人・電子郵件"]
+    People --> Contact["人物頁：手機聯絡人・電子郵件"]
     Session --> Transcript["逐字稿分頁<br/>點句播放・長按選單・語者是誰？"]
     Session -->|"放大鏡"| InSearch["在這場會議內搜尋<br/>AI 筆記・逐字稿・≈・✦ 問這場會議"]
     Transcript -->|"⇕"| Boundary["調整說話者分界<br/>拖曳・點字・‹ ›・試聽・從這裡分開・復原"]
@@ -205,7 +205,7 @@ flowchart TD
 
 ## 7. 場次：逐字稿分頁
 
-<img src="guide/18-transcript.png" width="270" alt="逐字稿"> <img src="guide/19-line-menu.png" width="270" alt="長按選單"> <img src="guide/17-speaker-rename.png" width="270" alt="語者 2 是誰？">
+<img src="guide/18-transcript.png" width="270" alt="逐字稿"> <img src="guide/19-line-menu.png" width="270" alt="長按選單"> <img src="guide/17-speaker-rename.png" width="270" alt="語者 1 是誰？：最近與手機聯絡人">
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -213,8 +213,10 @@ flowchart TD
 | 長按一句 → 編輯 | 長按選單 | 就地編輯，儲存後保存在場次中 | ✅ 手動（重新開啟後仍在） |
 | 長按 → 將此句移至 → 語者 N | 長按選單 | 該句改派語者，保存在場次中 | ✅ 手動（重新開啟後仍在） |
 | 長按 → 合併語者至 → 語者 N | 長按選單 | 先確認「將「語者 1」合併至「語者 2」？」；合併後整位語者併入另一位，其他語者的名稱不變；下方提示「已合併語者」，點 **復原** 可還原（移動單句同樣可復原） | ✅ 手動（Note 10+）、✅ 自動（SpeakerEditsTest） |
-| 點語者名稱 | 每段開頭的「語者 N」 | 開啟「語者 N 是誰？」面板：依聲音建議（開啟辨識聲音時）、最近、全部、搜尋、「新增為新的人」、「從聯絡人選擇…」、「清除名字」；選定後這位語者的每一句都換成該名字（見第 9a 節） | ✅ 手動 |
+| 點語者名稱 | 每段開頭的「語者 N」 | 開啟「語者 N 是誰？」面板：依聲音建議（開啟辨識聲音時）、這場會議中、最近、手機的聯絡人、搜尋、「新增「…」為新的人」（存入手機聯絡人，接著可順手填電子郵件）、「把這位語者叫做「…」」（只用於這場會議）、「清除名字」；選定後這位語者的每一句都換成該名字；已命名的語者可直接開啟人物頁或新增電子郵件（見第 9a、9b 節） | ✅ 手動 |
 | 搜尋這場會議 | 頂端放大鏡 | 標示符合處並列出 AI 筆記與逐字稿的結果清單，上一個／下一個，關閉搜尋（第 7b 節） | ✅ 手動 |
+
+<img src="guide/47-name-add-email.png" width="270" alt="命名為新的人後順手新增電子郵件"> <img src="guide/48-named-speaker-sheet.png" width="270" alt="已命名的語者：開啟人物頁、新增電子郵件"> <img src="guide/49-contacts-denied.png" width="270" alt="未允許聯絡人權限時的說明卡片">
 
 <img src="guide/35-merge-confirm.png" width="270" alt="合併語者確認"> <img src="guide/36-merge-undo.png" width="270" alt="已合併語者，復原"> <img src="guide/13-transcript-search.png" width="270" alt="搜尋逐字稿">
 
@@ -309,9 +311,9 @@ flowchart TD
 
 ## 9a. 說話者名錄
 
-<p><img src="screenshots/people-voice-suggest-zh.png" width="200" alt="依聲音建議"> <img src="screenshots/people-people-zh.png" width="200" alt="說話者名錄與辨識聲音"> <img src="screenshots/people-person-zh.png" width="200" alt="人物頁"> <img src="screenshots/people-voice-explain-zh.png" width="200" alt="要辨識聲音嗎？"></p>
+<p><img src="screenshots/people-voice-suggest-zh.png" width="200" alt="依聲音建議"> <img src="screenshots/people-people-zh.png" width="200" alt="說話者名錄與辨識聲音"> <img src="screenshots/people-person-zh.png" width="200" alt="人物頁"> <img src="screenshots/people-voice-explain-zh.png" width="200" alt="要辨識聲音嗎？"> <img src="guide/46-people-contacts-card.png" width="200" alt="要把 2 位人員加入聯絡人嗎？"></p>
 
-設定 → 說話者名錄：你命名過的每個人，與他出現的會議。點逐字稿的語者名稱會開啟選人面板：依聲音建議（開啟辨識聲音時）、最近、全部，以及搜尋與「新增為新的人」、「清除名字」。名字跨會議共用：在人物頁全部改名，每場會議都跟著更新。
+設定 → 說話者名錄：你命名過的每個人，與他出現的會議。**人就是手機的聯絡人**：把語者命名為新的人時，App 在系統「聯絡人」中建立這個人，App 本身只記住與聯絡人的連結和聲音；電子郵件等資料存在聯絡人裡。第一次需要允許存取聯絡人；不允許時仍可為這場會議輸入名字，但不會成為人員（沒有電子郵件，也不辨識聲音）。舊版在 App 內命名過的人，名錄頂端會出現「要把 N 位人員加入聯絡人嗎？」：已在聯絡人中的人（電子郵件或名字相同）直接連結，不會重複建立，聲音與會議都保留。點逐字稿的語者名稱會開啟選人面板：依聲音建議（開啟辨識聲音時）、這場會議中、最近、聯絡人，以及搜尋、「新增為新的人」、「清除名字」。名字跨會議共用：在人物頁全部改名，每場會議都跟著更新。
 
 **辨識聲音**（選用，預設關閉）：開啟前先說明隱私（只在這支手機上，不上傳，不含於匯出與備份；「聲音」是最多 60 秒語音算出的一串數字；建議絕不自動套用；可忘記某人的聲音或刪除所有聲音資料；刪除會議也刪除它的聲音樣本；命名前請先徵得同意）。聲音模型（約 29 MB，Hugging Face `Luigi/primeminutes-speaker-litert` 版本 `8b7a1151`）開啟時下載一次並驗證 SHA-256。
 
@@ -328,15 +330,16 @@ flowchart TD
 
 ## 9b. 聯絡人與寄給與會者
 
-<p><img src="screenshots/people-contact.png" width="200" alt="人物頁：聯絡人與電子郵件"> <img src="screenshots/mail-participants.png" width="200" alt="寄給與會者"></p>
+<p><img src="screenshots/people-contact.png" width="200" alt="人物頁：聯絡人與可直接新增、移除的電子郵件"> <img src="screenshots/mail-participants.png" width="200" alt="寄給與會者"></p>
 
-人物頁的 **聯絡人** 卡片：**從聯絡人選擇…** 開啟系統聯絡人選擇器（不需要聯絡人權限；沒有電子郵件的聯絡人無法選），選擇後加入其電子郵件並記住連結；**從聯絡人更新**、**取消連結**（地址可保留或一併移除）。同一位聯絡人連到兩個人時，提示「是同一個人嗎？」並可合併。**電子郵件** 卡片：★ 為寄信時預設使用的地址，⋮ 可設為預設或移除，「新增電子郵件」可自行輸入。為語者命名時，選人面板也有「從聯絡人選擇…」，先確認在 App 中的名字（同名時詢問是否為同一人）。
+人物頁的 **聯絡人** 卡片顯示「聯絡人：名字」與 **在聯絡人中編輯**（開啟系統聯絡人 App）；聯絡人在系統中被刪除時，會議裡仍保留這個名字。**電子郵件** 卡片列出聯絡人上的地址：★ 為寄信時預設使用的地址；**新增電子郵件** 與每個地址旁的移除，都直接寫回手機聯絡人（重複或格式錯誤會提示）。為語者命名為新的人之後，App 會順手詢問電子郵件（可略過）。「我」的人物頁可用 **聯絡人中的我…** 連結到你自己的聯絡人卡片。
 
 會議選單 → **寄給與會者…**（語者卡片也有按鈕）：收件人預先勾選這場會議中有電子郵件的人，「我」不勾選；沒有地址的人可直接輸入（存入此人）；未命名的語者顯示「命名」；「新增其他收件人」只用於這封信，不存入名錄。內容：摘要、紀要、只要決議與待辦；附件：無、PDF、TXT、`.m4a`（超過 20 MB 時提醒）；郵件語言（只換範本文字，筆記不翻譯）；「預覽」顯示完整內文。**在郵件 App 中開啟** 只交給郵件 App（有多個時讓你選），沒有郵件 App 時改用分享選單並複製地址；**分享到其他 App…** 送出較短的聊天版本。App 不知道信是否送出，只記錄「上次分享」。
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
-| 從聯絡人選擇（人物頁、選人面板） | 不需權限；選擇後加入地址與連結，名字不變 | ✅ 手動（Note10+，Samsung 聯絡人選擇器）、✅ 自動（單元測試） |
+| 命名為新的人 | 在手機聯絡人中建立這個人，可順手新增電子郵件；未允許聯絡人權限時只能輸入這場會議的名字 | ✅ 手動（Note10+）、✅ 自動（OsContactsTest、ContactEmailOpsTest） |
+| 加入聯絡人卡片 | 舊版 App 內的人員依電子郵件或名字連結到既有聯絡人，其餘新建；不重複 | ✅ 自動（OsContactsTest） |
 | 【會議資訊】時間 | 錄音：實際開始到結束的時間；匯入：檔案本身記錄的建立時間（如手機錄音檔），沒有時就不列時間、只列日期；更新前的舊會議照舊 | ✅ 手動（模擬器：有日期與無日期的匯入）、✅ 自動（MediaDateTest、MeetingMailTest） |
 | 郵件內文 | 與設計範本逐位元相同（中文、英文、只要決議與待辦、mailto 長度上限、聊天版） | ✅ 自動（Android 與 iOS 共用的黃金檔） |
 | 在郵件 App 中開啟 | 只開郵件 App，帶收件人、主旨、內文與附件 | ✅ 手動（Note10+ 開啟 Outlook；內容未在已登入的郵件 App 中確認） |

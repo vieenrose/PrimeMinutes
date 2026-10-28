@@ -1,0 +1,40 @@
+# Prime Minutes S->T exceptions, applied over STPhrases/STCharacters (longest match wins). Same file on Android and iOS.
+# Format: simplified (or mixed) key<TAB>OpenCC s2t Traditional form (Taiwan variants such as 着->著 come later).
+# 发卡 is 髮卡 (hair clip) in STPhrases; a card issuer is 發卡.
+银行发卡	銀行發卡
+发卡银行	發卡銀行
+发卡机构	發卡機構
+发卡行	發卡行
+信用卡发卡	信用卡發卡
+发卡量	發卡量
+# STPhrases 别着 -> 彆着 (awkward) swallows 別 (don't) + 着急.
+别着急	別着急
+别着凉	別着涼
+别着了	別着了
+# STPhrases 再回 (identity) takes 回 before 回复 can match.
+再回复	再回覆
+# 范 before a title is the surname, not 範.
+范先生	范先生
+范女士	范女士
+范太太	范太太
+范总	范總
+范董	范董
+范老师	范老師
+范经理	范經理
+范主任	范主任
+范教授	范教授
+范博士	范博士
+范医生	范醫生
+范律师	范律師
+范同学	范同學
+范委员	范委員
+范部长	范部長
+# 干得 + praise is 幹 (do), STPhrases has 干得很 -> 乾得很 (dry).
+干得好	幹得好
+干得很好	幹得很好
+干得不错	幹得不錯
+干得很不错	幹得很不錯
+干得漂亮	幹得漂亮
+干得很棒	幹得很棒
+干得出色	幹得出色
+干得很出色	幹得很出色
