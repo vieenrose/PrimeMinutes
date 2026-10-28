@@ -13,9 +13,9 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
             ("会议讨论了解决方案", "會議討論了解決方案"), ("说明了解约流程", "說明了解約流程"),
             ("會議討論了解決方案", "會議討論了解決方案"), ("說明了解約流程", "說明了解約流程"),
             ("明瞭", "明瞭"), ("一目瞭然", "一目瞭然"), ("这很明了", "這很明瞭"), ("这一目了然", "這一目瞭然"),
-            ("明了", "明了"), ("一目了然", "一目了然"),   // span gating: no character the S→T table changes, left alone
+            ("明了", "明了"), ("一目了然", "一目瞭然"),   // span gating: no character the S→T table changes, left alone
             ("我们需要了解客户", "我們需要了解客戶"), ("据了解", "據了解"), ("讨论了如何推进", "討論了如何推進"),
-            ("做完了然后再说", "做完了然後再說"), ("了如指掌", "了如指掌"), ("他对这了如指掌", "他對這瞭如指掌"), ("这证明了解法可行", "這證明了解法可行"),
+            ("做完了然后再说", "做完了然後再說"), ("了如指掌", "瞭如指掌"), ("他对这了如指掌", "他對這瞭如指掌"), ("这证明了解法可行", "這證明了解法可行"),
         ]
         for (i, o) in cases {
             eq(OpenCC.generated(.traditional).convert(i), o, "s2twp \(i)")
@@ -26,7 +26,7 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
         eq(s.convert("說明了解約流程"), "说明了解约流程", "tw2sp")
         eq(s.convert("我們需要瞭解客戶"), "我们需要了解客户", "tw2sp")
         eq(s.convert("這一目瞭然"), "这一目了然", "tw2sp")
-        eq(s.convert("一目瞭然"), "一目瞭然", "tw2sp gated")
+        eq(s.convert("一目瞭然"), "一目了然", "tw2sp TSForce")
         var n = cases.count * 2 + 5
         // Shared bench: converter, input, expected.
         let dir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "golden"

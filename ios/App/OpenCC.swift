@@ -9,9 +9,11 @@ enum ChineseScript: String, CaseIterable { case traditional = "zh-Hant", simplif
 /// character of the source script (one the S→T, resp. T→S, character table changes), so text already in the target
 /// script passes through untouched (說明了 → 說明瞭, 干涉 → 幹涉 on Traditional input).
 final class OpenCC: @unchecked Sendable {
-    private let stages: [[String: String]], maxKey: Int, gate: Set<UInt32>
-    private init(_ s: [[String: String]], gate g: Set<UInt32>) {
-        stages = s; gate = g; maxKey = s.flatMap(\.keys).map { $0.unicodeScalars.count }.max() ?? 1
+    private let stages: [[String: String]], maxKey: Int, gate: Set<UInt32>, force: [String]
+    /// `force`: STForce/TSForce words (放松, 信息, 一目瞭然…) written with characters valid in both scripts but
+    /// belonging to one; a span holding one converts too. Same files as Android.
+    private init(_ s: [[String: String]], gate g: Set<UInt32>, force f: [String]) {
+        stages = s; gate = g; force = f; maxKey = s.flatMap(\.keys).map { $0.unicodeScalars.count }.max() ?? 1
     }
 
     func convert(_ text: String) -> String {
@@ -22,7 +24,10 @@ final class OpenCC: @unchecked Sendable {
         func flush(_ end: Int) {
             guard start < end else { return }
             let span = Array(sc[start..<end])
-            if span.contains(where: { gate.contains($0.value) }) {
+            if span.contains(where: { gate.contains($0.value) }) || (!force.isEmpty && {
+                var v = String.UnicodeScalarView(); v.append(contentsOf: span); let t = String(v)
+                return force.contains { t.contains($0) }
+            }()) {
                 var cur = span
                 for d in stages where !d.isEmpty { cur = Self.apply(cur, d, maxKey) }
                 out.append(contentsOf: cur)
@@ -81,6 +86,10 @@ final class OpenCC: @unchecked Sendable {
         return g
     }
     nonisolated(unsafe) private static var gates: [String: Set<UInt32>] = [:]   // only read and set inside memo, under lock
+    private static func words(_ name: String) -> [String] {
+        guard let u = url(name), let s = try? String(contentsOf: u, encoding: .utf8) else { return [] }
+        return s.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && !$0.hasPrefix("#") }
+    }
     private static func simpGate() -> Set<UInt32> { if let g = gates["s"] { return g }; let g = gate("STCharacters"); gates["s"] = g; return g }
     private static func tradGate() -> Set<UInt32> { if let g = gates["t"] { return g }; let g = gate("TSCharacters"); gates["t"] = g; return g }
     /// Host tests read the dictionaries from ios/App/Resources/opencc (`VOX_OPENCC_DIR`); the app uses its bundle.
@@ -120,13 +129,13 @@ final class OpenCC: @unchecked Sendable {
                 // TWLexicon (curated, ~270 rows, same file as Android) replaces OpenCC TWPhrases, whose software
                 // vocabulary rewrote meeting prose (文件→檔案, 權限→許可權, 優化→最佳化, 數據→資料, 項目→專案).
                 var tw: [String: String] = [:]; load("TWVariants", into: &tw); load("TWVariantsPhrases", into: &tw); load("TWLexicon", into: &tw)
-                return OpenCC([s2t(), tw], gate: simpGate())
+                return OpenCC([s2t(), tw], gate: simpGate(), force: words("STForce"))
             case .simplified:
                 // Lexicon reversed, first row wins (介面 → 界面, 預設 → 默认); identity rows guard 地點選, 軟體動物….
                 var rev: [String: String] = [:]
                 load("TWLexicon", reverse: true, keepIdentity: true, into: &rev); load("TWVariantsPhrases", reverse: true, into: &rev); load("TWVariants", reverse: true, into: &rev)
                 var t2s: [String: String] = [:]; load("TSPhrases", into: &t2s); load("TSCharacters", into: &t2s)
-                return OpenCC([rev, t2s], gate: tradGate())
+                return OpenCC([rev, t2s], gate: tradGate(), force: words("TSForce"))
             }
         }
     }
@@ -150,8 +159,8 @@ final class OpenCC: @unchecked Sendable {
     static func transcript(_ s: ChineseScript) -> OpenCC {
         memo("tr-" + s.rawValue) {
             switch s {
-            case .traditional: var tw: [String: String] = [:]; load("TWVariants", into: &tw); return OpenCC([s2t(), tw], gate: simpGate())
-            case .simplified: var t2s: [String: String] = [:]; load("TSPhrases", into: &t2s); load("TSCharacters", into: &t2s); return OpenCC([t2s], gate: tradGate())
+            case .traditional: var tw: [String: String] = [:]; load("TWVariants", into: &tw); return OpenCC([s2t(), tw], gate: simpGate(), force: words("STForce"))
+            case .simplified: var t2s: [String: String] = [:]; load("TSPhrases", into: &t2s); load("TSCharacters", into: &t2s); return OpenCC([t2s], gate: tradGate(), force: words("TSForce"))
             }
         }
     }

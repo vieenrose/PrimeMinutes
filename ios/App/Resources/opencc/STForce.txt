@@ -1,0 +1,45 @@
+# Prime Minutes S->T force list: a span with no character the S->T table changes is still converted when it
+# contains one of these words (written with characters valid in both scripts, but mainland/Simplified only).
+# One word per line, Simplified form. Same file on Android and iOS.
+放松
+松弛
+松懈
+松散
+松手
+松口
+松了
+很松
+太松
+了如指掌
+了若指掌
+一目了然
+信息
+硬件
+芯片
+屏幕
+打印
+博客
+短信
+算法
+字符
+激活
+黑客
+插件
+缺省
+人工智能
+分辨率
+演示文稿
+激光
+塑料
+酸奶
+奶酪
+方便面
+便利店
+艾滋病
+阿司匹林
+心肌梗死
+意大利
+悉尼
+特朗普
+普京
+莫扎特
