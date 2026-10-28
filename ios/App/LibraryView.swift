@@ -20,7 +20,6 @@ struct LibraryView: View {
     @State private var sharing: URL?
     @AppStorage("seenSessions") private var seenRaw = ""
     @ObservedObject private var indexer = LibraryIndexer.shared
-    @ObservedObject private var resumer = DownloadResumer.shared
     @State private var hits: [LibrarySearch.Hit] = []
     @State private var searchTask: Task<Void, Never>?
     /// The query whose semantic half is still running: until it lands, no hit means "searching", not "no match".
@@ -95,29 +94,6 @@ struct LibraryView: View {
         let g = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
         return g.keys.sorted(by: >).map { ($0, g[$0]!) }
     }
-    /// Android: the passages of a search hit under the card, ≈ marking the ones only the meaning found.
-    /// A summary line that matched is shown (it says why the meeting is listed); only a match on the
-    /// title is dropped, since the card already shows the title.
-    private func passages(_ s: Session) -> some View {
-        let ps = hits.first { $0.session.id == s.id }?.passages.filter { $0.kind != .meeting || $0.semanticOnly || $0.snippet != s.title } ?? []
-        return VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(ps.enumerated()), id: \.offset) { _, p in
-                Button { if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } } label: {
-                    HStack(alignment: .top, spacing: 6) {
-                        if p.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
-                        if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
-                        Text((p.speaker.map { $0 + ": " } ?? "") + snippet(p, s)).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
-                    }
-                }.buttonStyle(.plain)
-            }
-        }
-    }
-    /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
-    private func snippet(_ p: LibrarySearch.Passage, _ s: Session) -> String {
-        if p.kind == .chunk { return p.snippet }
-        let known = Set(s.lines.map(\.speaker))
-        return SpeakerRefs.resolve(p.snippet, label: { s.name($0) }, known: known.isEmpty ? nil : known)
-    }
     private func label(_ d: Date) -> String {
         if Calendar.current.isDateInToday(d) { return L("today") }
         if Calendar.current.isDateInYesterday(d) { return L("yesterday") }
@@ -129,45 +105,24 @@ struct LibraryView: View {
             (f, L("filter_" + f.rawValue, f == .all ? m.library.sessions.count : m.library.sessions.filter { f == .new ? isNew($0) : isDone($0) }.count))
         }
     }
-    private func card(_ s: Session) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: isNew(s) ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
-                .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                .foregroundStyle(isDone(s) ? Vox.success.color : Color.secondary)
-                .voxTint(isDone(s) ? Vox.success.color : Color.secondary, Vox.radiusSM)
-                .accessibilityLabel(L(isNew(s) ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
-            VStack(alignment: .leading, spacing: 2) {
-                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(2)
-                Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
-                if !query.isEmpty { passages(s) }
-                if indexer.indexing.contains(s.id) { Vox.micro(L("studio_indexing")) }
-            }
-            Spacer(minLength: 0)
-            if !selected.isEmpty {
-                Image(systemName: selected.contains(s.id) ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(selected.contains(s.id) ? Color.accentColor : Color.secondary)
-            } else { Menu {
-                // Long-press selects and nothing advertises it; this is the visible path (Android: same item).
-                Button(L("action_select"), systemImage: "checkmark.circle") { toggle(s) }
-                if let a = s.audio, FileManager.default.fileExists(atPath: JobQueue.audioDir.appendingPathComponent(a).path) {
-                    Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { sharing = JobQueue.audioDir.appendingPathComponent(a) }
-                }
-                Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
-                Button(L("rename"), systemImage: "pencil") { draft = s.title; renameTarget = s.id; renaming = s }
-                Button(L("delete"), systemImage: "trash", role: .destructive) { deleting = s }
-            // the outer "more" label wins — the inner cd_manage was dead code
-            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
-                .accessibilityLabel(L("more")) }
-        }
-        .padding(Vox.inset)
-        .voxCard()
-        .overlay(RoundedRectangle(cornerRadius: Vox.radiusLG).stroke(Color.accentColor, lineWidth: selected.contains(s.id) ? 2 : 0))
-        .contentShape(Rectangle())
-        .onLongPressGesture { toggle(s) }
-        .onTapGesture { activate(s) }
-        // Gestures are invisible to VoiceOver: say it is a button, and offer the long-press as an action.
-        .accessibilityAddTraits(selected.contains(s.id) ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { activate(s) }
-        .accessibilityAction(named: L("select")) { toggle(s) }
+    /// Search passages of a hit (Android: under the card); a match on the title alone is dropped.
+    private func passages(_ s: Session) -> [LibrarySearch.Passage] {
+        hits.first { $0.session.id == s.id }?.passages.filter { $0.kind != .meeting || $0.semanticOnly || $0.snippet != s.title } ?? []
+    }
+    private func open(_ s: Session) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
+    private func audioURL(_ s: Session) -> URL? {
+        guard let a = s.audio else { return nil }
+        let u = JobQueue.audioDir.appendingPathComponent(a)
+        return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+    /// One session row as the list draws it (actions wired to this screen's state).
+    private func row(_ s: Session) -> LibraryRow {
+        LibraryRow(s: s, isNew: isNew(s), done: isDone(s), searching: !query.isEmpty, passages: passages(s),
+                   indexing: indexer.indexing.contains(s.id), selecting: !selected.isEmpty, selected: selected.contains(s.id),
+                   audio: audioURL(s),
+                   onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
+                   onToggle: { toggle(s) }, onOpen: { open(s) }, onShare: { sharing = $0 },
+                   onRename: { draft = s.title; renaming = s }, onDelete: { deleting = s })
     }
     private func activate(_ s: Session) {
         if !selected.isEmpty { toggle(s); return }
@@ -180,7 +135,8 @@ struct LibraryView: View {
         let ps = hits.first { $0.session.id == s.id }?.passages ?? []
         return s.id.uuidString + "|" + s.title + "|" + ps.map { "\($0.kind)\($0.uttIndex)\($0.semanticOnly)" }.joined(separator: ",")
     }
-    private func jobCard(_ j: Job) -> some View {
+    private func jobCard(_ j: Job) -> AnyView { AnyView(jobCardBody(j)) }
+    private func jobCardBody(_ j: Job) -> some View {
         let active = j.id == m.runner.activeJob, failedDl = j.download?.error != nil
         return HStack(spacing: 12) {
             JobGlyph(m: m, j: j)
@@ -212,15 +168,6 @@ struct LibraryView: View {
     }
     private func toggle(_ s: Session) { if selected.contains(s.id) { selected.remove(s.id) } else { selected.insert(s.id) } }
 
-    private func pillar(_ icon: String, _ key: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).voxFore(Vox.info).frame(width: 32, height: 32).voxTint(Vox.info, Vox.radiusSM)
-            VStack(alignment: .leading, spacing: 2) {
-                Vox.subhead(L(key + "_title"))
-                Vox.meta(L(key + "_desc"))
-            }
-        }
-    }
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
     /// The row's Rename: the user's title, marked so no run replaces it (a blank one restores the automatic title).
     /// `renameTarget` outlives the alert's binding, which may already be cleared when Done runs.
@@ -258,68 +205,10 @@ struct LibraryView: View {
             }.padding(Vox.inset).voxRow().padding(.horizontal, Vox.gutter)
             .background(GeometryReader { g in Color.clear.preference(key: SearchRowFrameKey.self, value: g.frame(in: .global)) })
             .onPreferenceChange(SearchRowFrameKey.self) { searchRowFrame = $0 }
-            if !EmbedHost.ready && !m.library.sessions.isEmpty {
-                if let p = m.downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, Vox.gutter).padding(.top, 6) }
-                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { m.downloads.downloadEmbed() }.font(.caption).padding(.horizontal, Vox.gutter).padding(.top, 6) }
-            }
-            if m.downloads.prefetchProgress != nil { ModelDownloadCard(downloads: m.downloads).padding(.horizontal, Vox.gutter).padding(.top, 6) }
-            else if resumer.paused > 0 && !m.imports.dlPaused {   // a run's own model download, waiting to resume
-                HStack {
-                    Image(systemName: "pause.circle").voxFore(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
-                    Vox.meta(L("download_paused"))
-                    Spacer()
-                    Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold))
-                }.padding(.horizontal, Vox.gutter).padding(.top, 6)
-            }
-            if !indexer.indexing.isEmpty || indexer.pending > 0 {
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
-            }
-            if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter).padding(.horizontal, Vox.gutter).padding(.vertical, 10) }
-            PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {
-                        VStack(spacing: 18) {
-                            BrandMark(size: 72)
-                            Text(L("empty_headline")).font(.title3.bold()).multilineTextAlignment(.center)
-                            Vox.hint(L("empty_subtitle")).multilineTextAlignment(.center)
-                            VStack(alignment: .leading, spacing: 12) {
-                                pillar("lock.fill", "pillar_private")
-                                pillar("icloud.slash.fill", "pillar_offline")
-                                pillar("banknote.fill", "pillar_cost")
-                            }.padding(.top, 6)
-                            Vox.fine(L("library_empty")).multilineTextAlignment(.center).padding(.top, 4)
-                            if m.downloads.pending.any && m.downloads.prefetchProgress == nil {
-                                Vox.fine(L("first_run_download_notice", SizeFormat.bytes(m.downloads.pending.total))).multilineTextAlignment(.center)
-                            }
-                        }.frame(maxWidth: .infinity).padding(.top, 40)
-                    }
-                    if !m.library.sessions.isEmpty && days.isEmpty {
-                        if densePending != nil {
-                            VStack(spacing: 12) {
-                                ProgressView()
-                                Vox.hint(L("studio_searching")).multilineTextAlignment(.center)
-                            }.frame(maxWidth: .infinity).padding(.top, 40).accessibilityElement(children: .combine)
-                        } else {
-                            // A no-match with a search and filter chips on was a dead end: the way out was
-                            // clearing the field by hand and finding the chips behind the empty list (Android parity).
-                            ContentUnavailableView {
-                                Label(L("studio_no_match"), systemImage: "magnifyingglass")
-                            } actions: {
-                                if !query.trimmingCharacters(in: .whitespaces).isEmpty || filter != .all || personFilter != nil {
-                                    Button(L("studio_clear_filters")) { query = ""; filter = .all; personFilter = nil; searchFocused = false }
-                                        .buttonStyle(.bordered).controlSize(.large)
-                                }
-                            }.frame(maxWidth: .infinity).padding(.top, 24)
-                        }
-                    }
-                    ForEach(m.runner.waiting) { jobCard($0).id("job-" + $0.id.uuidString) }   // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
-                    ForEach(days, id: \.0) { day, items in
-                        if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
-                        ForEach(items) { s in card(s).id(rowKey(s)) }
-                    }
-                }.padding(.horizontal, Vox.gutter)
-            }
+            LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter)
+            LibraryList(m: m, days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
+                        filtered: filter != .all || personFilter != nil, row: row, rowKey: rowKey, job: { jobCard($0) },
+                        clearFilters: { query = ""; filter = .all; personFilter = nil; searchFocused = false })
             .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
             if m.runner.activeJob != nil {
                 Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
@@ -793,6 +682,201 @@ struct LibraryToolbar: ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button(action: onAdd) { Image(systemName: "plus") }.accessibilityLabel(L("import_audio"))
             Button(action: onSettings) { Image(systemName: "gearshape") }.accessibilityLabel(L("settings"))
+        }
+    }
+}
+
+/// A library session row: status glyph, title, time · length, and while searching the passages that matched.
+struct LibraryRow: View {
+    let s: Session
+    let isNew: Bool
+    let done: Bool
+    let searching: Bool
+    let passages: [LibrarySearch.Passage]
+    let indexing: Bool
+    let selecting: Bool
+    let selected: Bool
+    let audio: URL?
+    let onActivate: () -> Void
+    let onPassage: (LibrarySearch.Passage) -> Void
+    let onToggle: () -> Void
+    let onOpen: () -> Void
+    let onShare: (URL) -> Void
+    let onRename: () -> Void
+    let onDelete: () -> Void
+    /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
+    private func snippet(_ p: LibrarySearch.Passage) -> String {
+        if p.kind == .chunk { return p.snippet }
+        let known = Set(s.lines.map(\.speaker))
+        return SpeakerRefs.resolve(p.snippet, label: { s.name($0) }, known: known.isEmpty ? nil : known)
+    }
+    private var passageList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(passages.enumerated()), id: \.offset) { _, p in
+                Button { onPassage(p) } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        if p.semanticOnly { Text("≈").font(.caption.bold()).foregroundStyle(Color.accentColor).accessibilityLabel(L("search_semantic_marker")) }
+                        if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                        Text((p.speaker.map { $0 + ": " } ?? "") + snippet(p)).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
+                    }
+                }.buttonStyle(.borderless)
+            }
+        }
+    }
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
+                .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
+                .foregroundStyle(done ? Vox.success.color : Color.secondary)
+                .voxTint(done ? Vox.success.color : Color.secondary, Vox.radiusSM)
+                .accessibilityLabel(L(isNew ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
+            VStack(alignment: .leading, spacing: 2) {
+                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(2)
+                Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
+                if searching { passageList }
+                if indexing { Vox.micro(L("studio_indexing")) }
+            }
+            Spacer(minLength: 0)
+            if selecting {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            } else { Menu {
+                Button(L("action_select"), systemImage: "checkmark.circle") { onToggle() }
+                if let audio { Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { onShare(audio) } }
+                Button(L("action_open"), systemImage: "play.fill") { onOpen() }
+                Button(L("rename"), systemImage: "pencil") { onRename() }
+                Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
+            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
+                .accessibilityLabel(L("more")) }
+        }
+        .padding(Vox.inset)
+        .voxCard()
+        .overlay(RoundedRectangle(cornerRadius: Vox.radiusLG).stroke(Color.accentColor, lineWidth: selected ? 2 : 0))
+        .contentShape(Rectangle())
+        .onLongPressGesture { onToggle() }
+        .onTapGesture { onActivate() }
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { onActivate() }
+        .accessibilityAction(named: L("select")) { onToggle() }
+    }
+}
+
+/// The library's lines above the list: semantic-search download, first-run model download or a paused one,
+/// indexing progress, the All/New/Done filter and the people chips.
+struct LibraryHeader: View {
+    @ObservedObject var m: Model
+    @ObservedObject var downloads: ModelDownloads
+    let filterOptions: [(LibraryView.Filter, String)]
+    @Binding var filter: LibraryView.Filter
+    @Binding var personFilter: String?
+    @ObservedObject private var indexer = LibraryIndexer.shared
+    @ObservedObject private var resumer = DownloadResumer.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !EmbedHost.ready && !m.library.sessions.isEmpty {
+                if let p = downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, Vox.gutter).padding(.top, 6) }
+                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { downloads.downloadEmbed() }.font(.caption).padding(.horizontal, Vox.gutter).padding(.top, 6) }
+            }
+            if downloads.prefetchProgress != nil { ModelDownloadCard(downloads: downloads).padding(.horizontal, Vox.gutter).padding(.top, 6) }
+            else if resumer.paused > 0 && !m.imports.dlPaused { LibraryPausedRow().padding(.horizontal, Vox.gutter).padding(.top, 6) }
+            if !indexer.indexing.isEmpty || indexer.pending > 0 {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
+            }
+            if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter).padding(.horizontal, Vox.gutter).padding(.vertical, 10) }
+            PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
+        }
+    }
+}
+
+/// A run's own model download, waiting to resume.
+struct LibraryPausedRow: View {
+    var body: some View {
+        HStack {
+            Image(systemName: "pause.circle").voxFore(Vox.warning).accessibilityHidden(true)   // the text beside it carries the state
+            Vox.meta(L("download_paused"))
+            Spacer()
+            Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.caption.weight(.semibold)).buttonStyle(.borderless)
+        }
+    }
+}
+
+/// The empty library: the brand, what the app promises, and the first-run download notice.
+struct LibraryEmpty: View {
+    @ObservedObject var downloads: ModelDownloads
+    private func pillar(_ icon: String, _ key: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).voxFore(Vox.info).frame(width: 32, height: 32).voxTint(Vox.info, Vox.radiusSM)
+            VStack(alignment: .leading, spacing: 2) {
+                Vox.subhead(L(key + "_title"))
+                Vox.meta(L(key + "_desc"))
+            }
+        }
+    }
+    var body: some View {
+        VStack(spacing: 18) {
+            BrandMark(size: 72)
+            Text(L("empty_headline")).font(.title3.bold()).multilineTextAlignment(.center)
+            Vox.hint(L("empty_subtitle")).multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 12) {
+                pillar("lock.fill", "pillar_private")
+                pillar("icloud.slash.fill", "pillar_offline")
+                pillar("banknote.fill", "pillar_cost")
+            }.padding(.top, 6)
+            Vox.fine(L("library_empty")).multilineTextAlignment(.center).padding(.top, 4)
+            if downloads.pending.any && downloads.prefetchProgress == nil {
+                Vox.fine(L("first_run_download_notice", SizeFormat.bytes(downloads.pending.total))).multilineTextAlignment(.center)
+            }
+        }.frame(maxWidth: .infinity)
+    }
+}
+
+/// Search found nothing (or is still looking): a spinner, or the no-match view with a way out of the filters.
+struct LibraryNoMatch: View {
+    let pending: Bool
+    let filtered: Bool
+    let clearFilters: () -> Void
+    var body: some View {
+        if pending {
+            VStack(spacing: 12) {
+                ProgressView()
+                Vox.hint(L("studio_searching")).multilineTextAlignment(.center)
+            }.frame(maxWidth: .infinity).accessibilityElement(children: .combine)
+        } else {
+            // A no-match with a search and filter chips on was a dead end (Android parity: the way out is here).
+            ContentUnavailableView {
+                Label(L("studio_no_match"), systemImage: "magnifyingglass")
+            } actions: {
+                if filtered { Button(L("studio_clear_filters")) { clearFilters() }.buttonStyle(.bordered).controlSize(.large) }
+            }.frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// The scrolling part of the library: empty state, no-match, queued jobs, then the sessions by day.
+struct LibraryList: View {
+    @ObservedObject var m: Model
+    let days: [(Date, [Session])]
+    let label: (Date) -> String
+    let searching: Bool
+    let densePending: Bool
+    let filtered: Bool
+    let row: (Session) -> LibraryRow
+    let rowKey: (Session) -> String
+    let job: (Job) -> AnyView
+    let clearFilters: () -> Void
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                if m.library.sessions.isEmpty && m.runner.waiting.isEmpty { LibraryEmpty(downloads: m.downloads).padding(.top, 40) }
+                if !m.library.sessions.isEmpty && days.isEmpty {
+                    LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 24)
+                }
+                // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
+                ForEach(m.runner.waiting) { job($0).id("job-" + $0.id.uuidString) }
+                ForEach(days, id: \.0) { day, items in
+                    if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
+                    ForEach(items) { s in row(s).id(rowKey(s)) }
+                }
+            }.padding(.horizontal, Vox.gutter)
         }
     }
 }
