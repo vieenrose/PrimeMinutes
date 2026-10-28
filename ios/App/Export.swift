@@ -23,7 +23,7 @@ enum Export {
         s.notes = s0.notes.map { var n = $0; n.text = refs($0.text, s0); return n }
         switch f {
         case .srt:
-            return cues(s.lines).enumerated().map { i, l in "\(i + 1)\n\(clock(l.start, comma: true)) --> \(clock(endOf(l), comma: true))\n\(oneCue(s.name(l.speaker))): \(l.text)\n" }.joined(separator: "\n")
+            return cues(s.lines).enumerated().map { i, l in "\(i + 1)\n\(clock(l.start, comma: true)) --> \(clock(endOf(l), comma: true))\n\(oneCue(s.name(l.speaker))): \(oneCue(l.text))\n" }.joined(separator: "\n")
         case .vtt:
             return "WEBVTT\n\n" + cues(s.lines).map { "\(clock($0.start)) --> \(clock(endOf($0)))\n\(vtt(oneCue(s.name($0.speaker)))): \(vtt($0.text))\n" }.joined(separator: "\n")
         case .lrc:
