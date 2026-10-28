@@ -15,6 +15,7 @@
 "settings" = "Settings";
 "language" = "Language";
 "done" = "Done";
+"ok" = "OK";
 "loading_models" = "Loading models…";
 "mic_denied" = "Microphone access denied";
 "mic_error" = "Microphone: %@";

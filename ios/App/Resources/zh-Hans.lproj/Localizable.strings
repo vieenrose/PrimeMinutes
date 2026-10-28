@@ -15,6 +15,7 @@
 "settings" = "设置";
 "language" = "语言";
 "done" = "完成";
+"ok" = "好";
 "loading_models" = "加载模型中…";
 "mic_denied" = "麦克风权限被拒";
 "mic_error" = "麦克风：%@";

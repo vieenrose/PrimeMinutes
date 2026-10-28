@@ -124,10 +124,14 @@ struct CardActionsMenu: View {
     let copyLabel: String
     let onCopy: () -> Void
     let onEdit: () -> Void
+    /// After a copy the glyph turns into a checkmark for a beat (the haptic comes with the copy itself).
+    @State private var copied = false
     var body: some View {
-        Menu { CardActionItems(onCopy: onCopy, onEdit: onEdit) } label: { Image(systemName: "ellipsis.circle").tapTarget() }
+        Menu { CardActionItems(onCopy: copy, onEdit: onEdit) } label: { Image(systemName: copied ? "checkmark" : "ellipsis.circle").contentTransition(.symbolEffect(.replace)).tapTarget() }
             .accessibilityLabel(L("cd_more_options")).accessibilityHint(copyLabel)
+            .task(id: copied) { if copied { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { copied = false } } }
     }
+    private func copy() { onCopy(); withAnimation { copied = true } }
 }
 
 /// The grouped-list footer under a card: a secondary footnote, or an orange warning with its triangle.

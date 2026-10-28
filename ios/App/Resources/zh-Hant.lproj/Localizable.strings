@@ -15,6 +15,7 @@
 "settings" = "設定";
 "language" = "語言";
 "done" = "完成";
+"ok" = "好";
 "loading_models" = "載入模型中…";
 "mic_denied" = "麥克風權限被拒";
 "mic_error" = "麥克風：%@";

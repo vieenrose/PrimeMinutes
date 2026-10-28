@@ -76,7 +76,8 @@ struct SessionView: View {
     /// (from, into) awaiting confirmation: a merge rewrites every line of a speaker, one tap away in a menu.
     @State private var merging: (Int, Int)?
     @State private var transcriptDirty = false
-    @State private var toast: String?
+    /// An error or a mail-send result: shown as a system alert (copies and edits confirm with a haptic instead).
+    @State private var alertText: String?
     @State private var editingSummary = false
     @State private var editingActions = false
     @State private var summaryStale = false
@@ -229,9 +230,9 @@ struct SessionView: View {
             refs: { refs($0) },
             playerAvailable: player.available,
             onSeekPlay: { player.seekPlay($0) },
-            onCopySummary: { UIPasteboard.general.string = refs(s.summary, screen: false); toast = L("summary_copied"); Haptics.success() },
+            onCopySummary: { UIPasteboard.general.string = refs(s.summary, screen: false); Haptics.success(); announce(L("summary_copied")) },
             onEditSummary: { draft = s.summary; editingSummary = true },
-            onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); toast = L("action_items_copied"); Haptics.success() } },
+            onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
             onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
             onToggleProcess: { withAnimation { showProcess.toggle() } },
             onOpenMail: { mailOpen = true },
@@ -308,27 +309,27 @@ struct SessionView: View {
             if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
         }
     }
-    /// Export-format picked: write the file, then hand it to the share sheet (or toast on failure).
+    /// Export-format picked: write the file, then hand it to the share sheet (or alert on failure).
     private func pickExport(_ f: Export.Format) {
         showExport = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { toast = L("export_share_failed") }
+            if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { alertText = L("export_share_failed") }
         }
     }
-    /// "Save session" picked: export the .primeminutes bundle, then share it (or toast on failure).
+    /// "Save session" picked: export the .primeminutes bundle, then share it (or alert on failure).
     private func saveSessionExport() {
         showExport = false; exporting = true
         Task {
             let u = await SessionFile.export(s); exporting = false
             try? await Task.sleep(nanoseconds: 400_000_000)
-            if let u { Haptics.success(); exportFile = u } else { toast = L("session_share_failed") }
+            if let u { Haptics.success(); exportFile = u } else { alertText = L("session_share_failed") }
         }
     }
     /// Mail "send" picked: close the sheet, then send after the dismiss animation.
     private func sendMail(_ r: MailRequest) {
         mailOpen = false
         let cur = s
-        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { toast = $0 } }
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { alertText = $0 } }
     }
     /// Mail "share chat" picked: close the sheet, then share after the dismiss animation.
     private func shareMailChat(_ r: MailRequest) {
@@ -358,8 +359,8 @@ struct SessionView: View {
         try? await Task.sleep(nanoseconds: 8_000_000_000)
         expireSpeakerUndo(u)
     }
-    /// A toast posted (export copy, mail send): show it.
-    private func showToast(_ n: NotificationCenter.Publisher.Output) { if let t = n.object as? String { toast = t } }
+    /// VoiceOver hears what sighted users see change (a copy, a moved boundary): no toast on screen.
+    private func announce(_ t: String) { UIAccessibility.post(notification: .announcement, argument: t) }
     // A run started on this meeting: the "re-summarize?" question is moot (the run re-reads the meeting).
     private func busyChanged(_ b: Bool) { if b { transcriptDirty = false } }
     // The index this search was waiting for is written: run the ≈ pass again (Android: indexingIds re-runs it).
@@ -561,10 +562,8 @@ struct SessionView: View {
             if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
             Button(L("cancel"), role: .cancel) {}
         }
-        .overlay(alignment: .bottom) {
-            if let toast {
-                SessionToast(text: toast, onExpire: { self.toast = nil })
-            }
+        .alert(alertText ?? "", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
+            Button(L("ok"), role: .cancel) {}
         }
         .sheet(isPresented: $editingSummary) {
             SessionTextEditSheet(draft: $draft, title: L("tab_summary"), doneEnabled: summaryEditDoneEnabled,
@@ -582,7 +581,6 @@ struct SessionView: View {
         .task { await devMergeTask() }
         .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
-        .onReceive(NotificationCenter.default.publisher(for: .voxToast)) { showToast($0) }
         .overlay {
             if exporting { SessionExporting() }
         }
@@ -696,13 +694,13 @@ struct SessionView: View {
         let before = (s.lines, s.speakerNames, s.speakerPeople)
         let out = BoundaryEdits.move(s.lines, seam: seam, split: split)
         guard out != s.lines else { return }
-        s.lines = out; record(before); save(s); toast = L("boundary_moved")
+        s.lines = out; record(before); save(s); announce(L("boundary_moved"))
     }
     private func splitLine(_ index: Int, _ at: Int, _ speaker: Int) {
         let before = (s.lines, s.speakerNames, s.speakerPeople)
         let out = BoundaryEdits.split(s.lines, index: index, at: at, speaker: speaker)
         guard out != s.lines else { return }
-        s.lines = out; record(before); save(s); toast = L("line_split_done")
+        s.lines = out; record(before); save(s); announce(L("line_split_done"))
     }
     /// DEV (README animation): VOX_BOUNDARY_STEPS="-1,-1" moves the open editor's marker by these steps, then applies.
     static var devDemo: [Int]? { Dev.on ? Dev.env["VOX_BOUNDARY_STEPS"].map { $0.split(separator: ",").compactMap { Int($0) } } : nil }
@@ -841,7 +839,7 @@ struct ExportSheet: View {
                     Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
                 }
             }
-            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success(); NotificationCenter.default.post(name: .voxToast, object: L("transcript_copied")) } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
+            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success(); UIAccessibility.post(notification: .announcement, argument: L("transcript_copied")) } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
             Spacer()
         }.padding(Vox.gutterWide).frame(maxWidth: .infinity, alignment: .leading)
     }

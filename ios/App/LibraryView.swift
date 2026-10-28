@@ -486,7 +486,6 @@ struct LiveJobView: View {
     private static let palette = speakerPalette
     /// The speaker being named from the run's rows (Android: the transcript row's speaker chip, live).
     @State private var renamingSpeaker: Int?
-    @State private var toast: String?
     /// The line being played (SessionView.current): highlighted, and followed while playing, as in a finished meeting.
     private var current: UUID? {
         guard player.engaged else { return nil }
@@ -600,12 +599,6 @@ struct LiveJobView: View {
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
         }
-        .overlay(alignment: .bottom) {
-            if let toast { Vox.hint(toast).padding(.horizontal, Vox.gutter).padding(.vertical, 10)
-                .background(.thinMaterial, in: Capsule()).padding(.bottom, 90)
-                // A toast is visual only: say it out loud too, as in the finished meeting (SessionView).
-                .transition(.opacity).task { UIAccessibility.post(notification: .announcement, argument: toast); try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { self.toast = nil } } }
-        }
         .toolbar {
             if let j = job {
                 ToolbarItem(placement: .primaryAction) {
@@ -641,12 +634,14 @@ struct LiveJobView: View {
     // MARK: live speaker names (Android SessionState.speakerNames during a run)
     /// `k` is `p` of the directory (Android linkSpeaker): every live row of `k` reads the name from the screen model,
     /// so they all change in this frame.
+    /// The rows relabel in place: a haptic, and VoiceOver hears it (no toast).
+    private func confirm(_ t: String) { Haptics.success(); UIAccessibility.post(notification: .announcement, argument: t) }
     private func link(_ k: Int, _ p: Person) {
         m.screen.names = LiveNames.setting(m.screen.names, k, SpeakerLink(name: p.name, person: p.id))
         PeopleStore.shared.touch(p.id)
         VoiceLinks.impl?.confirmed(session: id, speaker: k, person: p.id)
         persistNames()
-        withAnimation { toast = L("people_linked") }
+        confirm(L("people_linked"))
     }
     /// Back to "Speaker n" (Android clearSpeakerName): the name goes at once, the person stays in the directory.
     private func clearName(_ k: Int) {
@@ -654,7 +649,7 @@ struct LiveJobView: View {
         m.screen.names = LiveNames.cleared(m.screen.names, k)
         if let was { VoiceLinks.impl?.unlinked(session: id, speaker: k, person: was) }
         persistNames()
-        withAnimation { toast = L("people_linked") }
+        confirm(L("people_linked"))
     }
     /// Merge one speaker of the run into another (Android SpeakerEdits.merge): its lines move to the target, the
     /// merged id is gone and its name with it; the target keeps its own label.
@@ -663,7 +658,7 @@ struct LiveJobView: View {
         for i in m.screen.lines.indices where m.screen.lines[i].speaker == from { m.screen.lines[i].speaker = into }
         m.screen.names = LiveNames.merging(m.screen.names, from: from, into: into)
         persistNames()
-        withAnimation { toast = L("speaker_merged") }
+        confirm(L("speaker_merged"))
     }
     /// Names land in the meeting as soon as it is in the library (a re-run, a resumed job): the live screen answers
     /// over what it stored, so a speaker the run never mentions loses its name (Android dropName) and the names of
