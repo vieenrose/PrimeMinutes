@@ -31,6 +31,7 @@ object TranscriptExport {
         notes: ExportNotes.Section? = null,
         summaryHeading: String? = null,
         transcriptHeading: String? = null,
+        actions: ExportNotes.Section? = null,
     ): String = buildString {
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { append(it).append("\n\n") }
         summary?.trim()?.takeIf { it.isNotEmpty() }?.let {
@@ -42,6 +43,7 @@ object TranscriptExport {
             actionsHeading?.let { h -> append(h).append("\n") }
             append(it).append("\n\n")
         }
+        actions?.let { append(ExportNotes.plain(it)).append("\n\n") }
         notes?.let { append(ExportNotes.plain(it)).append("\n\n") }
         if (utterances.isNotEmpty()) transcriptHeading?.let { append(ExportNotes.plainHeading(it)).append('\n') }
         val pad = gutterWidth(utterances)
@@ -67,6 +69,7 @@ object TranscriptExport {
         actionItems: String? = null,
         actionsHeading: String? = null,
         notes: ExportNotes.Section? = null,
+        actions: ExportNotes.Section? = null,
     ): String = buildString {
         // Cites in the summary / notes link to the turn anchors (`<a id="t-15"></a>`) below.
         val starts = turns(utterances).filter { !it.cont }.map { it.u.startSec }
@@ -79,6 +82,7 @@ object TranscriptExport {
             actionsHeading?.let { h -> append("## ").append(h).append("\n\n") }
             append(it).append("\n\n")
         }
+        actions?.let { append(ExportNotes.markdown(it, starts)).append("\n\n") }
         notes?.let { append(ExportNotes.markdown(it, starts)).append("\n\n") }
         append("## ").append(transcriptHeading).append("\n\n")
         val pad = gutterWidth(utterances)

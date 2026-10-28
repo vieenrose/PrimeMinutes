@@ -39,11 +39,26 @@ object ExportNotes {
         ORDER.forEach { by[it] = ArrayList() }
         for (n in notes) {
             val text = refs(n.text.trim()).trimEnd('。').trim()
-            if (text.isEmpty() || text == "-") continue
+            if (MeetingMail.trivial(text)) continue
             by.getOrPut(fullTag(n.tag)) { ArrayList() } += Item(text, n.ts.trim().ifEmpty { null })
         }
         val groups = by.filterValues { it.isNotEmpty() }.map { (tag, items) -> Group(tag?.let { label(it) ?: it }, items) }
         return if (groups.isEmpty()) null else Section(heading, groups)
+    }
+
+    private val ITEM = Regex("""^[-*•・]\s*(.*?)\s*(?:\[(\d+:\d{2}(?::\d{2})?)])?\s*$""")
+
+    /**
+     * The action items block (raw `- text [m:ss]` lines from the extractor) as a formatted section:
+     * cite at the line end, trivial lines dropped; a line that isn't a bullet is kept as an item.
+     */
+    fun actions(heading: String, raw: String?, refs: (String) -> String = { it }): Section? {
+        val items = raw.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { l ->
+            val m = ITEM.matchEntire(l)
+            val text = refs((m?.groupValues?.get(1) ?: l).trim()).trimEnd('。').trim()
+            if (MeetingMail.trivial(text)) null else Item(text, m?.groupValues?.get(2)?.ifEmpty { null })
+        }
+        return if (items.isEmpty()) null else Section(heading, listOf(Group(null, items)))
     }
 
     /** A note's text with its cite at the end, glued (`…條款。⁠[1:12]`). */

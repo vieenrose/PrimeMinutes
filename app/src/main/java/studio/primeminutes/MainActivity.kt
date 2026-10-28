@@ -1116,9 +1116,7 @@ private fun TranscribeScreen(
         val out = StringBuilder()
         // "-" is the extractor's own "nothing found" marker, not content.
         // Action items are an opt-in experiment: exported only when shown in the app.
-        s.actionItems?.trim()?.takeIf { s.config.showActionItems && it.isNotEmpty() && it != "-" }?.let {
-            out.append(h(context.getString(R.string.export_heading_actions))).append("\n").append(it).append("\n\n")
-        }
+        // Action items: their own formatted section (exportActions), not raw text here.
         s.meetingNotes?.let { n ->
             fun section(heading: String, items: List<String>) {
                 if (items.isEmpty()) return
@@ -1147,8 +1145,12 @@ private fun TranscribeScreen(
                 else -> null
             }
         }) { refs(it) ?: it }
+    // Action items are an opt-in experiment: exported only when shown in the app.
+    fun exportActions(): studio.primeminutes.core.export.ExportNotes.Section? =
+        if (!s.config.showActionItems) null
+        else studio.primeminutes.core.export.ExportNotes.actions(context.getString(R.string.export_heading_actions), s.actionItems) { refs(it) ?: it }
     fun transcriptText(): String = TranscriptExport.plainText(s.utterances, speakerLabel, refs(s.title), refs(s.summary), exportExtras(markdown = false), null,
-        exportNotes(), context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript))
+        exportNotes(), context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript), actions = exportActions())
     fun exportBaseName(): String =
         s.title?.take(48)?.replace(Regex("[^\\p{L}\\p{N} _-]"), "_")?.trim()?.ifEmpty { null } ?: "transcript"
     fun writeDoc(uri: Uri?, content: String) {
@@ -1170,19 +1172,19 @@ private fun TranscribeScreen(
     val mdSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) {
         writeDoc(it, TranscriptExport.markdown(s.utterances, speakerLabel, refs(s.title), refs(s.summary),
             context.getString(R.string.export_heading_summary), context.getString(R.string.export_heading_transcript),
-            exportExtras(markdown = true), null, exportNotes()))
+            exportExtras(markdown = true), null, exportNotes(), exportActions()))
     }
     // PDF is binary, so it bypasses writeDoc() and streams from PdfExport directly to the SAF document.
     val pdfSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val utts = s.utterances; val t = refs(s.title); val sm = refs(s.summary)
         val sumH = context.getString(R.string.export_heading_summary); val txH = context.getString(R.string.export_heading_transcript)
-        val extras = exportExtras(markdown = false); val notes = exportNotes()
+        val extras = exportExtras(markdown = false); val notes = exportNotes(); val acts = exportActions()
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { os ->
-                        studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sm, sumH, txH, extras, null, context.resources.configuration.locales[0], notes)
+                        studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sm, sumH, txH, extras, null, context.resources.configuration.locales[0], notes, acts)
                     } != null
                 }.getOrDefault(false)
             }
@@ -1202,7 +1204,7 @@ private fun TranscribeScreen(
                 utts, speakerLabel, refs(s.title), refs(s.summary),
                 context.getString(R.string.export_heading_summary),
                 context.getString(R.string.export_heading_transcript),
-                exportExtras(markdown = true), null, exportNotes(),
+                exportExtras(markdown = true), null, exportNotes(), exportActions(),
             )
             ExportFormat.SRT -> TranscriptExport.srt(utts, speakerLabel)
             ExportFormat.VTT -> TranscriptExport.vtt(utts, speakerLabel)
@@ -1222,6 +1224,7 @@ private fun TranscribeScreen(
         val body = if (f == ExportFormat.PDF) null else exportText(f)
         val extras = if (f == ExportFormat.PDF) exportExtras(markdown = false) else null
         val notes = if (f == ExportFormat.PDF) exportNotes() else null
+        val acts = if (f == ExportFormat.PDF) exportActions() else null
         scope.launch {
             val file = withContext(Dispatchers.IO) {
                 runCatching {
@@ -1232,7 +1235,7 @@ private fun TranscribeScreen(
                     File(dir, "${exportBaseName()}.${f.ext}").also { out ->
                         if (f == ExportFormat.PDF) {
                             out.outputStream().use { os ->
-                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, extras, null, context.resources.configuration.locales[0], notes)
+                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, extras, null, context.resources.configuration.locales[0], notes, acts)
                             }
                         } else {
                             out.writeText(body.orEmpty())
@@ -2204,7 +2207,7 @@ private fun TranscribeScreen(
     }
     if (mailOpen && s.utterances.isNotEmpty()) studio.primeminutes.ui.EmailParticipantsFlow(
         s = s, notes = agent.notes.toList(), speakerLabel = speakerLabel,
-        exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras, exportNotes = ::exportNotes,
+        exportBaseName = ::exportBaseName, transcriptText = ::transcriptText, exportExtras = ::exportExtras, exportNotes = ::exportNotes, exportActions = ::exportActions,
         refs = { refs(it) }, notify = { vm.notify(it) },
         // Like the transcript's speaker names: off while a run relabels the speakers.
         onNameSpeaker = if (s.running) null else ({ sid -> mailOpen = false; vm.beginSpeakerEdit(sid, s.utterances.indexOfFirst { it.speaker == sid }.coerceAtLeast(0)) }),

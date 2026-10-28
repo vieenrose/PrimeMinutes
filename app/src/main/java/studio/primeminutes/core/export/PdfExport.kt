@@ -38,6 +38,8 @@ object PdfExport {
         locale: Locale = Locale.getDefault(),
         /** The AI notes, grouped by type (ExportNotes.section). */
         notes: ExportNotes.Section? = null,
+        /** The action items, formatted like the notes (ExportNotes.actions). */
+        actions: ExportNotes.Section? = null,
     ) {
         val titlePaint = paint(18f, bold = true, locale)
         val headingPaint = paint(13f, bold = true, locale)
@@ -60,7 +62,7 @@ object PdfExport {
             actionsHeading?.let { h -> pager.block(h, headingPaint); pager.gap(4f) }
             pager.block(it, bodyPaint); pager.gap(16f)
         }
-        notes?.let { sec ->
+        for (sec in listOfNotNull(actions, notes)) {
             pager.block(sec.heading, headingPaint); pager.gap(6f)
             val bullet = "•"
             val indent = bodyPaint.measureText(bullet) + 6f
