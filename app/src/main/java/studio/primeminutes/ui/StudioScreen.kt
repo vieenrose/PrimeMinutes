@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +60,14 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DockedSearchBar
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -232,8 +241,25 @@ fun StudioScreen(
     val haptics = LocalHapticFeedback.current
     var actionsFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
-    var deleteFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var confirmDeleteMany by remember { mutableStateOf(false) }
+    // A single delete is held back while its Undo snackbar shows: the row hides at once and the files
+    // go only when the snackbar times out (a killed app in that window keeps the meeting — the safe side).
+    val pendingDeletes = remember { mutableStateMapOf<String, Unit>() }
+    val deletedMsg = stringResource(R.string.deleted_one)
+    val undoLabel = stringResource(R.string.undo)
+    fun requestDelete(e: SessionLibrary.Entry) {
+        // The swipe can report its dismiss more than once: one snackbar per row, or the second
+        // one would delete after the first was undone.
+        if (e.id in pendingDeletes) return
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        pendingDeletes[e.id] = Unit
+        AppSnackbar.showAction(String.format(deletedMsg, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale)), undoLabel) { undone ->
+            pendingDeletes.remove(e.id)
+            if (!undone) onDelete(e)
+        }
+    }
+    @Suppress("NAME_SHADOWING")
+    val entries = if (pendingDeletes.isEmpty()) entries else entries.filter { it.id !in pendingDeletes }
     // A row's tap: a live run opens its live view (the queue's, or the screen's own run), a download item its
     // screen, a downloaded item starts processing, a saved meeting opens; the rest offer their actions.
     fun onRowTap(e: SessionLibrary.Entry, status: RowStatus) {
@@ -338,8 +364,10 @@ fun StudioScreen(
         }
     }
 
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Column(
-        Modifier.fillMaxSize().background(pal.Slate900Grad).statusBarsPadding().navigationBarsPadding(),
+        Modifier.fillMaxSize().background(pal.Slate900Grad).statusBarsPadding().navigationBarsPadding()
+            .nestedScroll(topBarScroll.nestedScrollConnection),
     ) {
         if (selectionMode) {
             SelectionHeader(
@@ -349,82 +377,77 @@ fun StudioScreen(
                 onDelete = { if (selected.isNotEmpty()) confirmDeleteMany = true },
             )
         } else {
-            // Flat identity row — the gradient band is retired. Content over chrome.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Spacing.xs),
-            ) {
-                androidx.compose.foundation.Image(
-                    androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.weight(1f))
-                Box(
-                    Modifier.size(48.dp).clip(MaterialTheme.shapes.medium).clickable(role = Role.Button, onClick = onImport),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
-                Spacer(Modifier.width(Spacing.xs))
-                Box(
-                    Modifier.size(48.dp).clip(MaterialTheme.shapes.medium).clickable(role = Role.Button, onClick = onSettings),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
-            }
-
-            // Search over the library (lexical at once, by meaning after a short pause).
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth().padding(horizontal = Gutter)
-                    .clip(MaterialTheme.shapes.medium).background(pal.PanelSurface)
-                    .border(1.dp, pal.Hairline, MaterialTheme.shapes.medium)
-                    .heightIn(min = 44.dp).padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(Spacing.sm))
-                BasicTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
-                    textStyle = TextStyle(color = pal.Slate200, fontSize = MaterialTheme.typography.bodyMedium.fontSize),
-                    cursorBrush = SolidColor(pal.Sky),
-                    decorationBox = { inner ->
-                        if (query.isEmpty()) Text(stringResource(R.string.studio_search_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
-                        inner()
-                    },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        imeAction = if (onAsk != null) androidx.compose.ui.text.input.ImeAction.Send
-                                    else androidx.compose.ui.text.input.ImeAction.Search,
-                    ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                        onSend = { if (query.isNotBlank()) onAsk?.invoke(query) },
-                    ),
-                    modifier = Modifier.weight(1f).onFocusChanged { f ->
-                        // Typing is imminent: load the embedder now so the first dense pass is not
-                        // delayed by the model load.
-                        if (f.isFocused && searchModelReady) EmbedHost.preload(context, 1)
-                    },
-                )
-                if (indexingIds.isNotEmpty()) Chip(stringResource(R.string.studio_indexing), pal.Slate400)
-                if (onAsk != null) {
-                    // Ask, labelled (an unlabelled paper plane was missed): with a query it asks it, empty
-                    // it opens the Ask sheet on its own question field.
-                    Spacer(Modifier.width(6.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
-                            .clickable { onAsk(query) }
-                            .semantics(mergeDescendants = true) { role = Role.Button }
-                            .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
-                    ) {
-                        Icon(Icons.Filled.QuestionAnswer, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(Spacing.xs))
-                        Text(stringResource(R.string.ask_title), color = pal.Sky, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            // M3 top app bar: brand, Add, Settings; it slides away as the list scrolls up (enterAlways).
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.Image(
+                            androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.app_name), maxLines = 1,
+                            style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                        )
                     }
-                }
-            }
+                },
+                actions = {
+                    IconButton(onClick = onImport) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
+                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
+                },
+                windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
+                scrollBehavior = topBarScroll,
+            )
+
+            // Search over the library (lexical at once, by meaning after a short pause): an M3 docked
+            // search bar that never expands — the results are the list below, as before.
+            DockedSearchBar(
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = query, onQueryChange = { query = it },
+                        // The keyboard's action asks the query when Ask is on (it was Send before).
+                        onSearch = { if (it.isNotBlank()) onAsk?.invoke(it) },
+                        expanded = false, onExpandedChange = {},
+                        placeholder = { Text(stringResource(R.string.studio_search_hint), maxLines = 1) },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_clear_search))
+                                }
+                                if (indexingIds.isNotEmpty()) Chip(stringResource(R.string.studio_indexing), pal.Slate400)
+                                if (onAsk != null) {
+                                    // Ask, labelled (an unlabelled paper plane was missed): with a query it asks it, empty
+                                    // it opens the Ask sheet on its own question field.
+                                    Spacer(Modifier.width(6.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
+                                            .clickable { onAsk(query) }
+                                            .semantics(mergeDescendants = true) { role = Role.Button }
+                                            .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+                                    ) {
+                                        Icon(Icons.Filled.QuestionAnswer, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(Spacing.xs))
+                                        Text(stringResource(R.string.ask_title), color = pal.Sky, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    }
+                                    Spacer(Modifier.width(Spacing.sm))
+                                }
+                            }
+                        },
+                        modifier = Modifier.onFocusChanged { f ->
+                            // Typing is imminent: load the embedder now so the first dense pass is not
+                            // delayed by the model load.
+                            if (f.isFocused && searchModelReady) EmbedHost.preload(context, 1)
+                        },
+                    )
+                },
+                expanded = false, onExpandedChange = {},
+                colors = SearchBarDefaults.colors(containerColor = pal.PanelSurface),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter),
+            ) {}
             if (searching && !searchModelReady) {
                 // Lexical only until the model is there: say how to get the semantic pass.
                 val mb = studio.primeminutes.core.models.SizeFormat.bytes(EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID).totalBytes)
@@ -575,6 +598,7 @@ fun StudioScreen(
                     val e = h.entry
                     val status = rowStatus(e, processingId, queuedIds, foregroundId)
                     Column {
+                        SwipeToDelete(enabled = !selectionMode && status != RowStatus.Processing, onDelete = { requestDelete(e) }) {
                         SessionRow(
                             entry = e, status = status,
                             processingLabel = rowLabel(e, status),
@@ -588,6 +612,7 @@ fun StudioScreen(
                             onLongClick = { if (!selectionMode) { selectionMode = true; selected[e.id] = Unit } },
                             onManage = { actionsFor = e },
                         )
+                        }
                         if (status == RowStatus.Done) h.passages.forEach { p ->
                             PassageRow(p, LibrarySearch.speakers(e)) {
                                 if (p.kind == SessionIndex.Kind.MEETING) onOpen(e) else onOpenAt(e, p.timeSec)
@@ -605,6 +630,7 @@ fun StudioScreen(
                     }
                     items(list, key = { it.id }, contentType = { "row" }) { e ->
                         val status = rowStatus(e, processingId, queuedIds, foregroundId)
+                        SwipeToDelete(enabled = !selectionMode && status != RowStatus.Processing, onDelete = { requestDelete(e) }) {
                         SessionRow(
                             entry = e, status = status,
                             // Feed live progress ONLY to the processing row — otherwise every tick
@@ -624,6 +650,7 @@ fun StudioScreen(
                             },
                             onManage = { actionsFor = e },
                         )
+                        }
                     }
                 }
             }
@@ -684,7 +711,7 @@ fun StudioScreen(
                     if (e.download.error != null) ActionRow(Icons.Filled.Refresh, stringResource(R.string.retry)) { actionsFor = null; onRetryDownload(e) }
                     else ActionRow(Icons.Filled.Download, stringResource(R.string.cd_status_downloading)) { actionsFor = null; onOpenDownload(e) }
                     ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
-                    ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { deleteFor = e; actionsFor = null }
+                    ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { actionsFor = null; requestDelete(e) }
                 } else {
                 // Long-press selects, and nothing in the UI says so; this is the path for a mouse, a
                 // stylus, and TalkBack (the row's onLongClickLabel is announced, not shown).
@@ -715,7 +742,7 @@ fun StudioScreen(
                 }
                 ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
                 ActionRow(Icons.Filled.Share, stringResource(R.string.action_share_audio)) { actionsFor = null; onShareAudio(e) }
-                ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { deleteFor = e; actionsFor = null }
+                ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { actionsFor = null; requestDelete(e) }
                 }
             }
         }
@@ -757,16 +784,6 @@ fun StudioScreen(
             },
             confirmButton = { TextButton(onClick = { renameFor = null; if (name.isNotBlank()) onRename(e, name.trim()) }) { Text(stringResource(android.R.string.ok)) } },
             dismissButton = { TextButton(onClick = { renameFor = null }) { Text(stringResource(android.R.string.cancel)) } },
-        )
-    }
-
-    deleteFor?.let { e ->
-        AlertDialog(
-            onDismissRequest = { deleteFor = null },
-            title = { Text(stringResource(R.string.action_delete)) },
-            text = { Text(stringResource(R.string.delete_confirm, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale))) },
-            confirmButton = { TextButton(onClick = { deleteFor = null; haptics.performHapticFeedback(HapticFeedbackType.LongPress); onDelete(e) }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) } },
-            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text(stringResource(android.R.string.cancel)) } },
         )
     }
 
@@ -830,6 +847,33 @@ private fun PassageRow(
             Text(snippet, color = pal.Slate200, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
+}
+
+/** A library row that deletes on an end-to-start swipe (the caller shows Undo). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDelete(enabled: Boolean, onDelete: () -> Unit, content: @Composable () -> Unit) {
+    if (!enabled) { content(); return }
+    // The swipe never settles on "dismissed": the delete fires and the row springs back (it is
+    // hidden at once while the Undo snackbar shows). A saved dismissed state would come back with
+    // the row after an Undo and delete it a second time.
+    val latest = androidx.compose.runtime.rememberUpdatedState(onDelete)
+    @Suppress("DEPRECATION")
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = {
+        if (it == SwipeToDismissBoxValue.EndToStart) latest.value()
+        false
+    })
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = Gutter).clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = Spacing.lg),
+                contentAlignment = Alignment.CenterEnd,
+            ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.onErrorContainer) }
+        },
+    ) { content() }
 }
 
 /** Contextual header shown during multi-select: exit · count · select-all · delete. */

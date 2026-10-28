@@ -142,6 +142,7 @@
     <string name="transcript_changed_resummarize">Transcript edited — tap Re-summarize to update the summary.</string>
     <string name="resummary_done">New summary ready.</string>
     <string name="undo">Undo</string>
+    <string name="deleted_one">Deleted “%s”</string>
     <string name="svc_asr_model_corrupt">The speech model couldn\'t be loaded — it may be incomplete. It has been cleared; tap Retry to download a fresh copy.</string>
     <string name="mic_permission_required">Microphone permission is required to record</string>
 
