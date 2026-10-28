@@ -102,7 +102,14 @@ enum Export {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842), inset = page.insetBy(dx: 40, dy: 48)
         let para = NSMutableParagraphStyle(); para.lineSpacing = 3
         let text = NSMutableAttributedString(string: body, attributes: [.font: UIFont.systemFont(ofSize: 11), .paragraphStyle: para])
-        text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: (title as NSString).length))
+        let ns = body as NSString
+        // Title line (bold 18) and section headings (bold 13), matching the text layout the PDF renders.
+        if !title.isEmpty { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 18), range: NSRange(location: 0, length: min((title as NSString).length, ns.length))) }
+        ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: [.byLines, .substringNotRequired]) { _, r, _, _ in
+            let line = ns.substring(with: r)
+            if !title.isEmpty, r.location == 0 { return }   // the title line is already styled above
+            if line == L("export_heading_actions") || line == L("export_heading_summary") || line == L("agent_title") { text.addAttribute(.font, value: UIFont.boldSystemFont(ofSize: 13), range: r) }
+        }
         let setter = CTFramesetterCreateWithAttributedString(text)
         var at = 0
         return UIGraphicsPDFRenderer(bounds: page).pdfData { ctx in
