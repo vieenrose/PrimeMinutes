@@ -332,6 +332,12 @@ extension PeopleStore {
             case "mkcontact" where a.count == 3: _ = OSContacts.create(a[1], emails: a[2].isEmpty ? [] : [a[2]])   // as if typed in Contacts
             case "cemail" where a.count == 3: if let k = person(a[1])?.contact?.key { OSContacts.addEmails(k, [a[2]]) }
             case "delcontacts" where a.count == 2: OSContacts.deleteAll(prefix: a[1]); syncContacts()
+            case "linkto" where a.count == 3:   // Me's "This is me in Contacts…" without the picker: an existing contact by name prefix
+                if let p = person(a[1]), let c = OSContacts.candidates().first(where: { $0.name.hasPrefix(a[2]) }) {
+                    if p.contact != nil { unlinkContact(p.id, removeEmails: true) }
+                    linkContact(p.id, PickedContact(name: c.name, emails: [], key: c.key)); syncContacts()
+                }
+            case "unlink" where a.count == 2: if let p = person(a[1]) { unlinkContact(p.id, removeEmails: true) }
             case "candidates": StatusLog.add("contacts: \(OSContacts.candidates().count) readable, access \(OSContacts.access)")
             case "newperson" where a.count == 2: _ = newPerson(a[1])
             case "sync": syncContacts()
