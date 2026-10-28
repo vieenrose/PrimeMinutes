@@ -794,11 +794,18 @@ private fun InferencePanel(enabled: Boolean) {
         enabled = enabled && !running,
         onClick = {
             running = true
+            // A failed run must not silently drop a manual choice to Auto: remember it, restore it.
+            val priorMode = studio.primeminutes.core.hw.HwInfo.mode(ctx)
             scope.launch {
                 studio.primeminutes.core.hw.HwInfo.setMode(ctx, studio.primeminutes.core.hw.ThreadMode.AUTO)
                 runCatching { studio.primeminutes.core.hw.HwInfo.ensureBench(ctx, force = true) }
                     .onSuccess { profile = it; benchFailed = false }
-                    .onFailure { benchFailed = true }   // the old numbers stay; say so instead of looking done
+                    .onFailure {
+                        studio.primeminutes.core.hw.HwInfo.setMode(ctx, priorMode)
+                        profile = studio.primeminutes.core.hw.HwInfo.profile(ctx)
+                        draft = profile.threads.toFloat()
+                        benchFailed = true
+                    }
                 running = false
             }
         },

@@ -304,7 +304,9 @@ fun StudioScreen(
         StatusFilter.NEW -> SessionLibrary.Status.RECORDED
         StatusFilter.DONE -> SessionLibrary.Status.DONE
     }
-    val searching = query.isNotBlank()
+    // A stray space is not a query: blank-after-trim falls through to the full list (like
+    // iOS) instead of a no-match screen from zero lexical hits.
+    val searching = query.trim().isNotEmpty()
     fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) &&
         when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
     val shownHits = remember(hits, statusFilter, personIds) { hits.filter { wanted(it.entry) } }
@@ -522,7 +524,7 @@ fun StudioScreen(
                 )
                 // A no-match from a search + filters was a dead end: the only way out was clearing the
                 // field by hand and finding the filter chips behind the empty list.
-                val filtered = query.isNotBlank() || statusFilter != StatusFilter.ALL || personFilter != null
+                val filtered = query.trim().isNotEmpty() || statusFilter != StatusFilter.ALL || personFilter != null
                 if (!firstRun && densePending == null && filtered) {
                     Spacer(Modifier.height(Spacing.xl))
                     androidx.compose.material3.OutlinedButton(
@@ -796,7 +798,9 @@ private fun PassageRow(
     val pal = LocalPrimeMinutesPalette.current
     Row(
         Modifier.fillMaxWidth().padding(start = Gutter + 12.dp, end = Gutter)
-            .clip(MaterialTheme.shapes.extraSmall).clickable(onClick = onClick)
+            // A passage opens its meeting at that line: a button, like every other tap row here
+            // (TalkBack read these as plain text with no tap cue).
+            .clip(MaterialTheme.shapes.extraSmall).clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
