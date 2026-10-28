@@ -739,7 +739,7 @@ object SessionReducer {
                 val msg = str(R.string.status_error, e.error)
                 // pendingNextTalk: the capture wasn't saved → don't roll into a new recording.
                 s = s.copy(pendingNextTalk = false, pendingAutoProcess = false, isRecording = false)
-                // The snackbar host lives in the Session scaffold: elsewhere a Toast reaches the user.
+                // Off the Session screen the app-level snackbar host (MainActivity) shows it.
                 if (s.screen != Screen.Session) emit(SessionEffect.Toast(msg))
                 s = s.copy(status = msg, statusIsError = true, running = false)
                 // The capture is over: leave the booth, whose timer and buttons are dead now.

@@ -41,6 +41,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,6 +72,7 @@ import studio.primeminutes.ui.theme.EinkPolicy
  * rare; permanent chrome is reserved for navigation and the transcript search. Status line and
  * the run progress bar sit under the bar, as before.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SessionTopBar(
     cover: androidx.compose.ui.graphics.ImageBitmap?,
@@ -101,71 +105,78 @@ fun SessionTopBar(
     /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
     canUndo: Boolean = false, canRedo: Boolean = false,
     onUndo: () -> Unit = {}, onRedo: () -> Unit = {},
+    /** Collapses the bar as the session content scrolls (null: pinned). */
+    scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // statusBarsPadding: as a Scaffold topBar this composable owns its own inset — without it the
     // bar draws under the clock on edge-to-edge phones (unnoticed on Boox, whose status bar keeps
     // an opaque strip above the app).
     Column(Modifier.fillMaxWidth().background(pal.Slate900Grad).statusBarsPadding()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
-            }
-            cover?.let {
-                androidx.compose.foundation.Image(
-                    bitmap = it,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = Spacing.sm).size(26.dp).clip(RoundedCornerShape(7.dp)),
-                )
-            }
-            Text(
-                title ?: stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = pal.Slate200,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-                    .then(if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier),
-            )
-            if (showNextTalk) {
-                IconButton(onClick = onNextTalk) {
-                    Icon(
-                        Icons.Filled.SkipNext,
-                        contentDescription = stringResource(R.string.cd_next_talk),
-                        tint = pal.Sky,
+        // M3 top app bar; with [scrollBehavior] it slides away while the content scrolls up (the
+        // status line, progress bar and the sticky tabs below stay put).
+        TopAppBar(
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
+                }
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    cover?.let {
+                        androidx.compose.foundation.Image(
+                            bitmap = it,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = Spacing.sm).size(26.dp).clip(RoundedCornerShape(7.dp)),
+                        )
+                    }
+                    Text(
+                        title ?: stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = pal.Slate200,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier,
                     )
                 }
-            }
-            if (running) {
-                IconButton(onClick = onStop) {
-                    Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop_resumable), tint = PrimeMinutesPalette.Red)
+            },
+            actions = {
+                if (showNextTalk) {
+                    IconButton(onClick = onNextTalk) {
+                        Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.cd_next_talk), tint = pal.Sky)
+                    }
                 }
-            }
-            if (canUndo || canRedo) {
-                IconButton(onClick = onUndo, enabled = canUndo) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo),
-                        tint = if (canUndo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
+                if (running) {
+                    IconButton(onClick = onStop) {
+                        Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop_resumable), tint = PrimeMinutesPalette.Red)
+                    }
                 }
-                IconButton(onClick = onRedo, enabled = canRedo) {
-                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.redo),
-                        tint = if (canRedo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
+                if (canUndo || canRedo) {
+                    IconButton(onClick = onUndo, enabled = canUndo) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.undo),
+                            tint = if (canUndo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
+                    }
+                    IconButton(onClick = onRedo, enabled = canRedo) {
+                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.redo),
+                            tint = if (canRedo) pal.Slate200 else pal.Slate400.copy(alpha = 0.4f))
+                    }
                 }
-            }
-            if (transcriptAvailable) {
-                IconButton(onClick = onSearch) {
-                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_transcript), tint = pal.Slate400)
+                if (transcriptAvailable) {
+                    IconButton(onClick = onSearch) {
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_transcript), tint = pal.Slate400)
+                    }
                 }
-            }
-            OverflowMenu(
-                canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
-                canResume, onResume,
-                canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting,
-            )
-        }
+                OverflowMenu(
+                    canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
+                    canResume, onResume,
+                    canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting,
+                )
+            },
+            windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
+            scrollBehavior = scrollBehavior,
+        )
         // A healthy idle status ("Loaded session — N lines") is two-second information, not
         // permanent chrome: show it muted and let it disappear after a beat. Errors and live-run
         // status keep their color and stay put.

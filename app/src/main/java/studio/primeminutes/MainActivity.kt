@@ -20,7 +20,6 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.viewModels
 import studio.primeminutes.session.Screen
@@ -50,6 +49,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -123,6 +123,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -407,6 +408,11 @@ class MainActivity : ComponentActivity() {
                             return@Surface
                         }
                         TranscribeScreen(sessionVm, ::startTranscription, ::stopTranscription, ::startRecording, ::processQueue)
+                        // The app-level snackbar host; the Session scaffold shows the same queue itself.
+                        val rootScreen by sessionVm.state.collectAsState()
+                        if (rootScreen.screen != Screen.Session) Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding(), contentAlignment = Alignment.BottomCenter) {
+                            SnackbarHost(studio.primeminutes.ui.AppSnackbar.host)
+                        }
                         BatteryExemptionDialog()
                     }
                 }
@@ -556,6 +562,7 @@ private fun unbreakable(name: String) =
  * what stays here is view state — scroll, the player, find-in-transcript matches, app-level
  * dialogs (crash recovery, update banner) and the Activity-bound launchers.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun TranscribeScreen(
     vm: SessionViewModel,
@@ -699,8 +706,7 @@ private fun TranscribeScreen(
                         }
                         if (apk == null) {
                             val msg = context.getString(R.string.update_download_failed)
-                            if (vm.now.screen == Screen.Session) snackbarHostState.showSnackbar(msg)
-                            else Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            studio.primeminutes.ui.AppSnackbar.show(msg)
                         } else UpdateInstaller.install(context, apk)
                     }
                 },
@@ -801,7 +807,7 @@ private fun TranscribeScreen(
             }
             searchDownload = null
             searchModelReady = EmbedHost.ready(context)
-            if (r.isFailure) Toast.makeText(context, R.string.search_model_download_failed, Toast.LENGTH_LONG).show()
+            if (r.isFailure) studio.primeminutes.ui.AppSnackbar.show(context, R.string.search_model_download_failed)
             else LibraryIndexer.catchUp(context)
         }
     }
@@ -1028,7 +1034,7 @@ private fun TranscribeScreen(
                 dlAsk = null
                 ModelPrefetch.setConsent(context, DownloadPlan.Consent.WIFI_ONLY)
                 if (dlUnmetered) { if (action != null) action() else ModelPrefetch.maybeStart(context, userAsked = true) }
-                else Toast.makeText(context, R.string.dl_consent_waiting_wifi, Toast.LENGTH_LONG).show()
+                else studio.primeminutes.ui.AppSnackbar.show(context, R.string.dl_consent_waiting_wifi)
             },
             onLater = { dlAsk = null; ModelPrefetch.laterThisRun = true },
         )
@@ -1757,9 +1763,11 @@ private fun TranscribeScreen(
             onStop = { vm.stop() },
             onBack = { vm.showScreen(Screen.Studio) },
         )
-        Screen.Session ->
+        Screen.Session -> {
+    val sessionBarScroll = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
-        modifier = Modifier.fillMaxSize().background(pal.Slate900Grad),
+        modifier = Modifier.fillMaxSize().background(pal.Slate900Grad)
+            .nestedScroll(sessionBarScroll.nestedScrollConnection),
         containerColor = Color.Transparent,
         topBar = {
             // No generated title yet (just recorded / still processing): show the entry's provisional
@@ -1813,6 +1821,7 @@ private fun TranscribeScreen(
                 onOpenExport = { vm.showExportSheet(true) },
                 onEmailParticipants = { mailOpen = true },
                 onAskMeeting = if (askMeetingAvailable) ({ askMeeting = "" }) else null,
+                scrollBehavior = sessionBarScroll,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1999,6 +2008,7 @@ private fun TranscribeScreen(
             }
         }
     }
+        }
     }   // end when(screen)
 
     // A status line is a string made when its event happened; after a language switch an idle one
@@ -2157,7 +2167,7 @@ private fun TranscribeScreen(
                 vm.linkNewPerson(sid, n, e, if (!edit) null else ({ p ->
                     val i = p.contact?.let { studio.primeminutes.core.people.ContactsProvider.editIntent(it) }
                     try { if (i != null) context.startActivity(i) } catch (_: android.content.ActivityNotFoundException) {
-                        Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+                        studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_no_app)
                     }
                 }))
             },
@@ -2171,7 +2181,7 @@ private fun TranscribeScreen(
     askQuestion?.let { q ->
         if (!ModelManager(context).let { it.llmReady(it.readerSpec(s.config.llmModelId)) }) {
             LaunchedEffect(q) {
-                Toast.makeText(context, R.string.ask_no_model, Toast.LENGTH_LONG).show(); askQuestion = null
+                studio.primeminutes.ui.AppSnackbar.show(context, R.string.ask_no_model); askQuestion = null
             }
         } else studio.primeminutes.ui.AskSheet(
             question = q, entries = remember(s.recentsVersion) { SessionLibrary.list(context) },

@@ -100,7 +100,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
             TextButton(onClick = {
                 val i = studio.primeminutes.core.people.ContactsProvider.editIntent(c)
                 try { if (i != null) context.startActivity(i) } catch (_: android.content.ActivityNotFoundException) {
-                    android.widget.Toast.makeText(context, R.string.contacts_no_app, android.widget.Toast.LENGTH_LONG).show()
+                    studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_no_app)
                 }
             }, modifier = Modifier.testTag("contact-edit")) { Text(stringResource(R.string.contact_edit)) }
         }
@@ -135,7 +135,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
         adding = false
         if (a != null) scope.launch {
             val ok = withContext(Dispatchers.IO) { PeopleStore.addEmailToContact(context, p.id, a) }
-            if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+            if (!ok) studio.primeminutes.ui.AppSnackbar.show(context, R.string.email_write_failed)
         }
     }
     removing?.let { a ->
@@ -147,7 +147,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
                     removing = null
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { PeopleStore.removeEmailFromContact(context, p.id, a) }
-                        if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+                        if (!ok) studio.primeminutes.ui.AppSnackbar.show(context, R.string.email_write_failed)
                     }
                 }, modifier = Modifier.testTag("email-remove-confirm")) { Text(stringResource(R.string.email_remove), color = pal.WarningText) }
             },

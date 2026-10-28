@@ -367,7 +367,7 @@ fun SpeakerNameFlow(
             if (a == null) return@AddressDialog
             scope.launch {
                 val ok = withContext(Dispatchers.IO) { PeopleStore.addEmailToContact(context, p.id, a) }
-                if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+                if (!ok) studio.primeminutes.ui.AppSnackbar.show(context, R.string.email_write_failed)
             }
         }
     }

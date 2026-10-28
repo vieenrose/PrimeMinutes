@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -216,5 +215,5 @@ fun EmailParticipantsFlow(
 private fun copyAddresses(context: Context, to: List<String>) {
     if (to.isEmpty()) return
     context.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("e-mail", to.joinToString(", ")))
-    Toast.makeText(context, R.string.mail_addresses_copied, Toast.LENGTH_LONG).show()
+    studio.primeminutes.ui.AppSnackbar.show(context, R.string.mail_addresses_copied)
 }

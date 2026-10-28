@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.ContactsContract
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.runtime.Composable
@@ -81,13 +80,13 @@ fun rememberContactPicker(onPicked: (PickedContact, String) -> Unit): () -> Unit
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val r = withContext(Dispatchers.IO) { readPickedEmail(context, uri) }
-            if (r == null) Toast.makeText(context, R.string.contacts_pick_failed, Toast.LENGTH_LONG).show()
+            if (r == null) studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_pick_failed)
             else onPicked(r.first, r.second)
         }
     }
     return {
         try { launcher.launch(Unit) } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+            studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_no_app)
         }
     }
 }
@@ -109,7 +108,7 @@ fun MeContactActions(me: studio.primeminutes.core.people.Person?) {
                 studio.primeminutes.core.people.ContactsProvider.fromUri(context, uri)
                     ?.let { studio.primeminutes.core.people.PeopleStore.linkMe(context, it) }
             }
-            if (c == null) Toast.makeText(context, R.string.contacts_pick_failed, Toast.LENGTH_LONG).show()
+            if (c == null) studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_pick_failed)
         }
     }
     val c = me?.contact
@@ -117,7 +116,7 @@ fun MeContactActions(me: studio.primeminutes.core.people.Person?) {
     val linked = me != null && studio.primeminutes.core.people.ContactLinks.isLinked(me)
     val pick = {
         try { launcher.launch(null) } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+            studio.primeminutes.ui.AppSnackbar.show(context, R.string.contacts_no_app)
         }
     }
     androidx.compose.foundation.layout.Row {

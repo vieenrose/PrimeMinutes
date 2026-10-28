@@ -3,7 +3,6 @@ package studio.primeminutes.session
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -100,7 +99,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
      *  shows the whole trace so far. */
     val queueAgent = AgentUiState()
     /** The one snackbar host (the Session scaffold shows it). */
-    val snackbar = SnackbarHostState()
+    val snackbar: SnackbarHostState = studio.primeminutes.ui.AppSnackbar.host
 
     var ui: SessionUi? = null
 
@@ -569,10 +568,9 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         }
     }
 
-    /** Snackbar on the Session screen, Toast elsewhere (the one SnackbarHost lives in the Session scaffold). */
+    /** The app-level snackbar (AppSnackbar): the Session scaffold shows it, the root host elsewhere. */
     fun notify(msg: String) {
-        if (now.screen == Screen.Session) viewModelScope.launch { snackbar.showSnackbar(msg) }
-        else Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+        studio.primeminutes.ui.AppSnackbar.show(msg)
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -677,7 +675,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 bumpRecents()
             }
             is SessionEffect.ApplyScript -> applyChineseScript(SummaryScript.scriptFor(e.config.summaryScript, ctx))
-            is SessionEffect.Toast -> Toast.makeText(ctx, e.message, Toast.LENGTH_LONG).show()
+            is SessionEffect.Toast -> studio.primeminutes.ui.AppSnackbar.show(e.message)
             is SessionEffect.Notify -> notify(e.message)
             is SessionEffect.Snackbar -> viewModelScope.launch { snackbar.showSnackbar(e.message) }
             is SessionEffect.OfferResummaryUndo -> viewModelScope.launch {
@@ -740,9 +738,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 }
                 RecentSessions.add(ctx, u.toString(), f.title ?: "", System.currentTimeMillis()); bumpRecents()
             }
-            // The user may be on Studio/Capture when the result lands: Toast there.
-            if (f.screen != Screen.Session) Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
-            else viewModelScope.launch { snackbar.showSnackbar(msg) }
+            // The user may be on Studio/Capture when the result lands: the root snackbar host shows it there.
+            studio.primeminutes.ui.AppSnackbar.show(msg)
         }
     }
 
