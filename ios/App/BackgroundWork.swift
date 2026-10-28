@@ -129,6 +129,24 @@ enum BackgroundWork {
         }
         // VOX_RECSTOP=s: tap Stop on the recording.
         after("VOX_RECSTOP") { if Model.shared.capture.recording { Model.shared.capture.toggleRecord() } else { StatusLog.add("trace probe recstop: not recording") } }
+        // VOX_BGDL=e2b|speech: download that model into a scratch folder (Caches/bgdl-test, never the user's models) on
+        // the background session, logging progress with the app state, to check it goes on with the screen locked.
+        if let which = env["VOX_BGDL"] { Task.detached {
+            let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("bgdl-test")
+            if env["VOX_BGDL_KEEP"] == nil { try? FileManager.default.removeItem(at: root) }
+            let m = which == "speech" ? ReaderModel.speech : ReaderModel.e2b, t0 = Date()
+            let step = Counter10()
+            StatusLog.add("trace bgdl start \(m.id)")
+            do {
+                try await DownloadResumer.shared.run("bgdl", onPause: { StatusLog.add("trace bgdl paused=\($0)") }) {
+                    try await ModelStore(root: root).download(m) { d, t in
+                        let pct = Int(d * 100 / max(1, t))
+                        if step.pass(pct) { Task { @MainActor in StatusLog.add("trace bgdl \(pct)% \(d)/\(t) state=\(UIApplication.shared.applicationState.rawValue) t=\(Int(Date().timeIntervalSince(t0)))s") } }
+                    }
+                }
+                await MainActor.run { StatusLog.add("trace bgdl done in \(Int(Date().timeIntervalSince(t0)))s state=\(UIApplication.shared.applicationState.rawValue)") }
+            } catch { StatusLog.add("trace bgdl failed: \(error)") }
+        } }
         // VOX_DLCANCEL=s: Delete the podcast item downloading now (its partial file goes with it).
         after("VOX_DLCANCEL") { let i = Model.shared.imports; StatusLog.add("trace probe delete download item \(i.dlId?.uuidString ?? "-") at \(i.dlBytes.map { "\($0.0)/\($0.1)" } ?? "-")"); i.removeCurrent() }
         // VOX_DLCANCEL_PCT=p: the same once it has passed p percent.
@@ -214,3 +232,9 @@ enum BackgroundWork {
     }
 }
 #endif
+
+/// DEV: lets a progress line through every 5 percent.
+final class Counter10: @unchecked Sendable {
+    private let l = NSLock(); private var last = -5
+    func pass(_ pct: Int) -> Bool { l.lock(); defer { l.unlock() }; if pct >= last + 5 { last = pct; return true }; return false }
+}

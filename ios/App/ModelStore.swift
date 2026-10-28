@@ -172,6 +172,7 @@ actor ModelStore {
             done += f.size; progress(done, total)
         }
         try m.rev.write(to: stamp, atomically: true, encoding: .utf8)
+        BackgroundDownloader.shared.endBridge()
     }
 
     /// The GPU graph's path when it is fully there.
@@ -195,14 +196,23 @@ actor ModelStore {
         if let s = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64, s == f.size { return }
         if reuse(m, f, dest) { progress(f.size); return }
         let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) ?? 0
-        var req = URLRequest(url: m.url(f))
-        if have > 0 { req.setValue("bytes=\(have)-", forHTTPHeaderField: "Range") }
-        do { try await Chunked.fetch(req, to: part, resumeFrom: have, onProgress: progress) }
-        catch ModelStoreError.badStatus(416) {
-            // The .part is already whole (or past it): a kill during the sha check left it. Start over
-            // instead of failing every retry on the same range.
+        switch PartPlan.of(have: have, size: f.size) {
+        case .verify:
+            // Whole already (a background transfer finished while suspended): only the checks below remain.
+            progress(f.size)
+            if let want = f.sha256, (try? Self.sha256(part)) != want {
+                try? FileManager.default.removeItem(at: part)
+                try await BackgroundDownloader.shared.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: 0, onProgress: progress)
+            }
+        case .discard, .fresh:
             try? FileManager.default.removeItem(at: part)
-            try await Chunked.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: 0, onProgress: progress)
+            try await BackgroundDownloader.shared.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: 0, onProgress: progress)
+        case .range(let from):
+            do { try await BackgroundDownloader.shared.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: from, onProgress: progress) }
+            catch ModelStoreError.badStatus(416) {
+                try? FileManager.default.removeItem(at: part)
+                try await BackgroundDownloader.shared.fetch(URLRequest(url: m.url(f)), to: part, resumeFrom: 0, onProgress: progress)
+            }
         }
         guard (try FileManager.default.attributesOfItem(atPath: part.path)[.size] as? Int64) == f.size else {
             try? FileManager.default.removeItem(at: part); throw ModelStoreError.size(f.name)
