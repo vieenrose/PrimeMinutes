@@ -191,7 +191,8 @@ object MeetingMail {
      */
     internal fun clauseEndCites(p: String): String = buildString {
         var last: String? = null
-        for (sen in sentences(p)) {
+        val all = sentences(p)
+        for ((si, sen) in all.withIndex()) {
             val cite = TS.find(sen)?.value
             if (cite == null) { append(sen); continue }
             val body = SPACED_TS.replace(sen, "")
@@ -202,7 +203,12 @@ object MeetingMail {
             val head = core.substring(0, k).trimEnd()
             val tail = core.substring(k)
             append(head).append(tail)
-            if (cite != last) append(glue(head + tail)).append(cite)
+            if (cite != last) {
+                append(glue(head + tail)).append(cite)
+                // One plain space between a cite and the next sentence (`…上班。⁠[0:00] 在搬家…`),
+                // never at the end of the line.
+                if (ws == 0 && si < all.lastIndex) append(' ')
+            }
             last = cite
             append(body.substring(body.length - ws))
         }

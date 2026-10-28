@@ -50,8 +50,8 @@ object PdfExport {
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { pager.block(it, titlePaint); pager.gap(12f) }
         summary?.trim()?.takeIf { it.isNotEmpty() }?.let { sm ->
             pager.block(summaryHeading, headingPaint); pager.gap(6f)
-            ExportNotes.summary(sm).split('\n').map { it.trim() }.filter { it.isNotEmpty() }.forEach { p ->
-                pager.para(p, bodyPaint, greyPaint, 0f, 0f, 0f, null, cites = true); pager.gap(6f)
+            ExportNotes.paragraphs(sm).flatMap { it.split('\n') }.map { it.trim() }.filter { it.isNotEmpty() }.forEach { p ->
+                pager.para(p, bodyPaint, greyPaint, 0f, 0f, 0f, null, cites = true); pager.gap(8f)
             }
             pager.gap(10f)
         }

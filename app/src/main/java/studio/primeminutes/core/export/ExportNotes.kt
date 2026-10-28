@@ -50,8 +50,43 @@ object ExportNotes {
     fun line(i: Item): String = i.text + MeetingMail.itemCite(i.text, i.ts)
 
     /** Summary prose: each paragraph with its cites moved to the clause end. */
-    fun summary(text: String): String =
-        text.split("\n").joinToString("\n") { MeetingMail.clauseEndCites(it) }
+    fun summary(text: String): String = paragraphs(text).joinToString("\n\n")
+
+    /**
+     * The summary's paragraphs, cites at the clause end: the model's own breaks (blank lines) kept,
+     * and a paragraph longer than ~350 Han / ~600 Latin characters cut at the clause-end cites
+     * nearest every ~250 / ~450 characters (only after a cite, so never inside a sentence).
+     */
+    fun paragraphs(text: String): List<String> =
+        text.split(PARA).map { it.trim() }.filter { it.isNotEmpty() }.flatMap { p ->
+            split(p.lines().joinToString("\n") { MeetingMail.clauseEndCites(it.trim()) })
+        }
+
+    private val PARA = Regex("""\n\s*\n""")
+    private val CITE_END = Regex("""[\u2060\u00A0]\[[^\]\n]*] """)
+
+    internal fun split(p: String): List<String> {
+        val han = p.count { it in '㐀'..'鿿' }
+        val zh = han * 2 > p.count { !it.isWhitespace() }
+        val (limit, chunk) = if (zh) 350 to 250 else 600 to 450
+        if (p.length <= limit) return listOf(p)
+        val cuts = CITE_END.findAll(p).map { it.range.last + 1 }.filter { it < p.length }.toList()
+        if (cuts.isEmpty()) return listOf(p)
+        val chosen = ArrayList<Int>()
+        var target = chunk
+        while (target < p.length - chunk / 2) {
+            val prev = chosen.lastOrNull() ?: 0
+            val best = cuts.filter { it > prev }.minByOrNull { kotlin.math.abs(it - target) } ?: break
+            if (p.length - best < chunk / 3) break   // no stub paragraph at the end
+            chosen += best
+            target = best + chunk
+        }
+        val out = ArrayList<String>()
+        var start = 0
+        for (c in chosen) { out += p.substring(start, c).trimEnd(); start = c }
+        out += p.substring(start).trim()
+        return out.filter { it.isNotEmpty() }
+    }
 
     private val CITE = Regex("""\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、]\s*\d+:\d{2}(?::\d{2})?)*)\]""")
 

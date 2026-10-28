@@ -46,11 +46,31 @@ class ExportNotesTest {
 
     @Test fun summaryCiteMovesAfterTheClausePunctuation() {
         val s = ExportNotes.summary("涵蓋多個方面 [0:15]。在營銷上 [1:16]，推出套餐 [1:49]。")
-        assertEquals("涵蓋多個方面。${wj}[0:15]在營銷上，推出套餐。${wj}[1:16]", s)
+        assertEquals("涵蓋多個方面。${wj}[0:15] 在營銷上，推出套餐。${wj}[1:16]", s)
         assertFalse(s.contains("]["))
         assertFalse(s.contains(" ["))
         assertEquals(listOf("0:15", "1:16"), ts.findAll(s).map { it.value }.toList())
         assertEquals("a b. [0:18, 0:35]", ExportNotes.summary("a b [0:18, 0:35]."))
+    }
+
+    @Test fun longSummaryIsCutIntoParagraphsAtCiteBoundariesOnly() {
+        // 12 sentences of 40 Han characters, one cite each: 480+ chars → paragraphs of ~250.
+        val raw = (1..12).joinToString("") { "會".repeat(39) + "議 [${it}:00]。" }
+        val ps = ExportNotes.paragraphs(raw)
+        assertTrue(ps.size >= 2)
+        ps.forEach { p ->
+            assertTrue(p, p.endsWith("]"))                    // every cut right after a cite
+            assertFalse(p.startsWith(" ") || p.endsWith(" "))
+            assertTrue(p.length in 150..360)
+        }
+        assertEquals(12, ps.sumOf { ts.findAll(it).count() })
+        assertEquals(ExportNotes.summary(raw), ps.joinToString("\n\n"))
+        // The model's own blank-line breaks are kept; a short paragraph is never cut.
+        assertEquals(listOf("甲。${wj}[0:01]", "乙。${wj}[0:02]"), ExportNotes.paragraphs("甲 [0:01]。\n\n乙 [0:02]。"))
+        val en = (1..14).joinToString(" ") { "The team agreed on item number $it for the move [${it}:00]." }
+        val eps = ExportNotes.paragraphs(en)
+        assertTrue(eps.size >= 2)
+        eps.forEach { assertTrue(it.endsWith("]")) }
     }
 
     @Test fun plainTextExportGolden() {
