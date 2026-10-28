@@ -236,4 +236,33 @@ final class ContactsMailUITests: XCTestCase {
         launch(["VOX_OPEN": "id:" + meeting, "VOX_MAIL": "1"]); sleep(4); shot("ne-5-mail", tree: true)
         XCTAssertTrue(app.debugDescription.contains(addr), "address as a mail recipient")
     }
+
+    /// "Download the AI models?" → Later: the prompt stays away (it came back a few seconds later, on a network
+    /// update) and Later is reachable at every text size (at AX sizes the prompt is a scrolling sheet).
+    /// Needs the models missing (fresh simulator) or PM_DLGATE=metered|wifi to force the prompt.
+    func testConsentLater() {
+        app.terminate()
+        var e = ["VOX_DEV": "1", "VOX_UILANG": "en", "VOX_THEME": "light"]
+        if let g = env["PM_DLGATE"] { e["VOX_DLGATE"] = g }
+        app.launchEnvironment = e
+        app.launch()
+        let title = app.staticTexts["Download the AI models?"]
+        let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")   // a fresh install asks for notifications first
+        for _ in 0..<10 where !title.exists {
+            for l in ["Allow", "允許", "允许"] { let b = sb.alerts.buttons[l]; if b.exists { b.tap(); break } }
+            sleep(2)
+        }
+        XCTAssertTrue(title.waitForExistence(timeout: 20), "the download prompt is up")
+        sleep(1); shot("consent-0-prompt", tree: true)
+        let later = app.buttons["Later"]
+        XCTAssertTrue(later.exists, "Later is there")
+        // On screen for real (isHittable lets XCUITest scroll the alert by itself, which a thumb cannot rely on).
+        let screen = app.windows.firstMatch.frame
+        for _ in 0..<6 where !screen.contains(later.frame) { app.swipeUp(); usleep(500_000) }
+        shot("consent-1-later-visible")
+        XCTAssertTrue(screen.contains(later.frame), "Later is on screen: \(later.frame) in \(screen)")
+        later.tap()
+        for i in 0..<8 { sleep(2); XCTAssertFalse(title.exists, "the prompt came back after \(2 * (i + 1)) s"); if title.exists { break } }
+        shot("consent-2-after-16s", tree: true)
+    }
 }

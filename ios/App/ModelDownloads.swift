@@ -68,7 +68,7 @@ import Network
     /// agrees again; a recording or an import still fetches what it needs (Android ModelPrefetch.cancel).
     private var cancelledThisRun = false
     /// "Later" at first launch: not asked again until the app restarts (a run that needs the models still asks).
-    private var laterThisRun = false
+    private var gate = DownloadPlan.PromptGate()
     private var prefetchTask: Task<Void, Never>?
     private var prefetchSpeech: Task<Bool, Never>?
     private let monitor = NWPathMonitor()
@@ -103,7 +103,7 @@ import Network
             return
         }
         let p = pending
-        if p.any && consent == .unset && !laterThisRun { consentRequest = ConsentRequest(pending: p, unmetered: unmetered, action: nil) }
+        if gate.mayAutoPrompt(consent, p) { consentRequest = ConsentRequest(pending: p, unmetered: unmetered, action: nil) }
         else { maybePrefetch() }
     }
 
@@ -112,17 +112,26 @@ import Network
     func withModels(_ action: @escaping () -> Void) {
         let p = pending
         if DownloadPlan.decide(consent, unmetered: unmetered, p) == .proceed { action(); return }
+        gate.explicitPrompt()
         consentRequest = ConsentRequest(pending: p, unmetered: unmetered, action: action)
     }
 
     func answer(_ r: ConsentRequest, _ c: DownloadPlan.Consent?) {
-        consentRequest = nil
-        guard let c else { laterThisRun = true; return }   // Later
+        if consentRequest?.id == r.id { consentRequest = nil }
+        guard let c else { gate.dismissed(); StatusLog.add("download prompt: later"); return }   // Later
+        gate.answered()
         consent = c
         cancelledThisRun = false
         if c == .wifiOnly && !r.unmetered { screen.status = L("dl_consent_waiting_wifi"); return }
         // With a run waiting, the run fetches what it needs (its own progress); else prefetch now.
         if let a = r.action { a() } else { maybePrefetch() }
+    }
+
+    /// The prompt went away without a button (an alert torn down by a re-render, a sheet swiped down): the
+    /// same as Later, so a network change or the next re-render never brings it back by itself.
+    func dismissPrompt() {
+        guard let r = consentRequest else { return }
+        answer(r, nil)
     }
 
     /// A latency switch: fetch the new recognizer in the background (Android SessionViewModel SaveConfig → prefetch).

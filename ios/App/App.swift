@@ -148,13 +148,22 @@ struct ContentView: View {
 /// warning off Wi-Fi, and Download now / Wi-Fi only / Later.
 struct DownloadConsent: ViewModifier {
     @ObservedObject var downloads: ModelDownloads
+    @Environment(\.dynamicTypeSize) private var size
     func body(content: Content) -> some View {
         let r = downloads.consentRequest
-        content.alert(L("dl_consent_title"), isPresented: Binding(get: { downloads.consentRequest != nil }, set: { _ in }), presenting: r) { r in
-            Button(L("dl_consent_now")) { downloads.answer(r, .anyNetwork) }
-            Button(L("dl_consent_wifi_only")) { downloads.answer(r, .wifiOnly) }
-            Button(L("dl_consent_later"), role: .cancel) { downloads.answer(r, nil) }
-        } message: { r in Text(Self.message(r)) }
+        // Dismissing counts as Later: a no-op setter let a re-render (the network monitor publishing) see the
+        // request still set mid-dismissal and bring the alert back.
+        let shown = Binding(get: { downloads.consentRequest != nil }, set: { if !$0 { downloads.dismissPrompt() } })
+        if size.isAccessibilitySize {
+            // A system alert at AX sizes pushes its last buttons off-screen: a scrolling sheet keeps all three reachable.
+            content.sheet(isPresented: shown) { if let r { ConsentSheet(r: r, downloads: downloads) } }
+        } else {
+            content.alert(L("dl_consent_title"), isPresented: shown, presenting: r) { r in
+                Button(L("dl_consent_now")) { downloads.answer(r, .anyNetwork) }
+                Button(L("dl_consent_wifi_only")) { downloads.answer(r, .wifiOnly) }
+                Button(L("dl_consent_later"), role: .cancel) { downloads.answer(r, nil) }
+            } message: { r in Text(Self.message(r)) }
+        }
     }
     static func message(_ r: ModelDownloads.ConsentRequest) -> String {
         var lines = [L("dl_consent_total", SizeFormat.bytes(r.pending.total))]
@@ -163,6 +172,23 @@ struct DownloadConsent: ViewModifier {
         lines.append(""); lines.append(L("dl_consent_body"))
         if !r.unmetered { lines.append(""); lines.append(L("dl_consent_metered")) }
         return lines.joined(separator: "\n")
+    }
+}
+
+/// The size prompt at accessibility text sizes: the text scrolls, the three choices follow it, Later included.
+struct ConsentSheet: View {
+    let r: ModelDownloads.ConsentRequest
+    @ObservedObject var downloads: ModelDownloads
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(L("dl_consent_title")).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                Text(DownloadConsent.message(r))
+                Button { downloads.answer(r, .anyNetwork) } label: { Text(L("dl_consent_now")).frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent)
+                Button { downloads.answer(r, .wifiOnly) } label: { Text(L("dl_consent_wifi_only")).frame(maxWidth: .infinity) }.buttonStyle(.bordered)
+                Button { downloads.answer(r, nil) } label: { Text(L("dl_consent_later")).frame(maxWidth: .infinity) }.buttonStyle(.bordered)
+            }.padding()
+        }
     }
 }
 

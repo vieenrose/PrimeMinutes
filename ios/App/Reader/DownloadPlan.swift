@@ -45,6 +45,25 @@ enum DownloadPlan {
     static func mayPrefetch(_ c: Consent, unmetered: Bool, _ p: Pending) -> Bool {
         p.any && (c == .anyNetwork || (c == .wifiOnly && unmetered)) && (unmetered || p.blocking > 0)
     }
+
+    /// The size prompt's memory for one app run. "Later" (or dismissing the prompt any other way) holds every
+    /// prompt nobody asked for (first launch, a network change, a re-render racing the dismissal) until the app
+    /// restarts or the user acts: a recording or an import still asks, and any answer lifts the hold.
+    struct PromptGate: Equatable {
+        private(set) var later = false
+        private(set) var showing = false
+        /// A prompt no user action asked for: only with nothing answered yet and no "Later" this run.
+        mutating func mayAutoPrompt(_ c: Consent, _ p: Pending) -> Bool {
+            guard p.any, c == .unset, !later, !showing else { return false }
+            showing = true; return true
+        }
+        /// A recording or an import that needs the models: always asks (it is the user's own action).
+        mutating func explicitPrompt() { showing = true }
+        /// "Later", a swipe-down, an alert torn down by a re-render: no prompt of its own accord this run.
+        mutating func dismissed() { showing = false; later = true }
+        /// Download now / Wi-Fi only.
+        mutating func answered() { showing = false; later = false }
+    }
 }
 
 /// Which notes model runs for the user's choice (Android `LlmRegistry.current / runnable / reclaimable`), over
