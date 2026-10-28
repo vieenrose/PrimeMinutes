@@ -113,4 +113,66 @@ class MeetingMailTest {
         assertEquals("zh-Hant", MeetingMail.defaultLang("zh", java.util.Locale.ENGLISH))
         assertEquals("zh-Hant", MeetingMail.defaultLang(null, java.util.Locale.TRADITIONAL_CHINESE))
     }
+
+    // --- design B (plain/chat: one cite per sentence, at its end, glued) + C (HTML pills) -----------
+
+    private val TS = Regex("""\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、]\s*\d+:\d{2}(?::\d{2})?)*)\]""")
+    private val ITEM = Regex("""^-\s*(.*?)\s*(?:\[(\d+:\d{2}(?::\d{2})?)\])?\s*$""")
+    private val ANCHOR = Regex("""\[(\d+):(\d{2})(?::(\d{2}))?]""")
+
+    @Test fun zhProseCitesMoveToSentenceEnd() {
+        val p = "新辦公室預計於三月十號正式上班 [0:00]。會議決定採用中間報價 [0:18, 0:35]，前提是打包自行完成 [0:40]。"
+        assertEquals(
+            "新辦公室預計於三月十號正式上班。\u2060[0:00]會議決定採用中間報價，前提是打包自行完成。\u2060[0:18, 0:35]",
+            MeetingMail.clauseEndCites(p),
+        )
+    }
+
+    @Test fun enProseCitesUseNoBreakSpaceAndCollapseRepeats() {
+        val p = "We move on March 7 [0:12]. The budget is 3.5 percent over [0:12]. No cite here."
+        assertEquals(
+            "We move on March 7.\u00A0[0:12] The budget is 3.5 percent over. No cite here.",
+            MeetingMail.clauseEndCites(p),
+        )
+    }
+
+    @Test fun longHanSentenceNeverOrphansItsCite() {
+        val han = "搬".repeat(60)
+        val out = MeetingMail.clauseEndCites("$han [1:12]。")
+        assertEquals("$han。\u2060[1:12]", out)
+        assertFalse("no space between Han text and a cite", Regex("""[㐀-鿿。] \[""").containsMatchIn(out))
+    }
+
+    @Test fun itemCitesFollowTheFullStop() {
+        assertEquals("。\u2060[1:12]", MeetingMail.itemCite("確保包含損壞賠償條款", "1:12"))
+        assertEquals("\u2060[1:12]", MeetingMail.itemCite("確保包含損壞賠償條款。", "1:12"))
+        assertEquals("\u00A0[0:05]", MeetingMail.itemCite("Alice sends the deck", "0:05"))
+        assertEquals("", MeetingMail.itemCite("x", null))
+    }
+
+    /** Every rendered cite is still a wire cite: TS / ITEM / ANCHOR_RE / splitAnchors all find it. */
+    @Test fun renderedCitesStayParseable() {
+        for ((name, lang) in listOf("move" to "zh-Hant", "is1009c" to "en")) {
+            val input = input(name)
+            val wire = input.sections.flatMap { s -> s.items.mapNotNull { it.ts } } +
+                TS.findAll(input.summary ?: "").map { it.value.trim('[', ']') }.toList()
+            val txt = plain(name, lang, MeetingMail.Options())
+            val chat = plain(name, lang, MeetingMail.Options(summary = false), chat = true)
+            for (body in listOf(txt, chat)) {
+                assertFalse("no ][ adjacency", body.contains("]["))
+                assertFalse("no cite orphaned at a line start", body.lines().any { it.trimStart().startsWith("[") && TS.matchesAt(it.trimStart(), 0) })
+                for (l in body.lines().filter { it.startsWith(MeetingMail.Templates.SHIPPED.strings.getJSONObject(lang).getString("bullet")) && TS.containsMatchIn(it) }) {
+                    val m = ITEM.matchEntire("-" + l.substringAfter(MeetingMail.Templates.SHIPPED.strings.getJSONObject(lang).getString("bullet")))
+                    assertTrue("ITEM parses: $l", m != null && m.groupValues[2].isNotEmpty())
+                }
+            }
+            val cites = TS.findAll(txt).map { it.groupValues[1] }.toSet()
+            for (c in input.sections.flatMap { s -> s.items.mapNotNull { it.ts } }) assertTrue("item cite $c kept", c in cites)
+            assertTrue(wire.isNotEmpty())
+            val html = html(name, lang, MeetingMail.Options())
+            assertTrue("pill style", html.contains("background:#EEF1EC;border-radius:8px;padding:0 6px;white-space:nowrap;"))
+            val htmlText = html.replace(Regex("<[^>]+>"), "")
+            for (c in input.sections.flatMap { s -> s.items.mapNotNull { it.ts } }) assertTrue("html keeps [$c]", ANCHOR.containsMatchIn(htmlText) && htmlText.contains("[$c]"))
+        }
+    }
 }

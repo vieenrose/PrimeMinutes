@@ -132,8 +132,81 @@ object MeetingMail {
         return s
     }
 
+    /** Design C (HTML only): each cite a small pill; the `[ts]` characters stay in the source so
+     *  copy-paste and the TS / ANCHOR_RE parsers still see them. A multi-cite becomes one pill per time. */
     private fun htmlTs(t: String): String =
-        TS.replace(MiniMustache.escapeHtml(t)) { m -> """<span style="color:#5A6982;font-size:13px;white-space:nowrap;">[${m.groupValues[1]}]</span>""" }
+        TS.replace(MiniMustache.escapeHtml(t)) { m ->
+            m.groupValues[1].split(CITE_SEP).joinToString("\u200A") { """<span style="$PILL">[${it.trim()}]</span>""" }
+        }
+
+    const val PILL = "color:#5A6982;font-size:13px;background:#EEF1EC;border-radius:8px;padding:0 6px;white-space:nowrap;"
+    private val CITE_SEP = Regex("""\s*[,，、]\s*""")
+
+    // --- design B: cites at the clause end (plain text + chat) ----------------------------------------
+
+    private const val WJ = "\u2060"
+    private val HAN = Regex("""[㐀-鿿　-〿＀-￯]""")
+    private val SPACED_TS = Regex("""[ \t]*""" + TS.pattern)
+    private val TERM = "。！？!?"
+
+    /** The glue before a trailing cite: U+2060 after Han / fullwidth text (never a space, never a
+     *  break), a no-break space after Latin text — the `[…]` never wraps alone to the next line. */
+    private fun glue(before: String): String =
+        if (before.isNotEmpty() && HAN.matches(before.last().toString())) WJ else "\u00A0"
+
+    /** A minutes item's trailing cite: `…條款。⁠[1:12]` (a Han item gets its full stop back). */
+    internal fun itemCite(text: String, ts: String?): String {
+        if (ts == null) return ""
+        val stop = if (text.isNotEmpty() && HAN.matches(text.last().toString()) && text.last() !in TERM + "」』）") "。" else ""
+        return stop + glue(text + stop) + "[$ts]"
+    }
+
+    /** Sentences of [p], each with its terminator and following whitespace. A `.` ends one only before
+     *  whitespace / the end (not `3.5`); closing brackets/quotes stay with their sentence. */
+    private fun sentences(p: String): List<String> {
+        val out = ArrayList<String>()
+        var start = 0
+        var i = 0
+        while (i < p.length) {
+            val c = p[i]
+            val ends = c in TERM || (c == '.' && (i + 1 == p.length || p[i + 1].isWhitespace()))
+            if (ends && !inCite(p, i)) {
+                var j = i + 1
+                while (j < p.length && (p[j] in TERM || p[j] in "」』）)\"'")) j++
+                while (j < p.length && p[j].isWhitespace()) j++
+                out += p.substring(start, j); start = j; i = j; continue
+            }
+            i++
+        }
+        if (start < p.length) out += p.substring(start)
+        return out
+    }
+
+    private fun inCite(p: String, i: Int): Boolean = p.lastIndexOf('[', i) > p.lastIndexOf(']', i)
+
+    /**
+     * Design B for prose: keep the FIRST cite of each sentence (as written: `[0:18, 0:35]` stays one
+     * cite), move it after the sentence's full stop, glued; drop an exact repeat of the previous
+     * sentence's cite. Bracket/separator shape untouched, so TS / ANCHOR_RE / repairTimestamps parse it.
+     */
+    internal fun clauseEndCites(p: String): String = buildString {
+        var last: String? = null
+        for (sen in sentences(p)) {
+            val cite = TS.find(sen)?.value
+            if (cite == null) { append(sen); continue }
+            val body = SPACED_TS.replace(sen, "")
+            val ws = body.length - body.trimEnd().length
+            val core = body.trimEnd()
+            var k = core.length
+            while (k > 0 && (core[k - 1] in TERM || core[k - 1] == '.' || core[k - 1] in "」』）)\"'")) k--
+            val head = core.substring(0, k).trimEnd()
+            val tail = core.substring(k)
+            append(head).append(tail)
+            if (cite != last) append(glue(head + tail)).append(cite)
+            last = cite
+            append(body.substring(body.length - ws))
+        }
+    }
 
     private fun len(s: String) = s.codePointCount(0, s.length)
 
@@ -194,7 +267,7 @@ object MeetingMail {
                 if (o !in byOwner) { byOwner[o] = ArrayList(); order += o }
                 var t = i["text"] as String
                 if (owner != null && t.startsWith(owner)) t = t.substring(owner.length).trimStart(' ')
-                byOwner[o]!! += mapOf("text" to t, "ts" to i["ts"])
+                byOwner[o]!! += mapOf("text" to t, "ts" to i["ts"], "cite" to itemCite(t, i["ts"] as String?))
             }
             val sorted = order.filter { it != none } + (if (none in byOwner) listOf(none) else emptyList())
             return sorted.map { mapOf("owner" to it, "items" to byOwner[it]) }
@@ -206,12 +279,12 @@ object MeetingMail {
             for (b in blocks) {
                 if (b.kind == "summary") {
                     if (b.paragraphs.isNotEmpty()) model["summary"] = mapOf("heading" to plainHeading(b.heading),
-                        "paragraphs" to b.paragraphs.map { mapOf("text" to it, "html" to htmlTs(it)) })
+                        "paragraphs" to b.paragraphs.map { mapOf("text" to clauseEndCites(it), "html" to htmlTs(it)) })
                     continue
                 }
                 if (b.items.isEmpty()) continue
                 val items = b.items.map { i ->
-                    mapOf("text" to refs(i.text), "ts" to i.ts, "owner" to if (b.tag == "ACTION") ownerOf(i.text, names) else null)
+                    mapOf("text" to refs(i.text), "ts" to i.ts, "cite" to itemCite(refs(i.text), i.ts), "owner" to if (b.tag == "ACTION") ownerOf(i.text, names) else null)
                 }
                 val g = if (items.any { it["owner"] != null }) groups(items) else listOf(mapOf("owner" to null, "items" to items))
                 secs += mapOf("heading" to plainHeading(b.heading), "groups" to g,
