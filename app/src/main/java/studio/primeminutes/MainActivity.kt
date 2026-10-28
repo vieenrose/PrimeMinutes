@@ -1193,11 +1193,13 @@ private fun TranscribeScreen(
     // Sharing a document/subtitle format: materialise it in a private cache dir and pass a
     // FileProvider uri (SAF only offers "save to a location").
     fun shareExport(f: ExportFormat) {
-        val utts = s.utterances; val t = refs(s.title); val sum = refs(s.summary); val acts = refs(s.actionItems)
+        val utts = s.utterances; val t = refs(s.title); val sum = refs(s.summary)
         val sumH = context.getString(R.string.export_heading_summary)
         val txH = context.getString(R.string.export_heading_transcript)
-        val actH = context.getString(R.string.export_heading_actions)
+        // Same body as the save path (~L1155): the full exportExtras block (actions gated on
+        // showActionItems with the "-" filter inside, plus notes sections) — not the raw action string.
         val body = if (f == ExportFormat.PDF) null else exportText(f)
+        val extras = if (f == ExportFormat.PDF) exportExtras(markdown = false) else null
         scope.launch {
             val file = withContext(Dispatchers.IO) {
                 runCatching {
@@ -1208,7 +1210,7 @@ private fun TranscribeScreen(
                     File(dir, "${exportBaseName()}.${f.ext}").also { out ->
                         if (f == ExportFormat.PDF) {
                             out.outputStream().use { os ->
-                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, acts, actH, context.resources.configuration.locales[0])
+                                studio.primeminutes.core.export.PdfExport.write(os, utts, speakerLabel, t, sum, sumH, txH, extras, null, context.resources.configuration.locales[0])
                             }
                         } else {
                             out.writeText(body.orEmpty())
