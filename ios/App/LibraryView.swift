@@ -887,7 +887,7 @@ struct LibrarySelectToolbar: ToolbarContent {
             ToolbarItemGroup(placement: .bottomBar) {
                 Button(L("select_all"), action: onSelectAll)
                 Spacer()
-                Text(L("selection_count", count)).font(.subheadline).foregroundStyle(.secondary)
+                Text(L("selection_count", count)).font(.subheadline).foregroundStyle(.secondary).fixedSize()
                 Spacer()
                 Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.disabled(count == 0).accessibilityLabel(L("delete"))
             }
