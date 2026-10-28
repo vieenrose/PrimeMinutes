@@ -145,6 +145,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import studio.primeminutes.ui.confirm
+import studio.primeminutes.ui.reject
+import studio.primeminutes.ui.toggleOn
+import studio.primeminutes.ui.toggleOff
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -1535,7 +1539,7 @@ private fun TranscribeScreen(
                     onCopy = {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes summary", refs(sm)))
-                        copyHaptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                        copyHaptic.confirm()
                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.summary_copied)) }
                     },
                     onSeek = anchorSeek, showHeading = twoPane)
@@ -1550,7 +1554,7 @@ private fun TranscribeScreen(
                     onCopy = {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes action items", refs(ai)))
-                        copyHaptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                        copyHaptic.confirm()
                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.action_items_copied)) }
                     },
                     onSeek = anchorSeek)
@@ -2146,7 +2150,7 @@ private fun TranscribeScreen(
             onDismissRequest = { mergeAsk = null },
             text = { Text(stringResource(R.string.speaker_merge_confirm, name(from), name(into))) },
             confirmButton = {
-                TextButton(onClick = { mergeAsk = null; vm.mergeSpeaker(from, into) }) { Text(stringResource(R.string.speaker_merge)) }
+                TextButton(onClick = { mergeAsk = null; vm.mergeSpeaker(from, into) }) { Text(stringResource(R.string.speaker_merge), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { mergeAsk = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -2221,7 +2225,7 @@ private fun TranscribeScreen(
         val exportHaptic = LocalHapticFeedback.current
         ExportSheet(
             onExport = { f, share -> onExport(f, share) },
-            onCopyTranscript = { copyTranscript(); exportHaptic.performHapticFeedback(HapticFeedbackType.ContextClick) },
+            onCopyTranscript = { copyTranscript(); exportHaptic.confirm() },
             onDismiss = { vm.showExportSheet(false) },
         )
     }
@@ -2244,7 +2248,7 @@ private fun TranscribeScreen(
     var wasExporting by remember { mutableStateOf(false) }
     LaunchedEffect(s.exporting) {
         if (s.exporting) wasExporting = true
-        else if (wasExporting) { wasExporting = false; exportDoneHaptic.performHapticFeedback(HapticFeedbackType.ContextClick) }
+        else if (wasExporting) { wasExporting = false; exportDoneHaptic.confirm() }
     }
     // The overlay waits for TranscriptEvent.ExportDone, which never arrives if the service is
     // killed mid-export: once nothing is exporting in the service any more and no completion has

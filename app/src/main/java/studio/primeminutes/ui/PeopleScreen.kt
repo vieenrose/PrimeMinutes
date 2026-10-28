@@ -50,6 +50,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import studio.primeminutes.ui.confirm
+import studio.primeminutes.ui.reject
+import studio.primeminutes.ui.toggleOn
+import studio.primeminutes.ui.toggleOff
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -228,7 +232,7 @@ private fun PersonPage(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(bottom = Spacing.sm)) {
                 if (people.size > 1) OutlinedButton(onClick = { merging = true }) { Text(stringResource(R.string.people_merge_into)) }
-                OutlinedButton(onClick = { deleting = true }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
+                OutlinedButton(onClick = { deleting = true }) { Text(stringResource(R.string.people_delete), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             }
         }
         item {
@@ -312,7 +316,7 @@ private fun PersonPage(
                     mergeTarget = null
                     scope.launch(Dispatchers.IO) { PeopleStore.merge(context, p.id, o.id) }
                     onGone()
-                }) { Text(stringResource(R.string.contact_merge), color = pal.WarningText) }
+                }) { Text(stringResource(R.string.contact_merge), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { mergeTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -337,11 +341,11 @@ private fun PersonPage(
             confirmButton = {
                 TextButton(onClick = {
                     deleting = false
-                    delHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    delHaptics.reject()
                     val c = clear
                     scope.launch(Dispatchers.IO) { PeopleStore.delete(context, p.id, c) }
                     onGone()
-                }) { Text(stringResource(R.string.people_delete), color = pal.WarningText) }
+                }) { Text(stringResource(R.string.people_delete), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { deleting = false }) { Text(stringResource(R.string.cancel)) } },
         )

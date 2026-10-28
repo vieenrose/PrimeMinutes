@@ -50,6 +50,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import studio.primeminutes.ui.confirm
+import studio.primeminutes.ui.reject
+import studio.primeminutes.ui.toggleOn
+import studio.primeminutes.ui.toggleOff
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -144,7 +148,7 @@ fun AskSheet(
     var askWasBusy by remember { mutableStateOf(false) }
     LaunchedEffect(busy) {
         if (busy) askWasBusy = true
-        else if (askWasBusy) { askWasBusy = false; askHaptics.performHapticFeedback(HapticFeedbackType.ContextClick) }
+        else if (askWasBusy) { askWasBusy = false; askHaptics.confirm() }
     }
     fun send() {
         val q = followUp.trim(); if (q.isEmpty() || busy) return

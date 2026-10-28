@@ -90,7 +90,7 @@ fun ItemDownloadCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 if (r?.paused == true) TextButton(onClick = { ImportDownloads.resumeNow() }) { Text(stringResource(R.string.dl_resume)) }
                 if (d.error != null) TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-                TextButton(onClick = { confirming = true }) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
+                TextButton(onClick = { confirming = true }) { Text(stringResource(R.string.action_delete), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             }
         }
     }
@@ -99,7 +99,7 @@ fun ItemDownloadCard(
         title = { Text(stringResource(R.string.action_delete)) },
         text = { Text(stringResource(R.string.delete_confirm, entry.title ?: SessionLibrary.defaultTitle(context, entry.createdAt))) },
         confirmButton = {
-            TextButton(onClick = { confirming = false; onDelete() }) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
+            TextButton(onClick = { confirming = false; onDelete() }) { Text(stringResource(R.string.action_delete), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
         },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.cancel)) } },
     )

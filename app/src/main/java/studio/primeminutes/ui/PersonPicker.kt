@@ -166,7 +166,7 @@ fun PersonPickerSheet(
     }
     val suggested = if (!access.granted) emptyList() else suggestions.mapNotNull { s -> linkedDoc.byId(s.person)?.let { it to s } }.filter { it.first.id !in exclude && it.first.id !in inMeeting }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false), containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).imePadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
@@ -376,7 +376,7 @@ fun SpeakerNameFlow(
             onDismissRequest = { mergeAsk = null; onDismiss() },
             title = { Text(stringResource(R.string.people_merge_title, p.name, defaultLabel(other.id))) },
             text = { Text(stringResource(R.string.people_merge_text, speaker.label, other.label)) },
-            confirmButton = { TextButton(onClick = { mergeAsk = null; onMerge(other.id) }) { Text(stringResource(R.string.speaker_merge)) } },
+            confirmButton = { TextButton(onClick = { mergeAsk = null; onMerge(other.id) }) { Text(stringResource(R.string.speaker_merge), color = androidx.compose.material3.MaterialTheme.colorScheme.error) } },
             dismissButton = {
                 Row {
                     TextButton(onClick = { mergeAsk = null; onDismiss() }) { Text(stringResource(R.string.cancel)) }

@@ -149,7 +149,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
                         val ok = withContext(Dispatchers.IO) { PeopleStore.removeEmailFromContact(context, p.id, a) }
                         if (!ok) studio.primeminutes.ui.AppSnackbar.show(context, R.string.email_write_failed)
                     }
-                }, modifier = Modifier.testTag("email-remove-confirm")) { Text(stringResource(R.string.email_remove), color = pal.WarningText) }
+                }, modifier = Modifier.testTag("email-remove-confirm")) { Text(stringResource(R.string.email_remove), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
         )

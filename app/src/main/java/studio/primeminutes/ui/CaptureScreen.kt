@@ -57,6 +57,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
+import studio.primeminutes.ui.confirm
+import studio.primeminutes.ui.reject
+import studio.primeminutes.ui.toggleOn
+import studio.primeminutes.ui.toggleOff
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -305,7 +309,7 @@ private fun CaptureButtons(
         // ⏭ Next talk — the batch-recording workhorse: auto-save this capture, defer its
         // processing, and roll straight into the next session.
         Button(
-            onClick = { haptics.performHapticFeedback(HapticFeedbackType.ContextClick); onNextTalk() },
+            onClick = { haptics.toggleOn(); onNextTalk() },
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
@@ -320,7 +324,7 @@ private fun CaptureButtons(
         }
         // ⏹ Stop & save — always safe: the capture is in the library before processing starts.
         Button(
-            onClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onStop() },
+            onClick = { haptics.toggleOff(); onStop() },
             enabled = isRecording,
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),
