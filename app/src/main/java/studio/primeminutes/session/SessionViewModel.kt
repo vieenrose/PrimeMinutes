@@ -291,10 +291,20 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     fun linkNewPerson(speaker: Int, name: String) {
         val n = name.trim().ifBlank { return }
         viewModelScope.launch {
-            val p = withContext(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.create(ctx, n) }
+            // People == OS contacts: a new person is a new contact; if Contacts refuses, a plain label.
+            val p = withContext(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.createWithContact(ctx, n) }
+            if (p == null) { linkUndoable(speaker, null, n); return@launch }
             linkUndoable(speaker, p.id, p.name)
             withContext(Dispatchers.IO) { studio.primeminutes.core.people.VoiceLinks.confirmed(ctx, now.libraryDir?.name, speaker, p.id) }
         }
+    }
+
+    /** A plain label (no person): what naming does without the Contacts permission. */
+    fun labelSpeaker(speaker: Int, name: String) {
+        val n = name.trim().ifBlank { return }
+        val was = now.speakerNames[speaker]?.person
+        linkUndoable(speaker, null, n)
+        if (was != null) viewModelScope.launch(Dispatchers.IO) { studio.primeminutes.core.people.VoiceLinks.unlinked(ctx, now.libraryDir?.name, speaker, was) }
     }
 
     /** Back to "Speaker n": the person stays in the directory. */

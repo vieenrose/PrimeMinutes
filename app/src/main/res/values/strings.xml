@@ -699,4 +699,22 @@
     <string name="search_results_show">Show the results list</string>
     <string name="search_results_hide">Hide the results list</string>
     <string name="search_results_more">First %1$d results</string>
+    <string name="people_section_contacts">Contacts</string>
+    <string name="people_use_label">Call this speaker “%s”</string>
+    <string name="contacts_needed_title">People are your contacts</string>
+    <string name="contacts_needed_text">Naming someone as a person saves them in Contacts, where you add their e-mail. Without access to Contacts you can still type a name for this meeting, but it won’t be a person: no e-mail, no voice recognition.</string>
+    <string name="contacts_grant">Allow access to Contacts</string>
+    <plurals name="contacts_card_title">
+        <item quantity="one">Add %d person to Contacts?</item>
+        <item quantity="other">Add %d people to Contacts?</item>
+    </plurals>
+    <string name="contacts_card_text">People you named before now live in Contacts. Someone already there (same e-mail or same name) is linked instead of duplicated; voices and meetings stay attached.</string>
+    <string name="contacts_card_yes">Add to Contacts</string>
+    <string name="contacts_card_no">Not now</string>
+    <string name="contact_in_contacts">In Contacts as %s</string>
+    <string name="contact_deleted">Removed from Contacts. The name stays in your meetings.</string>
+    <string name="contact_not_in_contacts">Not in Contacts yet</string>
+    <string name="contact_edit">Edit in Contacts</string>
+    <string name="email_none">No e-mail address</string>
+    <string name="email_none_edit_in_contacts">No e-mail address: add one in Contacts</string>
 </resources>

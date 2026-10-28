@@ -156,7 +156,9 @@ fun EmailParticipantsSheet(
     // The people of the meeting, with the directory's current addresses.
     val live = people.mapValues { (_, p) -> doc.byId(p.id) ?: p }
     val anyMe = doc.people.any { it.me }
-    val initial = remember(last, people.keys) { Recipients.rows(live, anyMe, last).associate { it.person.id to it.checked } }
+    // Addresses live in the OS contacts (edited in the Contacts app): re-read them as the sheet opens.
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { PeopleStore.syncContacts(context) } } }
+    val initial = remember(last, people.keys, live.values.map { it.emails.firstOrNull()?.address }) { Recipients.rows(live, anyMe, last).associate { it.person.id to it.checked } }
     val checked = remember(initial) { mutableStateMapOf<String, Boolean>().apply { putAll(initial) } }
     val rows = Recipients.rows(live, anyMe, last).map { it.copy(checked = it.address != null && (checked[it.person.id] ?: it.checked)) }
     val extras = remember { mutableStateListOf<Pair<String?, String>>() }   // one-off (name, address)
@@ -192,7 +194,7 @@ fun EmailParticipantsSheet(
             if (rows.isEmpty() && extras.isEmpty()) Text(stringResource(R.string.mail_no_people), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
             rows.forEach { r ->
                 RecipientRow(r, anyMe, onCheck = { on -> checked[r.person.id] = on },
-                    onAddress = { a -> scope.launch(Dispatchers.IO) { PeopleStore.addEmail(context, r.person.id, a) }; checked[r.person.id] = true })
+                    onAddress = { a -> scope.launch(Dispatchers.IO) { if (!PeopleStore.addEmailToContact(context, r.person.id, a)) PeopleStore.addEmail(context, r.person.id, a) }; checked[r.person.id] = true })
             }
             extras.forEach { (n, a) ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {

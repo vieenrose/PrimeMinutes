@@ -30,10 +30,14 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- People are OS contacts: naming a speaker as a new person inserts a contact, picking a person
+         lists the address book, and e-mail addresses are read back from the contact. Without it the
+         app only offers plain speaker labels. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
 
     <!-- "Email participants": is there an e-mail app to hand the mail to (Android 11+ package
-         visibility)? Not a sensitive declaration; no contacts permission is used (the system
-         picker hands over only the contact the user taps). -->
+         visibility)? Not a sensitive declaration. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.SENDTO" />

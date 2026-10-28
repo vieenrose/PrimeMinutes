@@ -581,6 +581,18 @@ private fun TranscribeScreen(
     var mailOpen by remember { mutableStateOf(false) }
     // Names given before the directory existed become its people (once, in the background).
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { studio.primeminutes.core.people.PeopleStore.migrateIfNeeded(context) } } }
+    // People == OS contacts: names and addresses follow the address book (edited in the Contacts app),
+    // a deleted contact leaves its person unlinked. Re-read on every return to the app.
+    val peopleLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(peopleLifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                runCatching { studio.primeminutes.core.people.PeopleStore.syncContacts(context) }
+            }
+        }
+        peopleLifecycle.addObserver(obs)
+        onDispose { peopleLifecycle.removeObserver(obs) }
+    }
     // Speaker-boundary editor: the seam (index of the line that starts the new speaker) or the line to split.
     var boundarySeam by remember { mutableStateOf<Int?>(null) }
     var splitLineAt by remember { mutableStateOf<Int?>(null) }
@@ -2141,6 +2153,7 @@ private fun TranscribeScreen(
             onLink = { p -> vm.linkPerson(sid, p.id) },
             onNew = { n -> vm.linkNewPerson(sid, n) },
             onClear = { vm.clearSpeakerName(sid) },
+            onLabel = { n -> vm.labelSpeaker(sid, n) },
             onMerge = { into -> vm.cancelSpeakerEdit(); vm.mergeSpeaker(sid, into) },
             onDismiss = { vm.cancelSpeakerEdit() },
         )

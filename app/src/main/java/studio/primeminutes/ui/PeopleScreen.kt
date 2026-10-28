@@ -125,6 +125,13 @@ private fun PeopleContent(
     }
     var openId by remember { mutableStateOf<String?>(null) }
     val open = doc.byId(openId)
+    val access = rememberContactsAccess()
+    // People == OS contacts: re-read names/addresses on open; the app-only people left from before
+    // are offered once ("Add N people to Contacts?").
+    val cardCount by produceState(0, version, access.granted) {
+        value = withContext(Dispatchers.IO) { runCatching { PeopleStore.syncContacts(context) }; PeopleStore.contactsCardCount(context) }
+    }
+    var migrating by remember { mutableStateOf(false) }
     BackHandler { if (open != null) openId = null else onClose() }
 
     Column(Modifier.fillMaxSize().background(pal.Slate900).statusBarsPadding().navigationBarsPadding()) {
@@ -142,6 +149,22 @@ private fun PeopleContent(
                         Text(pluralStringResource(R.plurals.people_migration_card, doc.migrationFound, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissMigrationCard(context) } }, modifier = Modifier.align(Alignment.End)) {
                             Text(stringResource(R.string.people_migration_ok))
+                        }
+                    }
+                }
+                if (!access.granted) item { ContactsBlockedCard(access) }
+                if (cardCount > 0) item {
+                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.PanelSurface, MaterialTheme.shapes.medium).padding(Spacing.md).testTag("contacts-card")) {
+                        Text(pluralStringResource(R.plurals.contacts_card_title, cardCount, cardCount), color = pal.Slate200, style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.contacts_card_text), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                        Row(Modifier.align(Alignment.End)) {
+                            TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissContactsCard(context) } }, modifier = Modifier.testTag("contacts-card-dismiss")) {
+                                Text(stringResource(R.string.contacts_card_no))
+                            }
+                            TextButton(enabled = !migrating, onClick = {
+                                if (!access.granted) access.request()
+                                else { migrating = true; scope.launch(Dispatchers.IO) { runCatching { PeopleStore.migrateToContacts(context) }; migrating = false } }
+                            }, modifier = Modifier.testTag("contacts-card-add")) { Text(stringResource(R.string.contacts_card_yes)) }
                         }
                     }
                 }
@@ -168,7 +191,7 @@ private fun PeopleContent(
                     HorizontalDivider(color = pal.Hairline)
                 }
             }
-        } else PersonPage(open, meetings[open.id].orEmpty(), doc.people, onOpenMeeting, onGone = { openId = null }, voiceOfPerson)
+        } else PersonPage(open, meetings[open.id].orEmpty(), doc.people, onOpenMeeting, onGone = { openId = null }, voiceOfPerson, canCreate = access.granted)
     }
 }
 
@@ -183,10 +206,14 @@ private fun PersonPage(
     p: Person, meetings: List<PersonMeeting>, people: List<Person>,
     onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit, onGone: () -> Unit,
     voiceOfPerson: @Composable (Person) -> Unit,
+    /** Contacts granted: splitting a meeting off creates a person, so a contact. */
+    canCreate: Boolean,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // A linked person's name is the contact's: renamed in the Contacts app ("Edit in Contacts").
+    val linked = studio.primeminutes.core.people.ContactLinks.isLinked(p)
     var renaming by remember { mutableStateOf(false) }
     var noting by remember { mutableStateOf(false) }
     var merging by remember { mutableStateOf(false) }
@@ -201,7 +228,7 @@ private fun PersonPage(
         p.note?.let { item { Text(it, color = pal.Slate400, modifier = Modifier.padding(bottom = Spacing.sm)) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(vertical = Spacing.sm)) {
-                OutlinedButton(onClick = { renaming = true }) { Text(stringResource(R.string.people_rename)) }
+                if (!linked) OutlinedButton(onClick = { renaming = true }) { Text(stringResource(R.string.people_rename)) }
                 OutlinedButton(onClick = { noting = true }) { Text(stringResource(R.string.people_note_short)) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(bottom = Spacing.sm)) {
@@ -235,7 +262,7 @@ private fun PersonPage(
                     Text(entryTitle(context, m.entry), color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(dateFmt.format(Date(m.entry.createdAt)), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                 }
-                Box {
+                if (canCreate) Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate400) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.people_split, p.name)) }, onClick = { menu = false; splitting = m })
@@ -258,7 +285,7 @@ private fun PersonPage(
     splitting?.let { m ->
         NameDialog(stringResource(R.string.people_split_title), "", onDone = { n ->
             splitting = null
-            if (!n.isNullOrBlank()) scope.launch(Dispatchers.IO) { PeopleStore.split(context, m.entry.id, p.id, n) }
+            if (!n.isNullOrBlank()) scope.launch(Dispatchers.IO) { PeopleStore.split(context, m.entry.id, p.id, n, withContact = true) }
         })
     }
     if (merging) AlertDialog(

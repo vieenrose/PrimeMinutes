@@ -226,16 +226,97 @@ object PeopleStore {
         return doc.value.byId(p.id) ?: p
     }
 
+    // --- OS contacts (people == contacts) -----------------------------------------------------
+
+    /** A new person backed by a new OS contact named [name]; null when Contacts refused (no permission, provider error). */
+    fun createWithContact(context: Context, name: String): Person? {
+        val c = ContactsProvider.insert(context, name.trim()) ?: return null
+        return createForContact(context, c)
+    }
+
+    /** The person linked to contact [c] (an existing one when already linked, else a new one). */
+    fun createForContact(context: Context, c: OsContact): Person {
+        init(context)
+        doc.value.people.firstOrNull { ContactLinks.isLinked(it) && (it.contact!!.key == c.key || it.contact.id == c.id) }?.let { return it }
+        val p = create(context, c.name)
+        mutate(context) { ContactLinks.apply(it, p.id, LinkState.Linked(c), now()) }
+        return doc.value.byId(p.id) ?: p
+    }
+
+    /**
+     * Re-reads every linked person from the address book: names and addresses follow the contact,
+     * a deleted contact leaves its person unlinked (name kept). Renames reach the meetings. No-op
+     * without the permission. Run at launch/resume and when a screen that shows addresses opens.
+     */
+    fun syncContacts(context: Context) {
+        init(context)
+        if (!ContactsProvider.granted(context)) return
+        val before = doc.value
+        val states = before.people.filter { it.contact?.platform == "android" }.associate { it.id to ContactsProvider.resolve(context, it.contact) }
+        if (states.isEmpty()) return
+        val after = mutate(context) { d -> states.entries.fold(d) { acc, (id, st) -> ContactLinks.apply(acc, id, st, now()) } }
+        for (p in after.people) {
+            val old = before.byId(p.id) ?: continue
+            if (old.name != p.name) rewriteMeetings(context) { LinkOps.rename(it, p.id, p.name) }
+        }
+    }
+
+    /** Adds [address] to [id]'s contact (the mail sheet's "add an address"), then reads it back. */
+    fun addEmailToContact(context: Context, id: String, address: String): Boolean {
+        val p = doc.value.byId(id) ?: return false
+        val st = ContactsProvider.resolve(context, p.contact)
+        if (st !is LinkState.Linked) return false
+        val ok = ContactsProvider.addEmails(context, st.contact.id, listOf(EmailRules.normalize(address)))
+        syncContacts(context)
+        return ok
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("people_contacts", Context.MODE_PRIVATE)
+
+    /** The "Add N people to Contacts?" card: how many app-only people there are (0 once dismissed or none). */
+    fun contactsCardCount(context: Context): Int {
+        init(context)
+        if (prefs(context).getBoolean("card_dismissed", false)) return 0
+        return ContactMigration.candidates(doc.value).size
+    }
+
+    fun dismissContactsCard(context: Context) { prefs(context).edit().putBoolean("card_dismissed", true).apply(); _version.value++ }
+
+    /**
+     * Moves the app-only people to Contacts ([ContactMigration]): matched ones are linked to the
+     * existing contact (their addresses added to it), the others are created. The person ids stay, so
+     * voiceprints and meetings stay attached. Returns how many were linked.
+     */
+    fun migrateToContacts(context: Context): Int {
+        init(context)
+        if (!ContactsProvider.granted(context)) return 0
+        val plan = ContactMigration.plan(ContactMigration.candidates(doc.value), ContactsProvider.all(context), fold(context))
+        var n = 0
+        for (step in plan) {
+            val c = when (step) {
+                is ContactMigration.Step.Match -> step.contact.also { ContactsProvider.addEmails(context, it.id, step.missingEmails) }
+                is ContactMigration.Step.Create -> ContactsProvider.insert(context, step.person.name, step.person.emails.map { it.address })
+            } ?: continue
+            val fresh = ContactsProvider.byId(context, c.id) ?: c
+            mutate(context) { ContactLinks.apply(it, step.person.id, LinkState.Linked(fresh), now()) }
+            n++
+        }
+        Log.i(TAG, "contacts migration: $n of ${plan.size} linked (${plan.count { it is ContactMigration.Step.Match }} matched)")
+        syncContacts(context)
+        dismissContactsCard(context)
+        return n
+    }
+
     /** Marks [id] as the phone's owner (one Me at most). */
     fun setMe(context: Context, id: String) {
         mutate(context) { d -> d.copy(people = d.people.map { it.copy(me = it.id == id) }) }
     }
 
     /** "This meeting's [personId] is someone else": its speakers there go to a new person [newName]. */
-    fun split(context: Context, entryId: String, personId: String, newName: String): Person? {
+    fun split(context: Context, entryId: String, personId: String, newName: String, withContact: Boolean = false): Person? {
         val dir = File(SessionLibrary.root(context), entryId)
         val links = readLinks(dir) ?: return null
-        val p = create(context, newName)
+        val p = if (withContact) createWithContact(context, newName) ?: return null else create(context, newName)
         val nl = LinkOps.split(links, personId, p)
         writeLinks(dir, nl)
         studio.primeminutes.core.embed.LibraryIndexer.request(context, entryId)

@@ -685,4 +685,21 @@
     <string name="search_results_show">顯示結果清單</string>
     <string name="search_results_hide">隱藏結果清單</string>
     <string name="search_results_more">前 %1$d 筆結果</string>
+    <string name="people_section_contacts">聯絡人</string>
+    <string name="people_use_label">把這位語者叫做「%s」</string>
+    <string name="contacts_needed_title">人員就是你的聯絡人</string>
+    <string name="contacts_needed_text">把某人設為人員時，會存進「聯絡人」，電子郵件也在那裡新增。沒有聯絡人權限時，仍可替這場會議輸入名字，但不會成為人員：沒有電子郵件，也不會辨識聲音。</string>
+    <string name="contacts_grant">允許存取聯絡人</string>
+    <plurals name="contacts_card_title">
+        <item quantity="other">要把 %d 位人員加入聯絡人嗎？</item>
+    </plurals>
+    <string name="contacts_card_text">以前命名的人員，現在都存放在聯絡人中。已在聯絡人裡的人（電子郵件或名字相同）會直接連結，不會重複建立；聲音與會議都會保留。</string>
+    <string name="contacts_card_yes">加入聯絡人</string>
+    <string name="contacts_card_no">稍後再說</string>
+    <string name="contact_in_contacts">聯絡人：%s</string>
+    <string name="contact_deleted">已從聯絡人中刪除。會議裡仍保留這個名字。</string>
+    <string name="contact_not_in_contacts">尚未加入聯絡人</string>
+    <string name="contact_edit">在聯絡人中編輯</string>
+    <string name="email_none">沒有電子郵件地址</string>
+    <string name="email_none_edit_in_contacts">沒有電子郵件地址：請在聯絡人中新增</string>
 </resources>

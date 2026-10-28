@@ -65,50 +65,39 @@ import studio.primeminutes.ui.theme.primeMinutesTextFieldColors
 import studio.primeminutes.ui.theme.Spacing
 
 /**
- * A person's contact side on the person page (docs/design/speaker-contacts.md §2, mockup 01): the
- * address-book link (picked through the system picker, no permission) and the e-mail addresses, the
- * first one (★) used when sending. The person's name is never changed by a contact.
+ * A person's contact side on the person page: people are OS contacts, so this shows the linked
+ * contact and its addresses (read from it, the first used when sending) and opens the Contacts app to
+ * edit them. A person whose contact was deleted stays (name, meetings, voice), unlinked.
  */
 @Composable
 internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var adding by remember { mutableStateOf(false) }
-    var unlinking by remember { mutableStateOf(false) }
-    var replaceAsk by remember { mutableStateOf<Pair<PickedContact, String>?>(null) }
     val doc by PeopleStore.doc.collectAsState()
-    val pick = rememberContactPicker { c, chosen ->
-        val old = p.contact
-        if (old != null && old.platform == c.platform && old.key != c.key) replaceAsk = c to chosen
-        else scope.launch(Dispatchers.IO) { PeopleStore.linkContact(context, p.id, c, chosen) }
-    }
-    val dateFmt = remember { java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT, studio.primeminutes.core.config.AppLanguage.uiLocale(context)) }
-
-    // --- the contact link ---
+    val c = p.contact
+    val linked = studio.primeminutes.core.people.ContactLinks.isLinked(p)
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f).padding(start = Spacing.md)) {
                 Text(stringResource(R.string.contact_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold)
-                val c = p.contact
                 Text(
                     when {
-                        c == null -> stringResource(R.string.contact_not_linked)
-                        c.platform != "android" -> stringResource(R.string.contact_other_platform)
-                        else -> stringResource(R.string.contact_linked_to,
-                            listOfNotNull(c.name, c.org?.let { "($it)" }).joinToString(" ").ifBlank { "—" },
-                            dateFmt.format(java.util.Date(c.synced * 1000)))
+                        linked -> stringResource(R.string.contact_in_contacts, c?.name ?: p.name)
+                        c != null && c.platform == "android" && c.missing -> stringResource(R.string.contact_deleted)
+                        else -> stringResource(R.string.contact_not_in_contacts)
                     },
                     color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = pick, modifier = Modifier.testTag("contact-pick")) {
-                Text(stringResource(if (p.contact == null) R.string.contact_choose else R.string.contact_update))
-            }
-            if (p.contact != null) TextButton(onClick = { unlinking = true }) { Text(stringResource(R.string.contact_unlink), color = pal.Slate400) }
+        if (linked && c != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = {
+                val i = studio.primeminutes.core.people.ContactsProvider.editIntent(c)
+                try { if (i != null) context.startActivity(i) } catch (_: android.content.ActivityNotFoundException) {
+                    android.widget.Toast.makeText(context, R.string.contacts_no_app, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }, modifier = Modifier.testTag("contact-edit")) { Text(stringResource(R.string.contact_edit)) }
         }
         PeopleOps.sameContact(doc, p).firstOrNull()?.let { o ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -118,55 +107,15 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
         }
     }
     Spacer(Modifier.padding(top = Spacing.sm))
-    // --- the addresses ---
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Email, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(22.dp))
             Text(stringResource(R.string.email_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = Spacing.md))
         }
         if (p.me) Text(stringResource(R.string.email_me_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
-        p.emails.forEachIndexed { i, e -> EmailRow(p, e, isDefault = i == 0, showDefault = p.emails.size > 1) }
-        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { adding = true }.heightIn(min = 48.dp).padding(vertical = Spacing.sm).testTag("email-add"),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
-            Spacer(Modifier.width(Spacing.sm))
-            Text(stringResource(R.string.email_add), color = pal.Sky, fontWeight = FontWeight.SemiBold)
-        }
-    }
-
-    if (adding) AddressDialog(onDone = { a ->
-        adding = false
-        if (a != null) scope.launch(Dispatchers.IO) { PeopleStore.addEmail(context, p.id, a) }
-    })
-    if (unlinking) AlertDialog(
-        onDismissRequest = { unlinking = false },
-        title = { Text(stringResource(R.string.contact_unlink_title, p.name)) },
-        text = { Text(stringResource(R.string.contact_unlink_text)) },
-        confirmButton = {
-            TextButton(onClick = { unlinking = false; scope.launch(Dispatchers.IO) { PeopleStore.unlinkContact(context, p.id, false) } }) {
-                Text(stringResource(R.string.contact_unlink))
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = { unlinking = false }) { Text(stringResource(R.string.cancel)) }
-                if (p.emails.any { it.from == PersonEmail.FROM_CONTACT }) TextButton(onClick = {
-                    unlinking = false; scope.launch(Dispatchers.IO) { PeopleStore.unlinkContact(context, p.id, true) }
-                }) { Text(stringResource(R.string.contact_unlink_remove), color = pal.WarningText) }
-            }
-        },
-    )
-    replaceAsk?.let { (c, chosen) ->
-        AlertDialog(
-            onDismissRequest = { replaceAsk = null },
-            text = { Text(stringResource(R.string.contact_replace, p.contact?.name ?: "—")) },
-            confirmButton = {
-                TextButton(onClick = { replaceAsk = null; scope.launch(Dispatchers.IO) { PeopleStore.linkContact(context, p.id, c, chosen) } }) {
-                    Text(stringResource(R.string.contact_replace_yes))
-                }
-            },
-            dismissButton = { TextButton(onClick = { replaceAsk = null }) { Text(stringResource(R.string.cancel)) } },
-        )
+        p.emails.forEachIndexed { i, e -> EmailRow(e, isDefault = i == 0, showDefault = p.emails.size > 1) }
+        if (p.emails.isEmpty()) Text(stringResource(if (linked) R.string.email_none_edit_in_contacts else R.string.email_none),
+            color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
@@ -178,34 +127,16 @@ private fun Card(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun EmailRow(p: Person, e: PersonEmail, isDefault: Boolean, showDefault: Boolean) {
+private fun EmailRow(e: PersonEmail, isDefault: Boolean, showDefault: Boolean) {
     val pal = LocalPrimeMinutesPalette.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var menu by remember { mutableStateOf(false) }
     HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(top = Spacing.sm))
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(e.address, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = listOfNotNull(
-                stringResource(if (e.from == PersonEmail.FROM_CONTACT) R.string.email_from_contact else R.string.email_from_user),
-                if (isDefault && showDefault) stringResource(R.string.email_default) else null,
-            ).joinToString(" · ")
-            Text(sub, color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+            if (isDefault && showDefault) Text(stringResource(R.string.email_default), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
         }
         // The line above already reads 寄信時預設使用; a label here made TalkBack say it twice.
         if (isDefault && showDefault) Icon(Icons.Filled.Star, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(20.dp))
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate400) }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                if (!isDefault) DropdownMenuItem(text = { Text(stringResource(R.string.email_make_default)) }, onClick = {
-                    menu = false; scope.launch(Dispatchers.IO) { PeopleStore.makeDefaultEmail(context, p.id, e.address) }
-                })
-                DropdownMenuItem(text = { Text(stringResource(R.string.email_remove), color = pal.WarningText) }, onClick = {
-                    menu = false; scope.launch(Dispatchers.IO) { PeopleStore.removeEmail(context, p.id, e.address) }
-                })
-            }
-        }
     }
 }
 

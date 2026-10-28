@@ -56,6 +56,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import studio.primeminutes.R
+import studio.primeminutes.core.people.ContactLinks
+import studio.primeminutes.core.people.ContactsProvider
+import studio.primeminutes.core.people.OsContact
 import studio.primeminutes.core.people.PeoplePicker
 import studio.primeminutes.core.people.PeopleStore
 import studio.primeminutes.core.people.Person
@@ -76,8 +79,10 @@ sealed interface PersonPick {
     data class New(val name: String) : PersonPick
     /** Back to the default "Speaker n" label. */
     data object Clear : PersonPick
-    /** A contact from the system picker (docs/design/speaker-contacts.md §2.2), [chosen] the tapped address. */
-    data class FromContact(val contact: studio.primeminutes.core.people.PickedContact, val chosen: String) : PersonPick
+    /** An OS contact that is not a person yet (people == contacts): it becomes one, linked to it. */
+    data class Contact(val contact: OsContact) : PersonPick
+    /** No Contacts permission: a plain label for this meeting only (no person, no e-mail, no voice). */
+    data class Label(val name: String) : PersonPick
 }
 
 /**
@@ -105,8 +110,8 @@ fun PersonPickerSheet(
     voiceNote: String? = null,
     onPlaySample: (() -> Unit)? = null,
     allowClear: Boolean = current?.person != null || (current != null && current.label != defaultLabel(current.id)),
-    /** Offer "Choose from contacts…" (the system picker, no permission). */
-    allowContacts: Boolean = false,
+    /** Plain labels instead of people when Contacts is not granted (the rename sheet; false: pick people only). */
+    allowLabel: Boolean = true,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -117,6 +122,15 @@ fun PersonPickerSheet(
     }
     val fold by produceState<(String) -> String>({ it }) { value = withContext(Dispatchers.IO) { PeopleStore.fold(context) } }
     var query by remember { mutableStateOf("") }
+    val access = rememberContactsAccess()
+    // People == OS contacts: the directory's people backed by a live contact, and the address book.
+    val contacts by produceState(emptyList<OsContact>(), access.granted, version) {
+        value = if (!access.granted) emptyList() else withContext(Dispatchers.IO) {
+            PeopleStore.syncContacts(context); ContactsProvider.all(context)
+        }
+    }
+    val linkedDoc = remember(doc) { doc.copy(people = doc.people.filter(ContactLinks::isLinked)) }
+    val personOfContact = remember(linkedDoc) { linkedDoc.people.associateBy { it.contact!!.key } }
     var sameAsk by remember { mutableStateOf<Pair<String, List<Person>>?>(null) }
     val inMeeting = remember(speakers, current) {
         speakers.filter { it.id != current?.id && it.person != null }.associate { it.person!! to it.id }
@@ -125,8 +139,14 @@ fun PersonPickerSheet(
     val exclude = setOfNotNull(current?.person)
     // A person suggested by voice is listed once, in the voice section (while not searching).
     val voiceIds = if (query.isBlank()) suggestions.map { it.person }.filter { it !in inMeeting }.toSet() else emptySet()
-    val sec = remember(doc, usage, inMeeting, query, fold, voiceIds) { PeoplePicker.sections(doc, usage, inMeeting, query, fold, exclude + voiceIds) }
-    val homonyms = remember(doc, fold) { PeoplePicker.homonyms(doc, fold) }
+    val sec = remember(linkedDoc, usage, inMeeting, query, fold, voiceIds) { PeoplePicker.sections(linkedDoc, usage, inMeeting, query, fold, exclude + voiceIds) }
+    val homonyms = remember(linkedDoc, fold) { PeoplePicker.homonyms(linkedDoc, fold) }
+    // The address book below the recent people: every contact matching the search (not those listed above).
+    val shown = (sec.inMeeting + sec.recent).map { it.person.id }.toSet() + exclude + voiceIds
+    val contactRows = remember(contacts, query, fold, shown, personOfContact) {
+        val q = PersonNames.normalize(query, fold)
+        contacts.filter { c -> personOfContact[c.key]?.id !in shown && (q.isEmpty() || PersonNames.normalize(c.name, fold).contains(q)) }
+    }
     fun hint(p: Person): String? = when {
         p.note != null -> p.note
         p.id in homonyms -> usage[p.id]?.lastTitle?.let { context.getString(R.string.people_last, it) }
@@ -135,11 +155,11 @@ fun PersonPickerSheet(
     fun addNew(name: String) {
         val n = name.trim()
         if (!PersonNames.isPersonName(n)) return
-        val same = doc.people.filter { PersonNames.same(it.name, n, fold) && it.id != current?.person }
+        if (!access.granted) { if (allowLabel) onPick(PersonPick.Label(n)); return }
+        val same = linkedDoc.people.filter { PersonNames.same(it.name, n, fold) && it.id != current?.person }
         if (same.isEmpty()) onPick(PersonPick.New(n)) else sameAsk = n to same
     }
-    val pickContact = rememberContactPicker { c, chosen -> onPick(PersonPick.FromContact(c, chosen)) }
-    val suggested = suggestions.mapNotNull { s -> doc.byId(s.person)?.let { it to s } }.filter { it.first.id !in exclude && it.first.id !in inMeeting }
+    val suggested = if (!access.granted) emptyList() else suggestions.mapNotNull { s -> linkedDoc.byId(s.person)?.let { it to s } }.filter { it.first.id !in exclude && it.first.id !in inMeeting }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).imePadding()) {
@@ -159,24 +179,14 @@ fun PersonPickerSheet(
                 trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, stringResource(R.string.cd_clear_search)) } }) else null,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    val exact = (sec.inMeeting + sec.recent + sec.all).firstOrNull { PersonNames.same(it.person.name, query, fold) }
+                    val exact = if (!access.granted) null else (sec.inMeeting + sec.recent + sec.all).firstOrNull { PersonNames.same(it.person.name, query, fold) }
                     if (exact != null) onPick(PersonPick.Existing(exact.person)) else addNew(query)
                 }),
                 colors = primeMinutesTextFieldColors(),
                 modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm).testTag("people-search"),
             )
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
-                if (allowContacts && query.isBlank()) item {
-                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { pickContact() }.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("people-contacts"),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
-                        Spacer(Modifier.width(Spacing.sm))
-                        Column {
-                            Text(stringResource(R.string.contact_choose), color = pal.Sky, fontWeight = FontWeight.SemiBold)
-                            Text(stringResource(R.string.contact_choose_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
+                if (!access.granted) item { ContactsBlockedCard(access) }
                 if (query.isBlank() && (suggested.isNotEmpty() || voiceNote != null)) {
                     item { SectionLabel(stringResource(R.string.people_section_voice)) }
                     items(suggested, key = { "v" + it.first.id }) { (p, s) ->
@@ -197,20 +207,22 @@ fun PersonPickerSheet(
                         PersonRow(r.person.name, hint(r.person) ?: meetingsText(r.meetings), onClick = { onPick(PersonPick.Existing(r.person)) })
                     }
                 }
-                if (sec.all.isNotEmpty()) {
-                    item { SectionLabel(stringResource(if (query.isBlank()) R.string.people_section_all else R.string.people_section_matches)) }
-                    items(sec.all, key = { "a" + it.person.id }) { r ->
-                        PersonRow(r.person.name, hint(r.person) ?: meetingsText(r.meetings), onClick = { onPick(PersonPick.Existing(r.person)) })
+                if (contactRows.isNotEmpty()) {
+                    item { SectionLabel(stringResource(if (query.isBlank()) R.string.people_section_contacts else R.string.people_section_matches)) }
+                    items(contactRows, key = { "c" + it.id }) { c ->
+                        val p = personOfContact[c.key]
+                        PersonRow(c.name, p?.let { hint(it) ?: meetingsText(usage[it.id]?.meetings ?: 0) },
+                            onClick = { onPick(if (p != null) PersonPick.Existing(p) else PersonPick.Contact(c)) })
                     }
                 }
-                if (doc.people.isEmpty() && query.isBlank()) item {
+                if (access.granted && contacts.isEmpty() && linkedDoc.people.isEmpty() && query.isBlank()) item {
                     Text(stringResource(R.string.people_picker_empty), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = Spacing.sm))
                 }
-                if (sec.canAdd) item {
+                if (sec.canAdd && (access.granted || allowLabel)) item {
                     Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { addNew(query) }.padding(vertical = Spacing.md).testTag("people-add"), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Add, contentDescription = null, tint = pal.Sky)
                         Spacer(Modifier.width(Spacing.sm))
-                        Text(stringResource(R.string.people_add_new, query.trim()), color = pal.Sky, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(if (access.granted) R.string.people_add_new else R.string.people_use_label, query.trim()), color = pal.Sky, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 if (allowClear && current != null) item {
@@ -281,32 +293,28 @@ fun SpeakerNameFlow(
     onNew: (String) -> Unit,
     onClear: () -> Unit,
     onMerge: (into: Int) -> Unit,
+    /** No Contacts permission: [speaker] is just called this, in this meeting. */
+    onLabel: (String) -> Unit,
     onDismiss: () -> Unit,
     suggestions: List<VoiceSuggestion> = emptyList(),
     voiceNote: String? = null,
     onPlaySample: (() -> Unit)? = null,
 ) {
     var mergeAsk by remember { mutableStateOf<Pair<Person, PickerSpeaker>?>(null) }
-    // From contacts: confirm the name, then (same name in the directory?) the same person or a new one.
-    var contactName by remember { mutableStateOf<PersonPick.FromContact?>(null) }
-    var contactSame by remember { mutableStateOf<Triple<PersonPick.FromContact, String, Person>?>(null) }
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    fun linkFromContact(pick: PersonPick.FromContact, existing: Person?, name: String) {
+    fun linkContact(c: OsContact) {
         scope.launch {
-            val p = withContext(Dispatchers.IO) {
-                if (existing != null) { PeopleStore.linkContact(context, existing.id, pick.contact, pick.chosen); PeopleStore.doc.value.byId(existing.id) ?: existing }
-                else PeopleStore.createFromContact(context, name, pick.contact, pick.chosen)
-            }
+            val p = withContext(Dispatchers.IO) { PeopleStore.createForContact(context, c) }
             val other = speakers.firstOrNull { it.id != speaker.id && it.person == p.id }
             if (other != null) mergeAsk = p to other else onLink(p)
         }
     }
-    if (mergeAsk == null && contactName == null && contactSame == null) PersonPickerSheet(
+    if (mergeAsk == null) PersonPickerSheet(
         title = stringResource(R.string.people_who_is, speaker.label),
         current = speaker, speakers = speakers,
         suggestions = suggestions, voiceNote = voiceNote, onPlaySample = onPlaySample,
-        onDismiss = onDismiss, allowContacts = true,
+        onDismiss = onDismiss,
         onPick = { pick ->
             when (pick) {
                 is PersonPick.Existing -> {
@@ -315,27 +323,11 @@ fun SpeakerNameFlow(
                 }
                 is PersonPick.New -> onNew(pick.name)
                 PersonPick.Clear -> onClear()
-                is PersonPick.FromContact -> contactName = pick
+                is PersonPick.Contact -> linkContact(pick.contact)
+                is PersonPick.Label -> onLabel(pick.name)
             }
         },
     )
-    contactName?.let { pick ->
-        NameDialog(stringResource(R.string.contact_name_title), pick.contact.name ?: pick.chosen.substringBefore('@'), onDone = { n ->
-            contactName = null
-            if (n.isNullOrBlank()) { onDismiss(); return@NameDialog }
-            val fold: (String) -> String = { it }
-            val same = PeopleStore.doc.value.people.firstOrNull { PersonNames.same(it.name, n, fold) && it.id != speaker.person }
-            if (same != null) contactSame = Triple(pick, n, same) else linkFromContact(pick, null, n)
-        })
-    }
-    contactSame?.let { (pick, name, same) ->
-        AlertDialog(
-            onDismissRequest = { contactSame = null; onDismiss() },
-            text = { Text(stringResource(R.string.people_same_title_bare, same.name)) },
-            confirmButton = { TextButton(onClick = { contactSame = null; linkFromContact(pick, same, name) }) { Text(stringResource(R.string.people_same_yes)) } },
-            dismissButton = { TextButton(onClick = { contactSame = null; linkFromContact(pick, null, name) }) { Text(stringResource(R.string.people_same_no, name)) } },
-        )
-    }
     mergeAsk?.let { (p, other) ->
         AlertDialog(
             onDismissRequest = { mergeAsk = null; onDismiss() },

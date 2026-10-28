@@ -685,4 +685,21 @@
     <string name="search_results_show">显示结果列表</string>
     <string name="search_results_hide">隐藏结果列表</string>
     <string name="search_results_more">前 %1$d 条结果</string>
+    <string name="people_section_contacts">联系人</string>
+    <string name="people_use_label">把这位说话人叫做“%s”</string>
+    <string name="contacts_needed_title">人员就是你的联系人</string>
+    <string name="contacts_needed_text">把某人设为人员时，会存进“联系人”，电子邮件也在那里添加。没有联系人权限时，仍可为这场会议输入名字，但不会成为人员：没有电子邮件，也不会识别声音。</string>
+    <string name="contacts_grant">允许访问联系人</string>
+    <plurals name="contacts_card_title">
+        <item quantity="other">要把 %d 位人员加入联系人吗？</item>
+    </plurals>
+    <string name="contacts_card_text">以前命名的人员，现在都存放在联系人中。已在联系人里的人（电子邮件或名字相同）会直接链接，不会重复创建；声音与会议都会保留。</string>
+    <string name="contacts_card_yes">加入联系人</string>
+    <string name="contacts_card_no">稍后再说</string>
+    <string name="contact_in_contacts">联系人：%s</string>
+    <string name="contact_deleted">已从联系人中删除。会议里仍保留这个名字。</string>
+    <string name="contact_not_in_contacts">尚未加入联系人</string>
+    <string name="contact_edit">在联系人中编辑</string>
+    <string name="email_none">没有电子邮件地址</string>
+    <string name="email_none_edit_in_contacts">没有电子邮件地址：请在联系人中添加</string>
 </resources>
