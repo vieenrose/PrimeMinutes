@@ -76,12 +76,13 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
                 if let old = waiters.removeValue(forKey: key) { old.cont.resume(throwing: CancellationError()) }
                 waiters[key] = Waiter(cont: c, progress: onProgress, base: resumeFrom)
                 lock.unlock()
-                if let running { StatusLog.add("download re-attached \(part.lastPathComponent)"); return }
+                if running != nil { StatusLog.add("download re-attached \(part.lastPathComponent)"); return }
                 var r = req
                 if resumeFrom > 0 { r.setValue("bytes=\(resumeFrom)-", forHTTPHeaderField: "Range") }
                 let t = session.downloadTask(with: r)
                 t.taskDescription = key
                 t.resume()
+                StatusLog.add("background download \(part.lastPathComponent) started at \(resumeFrom)")
             }
         } onCancel: {
             // The user's Cancel: stop the transfer (the .part keeps what was already folded in).
