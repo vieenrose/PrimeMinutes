@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -460,7 +461,9 @@ fun StudioScreen(
             val showDone = doneCount > 0 && doneCount < entries.size
             if (showNew || showDone) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm),
+                    // Scrolls sideways at large font scales instead of squeezing the last chip to a column.
+                    Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                        .padding(start = Gutter, end = Gutter, top = Spacing.sm),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     FilterChip(stringResource(R.string.filter_all, entries.size), statusFilter == StatusFilter.ALL) { statusFilter = StatusFilter.ALL }
