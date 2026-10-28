@@ -33,3 +33,19 @@ enum RerunTitle {
         return t
     }
 }
+
+/// A title the user typed wins over every generated one (re-transcribe, re-summarize, the queue, the reader's title,
+/// a re-import of the .m4a): `Session.titleUserSet` marks it. Clearing the title gives the meeting back to the
+/// automatic titles: the placeholder shows until the next run names it.
+enum TitleEdit {
+    /// The user's draft: a non-blank one is kept and marked; a blank one restores `auto` and clears the mark.
+    static func apply(_ draft: String, auto: String) -> (title: String, userSet: Bool?) {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? (auto, nil) : (t, true)
+    }
+    /// What a run saves: the stored title when the user set it, else the run's own.
+    static func merged(run: String, stored: String?, storedUserSet: Bool?) -> (title: String, userSet: Bool?) {
+        if storedUserSet == true, let t = stored, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return (t, true) }
+        return (run, nil)
+    }
+}

@@ -345,7 +345,7 @@ struct SessionView: View {
     /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
     private func undoResummary() {
         guard let old = undoable else { return }
-        s.summary = old.summary; s.title = old.title; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s)
+        s.summary = old.summary; s.title = old.title; s.titleUserSet = old.titleUserSet; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s)
         withAnimation { undoable = nil }
     }
     /// The speaker-undo banner timed out: clear it, and ask "re-summarize?" if the edit changed what was said.
@@ -411,13 +411,15 @@ struct SessionView: View {
     private func checkSummaryStale() {
         if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true }
     }
+    /// The rename alert's Done: the user's title (a blank one restores the automatic title).
+    private func commitTitle() { let before = (s.title, s.titleUserSet); s.rename(draft); if (s.title, s.titleUserSet) != before { save(s) } }
     /// The session toolbar, out of the body chain so the solver sees one call.
     @ToolbarContentBuilder private func toolbar() -> some ToolbarContent {
         SessionToolbar(
             showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
             canUndo: canUndo, canRedo: canRedo, busy: busy,
             hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
-            askMeetingReady: askMeetingReady, title: s.title,
+            askMeetingReady: askMeetingReady, title: s.title, displayTitle: refs(s.title, screen: false),
             shareText: Export.text(s, .txt),
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
             onRename: { draft = s.title; renamingTitle = true },
@@ -497,8 +499,8 @@ struct SessionView: View {
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
-                .submitLabel(.done).onSubmit { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }
-            Button(L("done")) { let t = draft.trimmingCharacters(in: .whitespaces); if !t.isEmpty { s.title = t; save(s) } }
+                .submitLabel(.done).onSubmit { commitTitle() }
+            Button(L("done")) { commitTitle() }
             Button(L("cancel"), role: .cancel) {}
         }
         // Naming a speaker: the people picker (docs/design/speaker-tags.md §2.1), not a free-text alert any more.

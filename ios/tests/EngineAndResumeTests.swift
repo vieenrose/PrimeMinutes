@@ -45,6 +45,17 @@ final class Counter: @unchecked Sendable {
         check(RerunTitle.kept("So let us start with", placeholders: ph, firstLine: "So let us start with the budget"), nil, "the first-words fallback is dropped")
         check(RerunTitle.kept("So let us start", placeholders: ph, firstLine: "So let us start"), nil, "a short first line used whole is dropped")
 
+        // TitleEdit: a user title survives every run; a blank rename gives the title back to the automatic ones
+        check(TitleEdit.apply("  Board sync ", auto: "Meeting").title, "Board sync", "the draft is trimmed")
+        check(TitleEdit.apply("Board sync", auto: "Meeting").userSet, true, "a typed title is marked")
+        check(TitleEdit.apply("   ", auto: "Meeting").title, "Meeting", "a blank draft restores the automatic title")
+        check(TitleEdit.apply("", auto: "Meeting").userSet, nil, "a blank draft clears the mark")
+        check(TitleEdit.merged(run: "AI title", stored: "Board sync", storedUserSet: true).title, "Board sync", "re-transcribe / re-summarize keep the user's title")
+        check(TitleEdit.merged(run: "AI title", stored: "Board sync", storedUserSet: true).userSet, true, "and its mark")
+        check(TitleEdit.merged(run: "AI title", stored: "Old AI", storedUserSet: nil).title, "AI title", "a generated title follows the run")
+        check(TitleEdit.merged(run: "AI title", stored: nil, storedUserSet: nil).userSet, nil, "a new meeting is unmarked")
+        check(TitleEdit.merged(run: "AI title", stored: " ", storedUserSet: true).title, "AI title", "a blank stored title never wins")
+
         print(failures == 0 ? "engine+resume tests: all passed" : "engine+resume tests: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

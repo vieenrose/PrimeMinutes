@@ -37,6 +37,13 @@ struct Session: Identifiable, Codable, Hashable {
     /// (MediaDate); -1: an import whose file has no date (the mail then leaves the time out); nil: a meeting saved
     /// before the field, read as `date` as before (Android Entry.captureStart).
     var captureStart: Double? = nil
+    /// The user typed this title (TitleEdit): no run, reader or re-import replaces it. nil = generated.
+    var titleUserSet: Bool? = nil
+    /// The user's rename: a blank draft gives the title back to the automatic one.
+    mutating func rename(_ draft: String) {
+        let r = TitleEdit.apply(draft, auto: lines.first.map { String($0.text.prefix(20)) } ?? L("meeting"))
+        title = r.title; titleUserSet = r.userSet
+    }
     /// The meeting's start for the mail's date and time; nil when unknown (an import without a media date).
     var meetingStart: Date? { captureStart.map { $0 < 0 ? nil : Date(timeIntervalSince1970: $0) } ?? date }
     /// Processed, but nothing was said (SpeechCheck): shown as such, never as "Done", and never read by the reader.

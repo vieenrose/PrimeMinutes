@@ -11,6 +11,7 @@ struct LibraryView: View {
     /// The person whose meetings the list is narrowed to (nil: everyone).
     @State private var personFilter: String? = Dev.env["VOX_FILTER"].flatMap { n in PeopleStore.shared.doc.people.first { PersonNames.same($0.name, n, PeopleStore.fold) }?.id }
     @State private var renaming: Session?
+    @State private var renameTarget: UUID?
     @State private var deleting: Session?
     @State private var draft = ""
     @State private var selected = Set<UUID>()
@@ -151,7 +152,7 @@ struct LibraryView: View {
                     Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { sharing = JobQueue.audioDir.appendingPathComponent(a) }
                 }
                 Button(L("action_open"), systemImage: "play.fill") { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s)) }
-                Button(L("rename"), systemImage: "pencil") { draft = s.title; renaming = s }
+                Button(L("rename"), systemImage: "pencil") { draft = s.title; renameTarget = s.id; renaming = s }
                 Button(L("delete"), systemImage: "trash", role: .destructive) { deleting = s }
             // the outer "more" label wins — the inner cd_manage was dead code
             } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
@@ -221,6 +222,12 @@ struct LibraryView: View {
         }
     }
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
+    /// The row's Rename: the user's title, marked so no run replaces it (a blank one restores the automatic title).
+    /// `renameTarget` outlives the alert's binding, which may already be cleared when Done runs.
+    private func commitRename() {
+        guard let id = renameTarget ?? renaming?.id, var s = m.library.sessions.first(where: { $0.id == id }) else { return }
+        renameTarget = nil; s.rename(draft); m.library.update(s)
+    }
     private func devOnAppear() { searchFocused = false; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     var body: some View {
         VStack(spacing: 0) {
@@ -345,8 +352,8 @@ struct LibraryView: View {
         }
         .alert(L("rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("title"), text: $draft)
-                .submitLabel(.done).onSubmit { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
-            Button(L("done")) { if var s = renaming, !draft.trimmingCharacters(in: .whitespaces).isEmpty { s.title = draft.trimmingCharacters(in: .whitespaces); m.library.update(s) } }
+                .submitLabel(.done).onSubmit { commitRename() }
+            Button(L("done")) { commitRename() }
             Button(L("cancel"), role: .cancel) {}
         }
         .confirmationDialog(L("delete_confirm_many", selected.count), isPresented: $deletingMany, titleVisibility: .visible) {

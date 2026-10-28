@@ -113,6 +113,10 @@ final class ReaderWorker: @unchecked Sendable {
             PeopleStore.apply(kept, to: &s)
             if !kept.isEmpty { StatusLog.add("people: \(kept.count) speaker names kept by the re-run") }
         }
+        // A title the user typed (before the run or while it ran) survives every run (TitleEdit).
+        if job != nil, let stored = await library.all().first(where: { $0.id == s.id }) {
+            let t = TitleEdit.merged(run: s.title, stored: stored.title, storedUserSet: stored.titleUserSet); s.title = t.title; s.titleUserSet = t.userSet
+        }
         // The live names land in the meeting over what it had (a clear stays cleared; SessionView writes them the same
         // way for a finished meeting), so the saved meeting shows what the live rows showed.
         if !liveNamed.isEmpty {
@@ -276,7 +280,7 @@ final class ReaderWorker: @unchecked Sendable {
     /// Android re-transcribe / re-summarize: re-queues the session's saved audio under the same id (summarize reuses the stored transcript, so only the reader runs).
     func rerun(_ s: Session, transcribe: Bool) {
         guard let a = s.audio else { StatusLog.add("trace rerun: no audio"); return }
-        var j = Job(id: s.id, date: s.date, audio: a, title: RerunTitle.kept(s.title, placeholders: [L("meeting"), L("status_no_speech")], firstLine: s.lines.first?.text))
+        var j = Job(id: s.id, date: s.date, audio: a, title: s.titleUserSet == true ? s.title : RerunTitle.kept(s.title, placeholders: [L("meeting"), L("status_no_speech")], firstLine: s.lines.first?.text))
         j.captureStart = s.captureStart
         guard FileManager.default.fileExists(atPath: JobQueue.url(j).path) else { StatusLog.add("trace rerun: audio file missing"); return }
         Task { guard !(await queue.contains(s.id)) else { return }   // already queued (double tap): one row, one run

@@ -308,7 +308,7 @@ struct SessionMoreMenu: View {
     let onResummarize: () -> Void
     var body: some View {
         Menu {
-            Button(L("rename")) { onRename() }.disabled(busy)
+            Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
             if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
             Button(L("export_menu_entry")) { onExport() }.disabled(busy)
@@ -363,6 +363,8 @@ struct SessionToolbar: ToolbarContent {
     let noSpeech: Bool
     let askMeetingReady: Bool
     let title: String
+    /// The title as shown (speaker refs resolved): the nav bar's tap-to-rename button.
+    let displayTitle: String
     let shareText: String
     let onUndo: () -> Void
     let onRedo: () -> Void
@@ -374,6 +376,14 @@ struct SessionToolbar: ToolbarContent {
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
     var body: some ToolbarContent {
+        // Tap the title to rename the meeting (the ⋯ menu's Rename does the same).
+        ToolbarItem(placement: .principal) {
+            Button { onRename() } label: {
+                Text(displayTitle).font(.headline).lineLimit(1).foregroundStyle(Color.primary)
+            }.buttonStyle(.plain).disabled(busy)
+                .accessibilityLabel(displayTitle).accessibilityHint(L("rename"))
+                .accessibilityIdentifier("sessionTitle")
+        }
         if showUndo {
             ToolbarItem(placement: .primaryAction) {
                 Button { onUndo() } label: { Image(systemName: "arrow.uturn.backward") }.disabled(!canUndo || busy).accessibilityLabel(L("undo"))
