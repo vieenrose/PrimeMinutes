@@ -48,12 +48,14 @@ struct SessionSummaryTab: View {
             if !session.summary.isEmpty { VStack(alignment: .leading, spacing: 6) {
                 SessionCard {
                     // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
-                    HStack(spacing: 16) { Spacer()
-                        Button { onCopySummary() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_summary"))
-                        Button { onEditSummary() } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit")) }
-                    Collapsible(lines: 12) { Text(Markdown.render(refs(session.summary), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                        if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
-                        return .systemAction })
+                    // One overflow menu instead of an icon-only row above the text; the same pair on long press.
+                    HStack(alignment: .top, spacing: 8) {
+                        Collapsible(lines: 12) { Text(Markdown.render(refs(session.summary), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
+                            if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
+                            return .systemAction })
+                            .contextMenu { CardActionItems(onCopy: onCopySummary, onEdit: onEditSummary) }
+                        CardActionsMenu(copyLabel: L("cd_copy_summary"), onCopy: onCopySummary, onEdit: onEditSummary)
+                    }
                 }
                 CardFooter(text: L("ai_disclaimer"))
             } }
@@ -61,12 +63,12 @@ struct SessionSummaryTab: View {
                 SessionCard {
                     HStack(spacing: 16) {
                         Text(L("card_action_items")).font(.headline); Spacer()
-                        Button { onCopyActions() } label: { Image(systemName: "doc.on.doc").tapTarget() }.accessibilityLabel(L("cd_copy_actions"))
-                        Button { onEditActions() } label: { Image(systemName: "pencil").tapTarget() }.accessibilityLabel(L("cd_edit"))
+                        CardActionsMenu(copyLabel: L("cd_copy_actions"), onCopy: onCopyActions, onEdit: onEditActions)
                     }
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                         return .systemAction })
+                        .contextMenu { CardActionItems(onCopy: onCopyActions, onEdit: onEditActions) }
                 }
                 CardFooter(text: L("actions_verify_hint"), warning: true)
             } }
@@ -104,6 +106,27 @@ struct SessionNotesSection: View {
                 if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                 return .systemAction })
         }
+    }
+}
+
+/// Copy and Edit, shared by a card's overflow menu and its long-press context menu.
+struct CardActionItems: View {
+    let onCopy: () -> Void
+    let onEdit: () -> Void
+    var body: some View {
+        Button { onCopy() } label: { Label(L("copy"), systemImage: "doc.on.doc") }
+        Button { onEdit() } label: { Label(L("cd_edit"), systemImage: "pencil") }
+    }
+}
+
+/// A card's overflow menu (ellipsis.circle): Copy, Edit.
+struct CardActionsMenu: View {
+    let copyLabel: String
+    let onCopy: () -> Void
+    let onEdit: () -> Void
+    var body: some View {
+        Menu { CardActionItems(onCopy: onCopy, onEdit: onEdit) } label: { Image(systemName: "ellipsis.circle").tapTarget() }
+            .accessibilityLabel(L("cd_more_options")).accessibilityHint(copyLabel)
     }
 }
 
