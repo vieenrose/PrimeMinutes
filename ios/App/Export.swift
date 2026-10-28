@@ -42,7 +42,7 @@ enum Export {
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
             if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + s.summary + "\n\n" }
             if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
-            if !s.notes.isEmpty { o += "## " + L("agent") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
+            if !s.notes.isEmpty { o += "## " + L("agent_title") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
             return o + "## " + L("export_heading_transcript") + "\n\n" + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "- `\(hms(l.start))` **\(s.name(l.speaker))** \(x)" }.joined(separator: "\n") + "\n"
         }
     }
