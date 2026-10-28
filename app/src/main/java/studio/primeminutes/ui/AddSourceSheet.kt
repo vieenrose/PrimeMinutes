@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -47,6 +48,7 @@ fun AddSourceSheet(
     onYouTube: () -> Unit,
     onOpenSession: () -> Unit,
     onDismiss: () -> Unit,
+    onShows: () -> Unit = {},
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -67,6 +69,7 @@ fun AddSourceSheet(
             SourceRow(Icons.Filled.FolderOpen, stringResource(R.string.source_audio_file), stringResource(R.string.source_audio_file_desc)) { onDismiss(); onPickFile() }
             SourceRow(Icons.Filled.Podcasts, stringResource(R.string.source_podcast), stringResource(R.string.source_podcast_desc)) { onDismiss(); onPodcast() }
             SourceRow(Icons.Filled.SmartDisplay, stringResource(R.string.source_youtube), stringResource(R.string.source_youtube_desc)) { onDismiss(); onYouTube() }
+            SourceRow(Icons.Filled.Subscriptions, stringResource(R.string.sub_source), stringResource(R.string.sub_source_desc)) { onDismiss(); onShows() }
             SourceRow(Icons.Filled.FolderZip, stringResource(R.string.source_session), stringResource(R.string.source_session_desc)) { onDismiss(); onOpenSession() }
         }
     }

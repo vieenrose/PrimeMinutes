@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -57,7 +61,7 @@ import studio.primeminutes.ui.theme.Spacing
  * and hands its file:// Uri to [onEpisodeReady], reusing the existing pipeline.
  */
 @Composable
-fun PodcastPanel(onStarted: () -> Unit) {
+fun PodcastPanel(onStarted: () -> Unit, onOpenShow: (String) -> Unit = {}) {
     val pal = LocalPrimeMinutesPalette.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -68,6 +72,10 @@ fun PodcastPanel(onStarted: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var statusRes by remember { mutableIntStateOf(R.string.dl_searching) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pasteOpen by remember { mutableStateOf(false) }
+    val subs by studio.primeminutes.online.Subscriptions.all.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { studio.primeminutes.online.Subscriptions.load(context) } }
+    if (pasteOpen) PasteFeedDialog(onDismiss = { pasteOpen = false }, onSubscribed = { pasteOpen = false; onOpenShow(it) })
 
     Column(
         // Scrollable: series/episode lists routinely run past one screenful, and without this the
@@ -102,6 +110,10 @@ fun PodcastPanel(onStarted: () -> Unit) {
                 enabled = query.isNotBlank() && !busy,
                 onClick = search,
             )
+        }
+        TextButton(onClick = { pasteOpen = true }, modifier = Modifier.testTag("sub-paste")) {
+            Icon(Icons.Filled.Link, contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.sub_paste))
         }
         if (busy) {
             DownloadStatusBar(statusRes, null)
@@ -138,6 +150,23 @@ fun PodcastPanel(onStarted: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp)); Text(sel.title)
             }
+            // Subscribe (offline write once the feed is read; "Transcribe" below is unchanged).
+            val subId = studio.primeminutes.online.SubscriptionLogic.idOf(sel.feedUrl)
+            if (subs.any { it.id == subId }) {
+                TextButton(onClick = { onOpenShow(subId) }, modifier = Modifier.testTag("sub-subscribed")) {
+                    Icon(Icons.Filled.Check, contentDescription = null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.sub_subscribed))
+                }
+            } else {
+                androidx.compose.material3.OutlinedButton(enabled = !busy, modifier = Modifier.testTag("sub-subscribe"), onClick = {
+                    scope.launch {
+                        busy = true; statusRes = R.string.sub_checking
+                        studio.primeminutes.online.SubscriptionActions.subscribe(context, sel)
+                            .onFailure { e -> error = (e as? studio.primeminutes.online.SubscriptionActions.CheckFailed)?.error?.let { context.getString(it.label()) } ?: context.getString(R.string.podcast_failed) }
+                        busy = false
+                    }
+                }) { Text(stringResource(R.string.sub_subscribe)) }
+            }
             // A feed with no enclosures: say so instead of leaving just the Transcribe button gone.
             if (!busy && episodes.isEmpty()) Text(
                 stringResource(R.string.podcast_no_episodes), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium,
@@ -151,8 +180,11 @@ fun PodcastPanel(onStarted: () -> Unit) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(e.title, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
-                            if (e.durationText.isNotBlank()) {
-                                Text(e.durationText, style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
+                            val date = studio.primeminutes.online.FeedParser.parseDate(e.published).takeIf { it > 0 }
+                                ?.let { studio.primeminutes.core.library.SessionLibrary.shortDate(context, it * 1000) }
+                            val meta = listOfNotNull(e.durationText.ifBlank { null }, date).joinToString(" · ")
+                            if (meta.isNotBlank()) {
+                                Text(meta, style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                             }
                         }
                         Spacer(Modifier.width(Spacing.sm))

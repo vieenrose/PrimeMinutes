@@ -593,6 +593,8 @@ private fun TranscribeScreen(
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // The People screen (the directory of named speakers), over whatever screen opened it.
     var peopleOpen by remember { mutableStateOf(false) }
+    var subsOpen by remember { mutableStateOf(false) }
+    var subsOpenId by remember { mutableStateOf<String?>(null) }
     var peopleOpenId by remember { mutableStateOf<String?>(null) }
     // "Email participants" sheet (docs/design/speaker-contacts.md §4).
     var mailOpen by remember { mutableStateOf(false) }
@@ -675,6 +677,50 @@ private fun TranscribeScreen(
             android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title}")
             studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl)
         }.onFailure { android.util.Log.w("primeminutes-dev", "vox_podcast failed", it) }
+    }
+
+    // DEV (podcast subscriptions, device checks without typing):
+    //   --es vox_sub "<query>"      subscribe to the first search hit, open its page   [--ei vox_sub_ep n] then queue episode n
+    //   --es vox_sub_feed "<url>"   subscribe to a feed URL (the paste path)
+    //   --ez vox_sub_check true     check every subscription, log the result, open the list
+    //   --ez vox_sub_pause true     pause the first subscription, then check all (it must be skipped)
+    //   --ez vox_sub_lowspace true  with vox_sub_ep: take the not-enough-space path
+    LaunchedEffect(Unit) {
+        val ex = devExtras ?: return@LaunchedEffect
+        if (listOf("vox_sub", "vox_sub_feed", "vox_sub_check", "vox_sub_pause").none { ex.containsKey(it) }) return@LaunchedEffect
+        val tag = "primeminutes-dev"
+        runCatching {
+            val A = studio.primeminutes.online.SubscriptionActions
+            var sub: studio.primeminutes.online.Subscription? = null
+            ex.getString("vox_sub")?.let { q -> sub = A.subscribe(context, studio.primeminutes.online.Podcast.searchSeries(q).first()).getOrThrow() }
+            ex.getString("vox_sub_feed")?.let { u ->
+                val r = A.preview(u) as studio.primeminutes.online.FeedFetcher.Result.Ok
+                sub = A.subscribe(context, if (r.moved) r.finalUrl else u, r.feed)
+            }
+            sub?.let { android.util.Log.i(tag, "vox_sub: subscribed ${it.id} '${it.title}' (${it.episodes.size} episodes, ${it.seenGuids.size} seen)") }
+            if (ex.getBoolean("vox_sub_pause")) {
+                val first = studio.primeminutes.online.Subscriptions.load(context).first()
+                A.setPaused(context, first.id, true)
+                val before = studio.primeminutes.online.Subscriptions.byId(context, first.id)!!.lastChecked
+                kotlinx.coroutines.delay(1100); A.checkAll(context)
+                android.util.Log.i(tag, "vox_sub_pause: ${first.id} skipped=${studio.primeminutes.online.Subscriptions.byId(context, first.id)!!.lastChecked == before}")
+            }
+            if (ex.getBoolean("vox_sub_check")) {
+                A.checkAll(context)
+                studio.primeminutes.online.Subscriptions.load(context).forEach {
+                    android.util.Log.i(tag, "vox_sub_check: ${it.id} new=${it.newEpisodes.size} error=${it.checkError} paused=${it.paused}")
+                }
+            }
+            val s = sub
+            if (s != null && ex.containsKey("vox_sub_ep")) {
+                val ep = s.episodes[ex.getInt("vox_sub_ep")]
+                val r = A.queue(context, s.id, ep, forceLowSpace = ex.getBoolean("vox_sub_lowspace"))
+                android.util.Log.i(tag, "vox_sub_ep: ${ep.title} -> $r")
+                val again = A.queue(context, s.id, ep)
+                android.util.Log.i(tag, "vox_sub_ep: second submit -> $again")
+            }
+            subsOpenId = s?.id; subsOpen = true
+        }.onFailure { android.util.Log.w(tag, "vox_sub failed", it) }
     }
 
     // --- Update notifier: once/day GitHub release check → dismissible banner → download+install. ---
@@ -2107,7 +2153,7 @@ private fun TranscribeScreen(
         dlFailure?.let { vm.notify(context.getString(R.string.dl_failed_reason, it)); studio.primeminutes.online.ImportDownloads.consumeFailure() }
     }
     if (s.showPodcastSheet) {
-        PodcastSheet(onDismiss = { vm.showPodcastSheet(false) })
+        PodcastSheet(onDismiss = { vm.showPodcastSheet(false) }, onOpenShow = { subsOpenId = it; subsOpen = true })
     }
     boundarySeam?.let { seamIdx ->
         val us = s.utterances
@@ -2242,6 +2288,17 @@ private fun TranscribeScreen(
             onYouTube = { vm.showYouTubeSheet(true) },
             onOpenSession = { sessionOpener.launch(arrayOf("audio/ogg", "application/ogg", "audio/mp4", "audio/x-m4a", "*/*")) },
             onDismiss = { vm.showAddSourceSheet(false) },
+            onShows = { subsOpenId = null; subsOpen = true },
+        )
+    }
+    if (subsOpen) {
+        studio.primeminutes.ui.SubscriptionsScreen(
+            onClose = { subsOpen = false; subsOpenId = null },
+            initialId = subsOpenId,
+            onOpenEntry = { e ->
+                subsOpen = false
+                if (e.download != null || e.sourceOnly) vm.openDownload(e) else vm.openSessionUri(Uri.fromFile(e.audioFile))
+            },
         )
     }
     if (s.showYouTubeSheet) {

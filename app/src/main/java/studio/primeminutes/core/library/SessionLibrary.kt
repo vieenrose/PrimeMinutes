@@ -567,15 +567,26 @@ object SessionLibrary {
     // the item in the library, where it can be resumed, retried or deleted (deleting its directory removes
     // the partial file too).
     const val DOWNLOAD = "download.json"
+    /** Where a downloaded item came from (kind, sourceUrl, and for a subscribed episode seriesId + guid). Kept for good. */
+    const val SOURCE = "source.json"
+
+    /** Library items with a known source: (entry id, sourceUrl, guid). Items imported before source.json have none. */
+    fun sources(context: Context): List<Triple<String, String, String?>> =
+        root(context).listFiles()?.mapNotNull { d ->
+            runCatching { JSONObject(File(d, SOURCE).readText()) }.getOrNull()?.let { Triple(d.name, it.optString("sourceUrl"), it.optString("guid").ifBlank { null }) }
+        } ?: emptyList()
 
     /** What an item still has to download. [kind]: "podcast" (direct audio URL), "youtube" or "peertube" (video page URL). */
-    data class PendingDownload(val kind: String, val url: String, val error: String? = null) {
-        fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply { error?.let { put("error", it) } }
+    data class PendingDownload(val kind: String, val url: String, val error: String? = null, val seriesId: String? = null, val guid: String? = null) {
+        fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply {
+            error?.let { put("error", it) }; seriesId?.let { put("seriesId", it) }; guid?.let { put("guid", it) }
+        }
         companion object {
             const val PODCAST = "podcast"
             const val YOUTUBE = "youtube"
             const val PEERTUBE = "peertube"
-            fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null })
+            fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null },
+                o.optString("seriesId").ifBlank { null }, o.optString("guid").ifBlank { null })
         }
     }
 
@@ -588,6 +599,9 @@ object SessionLibrary {
         while (dir.exists()) dir = File(root(context), "$base-${n++}")
         dir.mkdirs()
         File(dir, DOWNLOAD).writeTextAtomic(d.toJson().toString())
+        // Provenance (source.json): outlives download.json, so a subscribed episode is known as imported later.
+        File(dir, SOURCE).writeTextAtomic(JSONObject().put("kind", d.kind).put("sourceUrl", d.url)
+            .apply { d.seriesId?.let { put("seriesId", it) }; d.guid?.let { put("guid", it) } }.toString())
         // A podcast / YouTube item: no meeting time to show.
         val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d, captureStart = UNKNOWN_START)
         writeMeta(entry)

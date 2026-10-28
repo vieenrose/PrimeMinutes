@@ -18,7 +18,7 @@ import androidx.compose.ui.semantics.heading
 /** Podcast search/browse/download in a bottom sheet (hosts the existing [PodcastPanel]). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PodcastSheet(onDismiss: () -> Unit) {
+fun PodcastSheet(onDismiss: () -> Unit, onOpenShow: (String) -> Unit = {}) {
     val pal = LocalPrimeMinutesPalette.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -36,7 +36,7 @@ fun PodcastSheet(onDismiss: () -> Unit) {
                 color = pal.Slate200, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 10.dp).semantics { heading() },
             )
-            PodcastPanel(onStarted = onDismiss)
+            PodcastPanel(onStarted = onDismiss, onOpenShow = { onDismiss(); onOpenShow(it) })
         }
     }
 }

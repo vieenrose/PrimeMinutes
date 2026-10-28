@@ -768,7 +768,18 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                         }
                     }
                 } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException || !dl.transient(e)) throw e
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (dl.noSpace(e)) {
+                        // Disk full: not a network pause and not a failure. Wait for space (the .part stays), retry
+                        // every minute or on Resume / app return.
+                        Log.w("primeminutes-import", "import download waits for space: ${e.message}")
+                        stageRes = R.string.sub_no_space; publish()
+                        updateNotification(getString(R.string.sub_no_space))
+                        while (dl.wake.tryReceive().isSuccess) { /* drop a stale wake */ }
+                        kotlinx.coroutines.withTimeoutOrNull(60_000L) { dl.wake.receive() }
+                        continue
+                    }
+                    if (!dl.transient(e)) throw e
                     attempt++
                     Log.w("primeminutes-import", "import download paused ($attempt): ${e.message}")
                     stageRes = R.string.dl_paused; publish()

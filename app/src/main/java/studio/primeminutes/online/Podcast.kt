@@ -41,7 +41,7 @@ object Podcast {
     /** iTunes Search API — public, no auth. Returns series that have an RSS feed. */
     suspend fun searchSeries(query: String): List<PodcastSeries> = withContext(Dispatchers.IO) {
         val url = "https://itunes.apple.com/search?term=" +
-            URLEncoder.encode(query, "UTF-8") + "&media=podcast&entity=podcast&limit=25&country=us"
+            URLEncoder.encode(query, "UTF-8") + "&media=podcast&entity=podcast&limit=25&country=" + searchCountry()
         val arr = JSONObject(httpGetString(url)).getJSONArray("results")
         (0 until arr.length()).mapNotNull { i ->
             val o = arr.getJSONObject(i)
@@ -54,6 +54,9 @@ object Podcast {
             )
         }
     }
+
+    /** The iTunes store searched (and recorded with a subscription): the device's region, US when unknown. */
+    fun searchCountry(): String = java.util.Locale.getDefault().country.lowercase().takeIf { it.length == 2 } ?: "us"
 
     /** Parse an RSS feed into episodes (first audio enclosure per item). */
     suspend fun fetchEpisodes(feedUrl: String, limit: Int = 30): List<Episode> = withContext(Dispatchers.IO) {

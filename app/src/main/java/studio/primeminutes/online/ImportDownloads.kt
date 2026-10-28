@@ -30,7 +30,7 @@ object ImportDownloads {
             val entryId: String, val title: String?, val stageRes: Int, val progress: Float?,
             val bytes: Long = 0, val total: Long = 0,
         ) : State {
-            val paused: Boolean get() = stageRes == studio.primeminutes.R.string.dl_paused
+            val paused: Boolean get() = stageRes == studio.primeminutes.R.string.dl_paused || stageRes == studio.primeminutes.R.string.sub_no_space
         }
     }
 
@@ -63,10 +63,11 @@ object ImportDownloads {
      * its page) was submitted: create its item, then start (or queue) its download. Null when the
      * item could not be created.
      */
-    fun submit(ctx: Context, title: String?, kind: String, url: String, durationSec: Int = 0) {
+    fun submit(ctx: Context, title: String?, kind: String, url: String, durationSec: Int = 0, seriesId: String? = null, guid: String? = null, onCreated: (String) -> Unit = {}) {
         val app = ctx.applicationContext
         io.launch {
-            SessionLibrary.createDownloadEntry(app, title, SessionLibrary.PendingDownload(kind, url), durationSec) ?: return@launch
+            val e = SessionLibrary.createDownloadEntry(app, title, SessionLibrary.PendingDownload(kind, url, seriesId = seriesId, guid = guid), durationSec) ?: return@launch
+            onCreated(e.id)
             changed()
             kickNow(app)
         }
@@ -112,6 +113,9 @@ object ImportDownloads {
     fun resumeNow() { wake.trySend(Unit) }
 
     /** A failure waiting can fix: the network (an [java.io.IOException]), not a 404 or a refused item. */
+    /** Disk full: the download waits for space (kept .part), it neither fails nor counts as a network pause. */
+    fun noSpace(e: Throwable): Boolean = SubscriptionLogic.isNoSpace(e)
+
     fun transient(e: Throwable): Boolean = e is java.io.IOException && e !is java.io.FileNotFoundException
 
     /** The UI took the ready item [entryId] (processing it, or it is gone). */
