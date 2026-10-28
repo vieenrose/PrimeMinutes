@@ -78,9 +78,16 @@ import ContactsUI
     static func deleteAll(prefix: String) {
         guard prefix.count >= 4 else { return }
         let req = CNContactFetchRequest(keysToFetch: keys); var gone: [CNMutableContact] = []
-        try? store.enumerateContacts(with: req) { c, _ in if name(c).hasPrefix(prefix), let m = c.mutableCopy() as? CNMutableContact { gone.append(m) } }
+        // The test contacts: "PMTEST" in the given or family name (the display order can put the family name first).
+        try? store.enumerateContacts(with: req) { c, _ in if (c.givenName + " " + c.familyName).hasPrefix(prefix), let m = c.mutableCopy() as? CNMutableContact { gone.append(m) } }
         let r = CNSaveRequest(); gone.forEach { r.delete($0) }
         do { try store.execute(r); StatusLog.add("contacts: DEV deleted \(gone.count) \(prefix)* contacts") } catch { StatusLog.add("contacts: DEV delete failed: \(error)") }
+    }
+    /// DEV: deletes one contact by its exact identifier.
+    static func delete(key: String) {
+        guard let c = try? store.unifiedContact(withIdentifier: key, keysToFetch: keys), let m = c.mutableCopy() as? CNMutableContact else { StatusLog.add("contacts: DEV no contact \(key)"); return }
+        let r = CNSaveRequest(); r.delete(m)
+        do { try store.execute(r); StatusLog.add("contacts: DEV deleted \(name(c)) | \(key)") } catch { StatusLog.add("contacts: DEV delete failed: \(error)") }
     }
     /// Every contact the app can read (all of them, or the limited set), for the migration's matching.
     static func candidates() -> [ContactMatch.Candidate] {

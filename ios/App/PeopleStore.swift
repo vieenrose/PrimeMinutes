@@ -350,6 +350,9 @@ extension PeopleStore {
                     linkContact(p.id, PickedContact(name: c.name, emails: [], key: c.key)); syncContacts()
                 }
             case "unlink" where a.count == 2: if let p = person(a[1]) { unlinkContact(p.id, removeEmails: true) }
+            case "find" where a.count == 2:   // DEV: readable contacts whose name or identifier contains a[1] (read-only)
+                for c in OSContacts.candidates() where c.name.contains(a[1]) || c.key.hasPrefix(a[1]) { StatusLog.add("contacts: found \(c.name) | \(c.key)") }
+            case "delkey" where a.count == 2: OSContacts.delete(key: a[1]); syncContacts()
             case "candidates": StatusLog.add("contacts: \(OSContacts.candidates().count) readable, access \(OSContacts.access)")
             case "newperson" where a.count == 2: _ = newPerson(a[1])
             case "sync": syncContacts()
