@@ -28,3 +28,4 @@ swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Transcript.swift $D
 swiftc -parse-as-library -O $D/../App/OpenCC.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $D/OpenCCTests.swift -o $O/opencc-tests
 VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/opencc-tests $D/golden
 swiftc -parse-as-library -O $D/../App/BackgroundDownload.swift $D/BackgroundDownloadTests.swift -o $O/bg-download-tests && $O/bg-download-tests
+swiftc -parse-as-library -O $D/../App/Subscriptions.swift $D/SubscriptionsTests.swift -o $O/subscriptions-tests && $O/subscriptions-tests

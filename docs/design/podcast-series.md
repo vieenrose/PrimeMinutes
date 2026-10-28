@@ -72,7 +72,7 @@ Status: 定案計畫 2026-10-20；**2026-10-29 依 origin/android（52292c6b，v
 
 ```
 {
-  "id": "podcast-<fnv1a(feedUrl) 16hex>",   // feedUrl 即身分（iOS 沿用 Podcast.stableHash）；301/308 搬家時 feedUrl 與 id 一併換鍵
+  "id": "podcast-<fnv1a(feedUrl) hex>",     // feedUrl 即身分；與 iOS Podcast.stableHash 位元一致（無前導零補齊，故不一定 16 位）；301/308 搬家時 feedUrl 與 id 一併換鍵
   "feedUrl": "https://…/feed.xml",          // 檢查追隨 301/308 後寫入最終位址（見取得策略「feed 搬家」）
   "country": "tw",                          // 修 Podcast.kt:44：記錄搜尋命中時的國家
   "title": "…", "artist": "…", "artworkUrl": "…",  // artworkUrl100（搜尋結果已有欄位）
@@ -99,8 +99,8 @@ Status: 定案計畫 2026-10-20；**2026-10-29 依 origin/android（52292c6b，v
 
 **来源標記（provenance）**——v2 去重與「已匯入」判定的持久鍵（移植 A 的 source.json 構想，落地為 meta.json 欄位）：
 
-* Android：`SessionLibrary.PendingDownload` 新增 `seriesId`/`guid`（寫入 `download.json`，`toJson` 選讀）；**`downloadDone` 時把 `sourceUrl` 寫進 `meta.json`**（今日 `download.json` 在下载完成即刪除，單集的 enclosure URL 就此失落，去重必須活得比它久）。`createDownloadEntry` 增加選填參數，舊 `meta.json` 照常解析。
-* iOS：`Job` 新增 `seriesId: String?`、`guid: String?`（`jobs.json` 以 `decodeIfPresent` 讀，舊檔照常解碼）；完成時 `sourceUrl` 記入库記錄。既有以 URL 雜湊命名的 `.part`（`podcast_<fnv1a(url)>.part`）天然續傳同一集。
+* Android：`SessionLibrary.PendingDownload` 新增 `seriesId`/`guid`（寫入 `download.json`，`toJson` 選讀）；**實作改為建立項目時寫 `source.json`（kind/sourceUrl/seriesId/guid，永久保留）**，不動 `meta.json` 格式（今日 `download.json` 在下载完成即刪除，單集的 enclosure URL 就此失落，去重必須活得比它久）。`createDownloadEntry` 增加選填參數，舊 `meta.json` 照常解析。
+* iOS：**實作改為 `Application Support/episode_sources.json`**（jobId/sourceUrl/guid/seriesId；場次 id＝job id，故作業結束後仍可對應），`Job` 與場次格式都不動。既有以 URL 雜湊命名的 `.part`（`podcast_<fnv1a(url)>.part`）天然續傳同一集。
 
 **共用管線**：訂閱只產生 `(title, audioUrl, durationSec, seriesId, guid)` 四元組，交給今日同一個提交點：
 
@@ -157,7 +157,7 @@ v1 的檢查只有兩種觸發，全部在使用者眼前：
 
 **畫面模式（2026-10-29，依 Lot 1–3）**：Android 節目清單與節目頁為**全螢幕**畫面，仿 Settings 全螢幕（ConfigSheet.kt:78 `LargeTopAppBar`、edge-to-edge、`AppSnackbar` 承載提示與「復原」），不用 bottom sheet；iOS 用 `NavigationStack` + `List`，列刪除與暫停用 `.swipeActions`，刪除確認用 `.alert`，清單 >8 筆時加 `.searchable`。兩平台都不新增自訂元件。
 
-**節目清單**（訂閱首頁）：每列 = artwork + 節目名稱 + 出演者；副標「N 集 · 上次檢查：10月18日」／「尚未檢查」／暫停中「已暫停 · 不會檢查新集數」；藍色徽章「2 集新」（暫停中凍結）；工具列「全部檢查」（跳過暫停中的訂閱）；列操作（Android 長按選單＋左滑刪除附 snackbar「復原」；iOS swipeActions：刪除〔alert 確認〕、暫停／繼續；context menu：分享節目連結）「暫停訂閱／繼續訂閱」「分享節目連結」「刪除訂閱」（訊息：「只移除訂閱，已下載的場次保留。」）；空狀態「尚未訂閱節目，到 ＋ → Podcast 搜尋訂閱」。「分享節目連結」＝ 系統分享面板（Android `ACTION_SEND` 文字、iOS `ShareLink`），內容「節目名稱 — feedUrl」，接收端貼上即訂閱（見上）。
+**節目清單**（訂閱首頁）：每列 = artwork + 節目名稱 + 出演者；副標「N 集 · 上次檢查：10月18日」／「尚未檢查」／暫停中「已暫停 · 不會檢查新集數」；藍色徽章「2 集新」（暫停中凍結）；工具列「全部檢查」（跳過暫停中的訂閱）；列操作（Android 長按選單，刪除附 snackbar「復原」〔v1 實作未加左滑〕；iOS swipeActions：刪除〔alert 確認〕、暫停／繼續；context menu：分享節目連結）「暫停訂閱／繼續訂閱」「分享節目連結」「刪除訂閱」（訊息：「只移除訂閱，已下載的場次保留。」）；空狀態「尚未訂閱節目，到 ＋ → Podcast 搜尋訂閱」。「分享節目連結」＝ 系統分享面板（Android `ACTION_SEND` 文字、iOS `ShareLink`），內容「節目名稱 — feedUrl」，接收端貼上即訂閱（見上）。
 
 **節目頁**（採用 B 的版面作為本計畫的節目頁）：標頭 artwork（本機快取、納入 `isExcludedFromBackup`）、節目名稱、出演者、N 集（補上 iOS 已解析未顯示的 `episodeCount`，Android 用既有 plurals `podcast_episodes`）；檢查失敗時紅色「訂閱來源失效：%1$s」；主按鈕「檢查新集數」（進行中「檢查中…」）；單集清單最新在前（標題 / 長度 `formatDuration` / 發表日——Android 補顯示發表日與 iOS 對齊，iOS 補顯示長度與 Android 對齊）；每列狀態 chip 全部沿用既有 `dl_*` 文案；頁尾「上次檢查：%1$s · 檢查新集數 · 暫停訂閱／繼續訂閱 · 分享節目連結 · 移除訂閱」；搬家換鍵後標頭顯示一次「訂閱連結已搬家 · 已追隨新連結」。
 

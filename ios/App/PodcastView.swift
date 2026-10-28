@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PodcastView: View {
     let pick: (Episode) -> Void
+    var openShow: (String) -> Void = { _ in }
+    @ObservedObject private var subs = SubscriptionStore.shared
+    @State private var pasting = false
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var series: [PodcastSeries] = []
@@ -21,13 +24,20 @@ struct PodcastView: View {
                             VStack(alignment: .leading) { Text(s.title).font(.headline); Text(s.artist).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
-                } else {
+                } else if let cur = current {
+                    // Subscribe (the feed is read once, then saved offline; "Transcribe" below is unchanged).
+                    let sid = SubscriptionLogic.idOf(cur.feedUrl)
+                    if subs.byId(sid) != nil {
+                        Button { openShow(sid) } label: { Label(L("sub_subscribed"), systemImage: "checkmark.circle.fill") }.accessibilityIdentifier("sub-subscribed")
+                    } else {
+                        Button { subscribe(cur) } label: { Label(L("sub_subscribe"), systemImage: "plus.circle") }.disabled(busy).accessibilityIdentifier("sub-subscribe")
+                    }
                     ForEach(episodes) { e in
                         Button { pick(e); dismiss() } label: {
                             VStack(alignment: .leading) {
                                 Text(e.title)
                                 Text(L("podcast_transcribe")).font(.caption2.weight(.semibold)).foregroundStyle(.blue)
-                                Text([e.duration, String(e.published.prefix(16))].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                                Text([e.duration, FeedParser.parseDate(e.published) > 0 ? Date(timeIntervalSince1970: TimeInterval(FeedParser.parseDate(e.published))).formatted(.dateTime.month().day()) : String(e.published.prefix(16))].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -51,7 +61,16 @@ struct PodcastView: View {
             .toolbar {
                 if current != nil { ToolbarItem(placement: .navigation) { Button(L("back")) { current = nil; episodes = [] } } }
                 ToolbarItem { Button(L("done")) { dismiss() } }
+                if current == nil { ToolbarItem(placement: .bottomBar) { Button(L("sub_paste"), systemImage: "link") { pasting = true }.labelStyle(.titleAndIcon).accessibilityIdentifier("sub-paste") } }
             }
+            .sheet(isPresented: $pasting) { PasteFeedView { id in pasting = false; openShow(id) } }
+        }
+    }
+    private func subscribe(_ s: PodcastSeries) {
+        busy = true; busyLabel = "sub_checking"; error = nil
+        Task {
+            defer { busy = false }
+            if case .failure(let f) = await subs.subscribe(feedUrl: s.feedUrl, title: s.title, artist: s.artist) { error = L(f.error.key) }
         }
     }
     private func search() {

@@ -348,6 +348,9 @@ final class Chunked: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         }
     }
 
+    /// Waits like a paused download (a kick, or `seconds` while in front and online): the podcast disk-full wait.
+    func waitKick(seconds: Double) async { await wait(after: seconds) }
+
     /// Runs `attempt` until it succeeds, pausing on transient failures (`onPause(true)`, then `false` when it tries
     /// again). Throws only for a cancel of the calling task or a permanent error.
     func run(_ name: String, onPause: @escaping @MainActor (Bool) -> Void, _ attempt: @escaping @Sendable () async throws -> Void) async throws {

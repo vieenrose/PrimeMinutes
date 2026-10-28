@@ -18,18 +18,36 @@ import AVFoundation
     @Published var dlId: UUID?
     @Published var dlBytes: (Int64, Int64)?
     @Published var dlPaused = false
+    /// The download waits for disk space (not a network pause, not a failure): retried every minute and on Resume.
+    @Published var dlNoSpace = false
     private var worker: Task<Void, Never>?
     private var itemTask: Task<Void, Error>?
 
-    func addEpisode(_ ep: Episode) {
+    @discardableResult func addEpisode(_ ep: Episode, seriesId: String? = nil, guid: String? = nil) -> UUID {
         var j = Job(audio: UUID().uuidString + "." + Podcast.ext(ep.audioUrl), title: ep.title)
         j.captureStart = -1   // a podcast episode: no meeting time to show
         j.download = JobDownload(url: ep.audioUrl)
         StatusLog.add("podcast item \(j.id): \(ep.title)")
+        // Provenance (outlives the job: the session keeps the job's id), so a subscribed episode is known as imported.
+        EpisodeSources.add(.init(jobId: j.id.uuidString, sourceUrl: ep.audioUrl, guid: guid, seriesId: seriesId))
         Task { await runner.queue.add(j); await runner.syncQueue(); kick() }
+        return j.id
     }
     /// At launch: items whose download a kill cut carry on (the pre-item UserDefaults record is dropped).
-    func restorePending() { UserDefaults.standard.removeObject(forKey: "pendingEpisode"); kick() }
+    func restorePending() {
+        UserDefaults.standard.removeObject(forKey: "pendingEpisode"); kick()
+        Task { let live = Set((await runner.queue.all).compactMap { $0.download.map { Podcast.partURL($0.url).lastPathComponent } }); Self.sweepStaleParts(keep: live) }
+    }
+    /// Podcast `.part` files older than 24 h that no queued item downloads (Android sweepStaleParts). Only the
+    /// audio directory's `podcast_*.part`: model parts belong to the background downloader.
+    nonisolated static func sweepStaleParts(keep: Set<String>, maxAge: TimeInterval = 24 * 3600) {
+        let fm = FileManager.default
+        for f in (try? fm.contentsOfDirectory(at: JobQueue.audioDir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        where f.lastPathComponent.hasPrefix("podcast_") && f.pathExtension == "part" && !keep.contains(f.lastPathComponent) {
+            let m = (try? f.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+            if Date().timeIntervalSince(m) > maxAge { try? fm.removeItem(at: f); StatusLog.add("swept stale part \(f.lastPathComponent)") }
+        }
+    }
     /// Resume now (the paused item's button); it also resumes by itself when the app is back in front and online.
     func resumeDownload() { DownloadResumer.shared.kick() }
     /// A failed item downloads again (from its `.part`).
@@ -78,6 +96,14 @@ import AVFoundation
             case .failure(let e):
                 // A cancel without a delete (cannot happen today) leaves it to resume at the next launch.
                 if e is CancellationError { await runner.syncQueue(); return }
+                if SubscriptionLogic.isNoSpace(e) {
+                    // Disk full: wait for space (the .part stays), then try again; never "failed".
+                    StatusLog.add("podcast item \(j.id) waits for space: \(e)")
+                    dlId = j.id; dlNoSpace = true; dlPaused = true
+                    await DownloadResumer.shared.waitKick(seconds: 60)
+                    dlNoSpace = false; dlPaused = false; dlId = nil
+                    continue
+                }
                 now.download?.error = (e as NSError).localizedDescription
                 StatusLog.add("podcast item \(j.id) failed: \(e)")
                 await runner.queue.update(now); await runner.syncQueue()

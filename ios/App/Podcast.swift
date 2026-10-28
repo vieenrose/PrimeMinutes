@@ -17,7 +17,7 @@ enum Podcast {
     static func search(_ query: String) async throws -> [PodcastSeries] {
         var c = URLComponents(string: "https://itunes.apple.com/search")!
         c.queryItems = [.init(name: "term", value: query), .init(name: "media", value: "podcast"), .init(name: "entity", value: "podcast"),
-                        .init(name: "limit", value: "25"), .init(name: "country", value: "us")]
+                        .init(name: "limit", value: "25"), .init(name: "country", value: (Locale.current.region?.identifier ?? "US").lowercased())]   // the device region (was always "us")
         let (d, _) = try await URLSession.shared.data(for: request(c.url!))
         let res = (try JSONSerialization.jsonObject(with: d) as? [String: Any])?["results"] as? [[String: Any]] ?? []
         return res.compactMap { o in
