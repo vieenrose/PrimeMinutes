@@ -101,6 +101,7 @@ struct SessionView: View {
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
     /// "Email participants" (docs/design/speaker-contacts.md §4). DEV: VOX_MAIL=1 (or preview) opens it.
     @State private var mailOpen = Dev.env["VOX_MAIL"] != nil
+    @State private var mailCopied = false
     @ObservedObject private var peopleStore = PeopleStore.shared
 
     let openAt: Double?
@@ -236,6 +237,7 @@ struct SessionView: View {
             onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
             onToggleProcess: { withAnimation { showProcess.toggle() } },
             onOpenMail: { mailOpen = true },
+            mailCopied: mailCopied,
             notesSection: { AnyView(notesSection($0, $1)) }
         )
     }
@@ -325,11 +327,17 @@ struct SessionView: View {
             if let u { Haptics.success(); exportFile = u } else { alertText = L("session_share_failed") }
         }
     }
+    /// The addresses went to the clipboard: the mail glyphs turn to a checkmark for 2 s and VoiceOver hears it
+    /// (as the other copies; an alert is kept for real errors).
+    private func mailCopiedFlash() {
+        withAnimation { mailCopied = true }; announce(L("mail_addresses_copied"))
+        Task { try? await Task.sleep(nanoseconds: 2_000_000_000); withAnimation { mailCopied = false } }
+    }
     /// Mail "send" picked: close the sheet, then send after the dismiss animation.
     private func sendMail(_ r: MailRequest) {
         mailOpen = false
         let cur = s
-        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r) { alertText = $0 } }
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r, copied: { mailCopiedFlash() }) { alertText = $0 } }
     }
     /// Mail "share chat" picked: close the sheet, then share after the dismiss animation.
     private func shareMailChat(_ r: MailRequest) {
@@ -423,7 +431,7 @@ struct SessionView: View {
             shareText: Export.text(s, .txt),
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
             onRename: { draft = s.title; renamingTitle = true },
-            onAsk: { askMeeting = "" }, onMail: { mailOpen = true },
+            onAsk: { askMeeting = "" }, onMail: { mailOpen = true }, mailCopied: mailCopied,
             onExport: { showExport = true },
             onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
     }

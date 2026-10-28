@@ -378,8 +378,9 @@ private struct AddRecipientView: View {
                                                      lang: r.lang))
     }
 
-    /// When nothing takes the mail, the share sheet opens and the addresses go to the clipboard (`toast` says so).
-    static func send(_ s: Session, _ r: MailRequest, toast: @escaping (String) -> Void) async {
+    /// When nothing takes the mail, the share sheet opens and the addresses go to the clipboard (`copied` confirms it
+    /// with a glyph swap, not an alert); `toast` carries the real failures, shown as alerts.
+    static func send(_ s: Session, _ r: MailRequest, copied: @escaping () -> Void = {}, toast: @escaping (String) -> Void) async {
         let input = MeetingMailSource.input(s)
         let file = await attachment(s, r.attach)
         if r.attach != nil && file == nil { toast(L("export_share_failed")) }
@@ -415,7 +416,7 @@ private struct AddRecipientView: View {
         StatusLog.add("mail: mailto ok=\(ok), \(r.to.count) recipient(s), \(m.plain.count) chars, truncated=\(m.truncated)")
         if ok { record(s, "email", "opened", r); return }
         // Nothing takes mailto: the share sheet, the addresses on the clipboard.
-        if !r.to.isEmpty { UIPasteboard.general.string = r.to.joined(separator: ", "); toast(L("mail_addresses_copied")); Haptics.success() }
+        if !r.to.isEmpty { UIPasteboard.general.string = r.to.joined(separator: ", "); copied(); Haptics.success() }
         share(m.plain, file: file)
         record(s, "share-sheet", "opened", r)
     }

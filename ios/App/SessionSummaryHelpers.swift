@@ -21,6 +21,7 @@ struct SessionSummaryTab: View {
     let onEditActions: () -> Void
     let onToggleProcess: () -> Void
     let onOpenMail: () -> Void
+    let mailCopied: Bool
     let notesSection: (String, [String]) -> AnyView
     var body: some View {
         VStack(spacing: 12) {
@@ -81,7 +82,7 @@ struct SessionSummaryTab: View {
             }
             if !session.lines.isEmpty { SpeakerStats(lines: session.lines, names: session.speakerNames, palette: palette).id("stats") }
             if hasMailRecipients {
-                HStack { Spacer(); Button { onOpenMail() } label: { Label(L("mail_chip"), systemImage: "envelope") }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
+                HStack { Spacer(); Button { onOpenMail() } label: { Label(L("mail_chip"), systemImage: mailCopied ? "checkmark" : "envelope").contentTransition(.symbolEffect(.replace)) }.buttonStyle(.bordered).accessibilityIdentifier("speakers-email") }
             }
             if session.summary.isEmpty { Vox.hint(L(busy ? "summary_pending_hint" : session.lines.isEmpty ? "status_no_speech" : "summary_missing_hint")).padding(.top, 12) }
         }.padding(.horizontal, Vox.gutter)

@@ -303,6 +303,7 @@ struct SessionMoreMenu: View {
     let onRename: () -> Void
     let onAsk: () -> Void
     let onMail: () -> Void
+    var mailCopied = false
     let onExport: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
@@ -310,7 +311,7 @@ struct SessionMoreMenu: View {
         Menu {
             Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-            if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: "envelope") }.disabled(busy) }
+            if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: mailCopied ? "checkmark" : "envelope") }.disabled(busy) }
             Button(L("export_menu_entry")) { onExport() }.disabled(busy)
             if hasLines { ShareLink(item: shareText, subject: Text(title)) { Text(L("export_share_transcript")) }.disabled(busy) }
             if hasAudio {
@@ -372,6 +373,7 @@ struct SessionToolbar: ToolbarContent {
     let onRename: () -> Void
     let onAsk: () -> Void
     let onMail: () -> Void
+    var mailCopied = false
     let onExport: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
@@ -400,7 +402,7 @@ struct SessionToolbar: ToolbarContent {
                 hasLines: hasLines, hasAudio: hasAudio, noSpeech: noSpeech,
                 askMeetingReady: askMeetingReady, busy: busy, title: title,
                 shareText: shareText,
-                onRename: onRename, onAsk: onAsk, onMail: onMail, onExport: onExport,
+                onRename: onRename, onAsk: onAsk, onMail: onMail, mailCopied: mailCopied, onExport: onExport,
                 onRetranscribe: onRetranscribe, onResummarize: onResummarize)
         }
     }
