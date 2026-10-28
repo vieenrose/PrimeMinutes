@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -268,6 +269,11 @@ private fun AppearanceSelector(enabled: Boolean) {
             )
         }
     }
+    // Wallpaper colours (Material You): Android 12+ only, and not offered with the e-ink palette.
+    val dyn = studio.primeminutes.ui.theme.LocalDynamicColorController.current
+    if (studio.primeminutes.ui.theme.dynamicColorSupported && theme.mode != ThemeMode.EINK) {
+        SwitchRow(stringResource(R.string.theme_dynamic), dyn.on, enabled) { dyn.set(it) }
+    }
     Text(
         stringResource(R.string.theme_eink_hint),
         style = MaterialTheme.typography.labelSmall,
@@ -406,6 +412,7 @@ private fun StoragePanel(enabled: Boolean, summaryReady: Boolean, llmId: String)
     confirm?.let { m ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { confirm = null },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Delete, contentDescription = null) },
             title = { Text(stringResource(R.string.storage_delete_title)) },
             text = { Text(stringResource(R.string.storage_delete_body, kindLabel(m.kind), fmt(m.bytes))) },
             confirmButton = {

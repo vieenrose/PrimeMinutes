@@ -45,4 +45,16 @@ object ThemeStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_HW, on).apply()
     }
+
+    private const val KEY_DYNAMIC = "dynamicColor"
+
+    /** Wallpaper colours (Material You, API 31+) instead of the brand palette. Off by default; never
+     *  applied to the e-ink palette or under the system high-contrast setting. */
+    fun loadDynamicColor(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DYNAMIC, false)
+
+    fun saveDynamicColor(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_DYNAMIC, on).apply()
+    }
 }

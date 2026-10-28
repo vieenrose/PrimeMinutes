@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -96,6 +97,7 @@ fun ItemDownloadCard(
     }
     if (confirming) AlertDialog(
         onDismissRequest = { confirming = false },
+        icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Delete, contentDescription = null) },
         title = { Text(stringResource(R.string.action_delete)) },
         text = { Text(stringResource(R.string.delete_confirm, entry.title ?: SessionLibrary.defaultTitle(context, entry.createdAt))) },
         confirmButton = {

@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +36,7 @@ fun DownloadConsentDialog(
     val pal = LocalPrimeMinutesPalette.current
     AlertDialog(
         onDismissRequest = onLater,
+        icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Download, contentDescription = null) },
         title = { Text(stringResource(R.string.dl_consent_title)) },
         text = {
             Column {

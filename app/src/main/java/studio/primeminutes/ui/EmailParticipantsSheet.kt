@@ -1,6 +1,8 @@
 package studio.primeminutes.ui
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.minimumInteractiveComponentSize
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -345,9 +347,11 @@ private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
     val shape = MaterialTheme.shapes.small
     Box(
-        Modifier.clip(shape).background(if (on) pal.Sky.copy(alpha = 0.15f) else Color.Transparent)
+        // 48 dp touch target around the ~36 dp chip (the visual stays compact).
+        Modifier.minimumInteractiveComponentSize().clip(shape).background(if (on) pal.Sky.copy(alpha = 0.15f) else Color.Transparent)
             .border(1.dp, if (on) pal.Sky.copy(alpha = 0.4f) else pal.Hairline, shape)
-            .clickable(onClick = onClick).padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            .clickable(role = Role.Checkbox, onClick = onClick).padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        contentAlignment = Alignment.Center,
     ) {
         Text((if (on) "✓ " else "") + label, color = if (on) pal.Sky else pal.Slate400, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
@@ -361,8 +365,13 @@ private fun RecipientRow(r: Recipients.Row, anyMe: Boolean, onCheck: (Boolean) -
     var saved by remember { mutableStateOf(false) }
     val pick = rememberContactPicker { _, chosen -> onAddress(chosen); saved = true; typing = false }
     Column {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = r.checked, enabled = r.address != null, onCheckedChange = onCheck)
+        // The whole row toggles (avatar and name included), not only the checkbox: the 36 dp avatar
+        // was a dead spot next to the 48 dp box. One TalkBack node, role Checkbox.
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                .toggleable(value = r.checked, enabled = r.address != null, role = Role.Checkbox, onValueChange = onCheck),
+            verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = r.checked, enabled = r.address != null, onCheckedChange = null,
+                modifier = Modifier.minimumInteractiveComponentSize())
             Avatar(r.person.name)
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

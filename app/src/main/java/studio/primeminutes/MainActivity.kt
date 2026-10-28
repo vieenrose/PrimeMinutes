@@ -1,5 +1,9 @@
 package studio.primeminutes
 
+import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MergeType
+import androidx.compose.material.icons.outlined.Restore
 import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.setProgress
@@ -32,6 +36,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import studio.primeminutes.ui.theme.Radius
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -380,6 +386,11 @@ class MainActivity : ComponentActivity() {
                 themeMode = mode
                 ThemeStore.save(this, mode)
             }
+            var dynamicColor by remember { mutableStateOf(ThemeStore.loadDynamicColor(this)) }
+            val dynamicController = studio.primeminutes.ui.theme.DynamicColorController(dynamicColor) { on ->
+                dynamicColor = on
+                ThemeStore.saveDynamicColor(this, on)
+            }
             var fontScale by remember { mutableStateOf(ThemeStore.loadFontScale(this)) }
             val fontController = studio.primeminutes.ui.theme.FontScaleController(fontScale) { v ->
                 fontScale = v
@@ -399,6 +410,7 @@ class MainActivity : ComponentActivity() {
             val localized = remember(langCode, realConfig) { studio.primeminutes.core.config.AppLanguage.wrap(this, langCode) }
             CompositionLocalProvider(
                 LocalThemeController provides controller,
+                studio.primeminutes.ui.theme.LocalDynamicColorController provides dynamicController,
                 LocalLanguageController provides langController,
                 studio.primeminutes.ui.theme.LocalFontScaleController provides fontController,
                 androidx.compose.ui.platform.LocalContext provides localized,
@@ -408,7 +420,7 @@ class MainActivity : ComponentActivity() {
                     android.content.res.Configuration(realConfig).also { it.setLocales(localized.resources.configuration.locales) }
                 },
             ) {
-                PrimeMinutesTheme(themeMode, fontScale) {
+                PrimeMinutesTheme(themeMode, fontScale, dynamicColor) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         if (!studio.primeminutes.core.power.CpuSupport.hasDotProd) {
                             Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -456,6 +468,7 @@ class MainActivity : ComponentActivity() {
         if (!batteryAsk) return
         AlertDialog(
             onDismissRequest = { batteryAsk = false },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.BatteryAlert, contentDescription = null) },
             title = { Text(stringResource(R.string.bg_long_job_title)) },
             text = { Text(stringResource(R.string.bg_long_job_message)) },
             confirmButton = { TextButton(onClick = { answerBatteryAsk(true) }) { Text(stringResource(R.string.bg_long_job_allow)) } },
@@ -995,6 +1008,7 @@ private fun TranscribeScreen(
     recoveredImport?.let { (copy, name) ->
         AlertDialog(
             onDismissRequest = {},
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Restore, contentDescription = null) },
             title = { Text(stringResource(R.string.recover_import_title)) },
             text = { Text(stringResource(R.string.recover_import_message, name)) },
             confirmButton = {
@@ -1019,6 +1033,7 @@ private fun TranscribeScreen(
         val dur = fmtSec(secs)
         AlertDialog(
             onDismissRequest = {},
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Restore, contentDescription = null) },
             title = { Text(stringResource(R.string.recover_title)) },
             text = { Text(stringResource(R.string.recover_message, dur)) },
             confirmButton = {
@@ -1687,6 +1702,7 @@ private fun TranscribeScreen(
     interruptedEntry?.let { e ->
         AlertDialog(
             onDismissRequest = { interruptedEntry = null },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.History, contentDescription = null) },
             title = { Text(stringResource(R.string.resume_prompt_title)) },
             text = { Text(stringResource(R.string.resume_prompt_message, e.title ?: SessionLibrary.defaultTitle(context, e.createdAt))) },
             confirmButton = { TextButton(onClick = { interruptedEntry = null; vm.resumeEntry(e) }) { Text(stringResource(R.string.action_resume)) } },
@@ -1889,8 +1905,15 @@ private fun TranscribeScreen(
                     positionMs = ms.coerceIn(0, durationMs)
                     resumeOrRecover(positionMs)
                 }
-                Surface(color = pal.PanelSurface, tonalElevation = 3.dp,
-                    modifier = Modifier.onGloballyPositioned { playerBarPx = it.size.height }) {
+                // An M3 bottom-bar surface: rounded top edge, tonal + shadow lift over the
+                // transcript (a hairline instead on e-ink, where a shadow greys out).
+                Surface(
+                    color = pal.PanelSurface, tonalElevation = 3.dp,
+                    shadowElevation = if (pal.isEink || pal.isDark) 0.dp else 6.dp,
+                    shape = RoundedCornerShape(topStart = Radius.Sheet, topEnd = Radius.Sheet),
+                    border = if (pal.isEink || pal.isDark) BorderStroke(1.dp, pal.Hairline) else null,
+                    modifier = Modifier.onGloballyPositioned { playerBarPx = it.size.height },
+                ) {
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -2199,6 +2222,7 @@ private fun TranscribeScreen(
         val name = { sid: Int -> s.speakerNames[sid]?.name ?: context.getString(R.string.speaker_n, sid + 1) }
         AlertDialog(
             onDismissRequest = { mergeAsk = null },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.MergeType, contentDescription = null) },
             text = { Text(stringResource(R.string.speaker_merge_confirm, name(from), name(into))) },
             confirmButton = {
                 TextButton(onClick = { mergeAsk = null; vm.mergeSpeaker(from, into) }) { Text(stringResource(R.string.speaker_merge), color = androidx.compose.material3.MaterialTheme.colorScheme.error) }

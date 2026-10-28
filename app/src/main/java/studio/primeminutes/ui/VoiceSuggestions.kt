@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.Delete
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -180,6 +181,7 @@ fun VoiceSettingsCard() {
     )
     if (deleteAsk) AlertDialog(
         onDismissRequest = { deleteAsk = false },
+        icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Delete, contentDescription = null) },
         title = { Text(stringResource(R.string.voice_delete_all)) },
         text = { Text(stringResource(R.string.voice_delete_all_text)) },
         confirmButton = { TextButton(onClick = { deleteAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.deleteAll(context) } }) { Text(stringResource(R.string.people_delete), color = LocalPrimeMinutesPalette.current.WarningText) } },
@@ -289,6 +291,7 @@ fun PersonVoiceRow(p: Person) {
     }
     if (forgetAsk) AlertDialog(
         onDismissRequest = { forgetAsk = false },
+        icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Delete, contentDescription = null) },
         title = { Text(stringResource(R.string.voice_forget)) },
         text = { Text(stringResource(R.string.voice_forget_text, p.name)) },
         confirmButton = { TextButton(onClick = { forgetAsk = false; scope.launch(Dispatchers.IO) { VoiceStore.forget(context, p.id) } }) { Text(stringResource(R.string.voice_forget_yes)) } },

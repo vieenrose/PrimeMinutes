@@ -241,7 +241,6 @@ fun StudioScreen(
     val haptics = LocalHapticFeedback.current
     var actionsFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
-    var confirmDeleteMany by remember { mutableStateOf(false) }
     // A single delete is held back while its Undo snackbar shows: the row hides at once and the files
     // go only when the snackbar times out (a killed app in that window keeps the meeting — the safe side).
     val pendingDeletes = remember { mutableStateMapOf<String, Unit>() }
@@ -256,6 +255,18 @@ fun StudioScreen(
         AppSnackbar.showAction(String.format(deletedMsg, e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale)), undoLabel) { undone ->
             pendingDeletes.remove(e.id)
             if (!undone) onDelete(e)
+        }
+    }
+    // Many at once: the same held-back delete with one Undo for the batch (it replaced a confirm dialog).
+    val deletedManyMsg = stringResource(R.string.deleted_many)
+    fun requestDeleteMany(victims: List<SessionLibrary.Entry>) {
+        val fresh = victims.filter { it.id !in pendingDeletes }
+        if (fresh.isEmpty()) return
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        fresh.forEach { pendingDeletes[it.id] = Unit }
+        AppSnackbar.showAction(String.format(deletedManyMsg, fresh.size), undoLabel) { undone ->
+            fresh.forEach { pendingDeletes.remove(it.id) }
+            if (!undone) onDeleteMany(fresh)
         }
     }
     @Suppress("NAME_SHADOWING")
@@ -374,7 +385,13 @@ fun StudioScreen(
                 count = selected.size,
                 onClose = { exitSelection() },
                 onSelectAll = { selected.clear(); shown.forEach { selected[it.id] = Unit } },
-                onDelete = { if (selected.isNotEmpty()) confirmDeleteMany = true },
+                onDelete = {
+                    if (selected.isNotEmpty()) {
+                        val victims = entries.filter { it.id in selected }
+                        exitSelection()
+                        requestDeleteMany(victims)
+                    }
+                },
             )
         } else {
             // M3 top app bar: brand, Add, Settings; it slides away as the list scrolls up (enterAlways).
@@ -784,24 +801,6 @@ fun StudioScreen(
             },
             confirmButton = { TextButton(onClick = { renameFor = null; if (name.isNotBlank()) onRename(e, name.trim()) }) { Text(stringResource(android.R.string.ok)) } },
             dismissButton = { TextButton(onClick = { renameFor = null }) { Text(stringResource(android.R.string.cancel)) } },
-        )
-    }
-
-    if (confirmDeleteMany) {
-        AlertDialog(
-            onDismissRequest = { confirmDeleteMany = false },
-            title = { Text(stringResource(R.string.action_delete)) },
-            text = { Text(stringResource(R.string.delete_confirm_many, selected.size)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDeleteMany = false
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    val victims = entries.filter { it.id in selected }
-                    exitSelection()
-                    onDeleteMany(victims)
-                }) { Text(stringResource(R.string.action_delete), color = studio.primeminutes.ui.theme.LocalPrimeMinutesPalette.current.WarningText) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDeleteMany = false }) { Text(stringResource(android.R.string.cancel)) } },
         )
     }
 }

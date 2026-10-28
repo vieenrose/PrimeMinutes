@@ -203,6 +203,55 @@ val LocalLanguageController = staticCompositionLocalOf { LanguageController("aut
 
 val LocalThemeController = staticCompositionLocalOf { ThemeController(ThemeMode.AUTO) {} }
 
+/** The optional wallpaper-colour palette (Material You) and how to switch it. */
+data class DynamicColorController(val on: Boolean, val set: (Boolean) -> Unit)
+
+val LocalDynamicColorController = staticCompositionLocalOf { DynamicColorController(false) {} }
+
+/** Whether this device can offer wallpaper colours (Android 12+). */
+val dynamicColorSupported: Boolean get() = android.os.Build.VERSION.SDK_INT >= 31
+
+/** System high contrast (Android 14+ contrast slider above zero): the brand palette is kept then. */
+private fun systemHighContrast(context: android.content.Context): Boolean =
+    android.os.Build.VERSION.SDK_INT >= 34 &&
+        (context.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager)?.contrast?.let { it > 0f } == true
+
+/**
+ * The brand palette re-tinted from the wallpaper (Material You). Every app token maps to an M3
+ * role of the dynamic scheme, so the hand-drawn surfaces (cards, timeline, chips) follow along with
+ * the Material components. Status colours and speaker hues are theme-independent and unchanged.
+ */
+@androidx.annotation.RequiresApi(31)
+private fun dynamicPalette(context: android.content.Context, dark: Boolean): PrimeMinutesColors {
+    val d = if (dark) androidx.compose.material3.dynamicDarkColorScheme(context)
+        else androidx.compose.material3.dynamicLightColorScheme(context)
+    val base = if (dark) DarkColors else LightColors
+    return base.copy(
+        Sky = d.primary,
+        Indigo = d.primary,
+        Slate900 = d.background,
+        Slate800 = d.surfaceContainer,
+        Slate700 = d.outlineVariant,
+        Slate600 = d.outline,
+        Slate400 = d.onSurfaceVariant,
+        Slate200 = d.onSurface,
+        OnBrand = d.onPrimary,
+        OnBrandMuted = d.onPrimary.copy(alpha = 0.78f),
+        OnBrandFaint = d.onPrimary.copy(alpha = 0.50f),
+        BrandGradient = Brush.linearGradient(listOf(d.primary, d.primary)),
+        Slate900Grad = Brush.verticalGradient(listOf(d.background, d.background)),
+        PanelSurface = d.surfaceContainerLow,
+        InsetSurface = d.surfaceContainerHigh,
+        Hairline = d.outlineVariant,
+        ActiveTint = d.primary.copy(alpha = 0.12f),
+        ActiveBar = d.primary,
+        OnSky = d.onPrimary,
+        AccentWash = d.primary.copy(alpha = 0.12f),
+        AccentMuted = d.tertiary,
+        ErrorText = d.error,
+    )
+}
+
 /** The app-wide text scale (over the system font size) and how to change it live. */
 data class FontScaleController(val scale: Float, val set: (Float) -> Unit)
 
@@ -316,14 +365,26 @@ private val PrimeMinutesShapes = Shapes(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 1f, content: @Composable () -> Unit) {
-    val pal = when (themeMode) {
-        ThemeMode.AUTO -> if (isSystemInDarkTheme()) DarkColors else LightColors
-        ThemeMode.LIGHT -> LightColors
-        ThemeMode.DARK -> DarkColors
-        ThemeMode.EINK -> EinkColors
+fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 1f, dynamicColor: Boolean = false, content: @Composable () -> Unit) {
+    val dark = when (themeMode) {
+        ThemeMode.AUTO -> isSystemInDarkTheme()
+        ThemeMode.DARK -> true
+        else -> false
     }
     val view = LocalView.current
+    val context = view.context
+    // Wallpaper colours: opt-in, Android 12+, never on e-ink (flat black ink is the point) nor under
+    // the system high-contrast setting (the brand palette is the tuned-contrast one).
+    val useDynamic = dynamicColor && dynamicColorSupported && themeMode != ThemeMode.EINK &&
+        !view.isInEditMode && !systemHighContrast(context)
+    val pal = remember(themeMode, dark, useDynamic, androidx.compose.ui.platform.LocalConfiguration.current) {
+        when {
+            themeMode == ThemeMode.EINK -> EinkColors
+            useDynamic && android.os.Build.VERSION.SDK_INT >= 31 -> dynamicPalette(context, dark)
+            dark -> DarkColors
+            else -> LightColors
+        }
+    }
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window

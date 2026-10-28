@@ -42,6 +42,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_eink">E-ink</string>
+    <string name="theme_dynamic">Wallpaper colours (Material You)</string>
     <string name="theme_eink_hint">E-ink is a flat high-contrast theme for e-paper devices; select it manually.</string>
     <string name="hw_status_cd">Hardware: CPU %1$d percent, memory %2$d percent, battery %3$d percent</string>
     <string name="settings_font_size">Text size</string>
@@ -143,6 +144,7 @@
     <string name="resummary_done">New summary ready.</string>
     <string name="undo">Undo</string>
     <string name="deleted_one">Deleted “%s”</string>
+    <string name="deleted_many">Deleted %d sessions</string>
     <string name="svc_asr_model_corrupt">The speech model couldn\'t be loaded — it may be incomplete. It has been cleared; tap Retry to download a fresh copy.</string>
     <string name="mic_permission_required">Microphone permission is required to record</string>
 

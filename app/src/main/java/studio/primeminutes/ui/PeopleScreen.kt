@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.Delete
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -327,6 +328,7 @@ private fun PersonPage(
         var clear by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { deleting = false },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Delete, contentDescription = null) },
             title = { Text(stringResource(R.string.people_delete_title, p.name)) },
             text = {
                 Column {

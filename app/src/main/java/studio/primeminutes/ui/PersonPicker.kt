@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.MergeType
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -374,6 +375,7 @@ fun SpeakerNameFlow(
     mergeAsk?.let { (p, other) ->
         AlertDialog(
             onDismissRequest = { mergeAsk = null; onDismiss() },
+            icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.MergeType, contentDescription = null) },
             title = { Text(stringResource(R.string.people_merge_title, p.name, defaultLabel(other.id))) },
             text = { Text(stringResource(R.string.people_merge_text, speaker.label, other.label)) },
             confirmButton = { TextButton(onClick = { mergeAsk = null; onMerge(other.id) }) { Text(stringResource(R.string.speaker_merge), color = androidx.compose.material3.MaterialTheme.colorScheme.error) } },

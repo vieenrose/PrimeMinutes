@@ -182,10 +182,10 @@ private fun Pillar(icon: ImageVector, titleRes: Int, descRes: Int) {
             contentDescription = null,
             tint = pal.Sky,
             modifier = Modifier
-                .size(38.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(pal.AccentWash)
-                .padding(9.dp),
+                .padding(12.dp),
         )
         Spacer(Modifier.width(14.dp))
         Column {

@@ -1,5 +1,6 @@
 package studio.primeminutes.ui
 
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -193,6 +194,7 @@ fun AskSheet(
                 }
                 if (confirmClear) androidx.compose.material3.AlertDialog(
                     onDismissRequest = { confirmClear = false },
+                    icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.DeleteSweep, contentDescription = null) },
                     title = { Text(stringResource(R.string.ask_meeting_clear)) },
                     text = { Text(stringResource(R.string.ask_meeting_clear_body)) },
                     confirmButton = {

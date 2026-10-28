@@ -41,6 +41,7 @@
     <string name="theme_light">浅色</string>
     <string name="theme_dark">深色</string>
     <string name="theme_eink">电子纸</string>
+    <string name="theme_dynamic">壁纸配色（Material You）</string>
     <string name="theme_eink_hint">电子纸为专为电子阅读器设计的高对比扁平主题，请手动选用。</string>
     <string name="hw_status_cd">硬件状态：CPU %1$d%%，内存 %2$d%%，电池 %3$d%%</string>
     <string name="settings_font_size">文字大小</string>
@@ -138,6 +139,7 @@
     <string name="resummary_done">新摘要已完成。</string>
     <string name="undo">撤销</string>
     <string name="deleted_one">已删除“%s”</string>
+    <string name="deleted_many">已删除 %d 个场次</string>
     <string name="svc_asr_model_corrupt">语音模型无法加载，文件可能不完整，已自动清除；请点“重试”重新下载。</string>
     <string name="mic_permission_required">录音需要麦克风权限</string>
 

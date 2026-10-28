@@ -41,6 +41,7 @@
     <string name="theme_light">淺色</string>
     <string name="theme_dark">深色</string>
     <string name="theme_eink">電子紙</string>
+    <string name="theme_dynamic">桌布配色（Material You）</string>
     <string name="theme_eink_hint">電子紙為專為電子閱讀器設計的高對比扁平主題，請手動選用。</string>
     <string name="hw_status_cd">硬體狀態：CPU %1$d%%，記憶體 %2$d%%，電池 %3$d%%</string>
     <string name="settings_font_size">文字大小</string>
@@ -138,6 +139,7 @@
     <string name="resummary_done">新摘要已完成。</string>
     <string name="undo">復原</string>
     <string name="deleted_one">已刪除「%s」</string>
+    <string name="deleted_many">已刪除 %d 個場次</string>
     <string name="svc_asr_model_corrupt">語音模型無法載入，檔案可能不完整，已自動清除；請點「重試」重新下載。</string>
     <string name="mic_permission_required">錄音需要麥克風權限</string>
 

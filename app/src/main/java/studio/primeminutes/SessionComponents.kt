@@ -620,14 +620,30 @@ internal fun PlayerBar(
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val shownMs = dragMs ?: positionMs
-    // Two slim rows: the seek bar IS the speaker timeline (one merged scrubber), then a centered
-    // transport with the times at the edges and volume tucked behind a popup.
+    // Three slim rows: the seek bar IS the speaker timeline (one merged scrubber), the times under
+    // it (elapsed | total, M3 media layout), then the transport centred with volume at the end.
+    // Times on their own row: at 200 % text they used to collide with the centred buttons.
     // 28dp strip: at 22dp the scrubber was precise enough for a stylus but fiddly for a thumb.
     val stripH = if (compact) 16.dp else 28.dp
-    // 44 dp minimum touch target on both densities (38/34 dp was below it).
-    val playSize = if (compact) 44.dp else 48.dp
-    val btnSize = if (compact) 40.dp else 44.dp
-    Column(Modifier.fillMaxWidth().padding(vertical = if (compact) 2.dp else 4.dp)) {
+    // 48 dp touch targets (M3 minimum); the play button is the larger 56 dp primary action.
+    val playSize = if (compact) 48.dp else 56.dp
+    val btnSize = 48.dp
+    // Tonal buttons: the accent wash in colour themes; outlined on e-ink (a translucent wash bands
+    // on e-paper, a solid fill would compete with the play button).
+    val tonal = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor = pal.AccentWash, contentColor = pal.Slate200,
+    )
+    @Composable
+    fun SkipButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+        if (pal.isEink) {
+            androidx.compose.material3.OutlinedIconButton(onClick = onClick, modifier = Modifier.size(btnSize),
+                border = BorderStroke(1.dp, pal.Slate600), content = content)
+        } else {
+            androidx.compose.material3.FilledTonalIconButton(onClick = onClick, modifier = Modifier.size(btnSize),
+                colors = tonal, content = content)
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(top = if (compact) 4.dp else Spacing.sm, bottom = if (compact) 2.dp else Spacing.xs)) {
         TimelineStrip(
             utterances = utterances,
             durationMs = durationMs,
@@ -637,47 +653,52 @@ internal fun PlayerBar(
             onDragChange = onDragChange,
             modifier = Modifier.fillMaxWidth().height(stripH),
         )
-        Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
-        // Box, not a Row with spacers: the edges (elapsed | volume + duration) differ in width, so
-        // weighted spacers pushed the transport off the screen centre. Centre it on the box.
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtMs(shownMs), style = MaterialTheme.typography.labelSmall, color = pal.Slate400, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            Text(fmtMs(durationMs), style = MaterialTheme.typography.labelSmall, color = pal.Slate400, maxLines = 1)
+        }
+        // Box, not a Row with spacers: the edges differ in width, so weighted spacers pushed the
+        // transport off the screen centre. Centre it on the box; the edges hold only icons.
         Box(Modifier.fillMaxWidth()) {
-            Text(fmtMs(shownMs), style = MaterialTheme.typography.labelSmall, color = pal.Slate400,
-                modifier = Modifier.align(Alignment.CenterStart))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.Center)) {
-                IconButton(onClick = { onSkip(-5000) }, modifier = Modifier.size(btnSize)) {
-                    Icon(Icons.Filled.Replay5, contentDescription = stringResource(R.string.cd_back5), tint = pal.Slate200)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                SkipButton(onClick = { onSkip(-5000) }) {
+                    Icon(Icons.Filled.Replay5, contentDescription = stringResource(R.string.cd_back5))
                 }
-                Box(
-                    Modifier
-                        .size(playSize)
-                        .clip(CircleShape)
-                        // Dark: the solid accent (the brand fill is a navy that swallows the dark glyph).
-                        .background(if (pal.isDark) androidx.compose.ui.graphics.SolidColor(pal.Sky) else pal.BrandGradient)
-                        .clickable(role = Role.Button, onClick = onPlayPause),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                        tint = pal.Slate900,
-                    )
+                Box(contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.FilledIconButton(
+                        onClick = onPlayPause,
+                        modifier = Modifier.size(playSize),
+                        // The one accent; the ink is the theme's contrasting ground (never white on light blue).
+                        colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                            containerColor = pal.Sky, contentColor = pal.OnSky,
+                        ),
+                    ) {
+                        Icon(
+                            if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
+                            modifier = Modifier.size(if (compact) 24.dp else 28.dp),
+                        )
+                    }
                     // Underrun: overlay a spinner so it reads as "buffering, will resume" not "frozen".
                     if (buffering) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(playSize),
-                            color = pal.Slate900,
+                            color = pal.OnSky,
                             strokeWidth = 2.dp,
                         )
                     }
                 }
-                IconButton(onClick = { onSkip(5000) }, modifier = Modifier.size(btnSize)) {
-                    Icon(Icons.Filled.Forward5, contentDescription = stringResource(R.string.cd_forward5), tint = pal.Slate200)
+                SkipButton(onClick = { onSkip(5000) }) {
+                    Icon(Icons.Filled.Forward5, contentDescription = stringResource(R.string.cd_forward5))
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterEnd)) {
+            Box(Modifier.align(Alignment.CenterEnd)) {
                 VolumeControl(volume = volume, muted = muted, onVolume = onVolume, onToggleMute = onToggleMute, btnSize = btnSize)
-                Spacer(Modifier.width(6.dp))
-                Text(fmtMs(durationMs), style = MaterialTheme.typography.labelSmall, color = pal.Slate400)
             }
         }
     }
