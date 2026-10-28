@@ -2,7 +2,10 @@ package studio.primeminutes.core.export
 
 import android.graphics.Color
 import android.graphics.pdf.PdfDocument
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.StaticLayout
+import android.text.style.LeadingMarginSpan
 import android.text.TextPaint
 import studio.primeminutes.core.events.TranscriptEvent
 import java.io.OutputStream
@@ -38,6 +41,7 @@ object PdfExport {
         val headingPaint = paint(13f, bold = true, locale)
         val bodyPaint = paint(10f, locale = locale)
 
+        var hang = 0f
         val doc = PdfDocument()
         val pager = Pager(doc)
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { pager.block(it, titlePaint); pager.gap(10f) }
@@ -53,13 +57,23 @@ object PdfExport {
             pager.block(it, bodyPaint); pager.gap(14f)
         }
         pager.block(transcriptHeading, headingPaint); pager.gap(4f)
-        for (u in utterances) {
-            // One transcript line per utterance, like the txt/md exports: an embedded newline would
-            // otherwise render as an untimestamped continuation line that reads as a separate turn.
-            val text = u.text.replace('\n', ' ').trim()
-            if (text.isEmpty()) continue
-            val who = u.speaker?.let { "${label(it)}: " } ?: ""
-            pager.block("[${clock(u.startSec)}] $who$text", bodyPaint); pager.gap(3f)
+        // Speaker turns as in the txt/md exports (TranscriptExport.turns: newlines flattened, blank
+        // lines dropped): the clock sits in a grey left gutter, the body hangs under its text.
+        val clockPaint = paint(10f, locale = locale).apply { color = GUTTER_GREY }
+        val pad = TranscriptExport.gutterWidth(utterances)
+        val gutter = clockPaint.measureText("0".repeat(pad)) + 10f
+        var first = true
+        for ((u, text, cont) in TranscriptExport.turns(utterances)) {
+            if (cont) {
+                pager.turn(null, "", text, bodyPaint, clockPaint, gutter, hang)
+            } else {
+                if (!first) pager.gap(6f)
+                val who = u.speaker?.let { "${label(it)}: " } ?: ""
+                hang = bodyPaint.measureText(who)
+                pager.turn(TranscriptExport.clock(u.startSec, pad), who, text, bodyPaint, clockPaint, gutter, hang)
+            }
+            first = false
+            pager.gap(3f)
         }
         pager.finish()
         doc.writeTo(out)
@@ -97,6 +111,27 @@ object PdfExport {
             }
         }
 
+        /**
+         * One transcript line: [clock] (null on a continuation) in the gutter, then `who + text` from
+         * the gutter edge, wrapped lines hanging-indented by [hang] (the speaker label's width).
+         */
+        fun turn(clock: String?, who: String, text: String, paint: TextPaint, clockPaint: TextPaint, gutter: Float, hang: Float) {
+            val body = SpannableString(who + text)
+            val firstHangs = clock == null
+            body.setSpan(LeadingMarginSpan.Standard(if (firstHangs) hang.toInt() else 0, hang.toInt()), 0, body.length, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+            val left = M + gutter
+            val layout = StaticLayout.Builder.obtain(body, 0, body.length, paint, (CW - gutter).toInt()).build()
+            for (i in 0 until layout.lineCount) {
+                val lineH = (layout.getLineTop(i + 1) - layout.getLineTop(i)).toFloat()
+                if (y + lineH > PH - M) newPage()
+                val baseline = y + (layout.getLineBaseline(i) - layout.getLineTop(i))
+                if (i == 0 && clock != null) canvas.drawText(clock, M.toFloat(), baseline, clockPaint)
+                val x = left + if (i > 0 || firstHangs) hang else 0f
+                canvas.drawText(body, layout.getLineStart(i), layout.getLineEnd(i), x, baseline, paint)
+                y += lineH
+            }
+        }
+
         fun finish() = doc.finishPage(page)
 
         private fun newPage() {
@@ -108,10 +143,6 @@ object PdfExport {
         }
     }
 
-    private fun clock(sec: Double): String {
-        val t = if (sec > 0) sec.toInt() else 0
-        val h = t / 3600; val m = (t % 3600) / 60; val s = t % 60
-        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
-        else String.format(Locale.US, "%02d:%02d", m, s)
-    }
+    /** Timestamp gutter colour (the mail's #5A6982 grey). */
+    private val GUTTER_GREY = Color.rgb(0x5A, 0x69, 0x82)
 }
