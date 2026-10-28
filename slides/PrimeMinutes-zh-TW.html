@@ -110,7 +110,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.49 · Android v0.53.17 · iOS build 11 · 版次 2026-10-25</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.50 · Android v0.53.18 · iOS 0.53.1 build 13 · 版次 2026-10-28</p>
 </section>
 
 <!-- 2 問題 -->
@@ -121,21 +121,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <li><b>成本與依賴</b>——訂閱制、按分鐘計費、需要網路；服務改版就失效。</li>
     <li><b>耗時</b>——會後人工聽錄重建逐字稿、歸納筆記，一場會花掉一小時以上。</li>
   </ul>
-  <p class="lede">Prime Minutes 的答案：這些工作全部由你自己手機上的模型完成，資料不出手機。</p>
-</section>
-
-<!-- 2b 對比 -->
-<section class="slide">
-  <div class="kicker">對比</div><h2>雲端會議 AI 與手機上的區別</h2>
-  <table class="t rowlab">
-    <tr><th></th><th>雲端會議 AI 服務</th><th>Prime Minutes</th></tr>
-    <tr><td>音訊在哪處理</td><td>上傳到服務商伺服器</td><td><b>你的手機，資料不出手機</b></td></tr>
-    <tr><td>網路需求</td><td>全程需要（即時上傳串流）</td><td>僅下載模型與匯入內容時</td></tr>
-    <tr><td>計費</td><td>按人按月的訂閱制</td><td>免費下載（APK／TestFlight）</td></tr>
-    <tr><td>帳號</td><td>註冊、綁定身分</td><td>無帳號、無伺服器</td></tr>
-    <tr><td>會後資料在哪</td><td>服務商的雲端與備份</td><td>只在你手機（App 資料不入備份）</td></tr>
-  </table>
-  <p class="lede">適合高敏感場合：法律、醫療、專利、併購、內部評審——會議內容從頭到尾不經第三者。</p>
+  <p class="lede">Prime Minutes 的答案：錄音、逐字稿、筆記、摘要，全部在你的手機上完成，資料不出手機。</p>
 </section>
 
 <!-- 3 主視覺 -->
@@ -145,11 +131,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col" style="flex:1.15"><div class="shot"><img src="img/demo-studio.gif" alt="錄音室示範"></div>
     <div class="cap">Galaxy Note10+ 實機：連錄兩場會議，背景整理筆記</div></div>
     <div class="col"><ul class="big">
-      <li>錄音中<b>即時逐字稿</b>，約兩秒上螢幕，同時標註誰在說話。</li>
-      <li>錄音中 AI 就在<b>閱讀逐字稿</b>：決議、待辦、提議、未決事項與數字。</li>
-      <li>停止後自動完成<b>段落式摘要與標題</b>。</li>
-      <li>8 GB 以上的手機<b>錄音中同步閱讀</b>；卡片預告第一次閱讀約幾分鐘後開始。</li>
-      <li>之後可搜尋、提問、匯出、寄給與會者。</li>
+      <li>錄音時<b>文字即時上螢幕</b>，同時標出是誰在說話。</li>
+      <li>錄到一半，App 已經在<b>讀內容、記重點</b>：決議、待辦、提議、還沒定案的事、提到的數字。</li>
+      <li>按下停止，<b>摘要跟標題自動寫好</b>。</li>
+      <li>之後可以搜尋、提問、匯出、寄給與會者。</li>
     </ul></div>
   </div>
 </section>
@@ -172,9 +157,9 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><div class="shot"><img src="img/24b-capture-live.png"></div><div class="cap">錄音中：逐字稿即時增長，每行標註語者</div></div>
     <div class="col"><div class="shot"><img src="img/agent-live.gif"></div><div class="cap">AI 筆記卡片即時顯示閱讀進度</div></div>
     <div class="col"><ul class="big">
-      <li>轉寫延遲四段可選：<b>0.16／0.48／0.96／1.92 秒</b>，越短越快上螢幕、越長越準（預設 1.92 秒）。</li>
-      <li>語者分離由 Nemotron-3 聲紋模型完成：文字先上螢幕，<b>語者名字預設約 15 秒後補上</b>；可調 5–30 秒，等越久標得越準（實測即時標註與最終稿的一致性：8 秒 93 %、15 秒 94.7 %、30 秒 95.8 %）。</li>
-      <li>「下一場」按鈕：連續錄多場，前一場的背景筆記接續整理。</li>
+      <li>講完話<b>約兩秒</b>，文字就出現在螢幕上。</li>
+      <li>誰在說話會<b>晚一點自動補上</b>；等一下下，標得更準，停止後還會整場再校正一次。</li>
+      <li>「下一場」按鈕：連著錄好幾場，前一場的筆記在背景繼續整理，不用等。</li>
     </ul></div>
   </div>
 </section>
@@ -184,10 +169,10 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="kicker">會後成果</div><h2>摘要、筆記，每個時間點可核對原話</h2>
   <div class="cols">
     <div class="col"><ul class="big">
-      <li>筆記依五類歸檔：<b>決議、待辦、未決、提議、重要數字</b>，逐條附時間。</li>
-      <li>閱讀以約 <b>1,500 詞元</b>為一批、邊錄邊寫；停止後自動生成標題與摘要。</li>
-      <li>摘要為連貫散文，一次最多 <b>1,600 詞元</b>；超長會議分寫接續（每段約 600 詞元、上限 4 段）。</li>
-      <li>摘要句尾附筆記時間（如 [1:23]），點句子即可播原話。</li>
+      <li>筆記自動分成五類：<b>決議、待辦、還沒定案、提議、重要數字</b>，每一條都附時間。</li>
+      <li>錄音時邊錄邊寫；按下停止，標題跟摘要自動完成。</li>
+      <li>很長的會分段接著寫，不會只寫一半就停。</li>
+      <li>點摘要裡的任何一句，<b>直接播出當時的原話</b>，不怕被 AI 帶偏。</li>
     </ul></div>
     <div class="col"><div class="shot"><img src="img/long-summary-android-zh.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
     <div class="col"><div class="shot"><img src="img/transcript-player-zh.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
@@ -196,47 +181,43 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 
 <!-- 7 語者 -->
 <section class="slide">
-  <div class="kicker">誰說了什麼</div><h2>語者辨識、名錄與分界編輯</h2>
+  <div class="kicker">誰說了什麼</div><h2>誰講的，一眼就知道</h2>
   <div class="cols">
     <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>聲紋比對由 <b>CAM++ zh-en</b>（約 29 MB）完成：每人以「已確認」的樣本依時長加權，構成他的聲紋基準。</li>
-      <li>建議分三級：<b>0.5 以下不建議</b>、0.5–0.7「可能」、0.7 以上且明顯領先才算穩；只是建議，<b>名字由你確認</b>後才成為基準。</li>
-      <li>圖例與顏色一眼分人；偏離本人其他場次的樣本<b>會先詢問</b>，也能一鍵清除全部聲音資料。</li>
-      <li>錄音中的語者標註預設約 <b>15 秒後才出現</b>，停止後整場重算——<b>最終稿才是定稿</b>；短促回應偶爾被併入前一位，<b>長按那一句</b>即可改派或分開。</li>
+      <li>每個人有自己的顏色，逐字稿裡<b>一眼看出誰講了哪句</b>。</li>
+      <li>App 會<b>建議</b>這是誰，<b>由你確認</b>才算數；名字一旦確認，以後每場都自動認得。</li>
+      <li>認聲音的功能<b>要你同意才開</b>，存的只是一組特徵數字、不是錄音，隨時可以一鍵清除。</li>
+      <li>標錯了怎麼辦？<b>長按那一句</b>就能改人；換人的位置不對，用分界編輯器拖一下就好，都可以復原。</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」經你同意才開啟，會議自動<b>建議</b>名字、由你確認；「聲音」是最多 <b>60 秒</b>語音算出的一串數字（<b>不是錄音</b>）</div></div>
-    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正語者，可復原、重做；推算的時間標「≈」</div></div>
+    <div class="col"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot" style="margin-top:10px"><img src="img/people-person-zh.png"></div><div class="cap">「辨識聲音」經你同意才開啟，會議自動<b>建議</b>名字、由你確認</div></div>
+    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正，可以復原、重做</div></div>
   </div>
-  <p class="lede">名字跨會議共用（人錄），從系統聯絡人加入電子郵件；人名欄不自動改字，iOS 並建議聯絡人姓名。</p>
+  <p class="lede">名字跟聯絡人存在一起（人錄），寫信時直接拿來當收件者。</p>
 </section>
 <!-- 8 搜尋 -->
 <section class="slide">
-  <div class="kicker">會議庫</div><h2>用語意搜尋整個會議庫</h2>
+  <div class="kicker">會議庫</div><h2>想找什麼，用說的也找得到</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/meeting-search-zh.png"></div><div class="cap">會議內搜尋：標「≈」者為語意命中，點段落直接跳原話時間點</div></div>
-    <div class="col"><div class="shot"><img src="img/search.gif"></div><div class="cap">首頁搜尋：詞彙＋語意雙路，「誰提到預算」也能找到</div></div>
+    <div class="col"><div class="shot"><img src="img/meeting-search-zh.png"></div><div class="cap">會議內搜尋：點結果直接跳到那句原話</div></div>
+    <div class="col"><div class="shot"><img src="img/search.gif"></div><div class="cap">首頁搜尋：「誰提到預算」這樣問也找得到</div></div>
     <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>語意搜尋由 <b>EmbeddingGemma 2 270M</b>（約 160 MB）在手機上完成；詞彙搜尋不需模型，安裝即可用。</li>
-      <li>每段逐字稿（≤ 512 詞元）嵌入為 <b>256 維向量</b>做餘弦排序；嵌入模型閒置 60 秒自動釋放記憶體。</li>
-      <li>依日期分組，支援篩選標籤與「依人」過濾。</li>
-      <li>語意索引在<b>背景建立</b>：搜尋列顯示「索引建立中…」，完成後「≈」命中自動補上，<b>不必重打</b>。</li>
-      <li>搜尋框<b>不自動修正</b>輸入（專名不被改字）；往下拖頁即收起鍵盤，長逐字稿不被擋住。</li>
+      <li><b>不用記得原話怎麼講</b>：打意思、打關鍵字都找得到，全部會議一起找。</li>
+      <li>可以<b>只看某個人講的</b>，或按日期、標籤過濾。</li>
+      <li>搜尋框<b>不會亂改你的字</b>，人名、專有名詞照你打的找。</li>
     </ul></div>
   </div>
 </section>
 
 <!-- 9 Ask -->
 <section class="slide">
-  <div class="kicker">向會議提問</div><h2>Ask：回答附出處，可點回原話</h2>
+  <div class="kicker">向會議提問</div><h2>直接問會議，答案可以查證</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/meeting-ask-zh.png"></div><div class="cap">會議內提問：答案引用時間點與語者</div></div>
-    <div class="col"><div class="shot"><img src="img/ask.gif"></div><div class="cap">跨會議提問：引用多個場次</div></div>
+    <div class="col"><div class="shot"><img src="img/meeting-ask-zh.png"></div><div class="cap">會議內提問：答案寫明是誰、何時講的</div></div>
+    <div class="col"><div class="shot"><img src="img/ask.gif"></div><div class="cap">跨會議提問：一次問遍所有會議</div></div>
     <div class="col"><ul class="big">
-      <li>三階段：搜尋會議 → 閱讀摘錄 → 作答，面板顯示每階段秒數（約 6–14 秒）。</li>
-      <li>混合檢索：<b>EG2 向量＋詞彙 BM25</b> 雙路排名融合；問題點名某人時，優先路由其參與的會議。</li>
-      <li>摘錄最多 <b>8 條</b>（詞元預算約 800）；答案上限約 <b>320 詞元</b>，摘錄裡沒有答案就直說沒有。</li>
-      <li>出處列「會議 · 時間」，點出處直接從該時間播放原話。</li>
-      <li>回答跟隨<b>提問的語言</b>，可連續追問；摘錄標語者，能答「誰負責什麼、期限何時」。</li>
+      <li>像「誰負責什麼、期限何時」這樣問，<b>幾秒鐘就有答案</b>。</li>
+      <li>每個答案都附<b>出處</b>：哪一場、幾分幾秒、誰講的，點一下就播原話。</li>
+      <li>找不到答案就<b>直說沒有</b>，不會硬編；可以用中文問，也可以用英文問。</li>
     </ul></div>
   </div>
 </section>
@@ -248,11 +229,9 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><div class="shot"><img src="img/07-add-source.png"></div><div class="cap">首頁「＋」：檔案 / Podcast / 影音連結</div></div>
     <div class="col"><div class="shot"><img src="img/08-podcast.png"></div><div class="cap">Podcast 單集匯入後：邊轉錄邊出逐字稿，語者即時分開</div></div>
     <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>音訊檔（mp3／wav／m4a…）直接匯入；YouTube、PeerTube 貼連結即可——PeerTube 支援任意站點，自動選最小檔案，優先僅含音訊的那個。</li>
-      <li>所有音訊一律重採為 <b>16 kHz 單聲道</b>才進管線，與麥克風錄音同一條路。</li>
-      <li>逐字稿時間與播放位置<b>對齊</b>：點哪個時間，就播到那句話。</li>
-      <li>下載可<b>暫停／續傳</b>，中斷不視為失敗；省電模式自動配合。</li>
-      <li>匯入走同一條管線：逐字稿、筆記、摘要、搜尋、提問全部可用，成果與錄音場次完全相同。</li>
+      <li>手機裡的音訊檔（mp3、wav、m4a……）直接匯入；YouTube、PeerTube 貼上連結就行。</li>
+      <li>匯入的內容跟自己錄的一樣：逐字稿、筆記、摘要、搜尋、提問<b>全部都有</b>。</li>
+      <li>下載可以<b>暫停再繼續</b>，網路斷了也不會白費。</li>
     </ul></div>
   </div>
 </section>
@@ -264,11 +243,9 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <div class="col"><div class="shot"><img src="img/21-export.png"></div><div class="cap">匯出：PDF · Markdown · 純文字 · SRT／VTT／LRC 字幕 · 場次 .m4a</div></div>
     <div class="col"><div class="shot"><img src="img/mail-preview-zh.png"></div><div class="cap">寄給與會者：摘要＋紀要＋會議時間，用你自己的郵件 App</div></div>
     <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>匯出內容以<b>語者名字</b>標註（非 S1／S2 代號）；PDF 與純文字含標題、摘要、待辦、筆記與逐字稿（附時間標點）。</li>
-      <li>字幕：長句按標點自動切條，單條不超過 32 個中文字，時間依句長分配，直接供剪輯軟體使用。</li>
-      <li>檔名取<b>會議標題</b>（前 60 字元，非法字元自動代換）。</li>
-      <li>場次 .m4a 內含音訊＋逐字稿＋筆記＋摘要，可在另一台裝置還原。</li>
-      <li>對話框（改名／新增人名／新增信箱／加入收件者）的鍵盤<b>「完成」鍵直接提交</b>；Ask 答案完成與匯出完成有<b>觸感回饋</b>。</li>
+      <li>匯出就有<b>人名</b>，不是 S1、S2 代號；PDF、文字檔、字幕任你選。</li>
+      <li>「寄給與會者」一按就開好郵件：摘要加紀要都寫好了，<b>用你自己的郵件 App 寄出</b>。</li>
+      <li>場次檔拿到另一台手機也能打開，內容一模一樣。</li>
     </ul></div>
   </div>
 </section>
@@ -287,83 +264,28 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   </div>
 </section>
 
-<!-- 13 模型 -->
-<section class="slide">
-  <div class="kicker">怎麼做到的</div><h2>全部模型都在手機 CPU 上跑</h2>
-  <table class="t">
-    <tr><th>模型</th><th>用途</th><th>大小</th></tr>
-    <tr><td>X-ASR（含標點）＋ Nemotron-3 語者分離</td><td>語音辨識、語者標註（4 種轉寫延遲可選）</td><td>約 273 MB</td></tr>
-    <tr><td>Gemma-4-E2B 會議模型（行動版 v1）</td><td>AI 筆記、摘要、提問；中文為底、英文另配提示（預設）</td><td>約 2.2 GB</td></tr>
-    <tr><td>Gemma-4-E4B 會議模型（行動版 v2）</td><td>同上，較完整；限 RAM 8 GB 以上</td><td>約 3.3 GB</td></tr>
-    <tr><td>EmbeddingGemma 2 270M（選用）</td><td>語意搜尋、提問檢索</td><td>約 160 MB</td></tr>
-    <tr><td>CAM++ zh-en（選用）</td><td>辨識聲音（建議名字）</td><td>約 29 MB</td></tr>
-  </table>
-  <p class="lede">首次使用顯示總量、選「僅限 Wi‑Fi」下載（語音模型 273 MB 約 1 分鐘完成）；Android 8.0+（ARMv8.2 dotprod）、iOS 17+。</p>
-</section>
-
-<!-- 13b pipeline -->
-<section class="slide">
-  <div class="kicker">運作方式</div><h2>一條管線，全程在手機上</h2>
-  <div class="flow">
-    <div class="step"><b>麥克風</b></div><span class="arr">→</span>
-    <div class="step">串流語音辨識 <b>X-ASR</b>＋標點</div><span class="arr">→</span>
-    <div class="step">聲紋分離 <b>Nemotron</b>：逐句標註語者</div><span class="arr">→</span>
-    <div class="step">場次檔 <b>.m4a</b>：音訊＋逐字稿＋筆記＋摘要同檔</div>
-  </div>
-  <div class="flow">
-    <div class="step">AI 筆記 <b>Gemma E2B/E4B</b>：每讀滿約 1,500 詞元寫一批</div><span class="arr">→</span>
-    <div class="step">停止後：<b>段落摘要＋標題</b>；長會議分段補齊</div><span class="arr">→</span>
-    <div class="step"><b>EmbeddingGemma</b> 索引</div><span class="arr">→</span>
-    <div class="step">搜尋 · 提問 · 匯出 · 寄給與會者</div>
-  </div>
-  <p class="lede">錄音與整理互不阻塞：按「下一場」立刻錄下一場，前一場在背景接續整理。場次檔可在另一台裝置還原全部內容。</p>
-</section>
-
-<!-- 14 效能 -->
-<section class="slide">
-  <div class="kicker">效能與品質</div><h2>延遲、準確度與資源</h2>
-  <div class="cols">
-    <div class="col" style="flex:1.3; gap:18px">
-      <div class="tile"><div class="tq">會議結束後，多久拿到摘要？</div><div class="tn">約 3.5–4.6 <span>分鐘</span></div><div class="td">E4B，29–38 分鐘的會議（實測 207–279 秒）。<br>筆記在錄音中已邊錄邊寫，停止後只剩寫摘要。</div></div>
-      <div class="tile"><div class="tq">趕時間就選 E2B</div><div class="tn">約 1.4 <span>分鐘</span></div><div class="td">49 分鐘的會議，分段摘要 82 秒（E4B 同場 187 秒）。<br>在與 Note10+ 同速的測試機上實測。</div></div>
-      <div class="tile"><div class="tq">AI 筆記要多少記憶體？</div><div class="tn">E2B 1.4 <span>GB</span> · E4B 2.9 <span>GB</span></div><div class="td">寫筆記時的程序峰值（含模型本身）。</div></div>
-      <div class="cap">Galaxy Note10+（Snapdragon 855）純 CPU 實測；第二格為同速測試機</div>
-    </div>
-    <div class="col"><ul class="big">
-      <li>Note10+（Snapdragon 855）實測 21–28 分鐘連續錄音：轉寫穩定，錄音中記憶體峰值約 1.1 GB。</li>
-      <li>公開評測（AISHELL-4／AMI）語者分離 DER：中文 <b>8.9 %</b>、英文 <b>9.9 %</b>；換人點約四成正好對齊，其餘可用分界編輯器微調。</li>
-      <li>Ask 提問回應 6–14 秒（E2B，含檢索）。</li>
-      <li>App 中斷／被系統終止後：重開會<b>提示接續處理</b>，已錄內容不丟、場次不損壞。</li>
-      <li>純 CPU 推理：不搶 GPU／NPU，溫控正常。</li>
-      <li>錄音畫面上方即時顯示 <b>CPU／記憶體／電池</b>，數值過高轉紅。</li>
-    </ul></div>
-  </div>
-</section>
 <!-- 15 隱私 -->
 <section class="slide">
   <div class="kicker">隱私設計</div><h2>資料不出手機</h2>
   <ul class="big">
-    <li>無帳號、無伺服器、無上傳——音訊與逐字稿只存在你的手機。</li>
-    <li>完全離線可用：飛航模式也能錄音、筆記、摘要、提問。</li>
-    <li>唯一的網路連線：下載模型、匯入 Podcast／YouTube／PeerTube；Android 另有每日一次的新版檢查。</li>
-    <li>聯絡人郵件走你裝置上既有的郵件 App，App 不經手內容。</li>
-    <li>App 資料不入備份（會議隱私優先）。</li>
+    <li><b>不用註冊、不用登入</b>——錄音跟文字只存在你的手機裡。</li>
+    <li><b>飛航模式也能用</b>：錄音、筆記、摘要、提問，沒網路照常運作。</li>
+    <li>只有兩件事需要網路：第一次下載、匯入 Podcast 或影音連結。</li>
+    <li>寄信走你自己的郵件 App，App 不經手內容。</li>
   </ul>
-  <p class="lede">適合：法律、醫療、專利、併購、內部評審等高敏感會議。</p>
+  <p class="lede">法律、醫療、專利、併購、內部評審——敏感的會也能放心錄。</p>
 </section>
 
 <!-- 16 設定 -->
 <section class="slide">
-  <div class="kicker">調校空間</div><h2>設定：延遲、模型與下載</h2>
+  <div class="kicker">調校空間</div><h2>設定：照你的習慣調</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">轉寫延遲四段可選（速度／準確度取捨）</div></div>
-    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">外觀主題、文字大小、硬體狀態列與介面語言</div></div>
+    <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">文字要快還是要準，自己選</div></div>
+    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">主題、字體大小、語言，都能調</div></div>
     <div class="col"><ul class="big">
-      <li>四段延遲各約 <b>155 MB</b>：<b>越短越快上螢幕，越長越準確</b>。</li>
-      <li>預設 <b>1.92 秒</b>：四段中最準確，一般會議建議維持預設。</li>
-      <li>會議模型（E2B／E4B）可切換，換完可整場重跑筆記與摘要；E4B 現為<b>第二代權重</b>：評測摘要 4.0／5（第一代 3.2）、自相矛盾 16 → 7。</li>
-      <li>下載可設<b>僅限 Wi‑Fi</b>，暫停／續傳，電量與網路自動配合。</li>
-      <li>介面語言：跟隨系統、English、繁體中文或简体中文；逐字稿、摘要與筆記的<b>繁簡字體</b>跟著介面語言走。</li>
+      <li>文字要<b>快一點還是準一點</b>，四段自己選；一般開會用預設就好。</li>
+      <li>筆記要<b>快一點還是完整一點</b>，兩種模式自己換，換完可以整場重跑。</li>
+      <li>下載可以設<b>只用 Wi‑Fi</b>；介面有繁體中文、简体中文跟英文。</li>
     </ul></div>
   </div>
 </section>
@@ -374,9 +296,8 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="cols">
     <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的匯入：重開 App 即詢問是否完成轉錄</div></div>
     <div class="col"><ul class="big">
-      <li>錄音中被系統終止 → 重開 App 會提示接續轉寫，已錄內容不丟。</li>
-      <li>背景模型下載可暫停／續傳，電量與網路自動配合。</li>
-      <li>App 更新後資料保留（Releases 覆蓋安裝）。</li>
+      <li>電話打進來、App 被系統關掉都沒關係——重開會問你要不要<b>接著做完</b>，錄好的東西不會丟。</li>
+      <li>下載到一半斷掉，下次<b>從斷掉的地方繼續</b>就好。</li>
     </ul></div>
   </div>
 </section>
@@ -387,27 +308,13 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <div class="cols">
     <div class="col"><ul class="big">
       <li><b>Android</b>：GitHub Releases 直接安裝 APK，App 內每日檢查新版。</li>
-      <li><b>iOS</b>：TestFlight 公開測試，目前 build 11，需 iOS 17 以上；6 GB 記憶體的 iPhone（如 14 Pro Max）就能用 E4B。先裝 TestFlight App，再掃封面 QR code 加入。</li>
-      <li>雙平台行為對齊：搜尋、提問、播放同步、逐字稿編輯。</li>
-      <li>互通：<b>.m4a 場次檔</b>兩平台交換——一端匯出（附逐字稿與筆記），另一端匯入即開場次。</li>
-      <li>取得與更新：github.com/vieenrose/PrimeMinutes（Releases 與 TestFlight）</li>
+      <li><b>iPhone</b>：TestFlight 公開測試，需 iOS 17 以上。先裝 TestFlight App，再掃封面 QR code 加入。</li>
+      <li>兩邊功能一樣：搜尋、提問、播放、改逐字稿都會。</li>
+      <li>互通：場次檔拿到另一台手機（不管 Android 還是 iPhone）都能打開。</li>
+      <li>去哪拿：github.com/vieenrose/PrimeMinutes</li>
     </ul></div>
     <div class="col"><div class="shot"><img src="img/reprocess.png"></div><div class="cap">換模型後可整場重跑：筆記與摘要重新生成</div></div>
   </div>
-</section>
-
-<!-- 18b 限制 -->
-<section class="slide">
-  <div class="kicker">坦白講</div><h2>限制與取捨</h2>
-  <ul class="big">
-    <li><b>E4B 需要較大的記憶體</b>：Android 8 GB、iPhone 6 GB 以上。較小的手機用 E2B，筆記在錄音結束後才整理（出現得較慢，結果相同）；3 GB 的 iPhone（如 XR）跑不動摘要模型。</li>
-    <li>重疊說話時語者分離可能延後標註（淺灰句子）——可用分界編輯器修正，可復原。</li>
-    <li>換人點是<b>估出來的</b>：分離器給區間、音量吸附對齊，約四成正好對齊，尾端偶爾晚半秒到三秒——分界編輯器可逐點微調、可復原。</li>
-    <li><b>手機放得越近，人分得越準</b>：同一場會議改從遠處收音，漏掉的換人點從 25 % 升到 35 %；中文會議也一樣，小會議室約 25 %，大會議室升到將近七成——離得遠，容易把同一個人認成兩個人，跟說哪種語言無關。開會時請把手機放在桌子中央、靠近講話的人；一秒內的快速接話仍最難抓，長按那句改派即可補救。</li>
-    <li>提問（Ask）為<b>實驗性</b>：答案一律附出處，請點回原話核對。</li>
-    <li>第一次進行長時間工作時，App 說明一次「電池最佳化」的影響並詢問是否豁免。</li>
-    <li>超長會議：摘要分段逐段補齊，時間與會議長度成正比。</li>
-  </ul>
 </section>
 
 <!-- 19 現場示範 -->
@@ -424,24 +331,13 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   </ol>
 </section>
 
-<!-- 19b 語者辨識進展 -->
-<section class="slide">
-  <div class="kicker">近期改進</div><h2>語者辨識：Android v0.53.16 起、iOS build 11 的改進</h2>
-  <ul class="big">
-    <li><b>換人位置更準</b>：換人那一刻改對齊到音量最低點。十場公開會議實測，英文「剛好對準」52.1 % → <b>58.6 %</b>，偏差中位數 0.08 秒 → <b>0.00</b>。</li>
-    <li><b>語者記憶恢復完整長度</b>：模型可記住約 21 秒的聲音樣本，App 先前只用了一半。六場中文會議：沒標到語者的比例 39.0 % → 33.2 %，語者標錯 21.2 % → <b>15.1 %</b>；錄音中照樣跟得上，標註也沒變慢。</li>
-    <li><b>更新不多佔空間</b>：App 更新後自動下載新模型（101 MB），第一次順利載入就刪掉舊檔。Note10+、iPhone 14 Pro Max、17e 都已實測；iOS build 11 已上傳 TestFlight，內容與 Android 相同。</li>
-    <li><b>中文難在收音距離</b>：離麥克風遠、聲音又相近時，模型容易把講者認成別人，這是模型本身的極限；把手機放近講話的人，效果最明顯。</li>
-  </ul>
-</section>
-
 <!-- 20 Roadmap -->
 <section class="slide">
-  <div class="kicker">正在進行</div><h2>接下來</h2>
+  <div class="kicker">接下來</div><h2>接下來會更好用</h2>
   <ul class="big">
-    <li><b>Podcast 系列訂閱</b>：訂閱＝儲存節目連結，「檢查新集數」比對新集，自動走既有匯入管線；僅限 Wi‑Fi、每個節目只取最新一集（設計中）。</li>
-    <li>語者功能延伸：分界編輯器與人名錄持續打磨；改過字的句子，分界時間只能估，會標上「≈」（Android v0.53.16 起與 iOS 一致）。</li>
-    <li>模型管線與 Ask 延遲持續優化。</li>
+    <li><b>Podcast 訂閱</b>：存下節目連結，有新集數自動幫你抓下來整理好。</li>
+    <li><b>人名錄越來越聰明</b>：認人、改分界的手感繼續打磨，改錯都救得回來。</li>
+    <li><b>問答越來越快</b>：提問的等待時間繼續縮短。</li>
   </ul>
 </section>
 
@@ -455,7 +351,8 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.17（版次 2026-10-23）· iOS TestFlight build 11 · 簡報 v2.49</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.53.18 · iOS 0.53.1 TestFlight build 13 · 簡報 v2.50</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">小提醒：開會時把手機放桌子中央、靠近講話的人，分人分得最準；答案都附出處，重要的事點回原話確認一下。</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
