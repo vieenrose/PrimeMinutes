@@ -26,4 +26,4 @@ swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Transcript.swift $D
 swiftc -parse-as-library -O $D/../App/AudioDecode.swift $D/PrimingTests.swift -o $O/priming-tests && $O/priming-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/../App/SpeakerRefs.swift $D/LiveRenameTests.swift -o $O/live-rename-tests && $O/live-rename-tests
 swiftc -parse-as-library -O $D/../App/OpenCC.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $D/OpenCCTests.swift -o $O/opencc-tests
-VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/opencc-tests
+VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/opencc-tests $D/golden
