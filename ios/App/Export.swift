@@ -56,7 +56,7 @@ enum Export {
         case .txt, .pdf:
             var o = s.title + "\n\n"
             if !s.summary.isEmpty { o += plainHeading(L("export_heading_summary")) + "\n" + summary(s.summary) + "\n\n" }
-            if Prefs.showActions, let a = acts { o += L("export_heading_actions") + "\n" + a + "\n\n" }
+            if Prefs.showActions, let a = acts, let sec = actionsSection(a) { o += plain(sec) + "\n\n" }
             if let n = notesSection(s.notes) { o += plain(n) + "\n\n" }
             // Speaker turns: `[mm:ss] Speaker: text` opens a turn, a blank line separates turns, a further line of the
             // same speaker hangs under the text. The `[mm:ss]` token is what ReaderProtocol / the anchors parse.
@@ -69,7 +69,7 @@ enum Export {
             let ts = turns(s.lines), starts = ts.filter { !$0.cont }.map { Int(max(0, $0.u.start)) }
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
             if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + mdCites(summary(s.summary), starts) + "\n\n" }
-            if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
+            if Prefs.showActions, let a = acts, let sec = actionsSection(a) { o += markdown(sec, starts) + "\n\n" }
             if let n = notesSection(s.notes) { o += markdown(n, starts) + "\n\n" }
             let pad = gutterWidth(s.lines)
             var named = Set<Int>()
@@ -111,7 +111,7 @@ enum Export {
             var t = n.text.trimmingCharacters(in: .whitespacesAndNewlines)
             while t.hasSuffix("。") { t.removeLast() }
             t = t.trimmingCharacters(in: .whitespaces)
-            if t.isEmpty || t == "-" { continue }
+            if MeetingMail.trivial(t) { continue }
             let k = fullTag(n.tag)
             if !keys.contains(k) { keys.append(k) }
             let ts = n.ts.trimmingCharacters(in: .whitespaces)
@@ -119,6 +119,19 @@ enum Export {
         }
         let groups = keys.compactMap { k in by[k].map { NoteGroup(label: k.map { label($0) ?? $0 }, items: $0) } }
         return groups.isEmpty ? nil : NoteSection(heading: heading, groups: groups)
+    }
+
+    /// The action items (raw `- text [m:ss]` lines) as one unlabelled group under the actions heading; trivial and
+    /// `-` lines dropped, a line that does not match kept as plain item text.
+    static func actionsSection(_ raw: String, heading: String = L("export_heading_actions")) -> NoteSection? {
+        let items = raw.components(separatedBy: "\n").compactMap { l -> NoteItem? in
+            let line = l.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { return nil }
+            var it = MeetingMail.itemLine(line).map { NoteItem(text: $0.text, ts: $0.ts) } ?? NoteItem(text: line, ts: nil)
+            while it.text.hasSuffix("。") { it.text.removeLast() }
+            return MeetingMail.trivial(it.text) ? nil : it
+        }
+        return items.isEmpty ? nil : NoteSection(heading: heading, groups: [NoteGroup(label: nil, items: items)])
     }
 
     /// A note's text with its cite at the end, glued (`…條款。⁠[1:12]`).
@@ -280,7 +293,7 @@ enum Export {
         func style(_ before: CGFloat, head: CGFloat = 0, first: CGFloat = 0) -> NSParagraphStyle {
             let ps = NSMutableParagraphStyle(); ps.lineSpacing = 3; ps.paragraphSpacingBefore = before; ps.headIndent = head; ps.firstLineHeadIndent = first; return ps
         }
-        let headings = Set(["export_heading_summary", "agent_title", "export_heading_transcript"].map { plainHeading(L($0)) } + [L("export_heading_actions")])
+        let headings = Set(["export_heading_summary", "agent_title", "export_heading_transcript"].map { plainHeading(L($0)) } + [plainHeading(L("export_heading_actions"))])
         let labels = Set(tagOrder.compactMap(tagLabel).flatMap { [$0 + "：", $0 + ":"] })
         var hang: NSParagraphStyle?, inTranscript = false, inNotes = false
         var cites: [(range: NSRange, sec: Int)] = [], turnAt: [(loc: Int, sec: Int)] = []
@@ -291,7 +304,7 @@ enum Export {
             if !title.isEmpty, r.location == 0 { return }   // the title line is already styled above
             if headings.contains(line) {
                 text.addAttributes([.font: UIFont.boldSystemFont(ofSize: 13), .paragraphStyle: style(14)], range: r)
-                inTranscript = line == plainHeading(L("export_heading_transcript")); inNotes = line == plainHeading(L("agent_title")); hang = nil; return
+                inTranscript = line == plainHeading(L("export_heading_transcript")); inNotes = line == plainHeading(L("agent_title")) || line == plainHeading(L("export_heading_actions")); hang = nil; return
             }
             if inNotes, labels.contains(line) || (line.hasSuffix("：") && !line.hasPrefix("・")) {
                 text.addAttributes([.font: UIFont.boldSystemFont(ofSize: 11.5), .paragraphStyle: style(6)], range: r); return

@@ -118,6 +118,10 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
         check(Recipients.rows([0: me], anyMe: false)[0].checked, "no Me yet: checked")
         check(Recipients.to(rows, extra: ["Y@x.com", "z@x.com"]) == ["y@x.com", "Y@x.com", "z@x.com"], "to")
 
+        // An item with no letter (only digits / punctuation) is not minutes content.
+        check(MeetingMail.parseMinutes("【數字】\n- 3 [0:01]\n- 預算 3 萬 [0:02]\n- 。", [("數字", "NUMBER")]).first?.items.map(\.text) == ["預算 3 萬"], "trivial items dropped")
+        check(MeetingMail.sectionsOf([(tag: "NUMBER", text: "3", ts: "0:01")], [("數字", "NUMBER")]).isEmpty, "trivial note dropped")
+
         // Design B (plain/chat: one cite per sentence, at its end, glued) + C (HTML pills). Android MeetingMailTest.
         check(MeetingMail.clauseEndCites("新辦公室預計於三月十號正式上班 [0:00]。會議決定採用中間報價 [0:18, 0:35]，前提是打包自行完成 [0:40]。")
               == "新辦公室預計於三月十號正式上班。\u{2060}[0:00] 會議決定採用中間報價，前提是打包自行完成。\u{2060}[0:18, 0:35]", "zh clause-end cites")

@@ -43,6 +43,12 @@ import Foundation
         check(Export.summary("a [0:01]。\n\nb [0:02]。") == "a。\(wj)[0:01]\n\nb。\(wj)[0:02]", "paragraph breaks kept")
         check(Export.mdCites("a [0:18, 0:35]") == "a `0:18, 0:35`", "md multi-cite, no turns")
         check(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]) == "a。\u{2060}[0:18](#t-0)、[1:10](#t-65)", "md multi-cite links: \(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]))")
+        // Trivial notes (no letter) dropped; action items through the formatted path.
+        check(Export.notesSection([Note(id: 1, window: 0, ts: "0:05", tag: "NUMBER", text: "3"), Note(id: 2, window: 0, ts: "0:06", tag: nil, text: "。")], heading: "AI 筆記") == nil, "trivial notes dropped")
+        let acts = Export.actionsSection("- 林雅婷寄出通知信 [4:11]\n- 3\n-\n- 確認合約。 [1:12]\n自由文字", heading: "行動項目")!
+        check(Export.plain(acts) == "【行動項目】\n・林雅婷寄出通知信。\(wj)[4:11]\n・確認合約。\(wj)[1:12]\n・自由文字", "actions txt: \(Export.plain(acts))")
+        check(Export.markdown(acts, [0, 70, 240]) == "## 行動項目\n\n- 林雅婷寄出通知信。\(wj)[4:11](#t-240)\n- 確認合約。\(wj)[1:12](#t-70)\n- 自由文字", "actions md: \(Export.markdown(acts, [0, 70, 240]))")
+        check(Export.plain(Export.actionsSection("- Send the notice [0:09]", heading: "Action items")!) == "ACTION ITEMS\n- Send the notice\u{00A0}[0:09]", "actions en")
         check(Export.target(75, [1, 65, 81]) == 1 && Export.target(0, [5]) == 0, "cite target")
         // Design A: speaker turns with a fixed-width clock gutter (Android TranscriptExportTest goldens).
         let turns = Session(title: "", summary: "", seconds: 90, lines: [
