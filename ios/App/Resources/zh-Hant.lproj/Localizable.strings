@@ -642,3 +642,6 @@
 "email_none_contact" = "沒有電子郵件，請在聯絡人中新增。";
 "email_none" = "沒有電子郵件。";
 "people_add_label" = "使用「%@」作為名稱";
+"contact_me_pick" = "在聯絡人中選擇我…";
+"contact_me_change" = "改選其他名片…";
+"contact_me_linked" = "聯絡人中的你：%@";

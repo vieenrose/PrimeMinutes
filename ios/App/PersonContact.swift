@@ -80,7 +80,9 @@ struct PersonContactSections: View {
     var body: some View {
         let p = person, linked = p.contact?.platform == "ios"
         Section {
-            if linked {
+            if p.me && OSContacts.access != .denied {
+                MeContactRow(me: p)
+            } else if linked {
                 Text(L("contact_is_contact")).font(.subheadline).foregroundStyle(.secondary)
                 Button { OSContacts.edit(p.contact!.key) { store.syncContacts() } } label: { Label(L("contact_edit"), systemImage: "person.crop.circle") }
                     .accessibilityIdentifier("contact-edit")

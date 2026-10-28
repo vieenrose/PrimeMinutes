@@ -60,6 +60,7 @@ struct VoiceSettingsCard: View {
                 Text(L(known.count == 1 ? "voice_known_one" : "voice_known_other", known.count)).font(.footnote).foregroundStyle(.secondary)
                 if !voice.working.isEmpty { Text(L("voice_note_working")).font(.footnote).foregroundStyle(.secondary) }
                 Button(L(people.doc.people.contains { $0.me && known[$0.id] != nil } ? "voice_me_again" : "voice_me")) { enrol = true }
+                if let me = people.doc.people.first(where: { $0.me }), OSContacts.access != .denied { MeContactRow(me: me) }
                 Button(L("voice_delete_all"), role: .destructive) { deleteAsk = true }
             }
         }

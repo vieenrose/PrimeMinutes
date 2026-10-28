@@ -143,3 +143,22 @@ struct ContactsMigrationCard: View {
         }
     }
 }
+
+/// "Me" picks its own card (iOS has no public API for My Card, and the app never creates a contact named Me):
+/// "This is me in Contacts…" opens the system picker; the link can be changed or removed.
+struct MeContactRow: View {
+    let me: Person
+    @ObservedObject private var store = PeopleStore.shared
+    var body: some View {
+        let linked = me.contact?.platform == "ios"
+        if linked { Text(L("contact_me_linked", me.contact?.name ?? "—")).font(.footnote).foregroundStyle(.secondary) }
+        Button(L(linked ? "contact_me_change" : "contact_me_pick")) { pick() }.accessibilityIdentifier("contact-me")
+        if linked { Button(L("contact_unlink")) { store.unlinkContact(me.id, removeEmails: true) }.foregroundStyle(.secondary) }
+    }
+    private func pick() {
+        ContactPicker.present(needsEmail: false) { c, _ in
+            if me.contact != nil { store.unlinkContact(me.id, removeEmails: true) }
+            store.linkContact(me.id, c); store.syncContacts()
+        }
+    }
+}

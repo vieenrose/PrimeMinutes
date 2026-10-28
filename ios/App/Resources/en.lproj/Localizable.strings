@@ -642,3 +642,6 @@
 "email_none_contact" = "No e-mail address. Add one in Contacts.";
 "email_none" = "No e-mail address.";
 "people_add_label" = "Use “%@” as the name";
+"contact_me_pick" = "This is me in Contacts…";
+"contact_me_change" = "Choose another card…";
+"contact_me_linked" = "You in Contacts: %@";

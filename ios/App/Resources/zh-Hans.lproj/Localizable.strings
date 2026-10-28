@@ -642,3 +642,6 @@
 "email_none_contact" = "没有电子邮件，请在通讯录中添加。";
 "email_none" = "没有电子邮件。";
 "people_add_label" = "使用“%@”作为名称";
+"contact_me_pick" = "在通讯录中选择我…";
+"contact_me_change" = "改选其他名片…";
+"contact_me_linked" = "通讯录中的你：%@";
