@@ -419,6 +419,7 @@ struct AskSheet: View {
                     Text(meeting.map { $0.title + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 } }
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("done")) { composer = false } }
                 // In-meeting: a new conversation also forgets this meeting's earlier questions.
                 // Saved questions are lost for good, so a meeting with any asks first; nothing to clear → disabled.
                 ToolbarItem(placement: .primaryAction) { Button { if meeting != nil, !(history.isEmpty && ask.turns.isEmpty) { confirmClear = true } else { ask.reset() } } label: { Image(systemName: "arrow.counterclockwise") }

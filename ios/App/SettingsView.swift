@@ -145,7 +145,7 @@ struct SettingsView: View {
             } message: { if let i = toDelete { Text(L("storage_delete_body", i.label, SizeFormat.bytes(i.bytes))) } }
             .navigationDestination(isPresented: $showPeople) { PeopleScreen(library: m.library, openMeeting: openMeeting) }
             .navigationTitle(L("settings"))
-            .toolbar { Button(L("done")) { dismiss() } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("done")) { dismiss() } } }
         }
     }
 }

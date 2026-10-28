@@ -121,16 +121,39 @@ enum Dev {
 enum StopFlag { nonisolated(unsafe) static var on = false }
 
 /// Touch confirmation at the moments the app answers the user: on the result of a long task, not on the tap.
-/// Not main-actor-isolated: it is also called from queue callbacks and DispatchQueue closures, and it hops to the
-/// main thread itself (the generators must run there).
+/// Callable from any thread (queue callbacks, DispatchQueue closures): each call bumps a main-actor bus that the
+/// root view observes with `.sensoryFeedback` (`hapticFeedback()` on ContentView), so SwiftUI owns and prepares
+/// the generators instead of a fresh, unprepared UIKit generator per call.
 enum Haptics {
     /// A long task ended: a meeting was saved, an answer finished, an export is ready.
-    nonisolated static func success() { onMain { UINotificationFeedbackGenerator().notificationOccurred(.success) } }
+    nonisolated static func success() { post(.success) }
     /// A destructive step completed (meetings deleted).
-    nonisolated static func destructive() { onMain { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() } }
+    nonisolated static func destructive() { post(.impact(weight: .heavy)) }
     /// A momentary switch flipped (recording started / stopped).
-    nonisolated static func toggle(_ on: Bool) { onMain { UIImpactFeedbackGenerator(style: on ? .medium : .light).impactOccurred() } }
-    private nonisolated static func onMain(_ f: @escaping () -> Void) { if Thread.isMainThread { f() } else { DispatchQueue.main.async(execute: f) } }
+    nonisolated static func toggle(_ on: Bool) { post(.impact(weight: on ? .medium : .light)) }
+    private nonisolated static func post(_ f: SensoryFeedback) {
+        let send = { MainActor.assumeIsolated { HapticBus.shared.send(f) } }
+        if Thread.isMainThread { send() } else { DispatchQueue.main.async(execute: send) }
+    }
+}
+
+/// The pending haptic: `tick` changes on every send so equal feedbacks in a row still fire.
+@MainActor @Observable final class HapticBus {
+    static let shared = HapticBus()
+    private(set) var tick = 0
+    private(set) var feedback: SensoryFeedback = .success
+    func send(_ f: SensoryFeedback) {
+        feedback = f; tick &+= 1
+        log.debug("haptic \(String(describing: f), privacy: .public) #\(self.tick)")
+    }
+    private let log = Logger(subsystem: "studio.primeminutes", category: "haptics")
+}
+
+extension View {
+    /// Plays every `Haptics` call through SwiftUI's sensory feedback; apply once, at the root.
+    func hapticFeedback() -> some View {
+        sensoryFeedback(trigger: HapticBus.shared.tick) { _, _ in HapticBus.shared.feedback }
+    }
 }
 
 extension View {

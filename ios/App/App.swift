@@ -10,7 +10,7 @@ import Combine
     @Environment(\.scenePhase) private var phase
     init() { BackgroundWork.register() }
     var body: some Scene {
-        WindowGroup { ContentView().modifier(TextSize(steps: Prefs.typeSizeSteps(textSize))) }
+        WindowGroup { ContentView().hapticFeedback().modifier(TextSize(steps: Prefs.typeSizeSteps(textSize))) }
             .onChange(of: phase) { if phase == .background { BackgroundWork.schedule() } else if phase == .active { PeopleStore.shared.syncContacts() } }
     }
 }

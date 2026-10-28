@@ -271,13 +271,15 @@ struct SessionLineEditSheet: View {
     let doneEnabled: Bool
     let onCancel: () -> Void
     let onDone: () -> Void
+    @FocusState private var focused: Bool
     var body: some View {
         NavigationStack {
-            TextEditor(text: $draft).padding(.horizontal, Vox.inset)
+            TextEditor(text: $draft).focused($focused).padding(.horizontal, Vox.inset)
                 .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } }
                     ToolbarItem(placement: .confirmationAction) { Button(L("done")) { onDone() }.disabled(!doneEnabled) }   // like Android: an emptied line is not a save
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("done")) { focused = false } }   // hide the keyboard, keep editing
                 }.navigationTitle(L("cd_edit")).navigationBarTitleDisplayMode(.inline)
         }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
@@ -578,13 +580,15 @@ struct SessionTextEditSheet: View {
     let doneEnabled: Bool
     let onCancel: () -> Void
     let onDone: () -> Void
+    @FocusState private var focused: Bool
     var body: some View {
         NavigationStack {
-            TextEditor(text: $draft).padding(.horizontal, Vox.inset)
+            TextEditor(text: $draft).focused($focused).padding(.horizontal, Vox.inset)
                 .scrollDismissesKeyboard(.interactively)   // a long paragraph: scroll to read the tail under the keyboard
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { onCancel() } }
                     ToolbarItem(placement: .confirmationAction) { Button(L("done")) { onDone() }.disabled(!doneEnabled) }
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("done")) { focused = false } }   // hide the keyboard, keep editing
                 }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
         }
     }
