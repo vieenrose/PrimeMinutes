@@ -25,7 +25,7 @@ struct SessionSummaryTab: View {
     var body: some View {
         VStack(spacing: 12) {
             // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
-            if !session.notes.isEmpty { SessionCard {
+            if !session.notes.isEmpty { VStack(alignment: .leading, spacing: 6) { SessionCard {
                 HStack {
                     Circle().fill(Vox.success.color).frame(width: 9, height: 9)
                     VStack(alignment: .leading) {
@@ -39,13 +39,13 @@ struct SessionSummaryTab: View {
                 // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
                 if showProcess {
                     ForEach(session.notes) { n in NoteRow(n: n) { sec in onSeekPlay(Double(sec)) } }
-                    Vox.micro(L("agent_notes_caution"))
                     // DEV builds: the saved reading's off-protocol counts (model guardrail).
                     if Dev.on, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger.color : Color.secondary) }
                 }
                 ChevronToggle(title: L(showProcess ? "hide_process" : "show_process"), expanded: showProcess) { onToggleProcess() }
-            } }
-            if !session.summary.isEmpty {
+            }
+            if showProcess { CardFooter(text: L("agent_notes_caution")) } } }
+            if !session.summary.isEmpty { VStack(alignment: .leading, spacing: 6) {
                 SessionCard {
                     // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
                     HStack(spacing: 16) { Spacer()
@@ -54,10 +54,10 @@ struct SessionSummaryTab: View {
                     Collapsible(lines: 12) { Text(Markdown.render(refs(session.summary), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                         return .systemAction })
-                    Vox.micro(L("ai_disclaimer"))
                 }
-            }
-            if showActions, let a = session.actionItems {
+                CardFooter(text: L("ai_disclaimer"))
+            } }
+            if showActions, let a = session.actionItems { VStack(alignment: .leading, spacing: 6) {
                 SessionCard {
                     HStack(spacing: 16) {
                         Text(L("card_action_items")).font(.headline); Spacer()
@@ -67,9 +67,9 @@ struct SessionSummaryTab: View {
                     Collapsible(lines: 8) { Text(Markdown.render(refs(a), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
                         if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                         return .systemAction })
-                    Vox.micro(L("actions_verify_hint")).voxFore(Vox.warning)
                 }
-            }
+                CardFooter(text: L("actions_verify_hint"), warning: true)
+            } }
             // Android NotesSection: what the v2 NOTES format adds to a prose summary, an empty section shows nothing.
             if let n = session.legacyNotes.flatMap(MeetingNotes.parse) {
                 notesSection(L("notes_decisions"), n.decisions)
@@ -104,6 +104,18 @@ struct SessionNotesSection: View {
                 if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                 return .systemAction })
         }
+    }
+}
+
+/// The grouped-list footer under a card: a secondary footnote, or an orange warning with its triangle.
+struct CardFooter: View {
+    let text: String
+    var warning = false
+    var body: some View {
+        Group {
+            if warning { Label(text, systemImage: "exclamationmark.triangle").voxFore(Vox.warning) }
+            else { Text(text).foregroundStyle(.secondary) }
+        }.font(.footnote).padding(.horizontal, Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

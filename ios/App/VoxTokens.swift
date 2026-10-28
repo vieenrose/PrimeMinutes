@@ -115,7 +115,7 @@ enum Vox {
     /// Fine print: disclaimers, indexing footnotes, storage rows, license lines.
     static func fine(_ s: String) -> Text { Text(s).font(.footnote).foregroundStyle(.secondary) }
     /// Micro labels: search result headers, tag chips, license rows, pipeline credit.
-    static func micro(_ s: String) -> Text { Text(s).font(.caption2).foregroundStyle(.secondary) }
+    static func micro(_ s: String) -> Text { Text(s).font(.caption).foregroundStyle(.secondary) }
     /// Transcript lines and summary prose: the reading size, full contrast.
     static func transcript(_ s: String) -> Text { Text(s) }
 }
