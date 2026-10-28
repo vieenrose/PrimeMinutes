@@ -255,44 +255,29 @@ private fun OverflowMenu(
     }
 }
 
-/** Segmented Summary · Transcript · Actions control (Prime Minutes 2.0 session tabs). */
+/** Summary · Transcript session tabs: the M3 primary TabRow (indicator under the selected tab). */
 @Composable
 fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    val outer = RoundedCornerShape(14.dp)
-    val seg = MaterialTheme.shapes.small
     val labels = listOf(
         stringResource(R.string.tab_summary),
         stringResource(R.string.tab_transcript),
     )
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp)
-            .clip(outer)
-            .background(pal.PanelSurface)
-            .border(1.dp, pal.Hairline, outer)
-            .padding(Spacing.xs)
-            .selectableGroup(),
+    androidx.compose.material3.PrimaryTabRow(
+        selectedTabIndex = selected,
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+        containerColor = Color.Transparent,
+        contentColor = pal.Sky,
+        divider = { androidx.compose.material3.HorizontalDivider(color = pal.Hairline) },
     ) {
         labels.forEachIndexed { i, label ->
-            val on = i == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .clip(seg)
-                    .background(if (on) EinkPolicy.selectedFill(pal) else Color.Transparent)
-                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
-                    .padding(vertical = 9.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (on) EinkPolicy.selectedInk(pal) else pal.Slate400,
-                )
-            }
+            androidx.compose.material3.Tab(
+                selected = i == selected,
+                onClick = { onSelect(i) },
+                selectedContentColor = pal.Sky,
+                unselectedContentColor = pal.Slate400,
+                text = { Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) },
+            )
         }
     }
 }
