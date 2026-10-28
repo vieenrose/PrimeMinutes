@@ -15,6 +15,10 @@ struct LibraryView: View {
     @State private var deleting: Session?
     @State private var draft = ""
     @State private var selected = Set<UUID>()
+    /// Native multi-select: the list's EditMode (Select / Done in the nav bar, or Select in a row's menu).
+    @State private var editMode: EditMode = .inactive
+    private var editing: Bool { editMode.isEditing }
+    private func setEditing(_ on: Bool) { withAnimation { editMode = on ? .active : .inactive }; if !on { selected = [] } }
     @State private var deletingMany = false
     @State private var dlDeleteAsk: UUID?   // download item awaiting its delete confirmation
     @State private var sharing: URL?
@@ -112,14 +116,12 @@ struct LibraryView: View {
     /// One session row as the list draws it (actions wired to this screen's state).
     private func row(_ s: Session) -> LibraryRow {
         LibraryRow(s: s, isNew: isNew(s), done: isDone(s), searching: !query.isEmpty, passages: passages(s),
-                   indexing: indexer.indexing.contains(s.id), selecting: !selected.isEmpty, selected: selected.contains(s.id),
-                   audio: audioURL(s),
+                   indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
-                   onToggle: { toggle(s) }, onOpen: { open(s) }, onShare: { sharing = $0 },
+                   onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = $0 },
                    onRename: { draft = s.title; renaming = s }, onDelete: { deleting = s })
     }
     private func activate(_ s: Session) {
-        if !selected.isEmpty { toggle(s); return }
         Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
     }
 
@@ -154,49 +156,24 @@ struct LibraryView: View {
                     label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
             }
         }
-        .padding(Vox.inset).voxCard()
         // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
         .contentShape(Rectangle())
-        .onTapGesture { if selected.isEmpty { path.append(.job(j.id)) } }
+        .onTapGesture { if !editing { path.append(.job(j.id)) } }
         .accessibilityAddTraits(.isButton).accessibilityAction { path.append(.job(j.id)) }
     }
-    private func toggle(_ s: Session) { if selected.contains(s.id) { selected.remove(s.id) } else { selected.insert(s.id) } }
 
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
-    private func devOnAppear() { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+    private func devOnAppear() { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     var body: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: 0).onAppear { devOnAppear() }
-            if !selected.isEmpty {
-                HStack(spacing: 16) {
-                    Button { selected = [] } label: { Image(systemName: "xmark").font(.title3).tapTarget() }.accessibilityLabel(L("cd_exit_selection"))
-                    Text(L("selection_count", selected.count)).font(.title3.bold())
-                    Spacer()
-                    Button(L("select_all")) { selected = Set(shown.map(\.id)) }
-                    Button(role: .destructive) { deletingMany = true } label: { Image(systemName: "trash").font(.title3).tapTarget() }.accessibilityLabel(L("delete"))
-                }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
-            }
-            LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
-                        filtered: filter != .all || personFilter != nil, row: row, rowKey: rowKey, job: { jobCard($0) },
-                        clearFilters: { query = ""; filter = .all; personFilter = nil })
-            .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
-            if m.runner.activeJob != nil {
-                Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
-                    .padding(Vox.insetTight).voxRow() }.buttonStyle(.plain).padding(.horizontal, Vox.gutter)
-            } else {
-                Vox.meta(m.screen.status).lineLimit(1).padding(.horizontal, Vox.gutter)
-            }
-            if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
-                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
-                    .buttonStyle(.bordered).padding(.horizontal, Vox.gutter)
-            }
-            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
-                Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
-                    .background(m.capture.recording ? Vox.danger.color : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
-            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
-        }
-        .background(Color(.systemGroupedBackground))
+        LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
+                    filtered: filter != .all || personFilter != nil, selection: $selected, row: row, rowKey: rowKey, job: { jobCard($0) },
+                    clearFilters: { query = ""; filter = .all; personFilter = nil })
+        .environment(\.editMode, $editMode)
+        .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
+        .onAppear { devOnAppear() }
+        .safeAreaInset(edge: .bottom) { if !editing { LibraryFooter(m: m, path: $path) } }
+        .toolbar { LibrarySelectToolbar(editing: editing, any: !m.library.sessions.isEmpty, count: selected.count,
+                                        onEdit: { setEditing(!editing) }, onSelectAll: { selected = Set(shown.map(\.id)) }, onDelete: { deletingMany = true }) }
         // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
         .searchSuggestions { if askReady && query.isEmpty { LibraryAskSuggestion { asking = "" } } }
@@ -204,7 +181,7 @@ struct LibraryView: View {
         .autocorrectionDisabled()
         .onSubmit(of: .search) { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
         .onChange(of: query) { _, _ in runSearch() }
-        .toolbar { if askReady { LibraryAskToolbar { asking = query.trimmingCharacters(in: .whitespaces) } } }
+        .toolbar { if askReady && !editing { LibraryAskToolbar { asking = query.trimmingCharacters(in: .whitespaces) } } }
         // A meeting that finished processing lands in the library: confirm it by touch (a removal stays silent).
         .onChange(of: m.library.sessions.count) { prev, now in
             defer { countArmed = true }
@@ -218,7 +195,7 @@ struct LibraryView: View {
             Button(L("cancel"), role: .cancel) {}
         }
         .confirmationDialog(L("delete_confirm_many", selected.count), isPresented: $deletingMany, titleVisibility: .visible) {
-            Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; selected = []; Haptics.destructive() }
+            Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; setEditing(false); Haptics.destructive() }
         }
         .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
@@ -653,6 +630,7 @@ struct LibraryToolbar: ToolbarContent {
 }
 
 /// A library session row: status glyph, title, time · length, and while searching the passages that matched.
+/// Swipe left: Delete; swipe right: Rename / Share audio; long-press: the full menu (Select enters edit mode).
 struct LibraryRow: View {
     let s: Session
     let isNew: Bool
@@ -660,13 +638,11 @@ struct LibraryRow: View {
     let searching: Bool
     let passages: [LibrarySearch.Passage]
     let indexing: Bool
-    let selecting: Bool
-    let selected: Bool
+    let editing: Bool
     let audio: URL?
     let onActivate: () -> Void
     let onPassage: (LibrarySearch.Passage) -> Void
-    let onToggle: () -> Void
-    let onOpen: () -> Void
+    let onSelect: () -> Void
     let onShare: (URL) -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
@@ -685,11 +661,11 @@ struct LibraryRow: View {
                         if p.kind != .meeting { Text(Export.mmss(p.timeSec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                         Text((p.speaker.map { $0 + ": " } ?? "") + snippet(p)).font(.caption).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(.primary)
                     }
-                }.buttonStyle(.borderless)
+                }.buttonStyle(.borderless).disabled(editing)
             }
         }
     }
-    var body: some View {
+    private var content: some View {
         HStack(spacing: 12) {
             Image(systemName: isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
                 .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
@@ -703,26 +679,30 @@ struct LibraryRow: View {
                 if indexing { Vox.micro(L("studio_indexing")) }
             }
             Spacer(minLength: 0)
-            if selecting {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(selected ? Color.accentColor : Color.secondary)
-            } else { Menu {
-                Button(L("action_select"), systemImage: "checkmark.circle") { onToggle() }
-                if let audio { Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { onShare(audio) } }
-                Button(L("action_open"), systemImage: "play.fill") { onOpen() }
-                Button(L("rename"), systemImage: "pencil") { onRename() }
-                Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
-            } label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()) }
-                .accessibilityLabel(L("more")) }
         }
-        .padding(Vox.inset)
-        .voxCard()
-        .overlay(RoundedRectangle(cornerRadius: Vox.radiusLG).stroke(Color.accentColor, lineWidth: selected ? 2 : 0))
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .onLongPressGesture { onToggle() }
-        .onTapGesture { onActivate() }
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { onActivate() }
-        .accessibilityAction(named: L("select")) { onToggle() }
+    }
+    var body: some View {
+        Group {
+            if editing { content }   // the list selects on tap
+            else { content.onTapGesture { onActivate() }.accessibilityAddTraits(.isButton).accessibilityAction { onActivate() } }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) { onDelete() } label: { Label(L("delete"), systemImage: "trash") }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button { onRename() } label: { Label(L("rename"), systemImage: "pencil") }.tint(Color.accentColor)
+            if let audio { Button { onShare(audio) } label: { Label(L("action_share_audio"), systemImage: "square.and.arrow.up") }.tint(Vox.info.color) }
+        }
+        .contextMenu {
+            Button(L("action_open"), systemImage: "play.fill") { onActivate() }
+            Button(L("action_select"), systemImage: "checkmark.circle") { onSelect() }
+            Button(L("rename"), systemImage: "pencil") { onRename() }
+            if let audio { Button(L("action_share_audio"), systemImage: "square.and.arrow.up") { onShare(audio) } }
+            Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
+        }
+        .accessibilityAction(named: L("select")) { onSelect() }
     }
 }
 
@@ -817,7 +797,8 @@ struct LibraryNoMatch: View {
     }
 }
 
-/// The scrolling part of the library: empty state, no-match, queued jobs, then the sessions by day.
+/// The library as a native inset-grouped List: the header lines and queued jobs as sections at the top, then one
+/// section per day (search: one ranked section). EditMode + selection give the native multi-select.
 struct LibraryList: View {
     @ObservedObject var m: Model
     let header: LibraryHeader
@@ -826,25 +807,83 @@ struct LibraryList: View {
     let searching: Bool
     let densePending: Bool
     let filtered: Bool
+    @Binding var selection: Set<UUID>
     let row: (Session) -> LibraryRow
     let rowKey: (Session) -> String
     let job: (Job) -> AnyView
     let clearFilters: () -> Void
     var body: some View {
-        ScrollView {
-            header
-            LazyVStack(alignment: .leading, spacing: 10) {
-                if m.library.sessions.isEmpty && m.runner.waiting.isEmpty { LibraryEmpty(downloads: m.downloads).padding(.top, 40) }
-                if !m.library.sessions.isEmpty && days.isEmpty {
-                    LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 24)
+        List(selection: $selection) {
+            Section { header.listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+            if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {
+                Section { LibraryEmpty(downloads: m.downloads).padding(.top, 24).listRowBackground(Color.clear) }
+            }
+            if !m.library.sessions.isEmpty && days.isEmpty {
+                Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear) }
+            }
+            if !m.runner.waiting.isEmpty {
+                Section {
+                    // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
+                    ForEach(m.runner.waiting) { job($0).id("job-" + $0.id.uuidString).selectionDisabled() }
                 }
-                // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
-                ForEach(m.runner.waiting) { job($0).id("job-" + $0.id.uuidString) }
-                ForEach(days, id: \.0) { day, items in
-                    if day != .distantPast { Text(label(day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6) }
-                    ForEach(items) { s in row(s).id(rowKey(s)) }
-                }
-            }.padding(.horizontal, Vox.gutter)
+            }
+            ForEach(days, id: \.0) { day, items in
+                Section {
+                    ForEach(items) { s in row(s).id(rowKey(s)).tag(s.id) }
+                } header: { if day != .distantPast { Text(label(day)) } }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+}
+
+/// Under the list: what the engines are doing (tap: the running job), Process all, and the record button.
+struct LibraryFooter: View {
+    @ObservedObject var m: Model
+    @Binding var path: [Route]
+    var body: some View {
+        VStack(spacing: 8) {
+            if m.runner.activeJob != nil {
+                Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
+                    .padding(Vox.insetTight).voxRow() }.buttonStyle(.plain).padding(.horizontal, Vox.gutter)
+            } else {
+                Vox.meta(m.screen.status).lineLimit(1).padding(.horizontal, Vox.gutter)
+            }
+            if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
+                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10) }
+                    .buttonStyle(.bordered).padding(.horizontal, Vox.gutter)
+            }
+            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
+                Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
+                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(m.capture.recording ? Vox.danger.color : Color.accentColor, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).foregroundStyle(.white)
+            }.padding(.horizontal, Vox.gutter).padding(.vertical, 8)
+        }
+        .padding(.top, 8)
+        .background(.bar)
+    }
+}
+
+/// The nav bar while the list can be selected: Select / Done; in edit mode, Select all and Delete in the bottom bar.
+struct LibrarySelectToolbar: ToolbarContent {
+    let editing: Bool
+    let any: Bool
+    let count: Int
+    let onEdit: () -> Void
+    let onSelectAll: () -> Void
+    let onDelete: () -> Void
+    var body: some ToolbarContent {
+        if editing {
+            ToolbarItem(placement: .topBarLeading) { Button(L("done"), action: onEdit).fontWeight(.semibold) }
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(L("select_all"), action: onSelectAll)
+                Spacer()
+                Text(L("selection_count", count)).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.disabled(count == 0).accessibilityLabel(L("delete"))
+            }
+        } else if any {
+            ToolbarItem(placement: .topBarTrailing) { Button(L("select"), action: onEdit) }
         }
     }
 }
