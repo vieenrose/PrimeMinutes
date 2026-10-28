@@ -13,6 +13,27 @@ enum Export {
         let x = max(0, Int(t)), h = x / 3600, m = x % 3600 / 60, s = x % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
     }
+    /// Zero-padded `mm:ss`, or `hh:mm:ss` when `width` is 8, so the transcript gutter aligns; still matches
+    /// `\d+:\d{2}(?::\d{2})?` (ReaderProtocol / Markdown anchors). Android TranscriptExport.clock(sec, width).
+    static func gutterClock(_ t: Double, _ width: Int) -> String {
+        let x = max(0, Int(t)), h = x / 3600
+        return h > 0 || width >= 8 ? String(format: "%02d:%02d:%02d", h, x % 3600 / 60, x % 60) : String(format: "%02d:%02d", x / 60, x % 60)
+    }
+    /// One transcript line of a document export: `cont` = same speaker as the previous (non-blank) line.
+    struct Line { var u: Utterance; var text: String; var cont: Bool }
+    /// Non-blank utterances (newlines flattened) grouped into speaker turns. Android TranscriptExport.turns.
+    static func turns(_ ls: [Utterance]) -> [Line] {
+        var out: [Line] = [], prev: Int?
+        for u in ls {
+            let x = u.text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if x.isEmpty { continue }
+            out.append(Line(u: u, text: x, cont: u.speaker == prev)); prev = u.speaker
+        }
+        return out
+    }
+    /// Clock width for the whole document: 5 (`mm:ss`) or 8 (`hh:mm:ss`).
+    static func gutterWidth(_ ls: [Utterance]) -> Int { ls.contains { $0.start >= 3600 } ? 8 : 5 }
+
     static func mmss(_ t: Double) -> String { let x = max(0, Int(t)); return x >= 3600 ? String(format: "%d:%02d:%02d", x / 3600, x % 3600 / 60, x % 60) : String(format: "%d:%02d", x / 60, x % 60) }
 
     /// Android: exported title, summary, notes and action items carry speaker names, not the raw S1/S2 refs the screen resolves.
@@ -37,13 +58,19 @@ enum Export {
             if !s.summary.isEmpty { o += s.summary + "\n\n" }
             if Prefs.showActions, let a = acts { o += L("export_heading_actions") + "\n" + a + "\n\n" }
             if !s.notes.isEmpty { o += L("agent_title") + "\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
-            return o + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "[\(hms(l.start))] \(s.name(l.speaker)): \(x)" }.joined(separator: "\n")
+            // Speaker turns: `[mm:ss] Speaker: text` opens a turn, a blank line separates turns, a further line of the
+            // same speaker hangs under the text. The `[mm:ss]` token is what ReaderProtocol / the anchors parse.
+            let pad = gutterWidth(s.lines), hang = String(repeating: " ", count: pad + 3)
+            return o + turns(s.lines).map { l in l.cont ? hang + l.text : "\n[\(gutterClock(l.u.start, pad))] \(s.name(l.u.speaker)): \(l.text)" }
+                .joined(separator: "\n").dropFirst().appending(turns(s.lines).isEmpty ? "" : "\n")
         case .md:
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
             if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + s.summary + "\n\n" }
             if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
             if !s.notes.isEmpty { o += "## " + L("agent_title") + "\n\n" + s.notes.map { "- " + ReaderProtocol.render($0) }.joined(separator: "\n") + "\n\n" }
-            return o + "## " + L("export_heading_transcript") + "\n\n" + s.lines.compactMap { l in let x = l.text.trimmingCharacters(in: .whitespacesAndNewlines); return x.isEmpty ? nil : "- `\(hms(l.start))` **\(s.name(l.speaker))** \(x)" }.joined(separator: "\n") + "\n"
+            let pad = gutterWidth(s.lines)
+            return o + "## " + L("export_heading_transcript") + "\n\n" + turns(s.lines).map { l in l.cont ? "  " + l.text : "\n- `\(gutterClock(l.u.start, pad))` **\(s.name(l.u.speaker))** \(l.text)" }
+                .joined(separator: "\n").dropFirst().appending(turns(s.lines).isEmpty ? "" : "\n")
         }
     }
 
