@@ -11,10 +11,30 @@ import Foundation
                         notes: [Note(id: 1, window: 0, ts: "0:01", tag: nil, text: "a note")])
         let md = Export.text(s, .md)
         check(md.contains("## " + L("agent_title")), "md notes heading: \(md)")
-        check(md.contains("- #1 [0:01] a note"), "md note bullet: \(md)")
+        check(md.contains("- a note\u{00A0}`0:01`"), "md note bullet: \(md)")
         let txt = Export.text(s, .txt)
-        check(txt.contains(L("agent_title")), "txt notes heading: \(txt)")
-        check(txt.contains("- #1 [0:01] a note"), "txt note bullet: \(txt)")
+        check(txt.contains(Export.plainHeading(L("agent_title"))), "txt notes heading: \(txt)")
+        check(txt.contains("a note\u{00A0}[0:01]") && !txt.contains("#1"), "txt note bullet: \(txt)")
+        // Notes grouped by type (Android ExportNotesTest goldens), no #N, no raw (TAG).
+        let wj = "\u{2060}", zh = ["DECISION": "決議", "ACTION": "待辦", "OPEN-ISSUE": "未決", "NUMBER": "數字", "PROPOSAL": "提議"]
+        let sec = Export.notesSection([
+            Note(id: 1, window: 0, ts: "0:15", tag: nil, text: "討論新平站開業細節"),
+            Note(id: 2, window: 0, ts: "1:16", tag: "PROPOSAL", text: "建議初期推出低價套餐"),
+            Note(id: 3, window: 0, ts: "23:15", tag: "NUMBER", text: "積分兌換比例建議為十元一分"),
+            Note(id: 4, window: 0, ts: "28:42", tag: "OPEN", text: "化妝品進貨渠道需掌握。"),
+            Note(id: 5, window: 0, ts: "29:00", tag: "-", text: "-"),
+        ], heading: "AI 筆記", label: { zh[$0] })!
+        check(sec.groups.map(\.label) == [nil, "未決", "數字", "提議"], "group order \(sec.groups.map(\.label))")
+        let pt = Export.plain(sec)
+        check(pt == "【AI 筆記】\n・討論新平站開業細節。\(wj)[0:15]\n\n未決：\n・化妝品進貨渠道需掌握。\(wj)[28:42]\n\n數字：\n・積分兌換比例建議為十元一分。\(wj)[23:15]\n\n提議：\n・建議初期推出低價套餐。\(wj)[1:16]", "plain notes: \(pt)")
+        let pm = Export.markdown(sec)
+        check(pm.hasPrefix("## AI 筆記\n\n- 討論新平站開業細節。\(wj)`0:15`\n\n### 未決\n\n") && pm.contains("### 提議\n\n- 建議初期推出低價套餐。\(wj)`1:16`"), "md notes: \(pm)")
+        let en = Export.notesSection([Note(id: 1, window: 0, ts: "1:02", tag: "DEC", text: "Ship on Monday")], heading: "AI notes", label: { $0 == "DECISION" ? "Decision" : nil })!
+        check(Export.plain(en) == "AI NOTES\nDecision:\n- Ship on Monday\u{00A0}[1:02]", "en notes: \(Export.plain(en))")
+        let sm = Export.summary("涵蓋多個方面 [0:15]。在營銷上 [1:16]，推出套餐 [1:49]。")
+        check(sm == "涵蓋多個方面。\(wj)[0:15]在營銷上，推出套餐。\(wj)[1:16]" && !sm.contains("][") && !sm.contains(" ["), "summary cites: \(sm)")
+        check(Export.mdCites("a [0:18, 0:35]") == "a `0:18, 0:35`", "md multi-cite")
+        check(Export.target(75, [1, 65, 81]) == 1 && Export.target(0, [5]) == 0, "cite target")
         // Design A: speaker turns with a fixed-width clock gutter (Android TranscriptExportTest goldens).
         let turns = Session(title: "", summary: "", seconds: 90, lines: [
             Utterance(speaker: 0, start: 1, end: 2.5, text: "Hello there"),
@@ -36,6 +56,15 @@ import Foundation
         check(srt.contains("2\n00:01:05,200 --> 00:01:10,000\n\(turns.name(1)): 我們開始吧\n"), "srt unchanged: \(srt)")
         check(Export.text(turns, .lrc).contains("[01:07.00]\(turns.name(1)): 接著討論預算"), "lrc unchanged")
         check(!Export.pdf(t2, title: "").isEmpty, "pdf renders")
+        // Cites in the summary become links to named transcript destinations.
+        let linked = Session(title: "T", summary: "開始 [0:01]。後來 [1:05, 1:21]。", seconds: 90, lines: turns.lines, notes: [])
+        let pdfData = Export.pdf(Export.text(linked, .txt), title: "T")
+        if let p = ProcessInfo.processInfo.environment["EXPORT_PDF_OUT"] { try? pdfData.write(to: URL(fileURLWithPath: p)) }
+        let pdf = String(decoding: pdfData, as: UTF8.self)
+        // One link per cite time (0:01, 1:05, 1:21), each resolved to its own turn's destination.
+        check(pdf.components(separatedBy: "/Subtype /Link").count - 1 == 3, "pdf: 3 links")
+        let ys = Set(try! NSRegularExpression(pattern: #"/XYZ 0 ([\d.]+) 0"#).matches(in: pdf, range: NSRange(location: 0, length: (pdf as NSString).length)).map { (pdf as NSString).substring(with: $0.range(at: 1)) })
+        check(ys.count == 3, "pdf: 3 distinct destinations \(ys)")
         print("export tests: OK")
     }
 }
