@@ -384,7 +384,7 @@ Compose 介面測試需在實機上執行（x86_64 模擬器上會出現 “Unab
 
 | 移動分界（中文） | 分界編輯器 | Adjust a boundary (English) |
 |:---:|:---:|:---:|
-| <img src="screenshots/boundary.gif" width="230" alt="拖曳分界並試聽"> | <img src="screenshots/boundary.png" width="230" alt="語者分界"> | <img src="screenshots/boundary-en.gif" width="230" alt="Moving a speaker boundary"> |
+| <img src="screenshots/boundary.gif" width="230" alt="拖曳分界並試聽"> | <img src="screenshots/boundary.png" width="230" alt="語者分界"> | [Moving a speaker boundary](screenshots/boundary-en.gif) |
 
 <p><img src="screenshots/people-voice-zh.gif" width="220" alt="為語者命名：依聲音建議陳經理"><br><sub>在尾牙示範會議命名「陳經理」後，App 在辦公室搬遷會議依聲音建議他。英文介面（AMI 公開會議）：<a href="screenshots/people-voice-en.gif">為語者命名</a>、<a href="screenshots/people-people-en.png">名錄</a>、<a href="screenshots/people-person-en.png">人物頁</a>、<a href="screenshots/people-voice-explain-en.png">說明</a>。</sub></p>
 
