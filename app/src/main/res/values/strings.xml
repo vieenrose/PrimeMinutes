@@ -710,6 +710,14 @@
     <string name="contact_deleted">Removed from Contacts. The name stays in your meetings.</string>
     <string name="contact_not_in_contacts">Not in Contacts yet</string>
     <string name="contact_edit">Edit in Contacts</string>
+    <string name="email_new_title">Add an e-mail for %1$s?</string>
+    <string name="email_new_hint">Optional: it is saved in the contact.</string>
+    <string name="email_skip">Skip</string>
+    <string name="email_duplicate">Already in this contact</string>
+    <string name="email_remove_cd">Remove %1$s</string>
+    <string name="email_remove_title">Remove %1$s from the contact?</string>
+    <string name="email_write_failed">Contacts did not accept the change</string>
+    <string name="speaker_open_person">Open %1$s’s page</string>
     <string name="email_none">No e-mail address</string>
     <string name="email_none_edit_in_contacts">No e-mail address: add one in Contacts</string>
     <string name="me_pick_contact">This is me in Contacts…</string>

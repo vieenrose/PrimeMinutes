@@ -91,9 +91,11 @@ fun PeopleScreen(
     onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit,
     voiceHeader: @Composable () -> Unit = {},
     voiceOfPerson: @Composable (Person) -> Unit = {},
+    /** Opens straight on this person's page (the transcript speaker sheet's "Open ‹name›'s page"). */
+    initialPersonId: String? = null,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        PeopleContent(onClose, onOpenMeeting, voiceHeader, voiceOfPerson)
+        PeopleContent(onClose, onOpenMeeting, voiceHeader, voiceOfPerson, initialPersonId)
     }
 }
 
@@ -103,6 +105,7 @@ private fun PeopleContent(
     onOpenMeeting: (SessionLibrary.Entry, Double) -> Unit,
     voiceHeader: @Composable () -> Unit,
     voiceOfPerson: @Composable (Person) -> Unit,
+    initialPersonId: String?,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -123,7 +126,7 @@ private fun PeopleContent(
             out.mapValues { (_, v) -> v.sortedByDescending { it.entry.createdAt } }
         }
     }
-    var openId by remember { mutableStateOf<String?>(null) }
+    var openId by remember { mutableStateOf(initialPersonId) }
     val open = doc.byId(openId)
     val access = rememberContactsAccess()
     // People == OS contacts: re-read names/addresses on open; the app-only people left from before

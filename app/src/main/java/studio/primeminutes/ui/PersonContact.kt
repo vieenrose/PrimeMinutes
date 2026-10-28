@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPage
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import studio.primeminutes.R
 import studio.primeminutes.core.people.EmailRules
 import studio.primeminutes.core.people.PeopleOps
@@ -76,6 +78,9 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
     val doc by PeopleStore.doc.collectAsState()
     val c = p.contact
     val linked = studio.primeminutes.core.people.ContactLinks.isLinked(p)
+    val scope = rememberCoroutineScope()
+    var adding by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<String?>(null) }
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(22.dp))
@@ -114,9 +119,40 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
             Text(stringResource(R.string.email_card_title), color = pal.Slate200, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = Spacing.md))
         }
         if (p.me) Text(stringResource(R.string.email_me_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
-        p.emails.forEachIndexed { i, e -> EmailRow(e, isDefault = i == 0, showDefault = p.emails.size > 1) }
-        if (p.emails.isEmpty()) Text(stringResource(if (linked) R.string.email_none_edit_in_contacts else R.string.email_none),
+        // Linked: the addresses are the contact's, added and removed here in place (the rest of the
+        // contact is edited in the Contacts app).
+        p.emails.forEachIndexed { i, e ->
+            EmailRow(e, isDefault = i == 0, showDefault = p.emails.size > 1, onRemove = if (linked) ({ removing = e.address }) else null)
+        }
+        if (p.emails.isEmpty()) Text(stringResource(R.string.email_none),
             color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+        if (linked) TextButton(onClick = { adding = true }, modifier = Modifier.testTag("email-add")) {
+            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(stringResource(R.string.email_add), modifier = Modifier.padding(start = 6.dp))
+        }
+    }
+    if (adding) AddressDialog(existing = p.emails.map { it.address }) { a ->
+        adding = false
+        if (a != null) scope.launch {
+            val ok = withContext(Dispatchers.IO) { PeopleStore.addEmailToContact(context, p.id, a) }
+            if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+    removing?.let { a ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            text = { Text(stringResource(R.string.email_remove_title, a)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) { PeopleStore.removeEmailFromContact(context, p.id, a) }
+                        if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }, modifier = Modifier.testTag("email-remove-confirm")) { Text(stringResource(R.string.email_remove), color = pal.WarningText) }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 }
 
@@ -128,7 +164,7 @@ private fun Card(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun EmailRow(e: PersonEmail, isDefault: Boolean, showDefault: Boolean) {
+private fun EmailRow(e: PersonEmail, isDefault: Boolean, showDefault: Boolean, onRemove: (() -> Unit)? = null) {
     val pal = LocalPrimeMinutesPalette.current
     HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(top = Spacing.sm))
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -138,14 +174,18 @@ private fun EmailRow(e: PersonEmail, isDefault: Boolean, showDefault: Boolean) {
         }
         // The line above already reads 寄信時預設使用; a label here made TalkBack say it twice.
         if (isDefault && showDefault) Icon(Icons.Filled.Star, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(20.dp))
+        if (onRemove != null) IconButton(onClick = onRemove, modifier = Modifier.testTag("email-remove")) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.email_remove_cd, e.address), tint = pal.Slate400, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
 /** One address field, validated as typed (full-width characters accepted); [onDone] gets it, or null. */
 @Composable
-internal fun AddressDialog(title: String = stringResource(R.string.email_add), onDone: (String?) -> Unit) {
+internal fun AddressDialog(title: String = stringResource(R.string.email_add), existing: List<String> = emptyList(), onDone: (String?) -> Unit) {
     var text by remember { mutableStateOf("") }
-    val ok = EmailRules.isValid(text)
+    val check = studio.primeminutes.core.people.ContactEmailOps.check(existing, text)
+    val ok = check is studio.primeminutes.core.people.ContactEmailOps.Check.Ok
     AlertDialog(
         onDismissRequest = { onDone(null) },
         title = { Text(title) },
@@ -153,7 +193,9 @@ internal fun AddressDialog(title: String = stringResource(R.string.email_add), o
             OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
                 placeholder = { Text("name@example.com") },
                 isError = text.isNotBlank() && !ok,
-                supportingText = if (text.isNotBlank() && !ok) ({ Text(stringResource(R.string.email_invalid)) }) else null,
+                supportingText = if (text.isNotBlank() && !ok) ({
+                    Text(stringResource(if (check is studio.primeminutes.core.people.ContactEmailOps.Check.Duplicate) R.string.email_duplicate else R.string.email_invalid))
+                }) else null,
                 // Done = the save button once the address validates; the keyboard's return key was a
                 // dead Enter (singleLine, no action wired).
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
@@ -162,5 +204,42 @@ internal fun AddressDialog(title: String = stringResource(R.string.email_add), o
         },
         confirmButton = { TextButton(enabled = ok, onClick = { onDone(EmailRules.normalize(text)) }) { Text(stringResource(R.string.people_save)) } },
         dismissButton = { TextButton(onClick = { onDone(null) }) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+/**
+ * Right after a speaker is named as a new person: an optional address for the new contact. [onDone]
+ * gets the address (null: Skip), [onEditInContacts] creates the contact and opens its editor instead.
+ */
+@Composable
+internal fun NewPersonEmailDialog(name: String, onDone: (String?) -> Unit, onEditInContacts: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    var text by remember { mutableStateOf("") }
+    val ok = EmailRules.isValid(text)
+    AlertDialog(
+        // Dismissing keeps the name (it was chosen): the same as Skip.
+        onDismissRequest = { onDone(null) },
+        title = { Text(stringResource(R.string.email_new_title, name)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.email_new_hint), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(text, { text = it }, singleLine = true, colors = primeMinutesTextFieldColors(),
+                    placeholder = { Text("name@example.com") },
+                    isError = text.isNotBlank() && !ok,
+                    supportingText = if (text.isNotBlank() && !ok) ({ Text(stringResource(R.string.email_invalid)) }) else null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (ok) onDone(EmailRules.normalize(text)) }),
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm).testTag("new-person-email"))
+                TextButton(onClick = onEditInContacts, modifier = Modifier.testTag("new-person-edit-contact")) {
+                    Text(stringResource(R.string.contact_edit))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = ok, onClick = { onDone(EmailRules.normalize(text)) }, modifier = Modifier.testTag("new-person-email-save")) {
+                Text(stringResource(R.string.people_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = { onDone(null) }, modifier = Modifier.testTag("new-person-email-skip")) { Text(stringResource(R.string.email_skip)) } },
     )
 }

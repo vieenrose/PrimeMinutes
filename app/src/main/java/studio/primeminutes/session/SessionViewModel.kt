@@ -288,13 +288,15 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     }
 
     /** [speaker] is someone new, named [name]: a new person of the directory. */
-    fun linkNewPerson(speaker: Int, name: String) {
+    fun linkNewPerson(speaker: Int, name: String, email: String? = null, onCreated: ((studio.primeminutes.core.people.Person) -> Unit)? = null) {
         val n = name.trim().ifBlank { return }
         viewModelScope.launch {
-            // People == OS contacts: a new person is a new contact; if Contacts refuses, a plain label.
-            val p = withContext(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.createWithContact(ctx, n) }
+            // People == OS contacts: a new person is a new contact (with the address typed right after
+            // naming, if any); if Contacts refuses, a plain label.
+            val p = withContext(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.createWithContact(ctx, n, listOfNotNull(email)) }
             if (p == null) { linkUndoable(speaker, null, n); return@launch }
             linkUndoable(speaker, p.id, p.name)
+            onCreated?.invoke(p)
             withContext(Dispatchers.IO) { studio.primeminutes.core.people.VoiceLinks.confirmed(ctx, now.libraryDir?.name, speaker, p.id) }
         }
     }

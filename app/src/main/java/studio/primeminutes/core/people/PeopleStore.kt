@@ -229,8 +229,8 @@ object PeopleStore {
     // --- OS contacts (people == contacts) -----------------------------------------------------
 
     /** A new person backed by a new OS contact named [name]; null when Contacts refused (no permission, provider error). */
-    fun createWithContact(context: Context, name: String): Person? {
-        val c = ContactsProvider.insert(context, name.trim()) ?: return null
+    fun createWithContact(context: Context, name: String, emails: List<String> = emptyList()): Person? {
+        val c = ContactsProvider.insert(context, name.trim(), emails.filter(EmailRules::isValid).map(EmailRules::normalize)) ?: return null
         return createForContact(context, c)
     }
 
@@ -276,6 +276,16 @@ object PeopleStore {
         val st = ContactsProvider.resolve(context, p.contact)
         if (st !is LinkState.Linked) return false
         val ok = ContactsProvider.addEmails(context, st.contact.id, listOf(EmailRules.normalize(address)))
+        syncContacts(context)
+        return ok
+    }
+
+    /** Removes [address] from [id]'s contact, then reads it back; false when not linked or refused. */
+    fun removeEmailFromContact(context: Context, id: String, address: String): Boolean {
+        val p = doc.value.byId(id) ?: return false
+        val st = ContactsProvider.resolve(context, p.contact)
+        if (st !is LinkState.Linked) return false
+        val ok = ContactsProvider.removeEmail(context, st.contact.id, address)
         syncContacts(context)
         return ok
     }

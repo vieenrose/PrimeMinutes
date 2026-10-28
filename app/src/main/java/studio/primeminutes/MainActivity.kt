@@ -577,6 +577,7 @@ private fun TranscribeScreen(
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // The People screen (the directory of named speakers), over whatever screen opened it.
     var peopleOpen by remember { mutableStateOf(false) }
+    var peopleOpenId by remember { mutableStateOf<String?>(null) }
     // "Email participants" sheet (docs/design/speaker-contacts.md §4).
     var mailOpen by remember { mutableStateOf(false) }
     // Names given before the directory existed become its people (once, in the background).
@@ -2062,8 +2063,9 @@ private fun TranscribeScreen(
     studio.primeminutes.ui.VoiceOutlierPrompt()
     if (peopleOpen) {
         studio.primeminutes.ui.PeopleScreen(
-            onClose = { peopleOpen = false },
-            onOpenMeeting = { e, t -> peopleOpen = false; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
+            onClose = { peopleOpen = false; peopleOpenId = null },
+            initialPersonId = peopleOpenId,
+            onOpenMeeting = { e, t -> peopleOpen = false; peopleOpenId = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
             voiceHeader = { studio.primeminutes.ui.VoiceSettingsCard() },
             voiceOfPerson = { p -> studio.primeminutes.ui.PersonVoiceRow(p) },
         )
@@ -2151,7 +2153,15 @@ private fun TranscribeScreen(
                 studio.primeminutes.core.people.CleanSpeech.sampleStart(s.utterances, sid)?.let { t -> seekAndPlay((t * 1000).toInt()) }
             }) else null,
             onLink = { p -> vm.linkPerson(sid, p.id) },
-            onNew = { n -> vm.linkNewPerson(sid, n) },
+            onNew = { n, e, edit ->
+                vm.linkNewPerson(sid, n, e, if (!edit) null else ({ p ->
+                    val i = p.contact?.let { studio.primeminutes.core.people.ContactsProvider.editIntent(it) }
+                    try { if (i != null) context.startActivity(i) } catch (_: android.content.ActivityNotFoundException) {
+                        Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+                    }
+                }))
+            },
+            onOpenPerson = { p -> vm.cancelSpeakerEdit(); peopleOpenId = p.id; peopleOpen = true },
             onClear = { vm.clearSpeakerName(sid) },
             onLabel = { n -> vm.labelSpeaker(sid, n) },
             onMerge = { into -> vm.cancelSpeakerEdit(); vm.mergeSpeaker(sid, into) },

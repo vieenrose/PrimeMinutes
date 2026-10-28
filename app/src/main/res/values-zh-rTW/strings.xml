@@ -696,6 +696,14 @@
     <string name="contact_deleted">已從聯絡人中刪除。會議裡仍保留這個名字。</string>
     <string name="contact_not_in_contacts">尚未加入聯絡人</string>
     <string name="contact_edit">在聯絡人中編輯</string>
+    <string name="email_new_title">要為%1$s加上電子郵件嗎？</string>
+    <string name="email_new_hint">可略過：會存進聯絡人。</string>
+    <string name="email_skip">略過</string>
+    <string name="email_duplicate">這個聯絡人已經有這個地址</string>
+    <string name="email_remove_cd">移除 %1$s</string>
+    <string name="email_remove_title">要從聯絡人移除 %1$s 嗎？</string>
+    <string name="email_write_failed">聯絡人沒有接受這項變更</string>
+    <string name="speaker_open_person">開啟%1$s的頁面</string>
     <string name="email_none">沒有電子郵件地址</string>
     <string name="email_none_edit_in_contacts">沒有電子郵件地址：請在聯絡人中新增</string>
     <string name="me_pick_contact">聯絡人中的我…</string>

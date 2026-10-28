@@ -54,18 +54,27 @@ object ContactsProvider {
     /** Adds [addresses] to the first raw contact of [contactId] (the "add an address" path, the migration). */
     fun addEmails(context: Context, contactId: Long, addresses: List<String>): Boolean = runCatching {
         if (addresses.isEmpty()) return true
-        val raw = context.contentResolver.query(ContactsContract.RawContacts.CONTENT_URI, arrayOf(ContactsContract.RawContacts._ID),
-            "${ContactsContract.RawContacts.CONTACT_ID}=?", arrayOf(contactId.toString()), null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
-            ?: return false
-        val ops = ArrayList(addresses.map { e ->
-            ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValue(ContactsContract.Data.RAW_CONTACT_ID, raw)
-                .withValue(ContactsContract.Data.MIMETYPE, Email.CONTENT_ITEM_TYPE)
-                .withValue(Email.ADDRESS, e).withValue(Email.TYPE, Email.TYPE_WORK).build()
-        })
-        context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
+        val raw = rawIds(context, contactId).firstOrNull() ?: return false
+        context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ContactEmailOps.insertOps(raw, addresses))
         true
     }.onFailure { Log.w(TAG, "addEmails failed", it) }.getOrDefault(false)
+
+    /** Removes every Email row of [contactId] equal to [address] (same [EmailRules.key]); false when none went. */
+    fun removeEmail(context: Context, contactId: Long, address: String): Boolean = runCatching {
+        val rows = context.contentResolver.query(Email.CONTENT_URI, arrayOf(Email._ID, Email.ADDRESS), "${Email.CONTACT_ID}=?",
+            arrayOf(contactId.toString()), null)?.use { c ->
+            buildList { while (c.moveToNext()) add(c.getLong(0) to (c.getString(1) ?: "")) }
+        }.orEmpty()
+        val ids = ContactEmailOps.rowsToDelete(rows, address)
+        if (ids.isEmpty()) return false
+        context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ContactEmailOps.deleteOps(ids))
+        true
+    }.onFailure { Log.w(TAG, "removeEmail failed", it) }.getOrDefault(false)
+
+    private fun rawIds(context: Context, contactId: Long): List<Long> =
+        context.contentResolver.query(ContactsContract.RawContacts.CONTENT_URI, arrayOf(ContactsContract.RawContacts._ID),
+            "${ContactsContract.RawContacts.CONTACT_ID}=?", arrayOf(contactId.toString()), null)
+            ?.use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }.orEmpty()
 
     private val CONTACT_PROJ = arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.LOOKUP_KEY, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
 
@@ -149,4 +158,39 @@ object ContactsProvider {
         val uri = ContactsContract.Contacts.getLookupUri(link.id ?: return false, link.key)
         context.contentResolver.delete(uri, null, null) > 0
     }.getOrDefault(false)
+}
+
+/** The e-mail writes on a contact, split from the provider calls so they can be unit-tested. */
+object ContactEmailOps {
+    sealed interface Check {
+        data class Ok(val address: String) : Check
+        data object Invalid : Check
+        data object Duplicate : Check
+    }
+
+    /** [typed] checked against the contact's [existing] addresses: normalized when it can be added. */
+    fun check(existing: List<String>, typed: String): Check {
+        if (!EmailRules.isValid(typed)) return Check.Invalid
+        val a = EmailRules.normalize(typed)
+        val k = EmailRules.key(a)
+        return if (existing.any { EmailRules.key(it) == k }) Check.Duplicate else Check.Ok(a)
+    }
+
+    /** One Email data row per address on raw contact [rawId] (work type, as the app's inserts). */
+    fun insertOps(rawId: Long, addresses: List<String>): ArrayList<ContentProviderOperation> = ArrayList(addresses.map { e ->
+        ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+            .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+            .withValue(ContactsContract.Data.MIMETYPE, Email.CONTENT_ITEM_TYPE)
+            .withValue(Email.ADDRESS, EmailRules.normalize(e)).withValue(Email.TYPE, Email.TYPE_WORK).build()
+    })
+
+    /** The data row ids among [rows] (id to address) that hold [address]. */
+    fun rowsToDelete(rows: List<Pair<Long, String>>, address: String): List<Long> {
+        val k = EmailRules.key(address)
+        return rows.filter { EmailRules.key(it.second) == k }.map { it.first }
+    }
+
+    fun deleteOps(ids: List<Long>): ArrayList<ContentProviderOperation> = ArrayList(ids.map {
+        ContentProviderOperation.newDelete(android.content.ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, it)).build()
+    })
 }

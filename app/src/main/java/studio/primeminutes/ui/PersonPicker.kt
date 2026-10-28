@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPage
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -112,6 +113,10 @@ fun PersonPickerSheet(
     allowClear: Boolean = current?.person != null || (current != null && current.label != defaultLabel(current.id)),
     /** Plain labels instead of people when Contacts is not granted (the rename sheet; false: pick people only). */
     allowLabel: Boolean = true,
+    /** [current] is a person already: one tap to their page (null hides it). */
+    onOpenPerson: ((Person) -> Unit)? = null,
+    /** [current] is a linked person: one tap to add an address to their contact (null hides it). */
+    onAddEmail: ((Person) -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
@@ -187,6 +192,21 @@ fun PersonPickerSheet(
             )
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                 if (!access.granted) item { ContactsBlockedCard(access) }
+                val named = current?.person?.let { doc.byId(it) }
+                if (named != null && query.isBlank() && (onOpenPerson != null || onAddEmail != null)) item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        if (onOpenPerson != null) TextButton(onClick = { onOpenPerson(named) }, modifier = Modifier.testTag("speaker-open-person")) {
+                            Icon(Icons.Filled.ContactPage, contentDescription = null, tint = pal.Sky)
+                            Text(stringResource(R.string.speaker_open_person, named.name), color = pal.Sky, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp))
+                        }
+                        if (onAddEmail != null && ContactLinks.isLinked(named)) TextButton(onClick = { onAddEmail(named) }, modifier = Modifier.testTag("speaker-add-email")) {
+                            Icon(Icons.Filled.Email, contentDescription = null, tint = pal.Sky)
+                            Text(stringResource(R.string.email_add), color = pal.Sky, maxLines = 1, modifier = Modifier.padding(start = 6.dp))
+                        }
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = Spacing.xs), color = pal.Hairline)
+                }
                 if (query.isBlank() && (suggested.isNotEmpty() || voiceNote != null)) {
                     item { SectionLabel(stringResource(R.string.people_section_voice)) }
                     items(suggested, key = { "v" + it.first.id }) { (p, s) ->
@@ -290,7 +310,8 @@ fun SpeakerNameFlow(
     speaker: PickerSpeaker,
     speakers: List<PickerSpeaker>,
     onLink: (Person) -> Unit,
-    onNew: (String) -> Unit,
+    /** A new person: name, the address typed right after (null: skipped), and whether to open the contact's editor once created. */
+    onNew: (name: String, email: String?, editInContacts: Boolean) -> Unit,
     onClear: () -> Unit,
     onMerge: (into: Int) -> Unit,
     /** No Contacts permission: [speaker] is just called this, in this meeting. */
@@ -299,8 +320,12 @@ fun SpeakerNameFlow(
     suggestions: List<VoiceSuggestion> = emptyList(),
     voiceNote: String? = null,
     onPlaySample: (() -> Unit)? = null,
+    /** The speaker is a person already: open their page. */
+    onOpenPerson: ((Person) -> Unit)? = null,
 ) {
     var mergeAsk by remember { mutableStateOf<Pair<Person, PickerSpeaker>?>(null) }
+    var newAsk by remember { mutableStateOf<String?>(null) }
+    var emailFor by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     fun linkContact(c: OsContact) {
@@ -310,24 +335,42 @@ fun SpeakerNameFlow(
             if (other != null) mergeAsk = p to other else onLink(p)
         }
     }
-    if (mergeAsk == null) PersonPickerSheet(
+    if (mergeAsk == null && newAsk == null && emailFor == null) PersonPickerSheet(
         title = stringResource(R.string.people_who_is, speaker.label),
         current = speaker, speakers = speakers,
         suggestions = suggestions, voiceNote = voiceNote, onPlaySample = onPlaySample,
         onDismiss = onDismiss,
+        onOpenPerson = onOpenPerson,
+        onAddEmail = { p -> emailFor = p },
         onPick = { pick ->
             when (pick) {
                 is PersonPick.Existing -> {
                     val other = speakers.firstOrNull { it.id != speaker.id && it.person == pick.person.id }
                     if (other != null) mergeAsk = pick.person to other else onLink(pick.person)
                 }
-                is PersonPick.New -> onNew(pick.name)
+                // Named as someone new: offer an address for the new contact before creating it.
+                is PersonPick.New -> newAsk = pick.name
                 PersonPick.Clear -> onClear()
                 is PersonPick.Contact -> linkContact(pick.contact)
                 is PersonPick.Label -> onLabel(pick.name)
             }
         },
     )
+    newAsk?.let { name ->
+        NewPersonEmailDialog(name,
+            onDone = { e -> newAsk = null; onNew(name, e, false) },
+            onEditInContacts = { newAsk = null; onNew(name, null, true) })
+    }
+    emailFor?.let { p ->
+        AddressDialog(existing = p.emails.map { it.address }) { a ->
+            emailFor = null
+            if (a == null) return@AddressDialog
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) { PeopleStore.addEmailToContact(context, p.id, a) }
+                if (!ok) android.widget.Toast.makeText(context, R.string.email_write_failed, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     mergeAsk?.let { (p, other) ->
         AlertDialog(
             onDismissRequest = { mergeAsk = null; onDismiss() },
