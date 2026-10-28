@@ -26,6 +26,8 @@
 | **Android** | 從 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK；App 每天檢查新版 | Android 8.0+，RAM 8 GB 以上最佳 | <img src="docs/screenshots/qr-android.png" width="110" alt="Android 下載 QR code"> |
 | **iOS** | [TestFlight 公開測試](https://testflight.apple.com/join/saH9YxEA)：先安裝 TestFlight App，再點連結加入 | iOS 17.0+，RAM 6 GB 以上最佳 | <img src="docs/screenshots/qr-ios.png" width="110" alt="iOS TestFlight QR code"> |
 
+**Android 擋下安裝時**：Play 安全防護跳出警告，點「更多詳細資料 → 仍要安裝」；小米／HyperOS 在安全提示中選擇允許安裝即可（[#6](https://github.com/vieenrose/PrimeMinutes/issues/6)）。
+
 這個分支是 Android 版（Kotlin、Jetpack Compose）；iOS 版的程式碼與說明在 [ios 分支](https://github.com/vieenrose/PrimeMinutes/blob/ios/README.md)。兩個版本共用同一套語音引擎與 AI 模型，功能一致。
 
 ## 特色
