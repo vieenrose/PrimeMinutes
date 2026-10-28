@@ -35,7 +35,8 @@ final class OpenCC: @unchecked Sendable {
 
     // MARK: dictionaries
     private static func load(_ name: String, reverse: Bool = false, into m: inout [String: String]) {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "opencc"),
+        guard let url = dictDir.map({ $0.appendingPathComponent(name + ".txt") })
+                ?? Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "opencc"),
               let s = try? String(contentsOf: url, encoding: .utf8) else { return }
         for line in s.split(separator: "\n") where !line.hasPrefix("#") {
             guard let tab = line.firstIndex(of: "\t") else { continue }
@@ -44,11 +45,31 @@ final class OpenCC: @unchecked Sendable {
             else if let f = vals.first, f != src { m[src] = f }
         }
     }
+    /// Host tests read the dictionaries from ios/App/Resources/opencc (`VOX_OPENCC_DIR`); the app uses its bundle.
+    private static let dictDir: URL? = ProcessInfo.processInfo.environment["VOX_OPENCC_DIR"].map { URL(fileURLWithPath: $0) }
     nonisolated(unsafe) private static var s2tCache: [String: String]?   // only read and set inside memo, under lock
     private static func s2t() -> [String: String] {
         if let c = s2tCache { return c }
-        var m: [String: String] = [:]; load("STPhrases", into: &m); load("STCharacters", into: &m); s2tCache = m; return m
+        var m: [String: String] = [:]; load("STPhrases", into: &m); load("STCharacters", into: &m)
+        for k in s2tDrop { m[k] = nil }
+        m.merge(s2tGuard) { _, g in g }
+        s2tCache = m; return m
     }
+    /// STPhrases maps 了解 (了解到, 不了解, 据了解) to 瞭解, and longest match then reads the particle 了 plus the
+    /// next word as that phrase: 討論了解決方案 → 討論瞭解決方案, 說明了解約 → 說明瞭解約, even in Traditional input.
+    /// 了解 is a standard Taiwan spelling, so the character mapping (了→了) is right. Same lists as Android.
+    static let s2tDrop = ["了解", "了解到", "不了解", "据了解"]
+    /// The same cross-word problem for 了如 / 了然 (討論了如何, 做完了然後) and 明了 after a verb ending in 明
+    /// (說明了 → 說明瞭): longer identity keys win the longest match; 了如指掌, 一目了然, 明了 keep their entries.
+    static let s2tGuard: [String: String] = {
+        var g = ["了如何": "了如何", "了然后": "了然後", "了然後": "了然後"]
+        let toTrad: [Character: Character] = ["说": "說", "证": "證", "声": "聲", "阐": "闡", "标": "標", "写": "寫", "讲": "講", "点": "點", "聪": "聰"]
+        for v in ["說明", "證明", "表明", "聲明", "查明", "闡明", "標明", "註明", "注明", "指明", "寫明", "講明", "點明", "聰明", "精明",
+                  "说明", "证明", "声明", "阐明", "标明", "写明", "讲明", "点明", "聪明"] {
+            g[v + "了"] = String(v.map { toTrad[$0] ?? $0 }) + "了"
+        }
+        return g
+    }()
     nonisolated(unsafe) private static var cache: [String: OpenCC] = [:]; private static let lock = NSLock()   // cache guarded by lock
     private static func memo(_ k: String, _ b: () -> OpenCC) -> OpenCC { lock.lock(); defer { lock.unlock() }; if let c = cache[k] { return c }; let c = b(); cache[k] = c; return c }
 
