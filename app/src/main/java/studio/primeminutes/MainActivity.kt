@@ -2424,7 +2424,6 @@ private fun TranscribeScreen(
         ExportingOverlay(onDismiss = { vm.setExporting(false) })
     }
     if (s.opening) OpeningOverlay()
-    BackHandler(s.showConfigSheet || s.showPodcastSheet || s.showAddSourceSheet) {
-        vm.closeSheets()
-    }
+    // No BackHandler for the sheets: AddSource/Podcast are ModalBottomSheets, which own back
+    // (and its predictive-back shrink) in their own window; full-screen Settings has its own.
 }
