@@ -5,6 +5,7 @@ import os
 import Combine
 
 @main struct PrimeMinutesApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("textSize") private var textSize = 0
     @Environment(\.scenePhase) private var phase
     init() { BackgroundWork.register() }
