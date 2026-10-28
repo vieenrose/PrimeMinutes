@@ -516,6 +516,7 @@ struct SessionView: View {
             }
         }
         .modifier(VoiceOutlierPrompt())
+        .modifier(NewPersonEmailPrompt())
         // A sheet, not an alert: an alert's field shows one line of a paragraph-long utterance.
         .sheet(isPresented: Binding(get: { editingLine != nil }, set: { if !$0 { editingLine = nil } })) {
             if editingLine != nil {

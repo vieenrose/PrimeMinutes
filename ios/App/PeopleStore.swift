@@ -172,7 +172,18 @@ import Foundation
         guard PersonNames.isPersonName(n), let key = OSContacts.create(n) else { return nil }
         let p = create(n)
         linkContact(p.id, PickedContact(name: n, emails: [], key: key))
+        askEmailFor = p.id   // "Add an e-mail for X?" (optional)
         return doc.byId(p.id) ?? p
+    }
+    /// The person "Add an e-mail for X?" is asked about (NewPersonEmailPrompt), nil when none.
+    @Published var askEmailFor: String?
+    /// An address typed in the app: into the person's contact when linked (its copy here is the cache).
+    func addContactEmail(_ id: String, _ address: String) {
+        let a = EmailRules.normalize(address)
+        guard EmailRules.isValid(a) else { StatusLog.add("people: not an e-mail address"); return }
+        if let c = doc.byId(id)?.contact, c.platform == "ios" { OSContacts.addEmails(c.key, [a]); addEmail(id, a, from: PersonEmail.fromContact) }
+        else { addEmail(id, a) }
+        StatusLog.add("contacts: address added for \(doc.byId(id)?.name ?? id)")
     }
     /// People of the app without a contact (made before People became Contacts, or whose contact was deleted).
     /// "Me" is left out: the user's own card is theirs to pick, never a duplicate made by the app.

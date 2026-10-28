@@ -126,6 +126,10 @@ struct PersonPickerSheet: View {
                         if sec.canAdd {
                             Button { addNew(query) } label: { Label(L(contacts == .denied ? "people_add_label" : "people_add_new", query.trimmingCharacters(in: .whitespacesAndNewlines)), systemImage: "plus").fontWeight(.semibold) }
                         }
+                        if let id = current?.person, let p = store.doc.byId(id) {
+                            Button { store.askEmailFor = id } label: { Label(L(p.emails.isEmpty ? "email_add_for" : "email_add_another", p.name), systemImage: "envelope") }
+                                .accessibilityIdentifier("picker-add-email")
+                        }
                         if clearable, let c = current {
                             Button { onPick(.clear) } label: { Text(L("people_clear_name", defaultLabel(c.id))).foregroundStyle(.secondary) }
                         }
@@ -142,6 +146,7 @@ struct PersonPickerSheet: View {
             Button(L("people_same_no", a.0)) { sameAsk = nil; onPick(.new(a.0)) }
         }
         .task { contacts = await OSContacts.requestIfNeeded() }
+        .modifier(NewPersonEmailPrompt())
         .task {   // DEV: VOX_CONTACT_TAP=speaker taps "Choose from contacts…" (device checks without taps)
             guard allowContacts, Dev.env["VOX_CONTACT_TAP"] == "speaker" else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000); chooseContact()

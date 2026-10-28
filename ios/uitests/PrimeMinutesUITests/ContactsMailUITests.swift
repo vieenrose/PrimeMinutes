@@ -214,4 +214,26 @@ final class ContactsMailUITests: XCTestCase {
         if let u = button(["Unlink", "取消連結", "取消关联"]) { u.tap(); sleep(2) } else { XCTFail("no Unlink") }
         shot("me-4-unlinked", tree: true)
     }
+
+    /// A NEW person (PM_NAME, default "PMTEST Nia") → "Add an e-mail for X" right away → typed + Save → the contact has it
+    /// (Contacts app search), and the meeting's mail sheet lists it as a recipient.
+    func testNewPersonEmail() {
+        let name = env["PM_NAME"] ?? "PMTEST Nia", addr = env["PM_ADDR"] ?? "nia.pmtest@example.com"
+        launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "2", "VOX_PICKAUTO": name])
+        let f = app.textFields["new-person-email"]
+        XCTAssertTrue(f.waitForExistence(timeout: 12), "the add-e-mail prompt follows the new person")
+        shot("ne-1-prompt", tree: true)
+        f.tap(); f.typeText(addr); shot("ne-2-typed")
+        button(["Save", "儲存", "保存"])?.tap(); sleep(2); shot("ne-3-saved")
+        let contacts = XCUIApplication(bundleIdentifier: "com.apple.MobileAddressBook")
+        contacts.launch(); sleep(3)
+        let s = contacts.searchFields.firstMatch
+        if s.waitForExistence(timeout: 6) { s.tap(); s.typeText(name); sleep(2) }
+        contacts.cells.firstMatch.tap(); sleep(2)   // the card: the address is there
+        shot("ne-4-contacts", tree: true)
+        XCTAssertTrue(contacts.staticTexts[addr].exists || contacts.buttons[addr].exists || contacts.debugDescription.contains(addr), "address in Contacts")
+        contacts.terminate()
+        launch(["VOX_OPEN": "id:" + meeting, "VOX_MAIL": "1"]); sleep(4); shot("ne-5-mail", tree: true)
+        XCTAssertTrue(app.debugDescription.contains(addr), "address as a mail recipient")
+    }
 }

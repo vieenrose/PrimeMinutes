@@ -162,3 +162,20 @@ struct MeContactRow: View {
         }
     }
 }
+
+/// Right after a speaker is named as a new person (and from the speaker sheet / person page): "Add an e-mail for X?"
+/// The address goes into the person's contact (CNSaveRequest update); optional (Skip), "Edit in Contacts" for the rest.
+struct NewPersonEmailPrompt: ViewModifier {
+    @ObservedObject private var store = PeopleStore.shared
+    @State private var draft = ""
+    func body(content: Content) -> some View {
+        let p = store.doc.byId(store.askEmailFor)
+        content.alert(L("email_add_for", p?.name ?? ""), isPresented: Binding(get: { p != nil }, set: { if !$0 { store.askEmailFor = nil } })) {
+            TextField("name@example.com", text: $draft).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .textContentType(.emailAddress).accessibilityIdentifier("new-person-email")
+            Button(L("people_save")) { if let p { store.addContactEmail(p.id, draft) }; draft = ""; store.askEmailFor = nil }
+            if let k = p?.contact?.key { Button(L("contact_edit")) { store.askEmailFor = nil; OSContacts.edit(k) { store.syncContacts() } } }
+            Button(L("email_skip"), role: .cancel) { draft = ""; store.askEmailFor = nil }
+        } message: { Text(L("email_add_text")) }
+    }
+}

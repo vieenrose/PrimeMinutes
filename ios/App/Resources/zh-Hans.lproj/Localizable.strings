@@ -645,3 +645,7 @@
 "contact_me_pick" = "在通讯录中选择我…";
 "contact_me_change" = "改选其他名片…";
 "contact_me_linked" = "通讯录中的你：%@";
+"email_add_for" = "为 %@ 添加电子邮件";
+"email_add_another" = "为 %@ 再添加一个电子邮件";
+"email_add_text" = "会保存到联系人中，用来发送会议纪要。可跳过。";
+"email_skip" = "跳过";

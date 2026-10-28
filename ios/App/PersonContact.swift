@@ -111,7 +111,9 @@ struct PersonContactSections: View {
                 }
             }
             if p.emails.isEmpty { Text(L(linked ? "email_none_contact" : "email_none")).font(.footnote).foregroundStyle(.secondary) }
+            Button { store.askEmailFor = p.id } label: { Label(L("email_add"), systemImage: "plus") }.accessibilityIdentifier("email-add")
         } header: { Label(L("email_card_title"), systemImage: "envelope") }
         .task { store.syncContacts() }
+        .modifier(NewPersonEmailPrompt())
     }
 }

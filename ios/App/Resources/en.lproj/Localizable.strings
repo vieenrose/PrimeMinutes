@@ -645,3 +645,7 @@
 "contact_me_pick" = "This is me in Contacts…";
 "contact_me_change" = "Choose another card…";
 "contact_me_linked" = "You in Contacts: %@";
+"email_add_for" = "Add an e-mail for %@";
+"email_add_another" = "Add another e-mail for %@";
+"email_add_text" = "Saved in the contact, for sending the minutes. Optional.";
+"email_skip" = "Skip";

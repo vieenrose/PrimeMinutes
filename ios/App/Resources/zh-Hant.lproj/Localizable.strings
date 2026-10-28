@@ -645,3 +645,7 @@
 "contact_me_pick" = "在聯絡人中選擇我…";
 "contact_me_change" = "改選其他名片…";
 "contact_me_linked" = "聯絡人中的你：%@";
+"email_add_for" = "為 %@ 新增電子郵件";
+"email_add_another" = "為 %@ 再新增一個電子郵件";
+"email_add_text" = "會存到聯絡人中，用來寄送會議紀錄。可略過。";
+"email_skip" = "略過";

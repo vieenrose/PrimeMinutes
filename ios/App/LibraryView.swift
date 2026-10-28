@@ -591,6 +591,7 @@ struct LiveJobView: View {
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
         }
+        .modifier(NewPersonEmailPrompt())
         .toolbar {
             if let j = job {
                 ToolbarItem(placement: .primaryAction) {
@@ -639,7 +640,7 @@ struct LiveJobView: View {
     private func link(_ k: Int, _ name: String) {
         m.screen.names = LiveNames.setting(m.screen.names, k, SpeakerLink(name: name))
         persistNames()
-        withAnimation { toast = L("people_linked") }
+        confirm(L("people_linked"))
     }
     /// Back to "Speaker n" (Android clearSpeakerName): the name goes at once, the person stays in the directory.
     private func clearName(_ k: Int) {
