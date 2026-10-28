@@ -6,8 +6,8 @@
 <key>CFBundleDisplayName</key><string>Prime Minutes</string>
 <key>CFBundleExecutable</key><string>PrimeMinutes</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>13</string>
-<key>CFBundleShortVersionString</key><string>0.53.1</string>
+<key>CFBundleVersion</key><string>14</string>
+<key>CFBundleShortVersionString</key><string>0.54.0</string>
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>zh-Hans</string></array>
