@@ -11,7 +11,7 @@ import Foundation
                         notes: [Note(id: 1, window: 0, ts: "0:01", tag: nil, text: "a note")])
         let md = Export.text(s, .md)
         check(md.contains("## " + L("agent_title")), "md notes heading: \(md)")
-        check(md.contains("- a note\u{00A0}`0:01`"), "md note bullet: \(md)")
+        check(md.contains("- a note\u{00A0}[0:01](#t-1)") && md.contains("- <a id=\"t-1\"></a>`00:01`"), "md note bullet + anchor: \(md)")
         let txt = Export.text(s, .txt)
         check(txt.contains(Export.plainHeading(L("agent_title"))), "txt notes heading: \(txt)")
         check(txt.contains("a note\u{00A0}[0:01]") && !txt.contains("#1"), "txt note bullet: \(txt)")
@@ -33,7 +33,8 @@ import Foundation
         check(Export.plain(en) == "AI NOTES\nDecision:\n- Ship on Monday\u{00A0}[1:02]", "en notes: \(Export.plain(en))")
         let sm = Export.summary("涵蓋多個方面 [0:15]。在營銷上 [1:16]，推出套餐 [1:49]。")
         check(sm == "涵蓋多個方面。\(wj)[0:15]在營銷上，推出套餐。\(wj)[1:16]" && !sm.contains("][") && !sm.contains(" ["), "summary cites: \(sm)")
-        check(Export.mdCites("a [0:18, 0:35]") == "a `0:18, 0:35`", "md multi-cite")
+        check(Export.mdCites("a [0:18, 0:35]") == "a `0:18, 0:35`", "md multi-cite, no turns")
+        check(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]) == "a。\u{2060}[0:18](#t-0)、[1:10](#t-65)", "md multi-cite links: \(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]))")
         check(Export.target(75, [1, 65, 81]) == 1 && Export.target(0, [5]) == 0, "cite target")
         // Design A: speaker turns with a fixed-width clock gutter (Android TranscriptExportTest goldens).
         let turns = Session(title: "", summary: "", seconds: 90, lines: [
@@ -46,7 +47,12 @@ import Foundation
         let t2 = Export.text(turns, .txt)
         check(t2.hasSuffix("[00:01] \(turns.name(0)): Hello there\n\n[01:05] \(turns.name(1)): 我們開始吧\n        接著討論預算，包括搬家公司報價\n\n[01:21] \(turns.name(0)): OK, let's go with the middle quote.\n"), "txt turns: \(t2)")
         let m2 = Export.text(turns, .md)
-        check(m2.hasSuffix("- `00:01` **\(turns.name(0))** Hello there\n\n- `01:05` **\(turns.name(1))** 我們開始吧\n  接著討論預算，包括搬家公司報價\n\n- `01:21` **\(turns.name(0))** OK, let's go with the middle quote.\n"), "md turns: \(m2)")
+        check(m2.hasSuffix("- <a id=\"t-1\"></a>`00:01` **\(turns.name(0))** Hello there\n\n- <a id=\"t-65\"></a>`01:05` **\(turns.name(1))** 我們開始吧\n  接著討論預算，包括搬家公司報價\n\n- <a id=\"t-81\"></a>`01:21` **\(turns.name(0))** OK, let's go with the middle quote.\n"), "md turns: \(m2)")
+        // Every md href has a matching anchor id.
+        let lm = Export.text(Session(title: "T", summary: "開始 [0:01]。後來 [1:05, 1:30]。", seconds: 90, lines: turns.lines, notes: []), .md) as NSString
+        let ids = Set(try! NSRegularExpression(pattern: #"<a id="(t-\d+)"></a>"#).matches(in: lm as String, range: NSRange(location: 0, length: lm.length)).map { lm.substring(with: $0.range(at: 1)) })
+        let hrefs = try! NSRegularExpression(pattern: #"\]\(#(t-\d+)\)"#).matches(in: lm as String, range: NSRange(location: 0, length: lm.length)).map { lm.substring(with: $0.range(at: 1)) }
+        check(hrefs == ["t-1", "t-65", "t-81"] && hrefs.allSatisfy(ids.contains), "md hrefs \(hrefs) ids \(ids)")
         let hour = Session(title: "", summary: "", seconds: 3725, lines: [Utterance(speaker: 0, start: 5, end: 6, text: "start"), Utterance(speaker: 1, start: 3723, end: 3725, text: "一小時後")], notes: [])
         check(Export.text(hour, .txt).hasSuffix("[00:00:05] \(hour.name(0)): start\n\n[01:02:03] \(hour.name(1)): 一小時後\n"), "hour clock zero-padded")
         // Every stamped line still parses as a ReaderProtocol LINE; subtitles keep one cue per utterance.

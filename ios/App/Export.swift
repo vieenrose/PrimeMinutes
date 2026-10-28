@@ -65,13 +65,19 @@ enum Export {
             return o + turns(s.lines).map { l in l.cont ? hang + l.text : "\n[\(gutterClock(l.u.start, pad))] \(s.name(l.u.speaker)): \(l.text)" }
                 .joined(separator: "\n").dropFirst().appending(turns(s.lines).isEmpty ? "" : "\n")
         case .md:
+            // Each turn opens with an anchor `t-<start second>` (once per second); every cite links to its turn.
+            let ts = turns(s.lines), starts = ts.filter { !$0.cont }.map { Int(max(0, $0.u.start)) }
             var o = "# \(s.title.isEmpty ? L("export_heading_transcript") : s.title)\n\n"
-            if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + mdCites(summary(s.summary)) + "\n\n" }
+            if !s.summary.isEmpty { o += "## " + L("export_heading_summary") + "\n\n" + mdCites(summary(s.summary), starts) + "\n\n" }
             if Prefs.showActions, let a = acts { o += "## " + L("export_heading_actions") + "\n\n" + a + "\n\n" }
-            if let n = notesSection(s.notes) { o += markdown(n) + "\n\n" }
+            if let n = notesSection(s.notes) { o += markdown(n, starts) + "\n\n" }
             let pad = gutterWidth(s.lines)
-            return o + "## " + L("export_heading_transcript") + "\n\n" + turns(s.lines).map { l in l.cont ? "  " + l.text : "\n- `\(gutterClock(l.u.start, pad))` **\(s.name(l.u.speaker))** \(l.text)" }
-                .joined(separator: "\n").dropFirst().appending(turns(s.lines).isEmpty ? "" : "\n")
+            var named = Set<Int>()
+            return o + "## " + L("export_heading_transcript") + "\n\n" + ts.map { l -> String in
+                if l.cont { return "  " + l.text }
+                let sec = Int(max(0, l.u.start)), anchor = named.insert(sec).inserted ? "<a id=\"t-\(sec)\"></a>" : ""
+                return "\n- \(anchor)`\(gutterClock(l.u.start, pad))` **\(s.name(l.u.speaker))** \(l.text)" }
+                .joined(separator: "\n").dropFirst().appending(ts.isEmpty ? "" : "\n")
         }
     }
 
@@ -124,8 +130,25 @@ enum Export {
     static let citeRe = try! NSRegularExpression(pattern: #"\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、]\s*\d+:\d{2}(?::\d{2})?)*)\]"#)
     static let timeRe = try! NSRegularExpression(pattern: #"\d+:\d{2}(?::\d{2})?"#)
 
-    /// Markdown cites: `[0:15]` → `` `0:15` `` (a multi-cite stays one code span, `a, b`).
-    static func mdCites(_ t: String) -> String { citeRe.stringByReplacingMatches(in: t, range: NSRange(location: 0, length: (t as NSString).length), withTemplate: "`$1`") }
+    /// Markdown cites: `[0:15]` → `[0:15](#t-15)`, the anchor of the last turn starting at or before it (else the
+    /// first); a multi-cite `[a, b]` → `[a](#t-A), [b](#t-B)`, separator kept. No turns (`starts` empty) → `` `0:15` ``.
+    static func mdCites(_ t: String, _ starts: [Int] = []) -> String {
+        let ns = t as NSString
+        var out = "", at = 0
+        for m in citeRe.matches(in: t, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: at, length: m.range.location - at)); at = m.range.location + m.range.length
+            let inner = ns.substring(with: m.range(at: 1))
+            if starts.isEmpty { out += "`\(inner)`"; continue }
+            let ins = inner as NSString
+            var j = 0
+            for tm in timeRe.matches(in: inner, range: NSRange(location: 0, length: ins.length)) {
+                out += ins.substring(with: NSRange(location: j, length: tm.range.location - j))   // the separator
+                let v = ins.substring(with: tm.range)
+                out += "[\(v)](#t-\(starts[target(seconds(v), starts)!]))"; j = tm.range.location + tm.range.length
+            }
+        }
+        return out + ns.substring(from: at)
+    }
 
     private static func isZh(_ s: String) -> Bool { s.unicodeScalars.contains { (0x3400...0x9FFF).contains($0.value) } }
 
@@ -146,11 +169,11 @@ enum Export {
     }
 
     /// The AI notes as Markdown: `## heading`, `### label` per type, `- text。⁠`0:15`` bullets.
-    static func markdown(_ s: NoteSection) -> String {
+    static func markdown(_ s: NoteSection, _ starts: [Int] = []) -> String {
         var o = "## " + s.heading + "\n\n"
         for g in s.groups {
             if let l = g.label { o += "### " + l + "\n\n" }
-            for i in g.items { o += "- " + mdCites(line(i)) + "\n" }
+            for i in g.items { o += "- " + mdCites(line(i), starts) + "\n" }
             o += "\n"
         }
         while o.hasSuffix("\n") { o.removeLast() }
