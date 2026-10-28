@@ -172,6 +172,7 @@ actor ModelStore {
             done += f.size; progress(done, total)
         }
         try m.rev.write(to: stamp, atomically: true, encoding: .utf8)
+        BackgroundDownloader.shared.endBridge()
     }
 
     /// The GPU graph's path when it is fully there.

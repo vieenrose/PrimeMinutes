@@ -54,6 +54,10 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
     private let lock = NSLock()
     private var waiters: [String: Waiter] = [:]
     private var lastReport: [String: Date] = [:]
+    /// Background time asked for when a file lands while the app is suspended: iOS wakes the app only briefly, and the
+    /// sha check + the next file's request must happen before it suspends again, else the chain stalls until the
+    /// app is back in front (seen on the 14 Pro Max 2026-10-28: the 1.28 GB file landed, the next never started).
+    private var bridge = UIBackgroundTaskIdentifier.invalid
     private lazy var session: URLSession = {
         let c = URLSessionConfiguration.background(withIdentifier: Self.identifier)
         c.isDiscretionary = false
@@ -76,18 +80,30 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
                 if let old = waiters.removeValue(forKey: key) { old.cont.resume(throwing: CancellationError()) }
                 waiters[key] = Waiter(cont: c, progress: onProgress, base: resumeFrom)
                 lock.unlock()
-                if running != nil { StatusLog.add("download re-attached \(part.lastPathComponent)"); return }
+                if running != nil { StatusLog.add("download re-attached \(part.lastPathComponent)"); endBridge(); return }
                 var r = req
                 if resumeFrom > 0 { r.setValue("bytes=\(resumeFrom)-", forHTTPHeaderField: "Range") }
                 let t = session.downloadTask(with: r)
                 t.taskDescription = key
                 t.resume()
                 StatusLog.add("background download \(part.lastPathComponent) started at \(resumeFrom)")
+                endBridge()
             }
         } onCancel: {
             // The user's Cancel: stop the transfer (the .part keeps what was already folded in).
             self.session.getAllTasks { $0.filter { $0.taskDescription == key }.forEach { $0.cancel() } }
         }
+    }
+
+    private func beginBridge() {
+        lock.lock(); defer { lock.unlock() }
+        guard bridge == .invalid else { return }
+        bridge = UIApplication.shared.beginBackgroundTask(withName: "model download chain") { [weak self] in self?.endBridge() }
+    }
+    /// The next transfer is queued (or the model is complete): the system carries on without the app.
+    func endBridge() {
+        lock.lock(); let b = bridge; bridge = .invalid; lock.unlock()
+        if b != .invalid { UIApplication.shared.endBackgroundTask(b) }
     }
 
     private func take(_ key: String) -> Waiter? { lock.lock(); defer { lock.unlock() }; return waiters.removeValue(forKey: key) }
@@ -112,6 +128,7 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
             do { try PartPlan.merge(location, into: URL(fileURLWithPath: key), status: code); result = nil } catch { result = error }
         } else { result = ModelStoreError.badStatus(code) }
         StatusLog.add("background download \(URL(fileURLWithPath: key).lastPathComponent) finished: HTTP \(code)")
+        beginBridge()
         if let w = take(key) {
             if let result { w.cont.resume(throwing: result) } else { w.progress(w.base + downloadTask.countOfBytesReceived); w.cont.resume() }
         }
