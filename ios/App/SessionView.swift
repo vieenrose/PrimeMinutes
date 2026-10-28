@@ -978,24 +978,48 @@ struct TrailingIconLabel: LabelStyle {
     }
 }
 
-/// The player bar under a meeting (seek slider, ±5 s, play, volume, length): the saved meeting and the live view of a
-/// job being processed share it.
+/// The player bar under a meeting: the scrubber with elapsed / total under it, then −5 s, play, +5 s centred and
+/// the volume menu at the trailing edge. The saved meeting and the live view of a job being processed share it.
+/// Large text: the times are capped and the volume menu drops out when the row no longer fits (the hardware
+/// buttons still set the volume), so no control ever overlaps another.
 struct PlayerBar: View {
     @ObservedObject var player: Player
+    /// The side of the ±5 s / volume targets: ≥ 44 pt, grows with the text up to 60 pt.
+    @ScaledMetric(relativeTo: .title2) private var side: CGFloat = 44
+    private var target: CGFloat { min(max(side, 44), 60) }
+    private var transport: some View {
+        HStack(spacing: 24) {
+            PlayerSkipBack(player: player, side: target)
+            PlayerPlayPause(player: player)
+            PlayerSkipForward(player: player, side: target)
+        }
+    }
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             PlayerSeekSlider(player: player)
             HStack {
-                // minWidth, not width: a fixed 96 pt clipped "7:40" to "7:4…" at large text sizes.
-                Text(Export.mmss(player.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .lineLimit(1).fixedSize().frame(minWidth: 96, alignment: .leading)
+                Text(Export.mmss(player.time)).accessibilityHidden(true)   // the slider's value says it
                 Spacer()
-                PlayerSkipBack(player: player)
-                PlayerPlayPause(player: player)
-                PlayerSkipForward(player: player)
-                Spacer()
-                PlayerVolumeCluster(player: player)
+                Text(Export.mmss(player.duration)).accessibilityHidden(true)
             }
-        }.padding(.horizontal, Vox.gutterWide).padding(.vertical, 8).background(.bar)
+            .font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            ViewThatFits(in: .horizontal) {
+                // Room for all: transport centred, volume trailing (a leading spacer of the same width keeps the centre).
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: target, height: 1)
+                    Spacer(minLength: 8)
+                    transport
+                    Spacer(minLength: 8)
+                    PlayerVolumeMenu(player: player).frame(width: target, height: target)
+                }
+                transport
+            }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+            .padding(.top, 2)
+        }
+        .padding(.horizontal, Vox.gutterWide).padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
     }
 }

@@ -138,8 +138,9 @@ struct PlayerSeekSlider: View {
 /// The −5 s skip button of the player bar.
 struct PlayerSkipBack: View {
     @ObservedObject var player: Player
+    var side: CGFloat = 44
     var body: some View {
-        Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
+        Button { player.seek(player.time - 5) } label: { Image(systemName: "gobackward.5").font(.title2).frame(width: side, height: side).contentShape(Rectangle()) }.accessibilityLabel(L("cd_back5"))
     }
 }
 
@@ -148,29 +149,21 @@ struct PlayerPlayPause: View {
     @ObservedObject var player: Player
     var body: some View {
         Button { player.toggle() } label: {
-            Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2).foregroundStyle(.white)
-                .frame(width: 56, height: 56).background(Color.accentColor, in: Circle())
-        }.accessibilityLabel(L(player.playing ? "pause" : "play"))
+            Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.title2)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.borderedProminent).buttonBorderShape(.circle).controlSize(.large)
+        .accessibilityLabel(L(player.playing ? "pause" : "play"))
     }
 }
 
 /// The +5 s skip button of the player bar.
 struct PlayerSkipForward: View {
     @ObservedObject var player: Player
+    var side: CGFloat = 44
     var body: some View {
-        Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
-    }
-}
-
-/// The volume menu plus total length at the player bar's trailing end.
-struct PlayerVolumeCluster: View {
-    @ObservedObject var player: Player
-    var body: some View {
-        HStack(spacing: 12) {
-            PlayerVolumeMenu(player: player)
-            Text(Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                .lineLimit(1).fixedSize()
-        }.frame(minWidth: 96, alignment: .trailing)
+        Button { player.seek(player.time + 5) } label: { Image(systemName: "goforward.5").font(.title2).frame(width: side, height: side).contentShape(Rectangle()) }.accessibilityLabel(L("cd_forward5"))
     }
 }
 
@@ -181,7 +174,7 @@ struct PlayerVolumeMenu: View {
         Menu {
             Button { player.muted.toggle() } label: { Label(L(player.muted ? "cd_unmute" : "cd_mute"), systemImage: player.muted ? "speaker.wave.2" : "speaker.slash") }
             ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { v in Button("\(Int(v * 100)) %") { player.muted = false; player.volume = Float(v) } }
-        } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).tapTarget() }
+        } label: { Image(systemName: player.muted || player.volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.body).foregroundStyle(.secondary).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
             .accessibilityLabel(L("cd_volume")).accessibilityValue(player.muted || player.volume == 0 ? L("cd_muted") : "\(Int(player.volume * 100)) %")
     }
 }
