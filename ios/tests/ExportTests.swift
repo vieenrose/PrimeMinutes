@@ -32,7 +32,15 @@ import Foundation
         let en = Export.notesSection([Note(id: 1, window: 0, ts: "1:02", tag: "DEC", text: "Ship on Monday")], heading: "AI notes", label: { $0 == "DECISION" ? "Decision" : nil })!
         check(Export.plain(en) == "AI NOTES\nDecision:\n- Ship on Monday\u{00A0}[1:02]", "en notes: \(Export.plain(en))")
         let sm = Export.summary("涵蓋多個方面 [0:15]。在營銷上 [1:16]，推出套餐 [1:49]。")
-        check(sm == "涵蓋多個方面。\(wj)[0:15]在營銷上，推出套餐。\(wj)[1:16]" && !sm.contains("][") && !sm.contains(" ["), "summary cites: \(sm)")
+        check(sm == "涵蓋多個方面。\(wj)[0:15] 在營銷上，推出套餐。\(wj)[1:16]" && !sm.contains("][") && !sm.contains(" ["), "summary cites: \(sm)")
+        check(Export.summary("Ship it [0:05]. Then test [0:09].") == "Ship it.\u{00A0}[0:05] Then test.\u{00A0}[0:09]", "latin cite spacing: \(Export.summary("Ship it [0:05]. Then test [0:09]."))")
+        // A long Han paragraph is cut at cite boundaries near every 250 characters, never inside a sentence.
+        let sen = String(repeating: "會議討論了搬遷的細節與預算安排", count: 4)   // 60 Han characters per sentence
+        let long = (0..<12).map { "\(sen) [\($0):00]。" }.joined()
+        let ps = Export.paragraphs(long)
+        check(ps.count >= 2 && ps.allSatisfy { $0.count <= 350 } && ps.allSatisfy { $0.hasSuffix("]") && !$0.hasPrefix(" ") }, "long paragraph cut: \(ps.map(\.count))")
+        check(ps.joined(separator: " ") == Export.paragraphs(long.replacingOccurrences(of: "X", with: "X")).joined(separator: " ") && ps.joined(separator: " ") == MeetingMail.clauseEndCites(long), "cut keeps every character")
+        check(Export.summary("a [0:01]。\n\nb [0:02]。") == "a。\(wj)[0:01]\n\nb。\(wj)[0:02]", "paragraph breaks kept")
         check(Export.mdCites("a [0:18, 0:35]") == "a `0:18, 0:35`", "md multi-cite, no turns")
         check(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]) == "a。\u{2060}[0:18](#t-0)、[1:10](#t-65)", "md multi-cite links: \(Export.mdCites("a。\u{2060}[0:18、1:10]", [0, 20, 65]))")
         check(Export.target(75, [1, 65, 81]) == 1 && Export.target(0, [5]) == 0, "cite target")

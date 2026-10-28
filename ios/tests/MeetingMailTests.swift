@@ -120,7 +120,7 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
 
         // Design B (plain/chat: one cite per sentence, at its end, glued) + C (HTML pills). Android MeetingMailTest.
         check(MeetingMail.clauseEndCites("新辦公室預計於三月十號正式上班 [0:00]。會議決定採用中間報價 [0:18, 0:35]，前提是打包自行完成 [0:40]。")
-              == "新辦公室預計於三月十號正式上班。\u{2060}[0:00]會議決定採用中間報價，前提是打包自行完成。\u{2060}[0:18, 0:35]", "zh clause-end cites")
+              == "新辦公室預計於三月十號正式上班。\u{2060}[0:00] 會議決定採用中間報價，前提是打包自行完成。\u{2060}[0:18, 0:35]", "zh clause-end cites")
         check(MeetingMail.clauseEndCites("We move on March 7 [0:12]. The budget is 3.5 percent over [0:12]. No cite here.")
               == "We move on March 7.\u{00A0}[0:12] The budget is 3.5 percent over. No cite here.", "en clause-end cites")
         let han = String(repeating: "搬", count: 60), long = MeetingMail.clauseEndCites(han + " [1:12]。")

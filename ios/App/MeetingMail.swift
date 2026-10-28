@@ -274,7 +274,8 @@ enum MeetingMail {
     /// untouched, so tsRe / the anchors / repairTimestamps still parse it. Android MeetingMail.clauseEndCites.
     static func clauseEndCites(_ p: String) -> String {
         var out = "", last: String?
-        for sen in sentences(p) {
+        let sens = sentences(p)
+        for (si, sen) in sens.enumerated() {
             let ns = sen as NSString
             guard let m = tsRe.firstMatch(in: sen, range: NSRange(location: 0, length: ns.length)) else { out += sen; continue }
             let cite = ns.substring(with: m.range)
@@ -286,7 +287,8 @@ enum MeetingMail {
             var head = String(core[..<k]); while head.last?.isWhitespace == true { head.removeLast() }
             let tail = String(core[k...])
             out += head + tail
-            if cite != last { out += glue(head + tail) + cite }
+            // A moved cite is followed by a space when its sentence had none and more text follows.
+            if cite != last { out += glue(head + tail) + cite; if ws.isEmpty && si + 1 < sens.count { out += " " } }
             last = cite
             out += ws
         }

@@ -124,8 +124,32 @@ enum Export {
     /// A note's text with its cite at the end, glued (`…條款。⁠[1:12]`).
     static func line(_ i: NoteItem) -> String { i.text + MeetingMail.itemCite(i.text, i.ts) }
 
-    /// Summary prose: each line with its cites moved to the clause end.
-    static func summary(_ t: String) -> String { t.components(separatedBy: "\n").map(MeetingMail.clauseEndCites).joined(separator: "\n") }
+    /// Summary prose: paragraphs (blank-line separated) with their cites moved to the clause end.
+    static func summary(_ t: String) -> String { paragraphs(t).joined(separator: "\n\n") }
+
+    /// The summary's paragraphs after `MeetingMail.clauseEndCites`. A long one (over 350 characters when mostly Han,
+    /// 600 otherwise) is cut at cite boundaries (right after a `[…]` cite and its space) nearest every 250 / 450
+    /// characters; the space is dropped at the cut, so a cut never falls inside a sentence.
+    static func paragraphs(_ t: String) -> [String] {
+        t.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.flatMap { raw -> [String] in
+            let p = MeetingMail.clauseEndCites(raw)
+            let c = Array(p), letters = c.filter { !$0.isWhitespace }
+            let han = letters.filter { $0.unicodeScalars.first.map { (0x3400...0x9FFF).contains($0.value) } ?? false }.count
+            let (limit, step) = han * 2 > letters.count ? (350, 250) : (600, 450)
+            if c.count <= limit { return [p] }
+            // Cut candidates: the index of the space right after a cite.
+            var cuts: [Int] = []
+            for i in 1..<c.count where c[i] == " " && c[i - 1] == "]" { cuts.append(i) }
+            var out: [String] = [], start = 0
+            while c.count - start > limit {
+                let goal = start + step
+                guard let best = cuts.filter({ $0 > start && c.count - $0 > 1 }).min(by: { abs($0 - goal) < abs($1 - goal) }) else { break }
+                out.append(String(c[start..<best])); start = best + 1
+            }
+            out.append(String(c[start...]))
+            return out
+        }
+    }
 
     static let citeRe = try! NSRegularExpression(pattern: #"\[(\d+:\d{2}(?::\d{2})?(?:\s*[,，、]\s*\d+:\d{2}(?::\d{2})?)*)\]"#)
     static let timeRe = try! NSRegularExpression(pattern: #"\d+:\d{2}(?::\d{2})?"#)
