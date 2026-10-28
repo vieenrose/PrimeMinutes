@@ -220,7 +220,7 @@ final class ContactsMailUITests: XCTestCase {
     func testNewPersonEmail() {
         let name = env["PM_NAME"] ?? "PMTEST N\(Int(Date().timeIntervalSince1970) % 100000)", addr = env["PM_ADDR"] ?? "nia.pmtest@example.com"
         launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "2", "VOX_PICKAUTO": name])
-        let f = app.textFields["new-person-email"]
+        let f = app.alerts.textFields.firstMatch   // alerts drop the identifier
         XCTAssertTrue(f.waitForExistence(timeout: 12), "the add-e-mail prompt follows the new person")
         shot("ne-1-prompt", tree: true)
         f.tap(); f.typeText(addr); shot("ne-2-typed")
