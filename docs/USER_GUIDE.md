@@ -90,14 +90,16 @@ flowchart TD
 
 ## 2. 場次與佇列選單
 
-場次列右側的 **⋯**：
+<p><img src="guide/48-swipe-delete.png" width="200"> <img src="guide/49-delete-confirm.png" width="200"> <img src="guide/50-swipe-rename.png" width="200"></p>
+
+場次列：點一下開啟；向左滑出 **刪除**，向右滑出 **重新命名** 與 **分享音訊**；長按顯示完整選單：
 
 | 節點 | 何時出現 | 預期結果 | 驗證 |
 |---|---|---|---|
 | 開啟 | 一律 | 開啟場次 | ⬜ |
-| 重新命名 | 一律 | 對話框輸入新標題 | ⬜ |
+| 重新命名 | 向右滑或長按 | 對話框輸入新標題 | ⬜ |
 | 分享音訊 | 有音訊檔 | 系統分享面板 | ⬜ |
-| 刪除 | 一律 | 確認對話框；取消不刪 | ⬜ |
+| 刪除 | 向左滑或長按 | 確認對話框（取消／刪除）；取消不刪 | ⬜ |
 | 長按 → 多選 | 長按一列 | 勾選多列，全選、批次刪除（需確認） | ⬜ |
 
 佇列列（處理中、排入佇列、已停止、失敗）右側的 **⋯**：
@@ -139,6 +141,10 @@ flowchart TD
 ## 5. 場次：摘要分頁
 
 <p><img src="guide/10-summary.png" width="200"> <img src="guide/17-process.png" width="200"> <img src="guide/18-actions.png" width="200"> <img src="guide/20-dark-summary.png" width="200"></p>
+
+<p><img src="guide/51-title-edit.png" width="200"></p>
+
+點上方的會議標題即可改名；自己改過的標題不會被之後的重新摘要取代，清空則恢復自動標題。
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
