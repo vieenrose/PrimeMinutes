@@ -1,6 +1,7 @@
 package studio.primeminutes.core.text
 
 import android.content.Context
+import java.io.InputStream
 
 /** Which Han script to normalize Chinese text into. */
 enum class ChineseScript { TRADITIONAL, SIMPLIFIED }
@@ -74,7 +75,7 @@ class OpenCcConverter private constructor(
          */
         fun getTranscriptTraditional(context: Context): OpenCcConverter =
             traditionalConservative ?: synchronized(this) {
-                traditionalConservative ?: buildTraditionalConservative(context)
+                traditionalConservative ?: buildTraditionalConservative(context.assets::open)
                     .also { traditionalConservative = it }
             }
 
@@ -88,17 +89,18 @@ class OpenCcConverter private constructor(
         fun getTranscriptSimplified(context: Context): OpenCcConverter =
             transcriptSimplified ?: synchronized(this) {
                 transcriptSimplified ?: run {
+                    val open: (String) -> InputStream = context.assets::open
                     val t2s = HashMap<String, String>(8192)
-                    loadInto(context, "opencc/TSPhrases.txt", t2s)
-                    loadInto(context, "opencc/TSCharacters.txt", t2s)
+                    loadInto(open, "opencc/TSPhrases.txt", t2s)
+                    loadInto(open, "opencc/TSCharacters.txt", t2s)
                     build(listOf(t2s))
                 }.also { transcriptSimplified = it }
             }
 
-        private fun buildTraditionalConservative(context: Context): OpenCcConverter {
+        private fun buildTraditionalConservative(open: (String) -> InputStream): OpenCcConverter {
             val twChars = HashMap<String, String>(2048)
-            loadInto(context, "opencc/TWVariants.txt", twChars)
-            return build(listOf(s2tStage(context), twChars))
+            loadInto(open, "opencc/TWVariants.txt", twChars)
+            return build(listOf(s2tStage(open), twChars))
         }
 
         /**
@@ -109,14 +111,43 @@ class OpenCcConverter private constructor(
          */
         @Volatile private var s2t: Map<String, String>? = null
 
-        private fun s2tStage(context: Context): Map<String, String> =
+        private fun s2tStage(open: (String) -> InputStream): Map<String, String> =
             s2t ?: synchronized(this) {
                 s2t ?: HashMap<String, String>(60_000).also { m ->
-                    loadInto(context, "opencc/STPhrases.txt", m)
-                    loadInto(context, "opencc/STCharacters.txt", m)
+                    loadInto(open, "opencc/STPhrases.txt", m)
+                    loadInto(open, "opencc/STCharacters.txt", m)
+                    S2T_DROP.forEach(m::remove)
+                    m.putAll(S2T_GUARD)
                     s2t = m
                 }
             }
+
+        /**
+         * STPhrases maps 了解 (and 了解到, 不了解, 据了解) to 瞭解. Longest match then reads the particle
+         * 了 plus the next word as that phrase: 討論了解決方案 became 討論瞭解決方案, 說明了解約 became
+         * 說明瞭解約, even for text already in Traditional. 了解 is a standard Taiwan spelling, so
+         * the plain character mapping (了→了) is right everywhere.
+         */
+        internal val S2T_DROP = listOf("了解", "了解到", "不了解", "据了解")
+
+        /**
+         * Same cross-word problem for other 了X / X明了 entries: the particle 了 followed by 如何 or
+         * 然后 (了如→瞭如, 了然→瞭然), or a verb ending in 明 followed by 了 (明了→明瞭: 說明了 →
+         * 說明瞭). Longer identity keys win the longest match; 了如指掌, 一目了然, 明了 keep their
+         * entries. Upstream already guards simplified 说明了/证明了; these cover the rest and the
+         * Traditional input forms.
+         */
+        internal val S2T_GUARD: Map<String, String> = buildMap {
+            put("了如何", "了如何")
+            put("了然后", "了然後"); put("了然後", "了然後")
+            for (v in listOf("說明", "證明", "表明", "聲明", "查明", "闡明", "標明", "註明", "注明",
+                "指明", "寫明", "講明", "點明", "聰明", "精明", "说明", "证明", "声明", "阐明", "标明",
+                "写明", "讲明", "点明", "聪明")) {
+                val trad = v.map { c -> mapOf('说' to '說', '证' to '證', '声' to '聲', '阐' to '闡',
+                    '标' to '標', '写' to '寫', '讲' to '講', '点' to '點', '聪' to '聰')[c] ?: c }.joinToString("")
+                put(v + "了", trad + "了")
+            }
+        }
 
         @Volatile private var tsChars: CharArray? = null
 
@@ -139,24 +170,28 @@ class OpenCcConverter private constructor(
             }
         }
 
+        /** Uncached converters over any dictionary source, for JVM tests that read the asset files. */
+        internal fun forTest(open: (String) -> InputStream): Triple<OpenCcConverter, OpenCcConverter, OpenCcConverter> =
+            Triple(buildTraditional(open), buildTraditionalConservative(open), buildSimplified(open))
+
         /** Build once per script (call off the main thread); later calls return the cached instance. */
         fun get(context: Context, script: ChineseScript): OpenCcConverter = when (script) {
             ChineseScript.TRADITIONAL ->
-                traditional ?: synchronized(this) { traditional ?: buildTraditional(context).also { traditional = it } }
+                traditional ?: synchronized(this) { traditional ?: buildTraditional(context.assets::open).also { traditional = it } }
             ChineseScript.SIMPLIFIED ->
-                simplified ?: synchronized(this) { simplified ?: buildSimplified(context).also { simplified = it } }
+                simplified ?: synchronized(this) { simplified ?: buildSimplified(context.assets::open).also { simplified = it } }
         }
 
         // s2twp: stage 1 S→T (phrases then chars merged — longest-match prefers the phrase entries);
         // stage 2 the Taiwan-localisation pass (variant dicts first, phrase dict LAST so TW vocabulary
         // wins on any key clash). Stage-2 keys are in Traditional form (post stage 1).
-        private fun buildTraditional(context: Context): OpenCcConverter {
+        private fun buildTraditional(open: (String) -> InputStream): OpenCcConverter {
             val tw = HashMap<String, String>(2048)
-            loadInto(context, "opencc/TWVariants.txt", tw)
-            loadInto(context, "opencc/TWVariantsPhrases.txt", tw)
-            loadInto(context, "opencc/TWPhrases.txt", tw)
+            loadInto(open, "opencc/TWVariants.txt", tw)
+            loadInto(open, "opencc/TWVariantsPhrases.txt", tw)
+            loadInto(open, "opencc/TWPhrases.txt", tw)
             PROSE_KEEP.forEach(tw::remove)
-            return build(listOf(s2tStage(context), tw))
+            return build(listOf(s2tStage(open), tw))
         }
 
         /**
@@ -172,11 +207,11 @@ class OpenCcConverter private constructor(
         // dictionaries s2twp uses), stage 2 is t2s (TSPhrases + TSCharacters). The summary model
         // writes Taiwan Traditional; plain t2s would leave 資訊/軟體/搜尋 untouched. Simplified input
         // passes through unchanged (every stage-1 key is Traditional).
-        private fun buildSimplified(context: Context): OpenCcConverter {
+        private fun buildSimplified(open: (String) -> InputStream): OpenCcConverter {
             val twRev = HashMap<String, String>(2048)
-            loadReverseInto(context, "opencc/TWPhrases.txt", twRev)
-            loadReverseInto(context, "opencc/TWVariantsPhrases.txt", twRev)
-            loadReverseInto(context, "opencc/TWVariants.txt", twRev)
+            loadReverseInto(open, "opencc/TWPhrases.txt", twRev)
+            loadReverseInto(open, "opencc/TWVariantsPhrases.txt", twRev)
+            loadReverseInto(open, "opencc/TWVariants.txt", twRev)
             // "點選" (Taiwan for "click") also ends a common noun: 地點選在… is 地點 + 選在, not
             // 地 + 點選 (seen live: "地点击在信义区"). Longest match from the left prefers these
             // longer keys, which stay as they are for t2s.
@@ -188,8 +223,8 @@ class OpenCcConverter private constructor(
             // prose it is the user interface: 會議介面 became 会议接口; 界面 is the mainland word.
             twRev["介面"] = "界面"
             val t2s = HashMap<String, String>(8192)
-            loadInto(context, "opencc/TSPhrases.txt", t2s)
-            loadInto(context, "opencc/TSCharacters.txt", t2s)
+            loadInto(open, "opencc/TSPhrases.txt", t2s)
+            loadInto(open, "opencc/TSCharacters.txt", t2s)
             return build(listOf(twRev, t2s))
         }
 
@@ -198,9 +233,9 @@ class OpenCcConverter private constructor(
         )
 
         /** OpenCC `*Rev` dictionary: every target of a line maps back to its source; earlier files win. */
-        private fun loadReverseInto(context: Context, asset: String, into: MutableMap<String, String>) {
+        private fun loadReverseInto(open: (String) -> InputStream, asset: String, into: MutableMap<String, String>) {
             try {
-                context.assets.open(asset).use { raw ->
+                open(asset).use { raw ->
                     raw.bufferedReader(Charsets.UTF_8).useLines { seq ->
                         seq.forEach { line ->
                             if (line.isBlank() || line.startsWith('#')) return@forEach
@@ -224,9 +259,9 @@ class OpenCcConverter private constructor(
         }
 
         /** OpenCC line: "src<TAB>tgt[ tgt2 …]" — take the first target; skip blank/# lines. */
-        private fun loadInto(context: Context, asset: String, into: MutableMap<String, String>) {
+        private fun loadInto(open: (String) -> InputStream, asset: String, into: MutableMap<String, String>) {
             try {
-                context.assets.open(asset).use { raw ->
+                open(asset).use { raw ->
                     raw.bufferedReader(Charsets.UTF_8).useLines { seq ->
                         seq.forEach { line ->
                             if (line.isBlank() || line.startsWith('#')) return@forEach
