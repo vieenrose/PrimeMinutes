@@ -114,6 +114,23 @@ class TranscriptExportTest {
         org.junit.Assert.assertEquals(text, cues.joinToString("") { it.text })
     }
 
+    @Test fun documentPathsFlattenEmbeddedNewlinesToOneLine() {
+        // An edited/ASR utterance can embed a newline; txt/md must stay one line per utterance (LRC
+        // already flattened) or the continuation reads as an untimestamped separate turn.
+        val lines = listOf(u(0, "first line\nsecond line", 1.0, 2.0, 0))
+        val txt = TranscriptExport.plainText(lines, label, "T", null)
+        assertTrue("continuation stays on the timestamped line",
+            txt.contains("[00:01] Speaker 1: first line second line\n"))
+        assertEquals("still exactly one transcript line", 1,
+            txt.lines().count { it.startsWith("[") })
+        val md = TranscriptExport.markdown(lines, label, "T", null, "Summary", "Transcript")
+        assertTrue(md.contains("- `00:01` **Speaker 1** first line second line\n"))
+        assertEquals("still exactly one transcript bullet", 1,
+            md.lines().count { it.startsWith("- `") })
+        // Whitespace-only after flattening is still dropped.
+        assertFalse(TranscriptExport.plainText(listOf(u(0, "\n  \n", 1.0, 2.0, 0)), label, "T", null).contains("[00:01]"))
+    }
+
     @Test fun englishTurnIsCutBetweenWordsOnly() {
         val text = "Button so that you actually in the transcription box but so that you click on a button and then it opens whatever that speaker characterization is and the left click would give you the menu"
         val u = studio.primeminutes.core.events.TranscriptEvent.Utterance(0, text, 0.0, 9.6, 0)

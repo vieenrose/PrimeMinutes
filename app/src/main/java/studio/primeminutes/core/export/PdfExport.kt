@@ -54,7 +54,9 @@ object PdfExport {
         }
         pager.block(transcriptHeading, headingPaint); pager.gap(4f)
         for (u in utterances) {
-            val text = u.text.trim()
+            // One transcript line per utterance, like the txt/md exports: an embedded newline would
+            // otherwise render as an untimestamped continuation line that reads as a separate turn.
+            val text = u.text.replace('\n', ' ').trim()
             if (text.isEmpty()) continue
             val who = u.speaker?.let { "${label(it)}: " } ?: ""
             pager.block("[${clock(u.startSec)}] $who$text", bodyPaint); pager.gap(3f)

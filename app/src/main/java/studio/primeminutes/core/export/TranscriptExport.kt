@@ -32,7 +32,7 @@ object TranscriptExport {
             append(it).append("\n\n")
         }
         for (u in utterances) {
-            val text = u.text.trim()
+            val text = u.text.replace('\n', ' ').trim()
             if (text.isEmpty()) continue
             append('[').append(clock(u.startSec)).append("] ")
             u.speaker?.let { append(label(it)).append(": ") }
@@ -62,7 +62,7 @@ object TranscriptExport {
         }
         append("## ").append(transcriptHeading).append("\n\n")
         for (u in utterances) {
-            val text = u.text.trim()
+            val text = u.text.replace('\n', ' ').trim()
             if (text.isEmpty()) continue
             append("- `").append(clock(u.startSec)).append("` ")
             u.speaker?.let { append("**").append(label(it)).append("** ") }
