@@ -96,4 +96,28 @@ class OsContactsTest {
         val plan = ContactMigration.plan(listOf(Person("1", "陳大文")), listOf(OsContact(3, "k3", "陈大文")), fold)
         assertTrue(plan[0] is ContactMigration.Step.Match)
     }
+
+    @Test fun migrationMergesIntoThePersonAlreadyLinked() {
+        val linked = Person("old", "Ann Lee", contact = ContactLink("android", "k-ann", 10))
+        val dup = Person("dup", "Ann Lee", emails = listOf(PersonEmail("ann@x.org")))
+        val doc = PeopleDoc(listOf(linked, dup))
+        val step = ContactMigration.plan(ContactMigration.candidates(doc), listOf(ann))[0] as ContactMigration.Step.Match
+        // The matched contact is already Ann's: the duplicate merges into her.
+        assertEquals("old", ContactMigration.mergeTarget(doc, step.person.id, step.contact)?.id)
+        // Matched by id after a key change, too; never itself; a missing link is no target.
+        assertEquals("old", ContactMigration.mergeTarget(doc, "dup", ann.copy(key = "new"))?.id)
+        assertEquals(null, ContactMigration.mergeTarget(doc, "old", ann))
+        val gone = PeopleDoc(listOf(linked.copy(contact = linked.contact!!.copy(missing = true)), dup))
+        assertEquals(null, ContactMigration.mergeTarget(gone, "dup", ann))
+        // The merge (PeopleOps.merge) keeps one person: the linked one, with the duplicate's address.
+        val merged = studio.primeminutes.core.people.PeopleOps.merge(doc, "dup", "old")
+        assertEquals(listOf("old"), merged.people.map { it.id })
+        assertEquals(listOf("ann@x.org"), merged.people[0].emails.map { it.address })
+        assertEquals("k-ann", merged.people[0].contact!!.key)
+    }
+
+    @Test fun noMergeTargetForAFreshContact() {
+        val doc = PeopleDoc(listOf(Person("a", "Bob")))
+        assertEquals(null, ContactMigration.mergeTarget(doc, "a", bob))
+    }
 }

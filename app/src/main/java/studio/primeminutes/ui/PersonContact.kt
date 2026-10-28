@@ -99,6 +99,7 @@ internal fun PersonContactCards(p: Person, onMergeInto: (Person) -> Unit) {
                 }
             }, modifier = Modifier.testTag("contact-edit")) { Text(stringResource(R.string.contact_edit)) }
         }
+        if (p.me) MeContactActions(p)
         PeopleOps.sameContact(doc, p).firstOrNull()?.let { o ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.contact_also_linked, o.name), color = pal.WarningText, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))

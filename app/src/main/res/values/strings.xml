@@ -712,4 +712,7 @@
     <string name="contact_edit">Edit in Contacts</string>
     <string name="email_none">No e-mail address</string>
     <string name="email_none_edit_in_contacts">No e-mail address: add one in Contacts</string>
+    <string name="me_pick_contact">This is me in Contacts…</string>
+    <string name="me_change_contact">Change my contact</string>
+    <string name="me_unlink_contact">Unlink</string>
 </resources>

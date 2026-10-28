@@ -162,6 +162,7 @@ fun VoiceSettingsCard() {
                     }
                     TextButton(onClick = { deleteAsk = true }) { Text(stringResource(R.string.voice_delete_all)) }
                 }
+                MeContactActions(doc.people.firstOrNull { it.me })
             }
         }
     }

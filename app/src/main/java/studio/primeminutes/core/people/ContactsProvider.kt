@@ -78,6 +78,13 @@ object ContactsProvider {
         one(context, ContactsContract.Contacts.CONTENT_URI, "${ContactsContract.Contacts._ID}=?", arrayOf(id.toString()))
     }.getOrNull()
 
+    /** The contact behind a picker result ([ContactsContract.Contacts] uri, read under its grant). */
+    fun fromUri(context: Context, uri: Uri): OsContact? = runCatching {
+        context.contentResolver.query(uri, CONTACT_PROJ, null, null, null)?.use { c ->
+            if (!c.moveToFirst()) null else OsContact(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "")
+        }?.let { c -> c.copy(emails = runCatching { emailsOf(context, c.id) }.getOrDefault(emptyList())) }
+    }.onFailure { Log.w(TAG, "picked contact unreadable", it) }.getOrNull()
+
     /** By lookup key alone (the provider follows a key across re-aggregations). */
     fun byKey(context: Context, key: String): OsContact? = runCatching {
         one(context, Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_LOOKUP_URI, Uri.encode(key)))

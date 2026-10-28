@@ -307,13 +307,33 @@ object PeopleStore {
                 is ContactMigration.Step.Create -> ContactsProvider.insert(context, step.person.name, step.person.emails.map { it.address })
             } ?: continue
             val fresh = ContactsProvider.byId(context, c.id) ?: c
-            mutate(context) { ContactLinks.apply(it, step.person.id, LinkState.Linked(fresh), now()) }
+            val into = ContactMigration.mergeTarget(doc.value, step.person.id, fresh)
+            if (into != null) {
+                // Already someone's contact: one person, merged (voiceprints, meetings, addresses).
+                Log.i(TAG, "contacts migration: merged a duplicate into an existing person")
+                merge(context, step.person.id, into.id)
+            } else mutate(context) { ContactLinks.apply(it, step.person.id, LinkState.Linked(fresh), now()) }
             n++
         }
         Log.i(TAG, "contacts migration: $n of ${plan.size} linked (${plan.count { it is ContactMigration.Step.Match }} matched)")
         syncContacts(context)
         dismissContactsCard(context)
         return n
+    }
+
+    /**
+     * "This is me in Contacts…": links Me to the owner's own card [c] picked by hand (Samsung One UI
+     * hides the profile card from apps). Creates Me when there is none — named after the contact,
+     * never a contact named "Me". A person already linked to [c] is merged into Me.
+     */
+    fun linkMe(context: Context, c: OsContact): Person {
+        init(context)
+        val me = doc.value.people.firstOrNull { it.me } ?: create(context, c.name, me = true)
+        ContactMigration.mergeTarget(doc.value, me.id, c)?.let { merge(context, it.id, me.id) }
+        val before = doc.value.byId(me.id)?.name
+        val after = mutate(context) { ContactLinks.apply(it, me.id, LinkState.Linked(c), now()) }.byId(me.id) ?: me
+        if (before != after.name) rewriteMeetings(context) { LinkOps.rename(it, me.id, after.name) }
+        return after
     }
 
     /** Marks [id] as the phone's owner (one Me at most). */

@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,6 +88,50 @@ fun rememberContactPicker(onPicked: (PickedContact, String) -> Unit): () -> Unit
     return {
         try { launcher.launch(Unit) } catch (_: ActivityNotFoundException) {
             Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+        }
+    }
+}
+
+/**
+ * "This is me in Contacts…" (Samsung One UI returns no profile card to apps): the system contact
+ * picker (`ACTION_PICK` on Contacts) links Me to the card the user picks; "Change" picks again,
+ * "Unlink" drops the link. Hidden when Me follows the profile card. [me]: the Me person, or null
+ * (then picking creates Me, named after the contact).
+ */
+@Composable
+fun MeContactActions(me: studio.primeminutes.core.people.Person?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val launcher = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickContact()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val c = withContext(Dispatchers.IO) {
+                studio.primeminutes.core.people.ContactsProvider.fromUri(context, uri)
+                    ?.let { studio.primeminutes.core.people.PeopleStore.linkMe(context, it) }
+            }
+            if (c == null) Toast.makeText(context, R.string.contacts_pick_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+    val c = me?.contact
+    if (c != null && c.key.startsWith(studio.primeminutes.core.people.ContactsProvider.PROFILE_PREFIX)) return
+    val linked = me != null && studio.primeminutes.core.people.ContactLinks.isLinked(me)
+    val pick = {
+        try { launcher.launch(null) } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, R.string.contacts_no_app, Toast.LENGTH_LONG).show()
+        }
+    }
+    androidx.compose.foundation.layout.Row {
+        if (!linked) androidx.compose.material3.TextButton(onClick = pick, modifier = androidx.compose.ui.Modifier.testTag("me-pick")) {
+            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.me_pick_contact))
+        } else {
+            androidx.compose.material3.TextButton(onClick = pick, modifier = androidx.compose.ui.Modifier.testTag("me-change")) {
+                androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.me_change_contact))
+            }
+            androidx.compose.material3.TextButton(onClick = {
+                scope.launch(Dispatchers.IO) { studio.primeminutes.core.people.PeopleStore.unlinkContact(context, me!!.id, removeEmails = true) }
+            }, modifier = androidx.compose.ui.Modifier.testTag("me-unlink")) {
+                androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(R.string.me_unlink_contact))
+            }
         }
     }
 }

@@ -85,6 +85,14 @@ object ContactMigration {
     /** People to offer: no Android link (never "Me", the phone's owner, nor a deleted contact's person). */
     fun candidates(doc: PeopleDoc): List<Person> = doc.people.filter { p -> !p.me && (p.contact == null || p.contact.platform != "android") }
 
+    /**
+     * The person other than [personId] already linked to [contact] (same lookup key or id), or null.
+     * During the migration that person IS the one being migrated (same human named twice): the
+     * migrated person is merged into it instead of becoming a second person with the same name.
+     */
+    fun mergeTarget(doc: PeopleDoc, personId: String, contact: OsContact): Person? =
+        doc.people.firstOrNull { it.id != personId && ContactLinks.isLinked(it) && (it.contact!!.key == contact.key || it.contact.id == contact.id) }
+
     fun plan(people: List<Person>, contacts: List<OsContact>, fold: (String) -> String = { it }): List<Step> {
         val byEmail = HashMap<String, OsContact>()
         for (c in contacts) for (e in c.emails) byEmail.putIfAbsent(EmailRules.key(e), c)

@@ -698,4 +698,7 @@
     <string name="contact_edit">在联系人中编辑</string>
     <string name="email_none">没有电子邮件地址</string>
     <string name="email_none_edit_in_contacts">没有电子邮件地址：请在联系人中添加</string>
+    <string name="me_pick_contact">联系人中的我…</string>
+    <string name="me_change_contact">更换我的联系人</string>
+    <string name="me_unlink_contact">取消关联</string>
 </resources>
