@@ -88,7 +88,11 @@ object ContactsProvider {
             "${Email.IS_SUPER_PRIMARY} DESC, ${Email.IS_PRIMARY} DESC")
             ?.use { c -> buildList { while (c.moveToNext()) c.getString(0)?.let { add(it) } } }.orEmpty()
 
-    /** The device owner's profile card ("Me" in the Contacts app), or null when there is none. */
+    /**
+     * The device owner's profile card ("Me" in the Contacts app), or null when there is none or the
+     * platform hides it (Samsung One UI on the Note10+ returns no profile rows to third-party apps
+     * even with READ_PROFILE granted): then Me stays app-only.
+     */
     fun profile(context: Context): OsContact? = runCatching {
         val cr = context.contentResolver
         val c = cr.query(ContactsContract.Profile.CONTENT_URI, CONTACT_PROJ, null, null, null)?.use { c ->
@@ -99,7 +103,7 @@ object ContactsProvider {
             arrayOf(Email.ADDRESS), "${ContactsContract.Data.MIMETYPE}=?", arrayOf(Email.CONTENT_ITEM_TYPE), null)
             ?.use { e -> buildList { while (e.moveToNext()) e.getString(0)?.let { add(it) } } }.orEmpty()
         c.copy(emails = emails)
-    }.onFailure { Log.w(TAG, "profile unreadable", it) }.getOrNull()
+    }.onFailure { Log.w(TAG, "profile unreadable", it) }.getOrNull().also { Log.i(TAG, "profile card: ${if (it == null) "none" else "found"}") }
 
     /** Lookup keys of the profile card carry this prefix, so they never collide with a contact's. */
     const val PROFILE_PREFIX = "profile:"
