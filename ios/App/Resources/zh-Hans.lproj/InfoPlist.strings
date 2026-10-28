@@ -1,1 +1,2 @@
 "NSMicrophoneUsageDescription" = "Prime Minutes 使用麦克风在设备上转录您的会议。";
+"NSContactsUsageDescription" = "你在会议中命名的人物就是你的联系人：Prime Minutes 会把他们添加到通讯录，并读取他们的电子邮件以发送会议纪要。";

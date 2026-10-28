@@ -509,7 +509,7 @@ struct SessionView: View {
                     speaker: pickerSpeaker(k), speakers: pickerSpeakers,
                     onPlaySample: { playSample(k) },
                     onLink: { renamingSpeaker = nil; link(k, $0) },
-                    onNew: { renamingSpeaker = nil; link(k, PeopleStore.shared.create($0)) },
+                    onNew: { n in renamingSpeaker = nil; if let p = PeopleStore.shared.newPerson(n) { link(k, p) } else { link(k, n) } },
                     onClear: { renamingSpeaker = nil; clearName(k) },
                     onMerge: { renamingSpeaker = nil; merge(k, $0) },
                     onDismiss: { renamingSpeaker = nil })
@@ -645,6 +645,12 @@ struct SessionView: View {
         speakerEdited(L("people_linked"), before, nameOnly: true)
         PeopleStore.shared.touch(p.id)
         VoiceLinks.impl?.confirmed(session: s.id, speaker: k, person: p.id)
+    }
+    /// A plain name, no person (Contacts access denied: no person, e-mail or voice recognition).
+    private func link(_ k: Int, _ name: String) {
+        let before = (s.lines, s.speakerNames, s.speakerPeople)
+        var l = PeopleStore.links(s); l[k] = SpeakerLink(name: name); PeopleStore.apply(l, to: &s)
+        speakerEdited(L("people_linked"), before, nameOnly: true)
     }
     /// Back to "Speaker n": the person stays in the directory.
     private func clearName(_ k: Int) {

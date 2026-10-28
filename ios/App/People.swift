@@ -586,3 +586,29 @@ enum CleanSpeech {
             ?? lines.first { $0.speaker == speaker }?.start
     }
 }
+
+/// "Add N people to Contacts" (iOS: People == the system Contacts): which existing contact each app-only person
+/// becomes, so the migration links instead of duplicating. A shared e-mail address wins; else the exact name, but
+/// only when exactly one contact and exactly one of `people` carry it (homonyms stay distinct people). nil: a new
+/// contact. Two people matching one contact are the same human: the store merges them (sessions and voice follow).
+enum ContactMatch {
+    struct Candidate: Equatable { var key: String; var name: String; var emails: [String] }
+    struct Step: Equatable { var person: String; var contact: String? }
+
+    static func plan(_ people: [Person], _ contacts: [Candidate], fold: PersonNames.Fold = { $0 }) -> [Step] {
+        func names(_ n: String) -> String { PersonNames.normalize(n, fold) }
+        var byName: [String: [String]] = [:]
+        for c in contacts where PersonNames.isPersonName(c.name) { byName[names(c.name), default: []].append(c.key) }
+        var peopleNamed: [String: Int] = [:]
+        for p in people { peopleNamed[names(p.name), default: 0] += 1 }
+        return people.map { p in
+            let mine = Set(p.emails.map { EmailRules.key($0.address) })
+            if !mine.isEmpty, let c = contacts.first(where: { $0.emails.contains { mine.contains(EmailRules.key($0)) } }) {
+                return Step(person: p.id, contact: c.key)
+            }
+            let n = names(p.name)
+            if let ks = byName[n], ks.count == 1, peopleNamed[n] == 1 { return Step(person: p.id, contact: ks[0]) }
+            return Step(person: p.id, contact: nil)
+        }
+    }
+}

@@ -583,7 +583,7 @@ struct LiveJobView: View {
                                     suggestions: suggestions, voiceNote: note,
                                     onPlaySample: player.available ? { playSample(k) } : nil,
                                     onLink: { p in renamingSpeaker = nil; link(k, p) },
-                                    onNew: { n in renamingSpeaker = nil; link(k, PeopleStore.shared.create(n)) },
+                                    onNew: { n in renamingSpeaker = nil; if let p = PeopleStore.shared.newPerson(n) { link(k, p) } else { link(k, n) } },
                                     onClear: { renamingSpeaker = nil; clearName(k) },
                                     onMerge: { into in renamingSpeaker = nil; merge(k, into) },
                                     onDismiss: { renamingSpeaker = nil })
@@ -634,6 +634,12 @@ struct LiveJobView: View {
         VoiceLinks.impl?.confirmed(session: id, speaker: k, person: p.id)
         persistNames()
         confirm(L("people_linked"))
+    }
+    /// A plain name, no person (Contacts access denied).
+    private func link(_ k: Int, _ name: String) {
+        m.screen.names = LiveNames.setting(m.screen.names, k, SpeakerLink(name: name))
+        persistNames()
+        withAnimation { toast = L("people_linked") }
     }
     /// Back to "Speaker n" (Android clearSpeakerName): the name goes at once, the person stays in the directory.
     private func clearName(_ k: Int) {

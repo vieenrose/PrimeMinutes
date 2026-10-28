@@ -26,6 +26,8 @@
 		<key>huggingface.co</key><dict><key>NSIncludesSubdomains</key><true/><key>NSExceptionAllowsInsecureHTTPLoads</key><false/></dict>
 		<key>hf.co</key><dict><key>NSIncludesSubdomains</key><true/><key>NSExceptionAllowsInsecureHTTPLoads</key><false/></dict>
 	</dict></dict>
+	<key>NSContactsUsageDescription</key>
+	<string>The people you name in your meetings are your contacts: Prime Minutes adds them there and reads their e-mail addresses to send minutes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Prime Minutes transcribes your meetings from the microphone, on the device.</string>
 </dict></plist>

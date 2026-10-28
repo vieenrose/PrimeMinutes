@@ -626,3 +626,19 @@
 "podcast_no_results_hint" = "No podcasts match “%@”. Check the spelling or try another search.";
 "podcast_too_large" = "This file is too large to download (over 500 MB).";
 "peertube_http" = "The PeerTube server could not provide this video (HTTP %d).";
+
+/* People == Contacts */
+"contacts_denied" = "Prime Minutes has no access to your contacts, so it cannot add people: a speaker gets a plain name only (no e-mail, no voice recognition). Allow Contacts in Settings to name people.";
+"contacts_open_settings" = "Open Settings";
+"contacts_migrate" = "Add %d people to Contacts?";
+"contacts_migrate_one" = "Add 1 person to Contacts?";
+"contacts_migrate_text" = "People are now your contacts. Someone already in Contacts (same e-mail or exact name) is linked, not duplicated; meetings and voices stay with them.";
+"contacts_migrate_add" = "Add";
+"contacts_migrate_later" = "Not now";
+"contact_is_contact" = "This person is a contact on this iPhone. Change the name details or e-mail there.";
+"contact_edit" = "Edit in Contacts";
+"contact_not_in_contacts" = "Not in Contacts yet.";
+"contact_add_one" = "Add to Contacts";
+"email_none_contact" = "No e-mail address. Add one in Contacts.";
+"email_none" = "No e-mail address.";
+"people_add_label" = "Use “%@” as the name";

@@ -173,4 +173,32 @@ final class ContactsMailUITests: XCTestCase {
         sleep(8); shot("sync-3-later")
         XCTAssertTrue((elapsed() ?? -1) > t2, "playback advances")
     }
+
+    /// People == Contacts (os-contacts-ios): the Contacts prompt is granted, a speaker named as a new person becomes a
+    /// contact (PM_NAME, default "PMTEST Zed"), and the Contacts app finds it. Test contacts are named PMTEST… and
+    /// removed afterwards with the VOX_PEOPLE_DO=delcontacts:PMTEST hook.
+    func testOSContacts() {
+        let name = env["PM_NAME"] ?? "PMTEST Zed"
+        launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "1"])
+        sleep(3); shot("oc-1-prompt", tree: true)
+        let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let yes = ["Allow Full Access", "允許完整取用", "允许完全访问", "Continue", "繼續", "继续", "OK", "好"]
+        for step in 0..<4 {   // iOS 18+: Continue, then Allow Full Access (system alert or the app's sheet)
+            var hit: XCUIElement?
+            for root in [sb, app] {
+                for l in yes { let b = root.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", l)).firstMatch; if b.exists { hit = b; break } }
+                if hit != nil { break }
+            }
+            guard let hit else { break }
+            hit.tap(); sleep(2); shot("oc-1-granted-\(step)", tree: true)
+        }
+        launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "1", "VOX_PICKAUTO": name])
+        sleep(7); shot("oc-2-named", tree: true)
+        let contacts = XCUIApplication(bundleIdentifier: "com.apple.MobileAddressBook")
+        contacts.launch(); sleep(3)
+        let f = contacts.searchFields.firstMatch
+        if f.waitForExistence(timeout: 6) { f.tap(); f.typeText(name); sleep(3) }
+        shot("oc-3-contacts", tree: true)
+        contacts.terminate()
+    }
 }

@@ -40,6 +40,8 @@ struct PersonPickerSheet: View {
     @ObservedObject private var store = PeopleStore.shared
     @State private var query = Dev.env["VOX_PICKQ"] ?? ""
     @State private var sameAsk: (String, Person)?
+    /// People == Contacts: denied access names a speaker with a plain label only (no new person).
+    @State private var contacts = OSContacts.access
     @FocusState private var focused: Bool
 
     private var inMeeting: [String: Int] {
@@ -108,7 +110,8 @@ struct PersonPickerSheet: View {
                 if doc.people.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(L("people_picker_empty")).font(.footnote).foregroundStyle(.secondary)
                 }
-                if allowContacts && query.trimmingCharacters(in: .whitespaces).isEmpty {
+                if contacts == .denied { Section { ContactsDeniedNote() } }
+                if allowContacts && contacts != .denied && query.trimmingCharacters(in: .whitespaces).isEmpty {
                     Section {
                         Button { chooseContact() } label: {
                             VStack(alignment: .leading, spacing: 2) {
@@ -121,7 +124,7 @@ struct PersonPickerSheet: View {
                 if sec.canAdd || (clearable && current != nil) {
                     Section {
                         if sec.canAdd {
-                            Button { addNew(query) } label: { Label(L("people_add_new", query.trimmingCharacters(in: .whitespacesAndNewlines)), systemImage: "plus").fontWeight(.semibold) }
+                            Button { addNew(query) } label: { Label(L(contacts == .denied ? "people_add_label" : "people_add_new", query.trimmingCharacters(in: .whitespacesAndNewlines)), systemImage: "plus").fontWeight(.semibold) }
                         }
                         if clearable, let c = current {
                             Button { onPick(.clear) } label: { Text(L("people_clear_name", defaultLabel(c.id))).foregroundStyle(.secondary) }
@@ -138,13 +141,14 @@ struct PersonPickerSheet: View {
             Button(L("people_same_yes")) { sameAsk = nil; onPick(.existing(a.1)) }
             Button(L("people_same_no", a.0)) { sameAsk = nil; onPick(.new(a.0)) }
         }
+        .task { contacts = await OSContacts.requestIfNeeded() }
         .task {   // DEV: VOX_CONTACT_TAP=speaker taps "Choose from contacts…" (device checks without taps)
             guard allowContacts, Dev.env["VOX_CONTACT_TAP"] == "speaker" else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000); chooseContact()
         }
     }
 
-    private func chooseContact() { ContactPicker.present { c, chosen in onPick(.contact(c, chosen)) } }
+    private func chooseContact() { ContactPicker.present(needsEmail: false) { c, chosen in onPick(.contact(c, chosen)) } }
 
     private func row(_ name: String, _ sub: String?, greyed: Bool = false, dots: Int = 0, _ tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
@@ -195,6 +199,9 @@ struct SpeakerNameFlow: View {
         case .new(let n): onNew(n)
         case .clear: onClear()
         case .contact(let c, let chosen):
+            if let k = c.key, let mine = PeopleStore.shared.doc.people.first(where: { $0.contact?.platform == c.platform && $0.contact?.key == k }) {
+                picked(.existing(mine)); return   // that contact is already a person: no name to confirm
+            }
             contactName = c.name ?? ""
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { contactAsk = (c, chosen) }   // after the picker is gone
         }
@@ -263,14 +270,7 @@ struct PeopleScreen: View {
             return ma != mb ? ma > mb : PersonNames.normalize(a.name) < PersonNames.normalize(b.name)
         }
         List {
-            if doc.migrationFound > 0 {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(doc.migrationFound == 1 ? L("people_migration_card_one") : L("people_migration_card", doc.migrationFound)).font(.subheadline)
-                        HStack { Spacer(); Button(L("people_migration_ok")) { store.dismissMigrationCard() }.bold() }
-                    }
-                }
-            }
+            ContactsMigrationCard()
             VoiceSettingsCard()
             if doc.people.isEmpty {
                 ContentUnavailableView(L("people_none_title"), systemImage: "person.2", description: Text(L("people_none")))

@@ -626,3 +626,19 @@
 "podcast_no_results_hint" = "没有符合“%@”的播客，请检查拼写或换个关键词。";
 "podcast_too_large" = "文件太大，无法下载（超过 500 MB）。";
 "peertube_http" = "PeerTube 服务器无法提供这个视频（HTTP %d）。";
+
+/* People == Contacts */
+"contacts_denied" = "Prime Minutes 无法访问你的通讯录，因此不能添加人物：说话人只能取普通名称（没有电子邮件，也不会识别声音）。请到“设置”允许访问通讯录，才能为人物命名。";
+"contacts_open_settings" = "打开设置";
+"contacts_migrate" = "要把 %d 位人物添加到通讯录吗？";
+"contacts_migrate_one" = "要把 1 位人物添加到通讯录吗？";
+"contacts_migrate_text" = "人物现在就是你的联系人。已在通讯录中的人（同一个电子邮件或完全相同的名字）会直接关联，不会重复创建；会议和声音都会跟着他们。";
+"contacts_migrate_add" = "添加";
+"contacts_migrate_later" = "以后再说";
+"contact_is_contact" = "这个人是这部 iPhone 上的联系人，名字或电子邮件请在通讯录中修改。";
+"contact_edit" = "在通讯录中编辑";
+"contact_not_in_contacts" = "尚未添加到通讯录。";
+"contact_add_one" = "添加到通讯录";
+"email_none_contact" = "没有电子邮件，请在通讯录中添加。";
+"email_none" = "没有电子邮件。";
+"people_add_label" = "使用“%@”作为名称";

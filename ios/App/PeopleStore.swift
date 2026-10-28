@@ -142,7 +142,7 @@ import Foundation
     @discardableResult func split(_ session: UUID, from personId: String, newName: String) async -> Person? {
         let n = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty else { return nil }
-        let p = create(n)
+        guard let p = newPerson(n) else { return nil }   // no Contacts access: no new person
         await rewriteSessions(only: [session]) { LinkOps.split($1, from: personId, to: p) }
         VoiceHooks.impl?.onSplit(session: session, from: personId, to: p.id)
         return p
@@ -152,7 +152,7 @@ import Foundation
 
     // MARK: addresses and contact link (docs/design/speaker-contacts.md §3)
 
-    func addEmail(_ id: String, _ address: String, makeDefault: Bool = false) { mutate { PeopleOps.addEmail($0, id, address, makeDefault: makeDefault) } }
+    func addEmail(_ id: String, _ address: String, from: String = PersonEmail.fromUser, makeDefault: Bool = false) { mutate { PeopleOps.addEmail($0, id, address, from: from, makeDefault: makeDefault) } }
     func removeEmail(_ id: String, _ address: String) { mutate { PeopleOps.removeEmail($0, id, address) } }
     func makeDefaultEmail(_ id: String, _ address: String) { mutate { PeopleOps.makeDefault($0, id, address) } }
     func linkContact(_ id: String, _ c: PickedContact, chosen: String? = nil) { mutate { PeopleOps.linkContact($0, id, c, now: Self.now(), chosen: chosen) } }
@@ -163,6 +163,70 @@ import Foundation
         linkContact(p.id, c, chosen: chosen)
         return doc.byId(p.id) ?? p
     }
+    // MARK: People == Contacts (OSContacts)
+
+    /// A new person = a new contact (CNSaveRequest) linked to it. nil without Contacts access (or when the save
+    /// fails): the caller names the speaker with a plain label instead.
+    func newPerson(_ name: String) -> Person? {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard PersonNames.isPersonName(n), let key = OSContacts.create(n) else { return nil }
+        let p = create(n)
+        linkContact(p.id, PickedContact(name: n, emails: [], key: key))
+        return doc.byId(p.id) ?? p
+    }
+    /// People of the app without a contact (made before People became Contacts, or whose contact was deleted).
+    /// "Me" is left out: the user's own card is theirs to pick, never a duplicate made by the app.
+    var appOnlyPeople: [Person] { doc.people.filter { $0.contact == nil && !$0.me } }
+    /// Refreshes every linked person's cached addresses from its contact; a deleted contact unlinks gracefully (the
+    /// person, its meetings and voice stay; only the contact's addresses go). Limited access keeps the cache.
+    func syncContacts() {
+        guard OSContacts.canWrite else { return }
+        for p in doc.people {
+            guard let c = p.contact, c.platform == "ios" else { continue }
+            let (contact, missing) = OSContacts.fetch(c.key)
+            if missing {
+                StatusLog.add("contacts: \(p.name)'s contact was deleted: unlinked")
+                unlinkContact(p.id, removeEmails: true); continue
+            }
+            guard let contact else { continue }
+            let emails = OSContacts.emails(contact)
+            mutate { d in
+                var nd = d
+                for i in nd.people.indices where nd.people[i].id == p.id {
+                    // The contact's addresses, then any typed before People became Contacts (never dropped).
+                    let fromContact = emails.map { PersonEmail(address: $0, from: PersonEmail.fromContact) }
+                    let keys = Set(emails.map(EmailRules.key))
+                    nd.people[i].emails = fromContact + nd.people[i].emails.filter { $0.from == PersonEmail.fromUser && !keys.contains(EmailRules.key($0.address)) }
+                    nd.people[i].contact?.name = OSContacts.name(contact).nonEmpty
+                    nd.people[i].contact?.synced = Self.now()
+                }
+                return nd
+            }
+        }
+    }
+    /// The card's "Add to Contacts": each app-only person is linked to the contact ContactMatch finds (its typed
+    /// addresses added there), else to a new contact; two people on one contact are merged (meetings + voice follow).
+    func migrateToContacts(_ only: [Person]? = nil) async {
+        guard await OSContacts.requestIfNeeded() != .denied else { return }
+        let people = only ?? appOnlyPeople
+        let plan = ContactMatch.plan(people, OSContacts.candidates(), fold: Self.fold)
+        var linked = 0, created = 0, merged = 0
+        for step in plan {
+            guard let p = doc.byId(step.person), p.contact == nil else { continue }
+            let typed = p.emails.map(\.address)
+            var key = step.contact
+            if let k = key { OSContacts.addEmails(k, typed); linked += 1 }
+            else { key = OSContacts.create(p.name, emails: typed); if key != nil { created += 1 } }
+            guard let key else { continue }
+            if let other = doc.people.first(where: { $0.id != p.id && $0.contact?.platform == "ios" && $0.contact?.key == key }) {
+                await merge(from: p.id, into: other.id); merged += 1; continue
+            }
+            linkContact(p.id, PickedContact(name: p.name, emails: [], key: key))
+        }
+        syncContacts()
+        StatusLog.add("contacts: migration linked \(linked), created \(created), merged \(merged)")
+    }
+
     /// "Which one is you?": only `id` is Me.
     func setMe(_ id: String) {
         mutate { d in var n = d; n.people = d.people.map { var p = $0; p.me = $0.id == id; return p }; return n }
@@ -263,13 +327,21 @@ extension PeopleStore {
             case "forget" where a.count == 2: if let p = person(a[1]) { mutate { PeopleOps.delete($0, p.id) } }
             case "forgetall": mutate { var d = $0; d.people = []; d.migrationFound = 0; return d }   // test cleanup
             case "rerun" where a.count == 2: if let s = await session(a[1]) { Model.shared.runner.rerun(s, transcribe: true) }
+            // People == Contacts checks (test people only: never migrate the user's own people from a DEV op).
+            case "tocontacts" where a.count == 2: await migrateToContacts(a[1].split(separator: ",").compactMap { person(String($0)) })
+            case "mkcontact" where a.count == 3: _ = OSContacts.create(a[1], emails: a[2].isEmpty ? [] : [a[2]])   // as if typed in Contacts
+            case "cemail" where a.count == 3: if let k = person(a[1])?.contact?.key { OSContacts.addEmails(k, [a[2]]) }
+            case "delcontacts" where a.count == 2: OSContacts.deleteAll(prefix: a[1]); syncContacts()
+            case "candidates": StatusLog.add("contacts: \(OSContacts.candidates().count) readable, access \(OSContacts.access)")
+            case "newperson" where a.count == 2: _ = newPerson(a[1])
+            case "sync": syncContacts()
             case "remigrate": mutate { var d = $0; d.migrated = false; return d }; await migrateIfNeeded()
             default: break
             }
         }
         await library.refresh()
         var out = "ops \(spec)\npeople \(doc.people.count) migrated=\(doc.migrated) found=\(doc.migrationFound)\n"
-        for p in doc.people { out += "  \(p.id.prefix(8)) \(p.name)" + (p.aliases.isEmpty ? "" : " aliases=\(p.aliases)") + (p.note.map { " note=\($0)" } ?? "") + (p.me ? " me" : "") + (p.emails.isEmpty ? "" : " emails=\(p.emails.map { "\($0.address)(\($0.from))" })") + (p.contact.map { " contact=\($0.name ?? "-")/\($0.org ?? "-")" } ?? "") + " last=\(p.lastUsed)\n" }
+        for p in doc.people { out += "  \(p.id.prefix(8)) \(p.name)" + (p.aliases.isEmpty ? "" : " aliases=\(p.aliases)") + (p.note.map { " note=\($0)" } ?? "") + (p.me ? " me" : "") + (p.emails.isEmpty ? "" : " emails=\(p.emails.map { "\($0.address)(\($0.from))" })") + (p.contact.map { " contact=\($0.name ?? "-")/\($0.org ?? "-")/\($0.key.prefix(8))" } ?? "") + " last=\(p.lastUsed)\n" }
         if spec.contains("list") { for s in library.sessions { out += "# \(s.id.uuidString.prefix(8)) \(Int(s.seconds))s spk=\(Set(s.lines.map(\.speaker)).count) audio=\(s.audio != nil) \(s.title.prefix(30))\n" } }
         for s in library.sessions where s.speakerNames != nil {
             out += "\(s.id.uuidString.prefix(8)) \(s.title.prefix(30)): " + Self.links(s).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value.name)" + ($0.value.person.map { "→\($0.prefix(8))" } ?? "") }.joined(separator: ", ") + "\n"

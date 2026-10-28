@@ -1,1 +1,2 @@
 "NSMicrophoneUsageDescription" = "Prime Minutes transcribes your meetings from the microphone, on the device.";
+"NSContactsUsageDescription" = "The people you name in your meetings are your contacts: Prime Minutes adds them there and reads their e-mail addresses to send minutes.";

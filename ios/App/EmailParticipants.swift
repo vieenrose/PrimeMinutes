@@ -302,7 +302,10 @@ struct EmailParticipantsSheet: View {
         }
     }
     private func addAddress(_ id: String, _ a: String) {
-        store.addEmail(id, a); checked[id] = true; saved.insert(id); typing = nil
+        // People == Contacts: the address is saved in the person's contact (the person's copy is its cache).
+        if let c = store.doc.byId(id)?.contact, c.platform == "ios" { OSContacts.addEmails(c.key, [a]); store.addEmail(id, a, from: PersonEmail.fromContact) }
+        else { store.addEmail(id, a) }
+        checked[id] = true; saved.insert(id); typing = nil
     }
     private func avatar(_ name: String) -> some View {
         Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased()).font(.subheadline.bold()).foregroundStyle(Color.accentColor)

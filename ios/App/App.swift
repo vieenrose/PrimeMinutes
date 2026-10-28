@@ -10,7 +10,7 @@ import Combine
     init() { BackgroundWork.register() }
     var body: some Scene {
         WindowGroup { ContentView().modifier(TextSize(steps: Prefs.typeSizeSteps(textSize))) }
-            .onChange(of: phase) { if phase == .background { BackgroundWork.schedule() } }
+            .onChange(of: phase) { if phase == .background { BackgroundWork.schedule() } else if phase == .active { PeopleStore.shared.syncContacts() } }
     }
 }
 
@@ -73,6 +73,7 @@ final class Model: ObservableObject {
         await library.refresh(); await runner.syncQueue()
         // Names given before the people directory existed become its people (once).
         await PeopleStore.shared.migrateIfNeeded()
+        PeopleStore.shared.syncContacts()   // People == Contacts: addresses edited there, deleted contacts unlinked
         if let ops = Dev.env["VOX_PEOPLE_DO"], !Dev.ranPeopleOps { Dev.ranPeopleOps = true; await PeopleStore.shared.devRun(ops) }
         VoiceStore.shared.attach()   // voice hooks + the backfill of meetings without vectors (only when recognition is on)
         if let ops = Dev.env["VOX_VOICE_DO"], !Dev.ranVoiceOps { Dev.ranVoiceOps = true; await VoiceStore.shared.devRun(ops) }

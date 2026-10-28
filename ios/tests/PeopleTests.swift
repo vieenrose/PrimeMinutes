@@ -121,6 +121,18 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             let u = t.map { Utterance(speaker: $0.speaker!, start: $0.start, end: $0.end, text: "") }
             check(abs((CleanSpeech.sampleStart(u, speaker: 0) ?? 0) - 110.1) < 1e-6, "sample start = longest clean line")
         }
+        do {   // contactMigrationMatching: e-mail first, then a unique exact name, else a new contact
+            func C(_ k: String, _ n: String, _ e: [String] = []) -> ContactMatch.Candidate { .init(key: k, name: n, emails: e) }
+            var mark = person("a", "Mark"); mark.emails = [PersonEmail(address: "Mark@X.org")]
+            let lin = person("b", "陳經理"), eve = person("c", "Eve"), eve2 = person("d", "Eve"), zoe = person("e", "Zoe")
+            let cs = [C("k1", "Marcus Chen", ["mark@x.org"]), C("k2", "陈经理"), C("k3", "Eve"), C("k4", "Zoe"), C("k5", "Zoe"), C("k6", "Mark")]
+            let plan = ContactMatch.plan([mark, lin, eve, eve2, zoe], cs, fold: fold)
+            check(plan == [.init(person: "a", contact: "k1"), .init(person: "b", contact: "k2"), .init(person: "c", contact: nil),
+                           .init(person: "d", contact: nil), .init(person: "e", contact: nil)], "contact plan \(plan)")
+            check(ContactMatch.plan([person("f", "Ann")], [C("k7", "ann ")]) == [.init(person: "f", contact: "k7")], "name case/space")
+            check(ContactMatch.plan([person("g", "Speaker 1")], [C("k8", "Speaker 1")]) == [.init(person: "g", contact: nil)], "default label never matches")
+            check(ContactMatch.plan([person("h", "Bo"), person("i", "Al")], [C("k9", "Bob", ["bo@y.org"])]).allSatisfy { $0.contact == nil }, "no match")
+        }
         print(failures == 0 ? "PeopleTests PASS" : "PeopleTests FAIL (\(failures))")
         exit(failures == 0 ? 0 : 1)
     }
