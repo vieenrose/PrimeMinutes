@@ -123,7 +123,7 @@ class MeetingMailTest {
     @Test fun zhProseCitesMoveToSentenceEnd() {
         val p = "新辦公室預計於三月十號正式上班 [0:00]。會議決定採用中間報價 [0:18, 0:35]，前提是打包自行完成 [0:40]。"
         assertEquals(
-            "新辦公室預計於三月十號正式上班。\u2060[0:00]會議決定採用中間報價，前提是打包自行完成。\u2060[0:18, 0:35]",
+            "新辦公室預計於三月十號正式上班。\u2060[0:00] 會議決定採用中間報價，前提是打包自行完成。\u2060[0:18, 0:35]",
             MeetingMail.clauseEndCites(p),
         )
     }

@@ -50,7 +50,7 @@ class TranscriptExportTest {
     @Test fun markdownHasHeadingsAndBoldSpeakers() {
         val md = TranscriptExport.markdown(sample, label, "Title", "body", "Summary", "Transcript")
         assertTrue(md.startsWith("# Title\n\n## Summary\n\nbody\n\n## Transcript\n\n"))
-        assertTrue(md.contains("- `00:01` **Speaker 1** Hello there"))
+        assertTrue(md.contains("- <a id=\"t-1\"></a>`00:01` **Speaker 1** Hello there"))
     }
 
     @Test fun documentFormatsCarryActionItems() {
@@ -125,9 +125,9 @@ class TranscriptExportTest {
         assertEquals("still exactly one transcript line", 1,
             txt.lines().count { it.startsWith("[") })
         val md = TranscriptExport.markdown(lines, label, "T", null, "Summary", "Transcript")
-        assertTrue(md.contains("- `00:01` **Speaker 1** first line second line\n"))
+        assertTrue(md.contains("- <a id=\"t-1\"></a>`00:01` **Speaker 1** first line second line\n"))
         assertEquals("still exactly one transcript bullet", 1,
-            md.lines().count { it.startsWith("- `") })
+            md.lines().count { it.startsWith("- <a id=") })
         // Whitespace-only after flattening is still dropped.
         assertFalse(TranscriptExport.plainText(listOf(u(0, "\n  \n", 1.0, 2.0, 0)), label, "T", null).contains("[00:01]"))
     }
@@ -170,12 +170,12 @@ class TranscriptExportTest {
         val md = TranscriptExport.markdown(turnsSample, label, "T", null, "Summary", "Transcript")
         assertEquals(
             "# T\n\n## Transcript\n\n" +
-                "- `00:01` **Speaker 1** Hello there\n" +
+                "- <a id=\"t-1\"></a>`00:01` **Speaker 1** Hello there\n" +
                 "\n" +
-                "- `01:05` **Speaker 2** 我們開始吧\n" +
+                "- <a id=\"t-65\"></a>`01:05` **Speaker 2** 我們開始吧\n" +
                 "  接著討論預算，包括搬家公司報價、紙箱發放、座位表、客戶通知信與停車位抽籤的所有細節安排與時程確認\n" +
                 "\n" +
-                "- `01:21` **Speaker 1** OK, let's go with the middle quote.\n",
+                "- <a id=\"t-81\"></a>`01:21` **Speaker 1** OK, let's go with the middle quote.\n",
             md,
         )
     }
@@ -185,7 +185,7 @@ class TranscriptExportTest {
         val txt = TranscriptExport.plainText(long, label, null, null)
         assertEquals("[00:00:05] Speaker 1: start\n\n[01:02:03] Speaker 2: 一小時後\n", txt)
         assertEveryStampedLineParses(txt)
-        assertTrue(TranscriptExport.markdown(long, label, null, null, "S", "Tr").contains("- `01:02:03` **Speaker 2** 一小時後"))
+        assertTrue(TranscriptExport.markdown(long, label, null, null, "S", "Tr").contains("- <a id=\"t-3723\"></a>`01:02:03` **Speaker 2** 一小時後"))
         assertEquals(3723, ReaderProtocol.parseLine("[01:02:03] Speaker 2: 一小時後")!!.startS)
     }
 

@@ -28,18 +28,30 @@ object TranscriptExport {
         summary: String?,
         actionItems: String? = null,
         actionsHeading: String? = null,
+        notes: ExportNotes.Section? = null,
+        summaryHeading: String? = null,
+        transcriptHeading: String? = null,
+        actions: ExportNotes.Section? = null,
     ): String = buildString {
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { append(it).append("\n\n") }
-        summary?.trim()?.takeIf { it.isNotEmpty() }?.let { append(it).append("\n\n") }
+        summary?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            summaryHeading?.let { h -> append(ExportNotes.plainHeading(h)).append('\n') }
+            append(ExportNotes.summary(it)).append("\n\n")
+        }
         // "-" is the extractor's own "nothing found" marker, not an action item.
         actionItems?.trim()?.takeIf { it.isNotEmpty() && it != "-" }?.let {
             actionsHeading?.let { h -> append(h).append("\n") }
             append(it).append("\n\n")
         }
+        actions?.let { append(ExportNotes.plain(it)).append("\n\n") }
+        notes?.let { append(ExportNotes.plain(it)).append("\n\n") }
+        if (utterances.isNotEmpty()) transcriptHeading?.let { append(ExportNotes.plainHeading(it)).append('\n') }
         val pad = gutterWidth(utterances)
+        var firstTurn = true
         for ((u, text, cont) in turns(utterances)) {
             if (cont) { append(" ".repeat(pad + 3)).append(text).append('\n'); continue }
-            if (length > 0 && !endsWith("\n\n")) append('\n')
+            if (!firstTurn) append('\n')
+            firstTurn = false
             append('[').append(clock(u.startSec, pad)).append("] ")
             u.speaker?.let { append(label(it)).append(": ") }
             append(text).append('\n')
@@ -56,24 +68,33 @@ object TranscriptExport {
         transcriptHeading: String,
         actionItems: String? = null,
         actionsHeading: String? = null,
+        notes: ExportNotes.Section? = null,
+        actions: ExportNotes.Section? = null,
     ): String = buildString {
+        // Cites in the summary / notes link to the turn anchors (`<a id="t-15"></a>`) below.
+        val starts = turns(utterances).filter { !it.cont }.map { it.u.startSec }
         append("# ").append(title?.trim()?.ifEmpty { null } ?: transcriptHeading).append("\n\n")
         summary?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            append("## ").append(summaryHeading).append("\n\n").append(it).append("\n\n")
+            append("## ").append(summaryHeading).append("\n\n").append(ExportNotes.mdCites(ExportNotes.summary(it), starts)).append("\n\n")
         }
         actionItems?.trim()?.takeIf { it.isNotEmpty() && it != "-" }?.let {
             // No heading given: the block carries its own (localized) headings — don't add an English one.
             actionsHeading?.let { h -> append("## ").append(h).append("\n\n") }
             append(it).append("\n\n")
         }
+        actions?.let { append(ExportNotes.markdown(it, starts)).append("\n\n") }
+        notes?.let { append(ExportNotes.markdown(it, starts)).append("\n\n") }
         append("## ").append(transcriptHeading).append("\n\n")
         val pad = gutterWidth(utterances)
         var first = true
+        val ids = HashSet<String>()
         for ((u, text, cont) in turns(utterances)) {
             if (cont) { append("  ").append(text).append('\n'); continue }
             if (!first) append('\n')
             first = false
-            append("- `").append(clock(u.startSec, pad)).append("` ")
+            append("- ")
+            ExportNotes.anchor(u.startSec).let { if (ids.add(it)) append("<a id=\"").append(it).append("\"></a>") }
+            append("`").append(clock(u.startSec, pad)).append("` ")
             u.speaker?.let { append("**").append(label(it)).append("** ") }
             append(text).append('\n')
         }

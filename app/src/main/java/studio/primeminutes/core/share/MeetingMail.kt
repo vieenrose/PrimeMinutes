@@ -76,6 +76,9 @@ object MeetingMail {
     private val HEAD = Regex("""^【(.+)】$""")
     private val EMPTY = setOf("無", "无", "None", "-", "")
 
+    /** Nothing to read: empty, a "none" marker, or no letter at all (a stray `3`, `-`, `…`). */
+    fun trivial(text: String): Boolean = text.trim() in EMPTY || text.none { it.isLetter() }
+
     /** The minutes text the reader assembles (`【heading】` then `- text [ts]`), as sections; empty ones dropped. */
     fun parseMinutes(raw: String, sections: List<Pair<String, String>>): List<Section> {
         val tags = sections.toMap()
@@ -87,7 +90,7 @@ object MeetingMail {
             if (line.startsWith("-") && out.isNotEmpty()) {
                 val m = ITEM.matchEntire(line) ?: continue
                 val text = m.groupValues[1]
-                if (text in EMPTY) continue
+                if (trivial(text)) continue
                 out.last().second += Item(text, m.groupValues[2].ifEmpty { null })
             }
         }
@@ -99,7 +102,7 @@ object MeetingMail {
     fun sectionsOf(notes: List<Triple<String?, String, String>>, sections: List<Pair<String, String>>, heading: (String) -> String = { it }): List<Section> =
         sections.mapNotNull { (h, tag) ->
             notes.filter { it.first?.uppercase() == tag }.map { Item(it.second.trimEnd('。'), it.third) }
-                .filter { it.text !in EMPTY }.takeIf { it.isNotEmpty() }?.let { Section(heading(h), tag, it) }
+                .filter { !trivial(it.text) }.takeIf { it.isNotEmpty() }?.let { Section(heading(h), tag, it) }
         }
 
     // --- speaker references ---------------------------------------------------------------------------
@@ -191,7 +194,8 @@ object MeetingMail {
      */
     internal fun clauseEndCites(p: String): String = buildString {
         var last: String? = null
-        for (sen in sentences(p)) {
+        val all = sentences(p)
+        for ((si, sen) in all.withIndex()) {
             val cite = TS.find(sen)?.value
             if (cite == null) { append(sen); continue }
             val body = SPACED_TS.replace(sen, "")
@@ -202,7 +206,12 @@ object MeetingMail {
             val head = core.substring(0, k).trimEnd()
             val tail = core.substring(k)
             append(head).append(tail)
-            if (cite != last) append(glue(head + tail)).append(cite)
+            if (cite != last) {
+                append(glue(head + tail)).append(cite)
+                // One plain space between a cite and the next sentence (`…上班。⁠[0:00] 在搬家…`),
+                // never at the end of the line.
+                if (ws == 0 && si < all.lastIndex) append(' ')
+            }
             last = cite
             append(body.substring(body.length - ws))
         }
