@@ -125,16 +125,16 @@ enum Vox {
 extension View {
     /// Card surface: secondary grouped background with the card rounding.
     func voxCard(_ radius: CGFloat = Vox.radiusLG) -> some View {
-        background(Vox.card, in: RoundedRectangle(cornerRadius: radius))
+        background(Vox.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
     /// Row surface: secondary grouped background with the row rounding.
     func voxRow(_ radius: CGFloat = Vox.radiusMD) -> some View {
-        background(Vox.card, in: RoundedRectangle(cornerRadius: radius))
+        background(Vox.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
     /// Status tint wash: a translucent status color behind a glyph or pill.
     /// Takes the normal `Color` (washes carry no text); text beside it resolves the tint.
     func voxTint(_ c: Color, _ radius: CGFloat = Vox.radiusMD) -> some View {
-        background(c.opacity(0.14), in: RoundedRectangle(cornerRadius: radius))
+        background(c.opacity(0.14), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
     /// Status tint wash from a `Vox.Tint` (normal variant; see `voxTint(_:)`).
     func voxTint(_ t: Vox.Tint, _ radius: CGFloat = Vox.radiusMD) -> some View {
@@ -150,7 +150,7 @@ extension View {
     }
     /// Selected wash: the accent tint behind a selected transcript line.
     func voxSelected() -> some View {
-        background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
+        background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: Vox.radiusMD, style: .continuous))
     }
     /// Environment-aware status foreground: normal system hue, or the Increase-Contrast
     /// variant (verified ≥ 4.5:1 on card and page, light and dark) when the user turns on
