@@ -144,14 +144,6 @@ private fun PeopleContent(
         }
         if (open == null) {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("people-list")) {
-                if (doc.migrationFound > 0) item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.PanelSurface, MaterialTheme.shapes.medium).padding(Spacing.md)) {
-                        Text(pluralStringResource(R.plurals.people_migration_card, doc.migrationFound, doc.migrationFound), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = { scope.launch(Dispatchers.IO) { PeopleStore.dismissMigrationCard(context) } }, modifier = Modifier.align(Alignment.End)) {
-                            Text(stringResource(R.string.people_migration_ok))
-                        }
-                    }
-                }
                 if (!access.granted) item { ContactsBlockedCard(access) }
                 if (cardCount > 0) item {
                     Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.PanelSurface, MaterialTheme.shapes.medium).padding(Spacing.md).testTag("contacts-card")) {
