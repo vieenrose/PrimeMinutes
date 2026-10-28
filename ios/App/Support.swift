@@ -132,8 +132,9 @@ enum Haptics {
     /// A momentary switch flipped (recording started / stopped).
     nonisolated static func toggle(_ on: Bool) { post(.impact(weight: on ? .medium : .light)) }
     private nonisolated static func post(_ f: SensoryFeedback) {
-        let send = { MainActor.assumeIsolated { HapticBus.shared.send(f) } }
-        if Thread.isMainThread { send() } else { DispatchQueue.main.async(execute: send) }
+        // No shared closure: a local one is not Sendable, and handing it to the main queue was a strict-concurrency warning.
+        if Thread.isMainThread { MainActor.assumeIsolated { HapticBus.shared.send(f) } }
+        else { DispatchQueue.main.async { HapticBus.shared.send(f) } }
     }
 }
 
@@ -145,6 +146,9 @@ enum Haptics {
     func send(_ f: SensoryFeedback) {
         feedback = f; tick &+= 1
         log.debug("haptic \(String(describing: f), privacy: .public) #\(self.tick)")
+        #if VOX_DEV
+        StatusLog.add("haptic \(f) #\(tick)")   // device checks read status.log
+        #endif
     }
     private let log = Logger(subsystem: "studio.primeminutes", category: "haptics")
 }
