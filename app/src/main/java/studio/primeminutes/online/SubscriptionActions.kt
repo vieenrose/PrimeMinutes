@@ -25,18 +25,23 @@ object SubscriptionActions {
     suspend fun preview(feedUrl: String): FeedFetcher.Result = FeedFetcher.fetch(feedUrl.trim())
 
     /** Saves [feed] as a subscription with the first-subscribe baseline (every current episode counts as seen). */
-    suspend fun subscribe(ctx: Context, feedUrl: String, feed: Feed, country: String = Podcast.searchCountry(), fallbackTitle: String = "", fallbackArtist: String = ""): Subscription =
+    suspend fun subscribe(ctx: Context, feedUrl: String, feed: Feed, country: String = Podcast.searchCountry(), fallbackTitle: String = "", fallbackArtist: String = "", fallbackArtwork: String = ""): Subscription =
         withContext(Dispatchers.IO) {
             mutex.withLock {
                 Subscriptions.byId(ctx, SubscriptionLogic.idOf(feedUrl))?.let { return@withLock it }
-                val f = feed.copy(title = feed.title.ifBlank { fallbackTitle }, artist = feed.artist.ifBlank { fallbackArtist })
-                SubscriptionLogic.baseline(feedUrl, f, country, System.currentTimeMillis() / 1000).also { Subscriptions.upsert(ctx, it) }
+                val f = feed.copy(title = feed.title.ifBlank { fallbackTitle }, artist = feed.artist.ifBlank { fallbackArtist },
+                    artworkUrl = feed.artworkUrl.ifBlank { fallbackArtwork })
+                SubscriptionLogic.baseline(feedUrl, f, country, System.currentTimeMillis() / 1000).also {
+                    Subscriptions.upsert(ctx, it)
+                    // The channel page and its episodes' rows draw the artwork offline from here on.
+                    ImportDownloads.cacheArtwork(ctx, studio.primeminutes.core.library.Provenance(studio.primeminutes.core.library.Provenance.PODCAST, seriesId = it.id, artworkUrl = it.artworkUrl.ifBlank { null }))
+                }
             }
         }
 
     /** Subscribes from a search hit (fetches the feed first). */
     suspend fun subscribe(ctx: Context, s: PodcastSeries): Result<Subscription> = when (val r = preview(s.feedUrl)) {
-        is FeedFetcher.Result.Ok -> Result.success(subscribe(ctx, if (r.moved) r.finalUrl else s.feedUrl, r.feed, fallbackTitle = s.title, fallbackArtist = s.artist))
+        is FeedFetcher.Result.Ok -> Result.success(subscribe(ctx, if (r.moved) r.finalUrl else s.feedUrl, r.feed, fallbackTitle = s.title, fallbackArtist = s.artist, fallbackArtwork = s.artworkUrl))
         is FeedFetcher.Result.Failed -> Result.failure(CheckFailed(r.error))
         is FeedFetcher.Result.NotModified -> Result.failure(CheckFailed(CheckError.RETRY_LATER))
     }
@@ -87,6 +92,13 @@ object SubscriptionActions {
 
     fun entryFor(index: Map<String, String>, ep: FeedEpisode): String? = index["guid:${ep.guid}"] ?: index["url:${ep.audioUrl}"]
 
+    /** The channel snapshot an episode of [s] is imported with (title, artist, artwork, its date and length). */
+    fun channelOf(s: Subscription?, seriesId: String, published: Long, durationSec: Int) = studio.primeminutes.core.library.Provenance(
+        studio.primeminutes.core.library.Provenance.PODCAST, seriesId = seriesId,
+        channelTitle = s?.title?.ifBlank { null }, channelArtist = s?.artist?.ifBlank { null }, artworkUrl = s?.artworkUrl?.ifBlank { null }, feedUrl = s?.feedUrl,
+        published = published, durationSec = durationSec,
+    )
+
     sealed interface Queue { data class Started(val entryId: String) : Queue; data class Already(val entryId: String) : Queue; data object NoSpace : Queue }
 
     /**
@@ -101,11 +113,14 @@ object SubscriptionActions {
             val need = SubscriptionLogic.spaceNeeded(ep.lengthBytes)
             val free = runCatching { StatFs(ctx.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
             if (forceLowSpace || (need > 0 && free < need)) return@withLock Queue.NoSpace
+            val sub = Subscriptions.byId(ctx, subId)
             val e = SessionLibrary.createDownloadEntry(ctx, ep.title,
-                SessionLibrary.PendingDownload(SessionLibrary.PendingDownload.PODCAST, ep.audioUrl, seriesId = subId, guid = ep.guid), ep.durationSec)
+                SessionLibrary.PendingDownload(SessionLibrary.PendingDownload.PODCAST, ep.audioUrl, seriesId = subId, guid = ep.guid), ep.durationSec,
+                channel = channelOf(sub, subId, ep.published, ep.durationSec))
                 ?: return@withLock Queue.NoSpace
             Subscriptions.update(ctx) { l -> l.map { if (it.id == subId) SubscriptionLogic.markSeen(it, ep.guid, e.id) else it } }
             ImportDownloads.changed(); ImportDownloads.kick(ctx)
+            ImportDownloads.cacheArtwork(ctx, e.source)
             Queue.Started(e.id)
         }
     }

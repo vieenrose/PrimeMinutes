@@ -410,10 +410,9 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     fun showConfigSheet(on: Boolean) = update { it.copy(showConfigSheet = on) }
     fun showPodcastSheet(on: Boolean) = update { it.copy(showPodcastSheet = on) }
     fun showAddSourceSheet(on: Boolean) = update { it.copy(showAddSourceSheet = on) }
-    fun showYouTubeSheet(on: Boolean) = update { it.copy(showYouTubeSheet = on) }
     fun showExportSheet(on: Boolean) = update { it.copy(showExportSheet = on) }
     fun closeSheets() = update {
-        it.copy(showConfigSheet = false, showPodcastSheet = false, showAddSourceSheet = false, showYouTubeSheet = false, showExportSheet = false)
+        it.copy(showConfigSheet = false, showPodcastSheet = false, showAddSourceSheet = false, showExportSheet = false)
     }
 
     // ---------------------------------------------------------------------------------------------

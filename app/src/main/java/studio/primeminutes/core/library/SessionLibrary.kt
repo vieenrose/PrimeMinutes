@@ -77,7 +77,11 @@ object SessionLibrary {
         /** The meeting's identity across devices ([studio.primeminutes.core.session.SessionShare]): given
          *  on the first share, or the sender's for a received meeting. Null until then. */
         val sessionId: String? = null,
+        /** Where it came from (source.json); null for an item saved before provenance (a meeting). */
+        val source: Provenance? = null,
     ) {
+        /** The library's source filter this item sits under. */
+        val category: Provenance.Category get() = source?.category ?: Provenance.Category.MEETING
         val wavFile: File get() = File(dir, WAV_NAME)
         val sessionFile: File get() = File(dir, SESSION_NAME)
 
@@ -147,7 +151,7 @@ object SessionLibrary {
      * copy only across filesystems, which can't happen from filesDir/audio) and never throw.
      * Returns null on failure, leaving [wav] where it was (the caller keeps using its path).
      */
-    fun promoteRecording(context: Context, wav: File, durationSec: Int, captureStart: Long? = null): Entry? = runCatching {
+    fun promoteRecording(context: Context, wav: File, durationSec: Int, captureStart: Long? = null, kind: String = Provenance.RECORDING): Entry? = runCatching {
         val createdAt = System.currentTimeMillis()
         val base = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(createdAt))
         var dir = File(root(context), base)
@@ -163,7 +167,9 @@ object SessionLibrary {
         // else durationSec before now, unless the caller knows better.
         val start = captureStart ?: Regex("""^recording_(\d{12,})\.wav$""").find(wav.name)?.groupValues?.get(1)?.toLongOrNull()
             ?: (createdAt - durationSec * 1000L)
-        val entry = Entry(dir.name, dir, title = null, createdAt = createdAt, durationSec = durationSec, status = Status.RECORDED, captureStart = start)
+        val src = Provenance(kind)
+        runCatching { Provenance.write(dir, src) }
+        val entry = Entry(dir.name, dir, title = null, createdAt = createdAt, durationSec = durationSec, status = Status.RECORDED, captureStart = start, source = src)
         writeMeta(entry)
         // Discoverable immediately: a home-screen row that re-opens (→ transcribes) the raw capture.
         RecentSessions.add(context, Uri.fromFile(dest).toString(), defaultTitle(context, createdAt), createdAt)
@@ -321,6 +327,32 @@ object SessionLibrary {
         }
     }
 
+    /**
+     * The kind of online source [entry] was imported from ("podcast", or "youtube" / "peertube" on items
+     * from older versions), from its kept provenance (source.json); null for a recording, an imported
+     * file or a received meeting.
+     */
+    fun onlineSource(entry: Entry): String? = Provenance.read(entry.dir)?.kind?.takeIf { it in Provenance.ONLINE }
+
+    /**
+     * [entry]'s meeting as text alone at [dest] — title, summary, transcript — with no audio: how a
+     * meeting from an online source is shared by default (the audio belongs to its publisher).
+     * [label] names a speaker; [headings]: (summary, transcript).
+     */
+    suspend fun shareTextOnly(entry: Entry, dest: File, label: (Int, Map<Int, studio.primeminutes.data.SpeakerName>) -> String,
+                              headings: Pair<String, String>): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (!entry.sessionFile.isFile) return@withContext null
+        val c = Content.of(PrimeMinutesSession.peek(entry.sessionFile) ?: return@withContext null)
+        val lab: (Int) -> String = { label(it, c.speakerNames) }
+        val known = c.utterances.mapNotNull { it.speaker }.toSet().ifEmpty { null }
+        fun refs(t: String?) = t?.let { studio.primeminutes.core.reader.SpeakerRefs.resolve(it, lab, known) }
+        runCatching {
+            dest.writeText(studio.primeminutes.core.export.TranscriptExport.plainText(c.utterances, lab, refs(c.title ?: entry.title),
+                refs(c.summary), summaryHeading = headings.first, transcriptHeading = headings.second))
+            dest
+        }.getOrNull()
+    }
+
     /** [entry]'s audio alone at [dest]: its m4a without the embedded meeting (title kept), or the WAV. */
     suspend fun shareAudioOnly(entry: Entry, dest: File, title: String?): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
         val src = entry.audioFile
@@ -359,7 +391,9 @@ object SessionLibrary {
             status = Status.DONE, noSpeech = !SpeechCheck.hasSpeech(loaded.utterances.map { it.text }),
             captureStart = share.createdAtMs(manifest) ?: UNKNOWN_START,
             sessionId = (if (keepId) share.sessionId(manifest) else null) ?: java.util.UUID.randomUUID().toString(),
+            source = Provenance(Provenance.RECEIVED, receivedAt = createdAt),
         )
+        runCatching { Provenance.write(dir, entry.source!!) }
         writeMeta(entry)
         // The sender's hand-edits stay protected here (re-summarize / re-transcribe ask first).
         share.userEdited(manifest)?.let { (sum, lines) -> UserEdits.write(dir, UserEdits(sum, lines)) }
@@ -661,13 +695,14 @@ object SessionLibrary {
             runCatching { JSONObject(File(d, SOURCE).readText()) }.getOrNull()?.let { Triple(d.name, it.optString("sourceUrl"), it.optString("guid").ifBlank { null }) }
         } ?: emptyList()
 
-    /** What an item still has to download. [kind]: "podcast" (direct audio URL), "youtube" or "peertube" (video page URL). */
+    /** What an item still has to download. [kind]: "podcast" (direct audio URL); "youtube" / "peertube" only on items from older versions. */
     data class PendingDownload(val kind: String, val url: String, val error: String? = null, val seriesId: String? = null, val guid: String? = null) {
         fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply {
             error?.let { put("error", it) }; seriesId?.let { put("seriesId", it) }; guid?.let { put("guid", it) }
         }
         companion object {
             const val PODCAST = "podcast"
+            /** No longer imported (removed in 0.55); kept so items queued or imported before still read. */
             const val YOUTUBE = "youtube"
             const val PEERTUBE = "peertube"
             fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null },
@@ -676,7 +711,7 @@ object SessionLibrary {
     }
 
     /** A new entry for an item to download, titled [title] (null: named once known). Null on failure. */
-    fun createDownloadEntry(context: Context, title: String?, d: PendingDownload, durationSec: Int = 0): Entry? = runCatching {
+    fun createDownloadEntry(context: Context, title: String?, d: PendingDownload, durationSec: Int = 0, channel: Provenance? = null): Entry? = runCatching {
         val createdAt = System.currentTimeMillis()
         val base = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(createdAt))
         var dir = File(root(context), base)
@@ -685,10 +720,13 @@ object SessionLibrary {
         dir.mkdirs()
         File(dir, DOWNLOAD).writeTextAtomic(d.toJson().toString())
         // Provenance (source.json): outlives download.json, so a subscribed episode is known as imported later.
-        File(dir, SOURCE).writeTextAtomic(JSONObject().put("kind", d.kind).put("sourceUrl", d.url)
-            .apply { d.seriesId?.let { put("seriesId", it) }; d.guid?.let { put("guid", it) } }.toString())
+        // [channel] carries the channel snapshot (title, artist, artwork) and the episode's date and length.
+        val src = (channel ?: Provenance(d.kind)).copy(kind = d.kind, sourceUrl = d.url,
+            seriesId = d.seriesId ?: channel?.seriesId, guid = d.guid ?: channel?.guid,
+            durationSec = channel?.durationSec?.takeIf { it > 0 } ?: durationSec)
+        Provenance.write(dir, src)
         // A podcast / YouTube item: no meeting time to show.
-        val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d, captureStart = UNKNOWN_START)
+        val entry = Entry(dir.name, dir, title?.trim()?.ifBlank { null }, createdAt, durationSec, Status.RECORDED, download = d, captureStart = UNKNOWN_START, source = src)
         writeMeta(entry)
         entry
     }.onFailure { Log.w(TAG, "could not create the download item", it) }.getOrNull()
@@ -763,6 +801,7 @@ object SessionLibrary {
                 sourceOnly = status == Status.RECORDED && File(dir, IMPORT_SOURCE).isFile && !File(dir, WAV_NAME).exists(),
                 captureStart = if (o.has("captureStart")) o.getLong("captureStart") else null,
                 sessionId = o.optString("sessionId", "").ifEmpty { null },
+                source = Provenance.read(dir),
             )
         }.onFailure { Log.w(TAG, "corrupt library meta in ${dir.name}", it) }.getOrNull()
     }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -615,22 +617,17 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
             Text(it, style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
         }
     }
-    Spacer(Modifier.height(10.dp))
-    Text(
-        stringResource(R.string.about_components),
-        style = MaterialTheme.typography.labelSmall,
-        color = pal.Slate400,
+    var showLicenses by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(Spacing.sm))
+    androidx.compose.material3.ListItem(
+        headlineContent = { Text(stringResource(R.string.about_licenses)) },
+        supportingContent = { Text(stringResource(R.string.about_licenses_desc)) },
+        leadingContent = { Icon(Icons.Filled.Description, contentDescription = null) },
+        colors = settingsListItemColors(),
+        modifier = Modifier.bleed().fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { showLicenses = true },
     )
-    Column(Modifier.padding(top = Spacing.xs)) {
-        COMPONENT_LICENSES.forEach { (nameRes, license) ->
-            val name = stringResource(nameRes)
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text(name, style = MaterialTheme.typography.bodySmall,
-                    color = pal.Slate200, modifier = Modifier.weight(1f))
-                Text(license, style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
-            }
-        }
-    }
+    if (showLicenses) LicensesDialog(onDismiss = { showLicenses = false })
     Spacer(Modifier.height(Spacing.sm))
     androidx.compose.material3.ListItem(
         headlineContent = { Text("github.com/vieenrose/PrimeMinutes") },
@@ -641,17 +638,42 @@ private fun AboutContent(onUpdateFound: (UpdateInfo) -> Unit) {
     )
 }
 
-private val COMPONENT_LICENSES = listOf(
-    R.string.lic_nemo to "Apache-2.0",
-    R.string.lic_crispasr to "MIT",
-    R.string.lic_audiocpp to "Apache-2.0",
-    R.string.lic_ggml to "Apache-2.0",
-    R.string.lic_xasr to "Apache-2.0",
-    R.string.lic_nemotron to "OpenMDW-1.1",
-    R.string.lic_opencc to "Apache-2.0",
-    R.string.lic_newpipe to "GPL-3.0",
-    R.string.lic_compose to "Apache-2.0",
-)
+/** Settings › About › Open-source licenses: every third-party component and its license (NOTICE). */
+@Composable
+private fun LicensesDialog(onDismiss: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    val uriHandler = LocalUriHandler.current
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = pal.Slate800) {
+            Column(Modifier.fillMaxSize().padding(Spacing.lg)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.about_licenses), style = MaterialTheme.typography.titleLarge,
+                        color = pal.Slate200, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f).semantics { heading() })
+                    androidx.compose.material3.TextButton(onClick = onDismiss) { Text(stringResource(R.string.back)) }
+                }
+                Column(Modifier.weight(1f).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    studio.primeminutes.core.legal.OpenSourceLicenses.groups.forEach { g ->
+                        Text(g.title, style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
+                            modifier = Modifier.padding(top = Spacing.md, bottom = Spacing.xs).semantics { heading() })
+                        g.items.forEach { c ->
+                            Row(Modifier.fillMaxWidth()
+                                .clickable(role = androidx.compose.ui.semantics.Role.Button) { runCatching { uriHandler.openUri(c.url) } }
+                                .padding(vertical = 6.dp)) {
+                                Text(c.name, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text(c.license, style = MaterialTheme.typography.bodySmall, color = pal.Sky)
+                            }
+                        }
+                    }
+                    Text("Prime Minutes · GPL-3.0-or-later", style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
+                        modifier = Modifier.padding(top = Spacing.lg))
+                }
+            }
+        }
+    }
+}
 
 /** A titled card: one topic per card, so the page reads as a few groups rather than one long list. */
 @Composable

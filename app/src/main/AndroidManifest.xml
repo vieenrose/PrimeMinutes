@@ -5,7 +5,7 @@
     <!-- INTERNET is used ONLY for first-run model download, (optional) podcast RSS, and the
          once/day GitHub release check. The transcription + summarization pipeline is fully offline
          once models are present. F-Droid: this combination earns no anti-feature on its own, but the
-         optional podcast/YouTube features are gated behind a build flag (see flavors / SPIKE.md). -->
+         optional podcast features are gated behind a build flag (see flavors / SPIKE.md). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- First-use model downloads: warn before using mobile data, "Wi-Fi only" waits for an unmetered network. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -83,6 +83,32 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+            <!-- A shared meeting (.pmin, see PrimeMinutesSession.SHARE_EXT): ours by MIME, and by name
+                 when Files / Quick Share only know it as octet-stream (non-meetings are refused, not imported). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.primeminutes.session" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.pmin" />
+                <data android:pathPattern=".*\\..*\\.pmin" />
+                <data android:pathPattern=".*\\..*\\..*\\.pmin" />
+            </intent-filter>
+            <!-- Files on Android 11+ hand content://…/document/123 with octet-stream: no name to match. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
             <!-- "Open with Prime Minutes" from a file manager / browser download. -->
             <intent-filter>

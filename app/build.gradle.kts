@@ -97,8 +97,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // NewPipeExtractor 0.26+ calls Java 10+ APIs (e.g. URLEncoder.encode(String, Charset))
-        // that don't exist below API 33 — desugar them for older devices (minSdk 26).
+        // Newer java.* APIs (java.nio / java.time additions) desugared for older devices (minSdk 26).
         isCoreLibraryDesugaringEnabled = true
     }
     kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
@@ -135,8 +134,6 @@ dependencies {
     // unused icons, so release-APK impact is negligible. BOM supplies the version.
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.kotlinx.coroutines.android)
-    // YouTube source extraction (GPL-3.0, via JitPack). Pulls nanojson/jsoup/rhino transitively.
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     testImplementation("junit:junit:4.13.2")

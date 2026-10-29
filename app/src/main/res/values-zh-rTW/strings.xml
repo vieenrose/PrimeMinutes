@@ -10,7 +10,7 @@
     <string name="empty_status">請選擇音訊檔案以開始。</string>
     <string name="status_stopped">已停止</string>
     <string name="empty_headline">完全離線轉錄與摘要</string>
-    <string name="empty_subtitle">加入音訊檔案、錄製會議，或貼上 YouTube 連結以開始。</string>
+    <string name="empty_subtitle">加入音訊檔案、錄製會議，或找一集 Podcast 開始。</string>
     <!-- Value pillars on the home screen -->
     <string name="pillar_private_title">隱私至上</string>
     <string name="pillar_private_desc">音訊永不離開您的裝置</string>
@@ -31,8 +31,6 @@
     <string name="source_record_desc">即時擷取並轉錄</string>
     <string name="source_podcast">Podcast</string>
     <string name="source_podcast_desc">搜尋並下載單集</string>
-    <string name="source_youtube">YouTube</string>
-    <string name="source_youtube_desc">以關鍵字搜尋或貼上影片連結</string>
 
     <!-- Settings -->
     <string name="settings_title">設定</string>
@@ -75,7 +73,6 @@
     <string name="model_kind_other">其他</string>
     <string name="settings_about">關於</string>
     <string name="about_license">錄音與文字只留在這支手機</string>
-    <string name="about_components">授權元件</string>
 
     <!-- Model option card -->
 
@@ -84,21 +81,14 @@
     <string name="podcast_search_hint">搜尋 Podcast</string>
     <string name="podcast_search">搜尋</string>
 
-    <!-- YouTube -->
-    <string name="youtube_fetch_failed">無法取得此影片</string>
-    <string name="youtube_no_videos">找不到影片</string>
-    <string name="youtube_search_failed">搜尋失敗</string>
+    <string name="dl_fetch_failed">無法下載這個項目</string>
     <string name="podcast_failed">Podcast 請求失敗</string>
     <string name="podcast_no_series">找不到 Podcast 節目。換個說法或用更短的詞試試。</string>
     <string name="podcast_no_episodes">此節目沒有可下載的單集。</string>
     <string name="settings_inference_failed">基準測試失敗，保留先前結果</string>
-    <string name="youtube_search_hint">搜尋影片或貼上連結</string>
-    <string name="youtube_go">前往</string>
-    <string name="youtube_search">搜尋</string>
 
     <!-- Download / fetch progress -->
     <string name="dl_searching">搜尋中…</string>
-    <string name="dl_resolving">解析影片中…</string>
     <string name="dl_loading_episodes">載入單集中…</string>
     <string name="dl_downloading">下載中…</string>
 
@@ -391,26 +381,10 @@
     <string name="err_open_file">無法開啟檔案</string>
     <string name="err_no_decoder">此裝置無法解碼 %1$s 音訊（沒有對應的解碼器）</string>
     <string name="err_decode_failed">此裝置無法解碼 %1$s 音訊</string>
-    <string name="err_youtube_no_stream">此影片沒有可用的音訊串流（可能受地區或登入限制）。</string>
-    <string name="err_youtube_live">直播無法轉錄，請選擇一般影片。</string>
-    <string name="err_youtube_no_decodable">此裝置無法解碼這部影片提供的任何音訊格式（%1$s）。</string>
-    <string name="err_peertube_bad_link">不是 PeerTube 影片連結</string>
-    <string name="err_peertube_http">PeerTube 伺服器回應錯誤 %1$d</string>
-    <string name="err_peertube_live">無法匯入直播</string>
-    <string name="err_peertube_no_file">此影片沒有可下載的檔案</string>
     <string name="network_error">網路錯誤——請檢查連線後再試一次。</string>
     <plurals name="podcast_episodes">
         <item quantity="other">%d 集</item>
     </plurals>
-    <string name="lic_nemo">nemo-x-asr-diarizer（串流語音辨識與語者分離）</string>
-    <string name="lic_crispasr">CrispASR（X-ASR 執行環境）</string>
-    <string name="lic_audiocpp">audio.cpp（Nemotron-3 語者分離執行環境）</string>
-    <string name="lic_ggml">LiteRT · SentencePiece（AI 筆記）</string>
-    <string name="lic_xasr">X-ASR 中英模型</string>
-    <string name="lic_nemotron">Nemotron-3 語者分離模型</string>
-    <string name="lic_opencc">OpenCC（繁體 / 簡體）</string>
-    <string name="lic_newpipe">NewPipeExtractor（YouTube）</string>
-    <string name="lic_compose" translatable="false">Jetpack Compose</string>
     <string name="settings_experimental">實驗功能</string>
     <string name="settings_show_actions">顯示行動項目</string>
     <string name="settings_show_actions_hint">在摘要下方列出模型擷取的行動項目。約五分之一可能與逐字稿不符，點時間即可核對。</string>
@@ -764,10 +738,36 @@
     <string name="share_dup_open">開啟現有的</string>
     <string name="share_dup_copy">保留副本</string>
     <string name="share_too_new">這場會議來自較新版本的 Prime Minutes。請更新 App 以還原；目前先以一般音訊匯入。</string>
+    <string name="share_not_meeting">這個檔案不是 Prime Minutes 會議。</string>
     <string name="share_received">已收到會議並加入資料庫</string>
     <string name="share_hint_original">會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。</string>
     <string name="confirm_resummarize_title">要取代你編輯過的摘要嗎？</string>
     <string name="confirm_resummarize_body">你改過摘要或行動項目。重新摘要會寫出新的內容取代它們（完成後仍可立即復原）。</string>
     <string name="confirm_retranscribe_title">要捨棄你修改的逐字稿嗎？</string>
     <string name="confirm_retranscribe_body">你修正過部分段落的文字。重新轉錄會依錄音重寫整份逐字稿，這些修正將會遺失。</string>
+    <!-- Online-import notice, unsupported video links, sharing an online-sourced meeting, licenses -->
+    <string name="import_video_unsupported">已不再支援匯入 YouTube 與 PeerTube</string>
+    <string name="link_unsupported_title">不支援影片連結</string>
+    <string name="link_unsupported_body">Prime Minutes 已不再匯入 YouTube 或 PeerTube 連結。若要轉錄你有權使用的影片，請先把它的音訊存成檔案，再分享到這裡或用本 App 開啟。</string>
+    <string name="online_notice_title">匯入前請留意</string>
+    <string name="online_notice_body">線上匯入僅供個人使用。你須自行確認有權下載並轉錄這些內容，並遵守發布者的使用條款。</string>
+    <string name="online_notice_ok">我了解</string>
+    <string name="share_online_title">不附音訊分享？</string>
+    <string name="share_online_body">這場會議來自線上來源，音訊屬於發布者。預設只分享逐字稿和摘要。</string>
+    <string name="share_text_only">只分享文字</string>
+    <string name="share_with_audio">附上音訊</string>
+    <string name="about_licenses">開放原始碼授權</string>
+    <string name="about_licenses_desc">App 內含的元件及其授權</string>
+    <!-- Library by source (filters, podcast rows, channel page) -->
+    <string name="filter_meetings">會議（%d）</string>
+    <string name="filter_podcasts">Podcast（%d）</string>
+    <string name="filter_received">收到的（%d）</string>
+    <string name="label_received">收到的</string>
+    <string name="podcasts_other">其他 Podcast</string>
+    <string name="channel_in_library">場次庫有 %d 集</string>
+    <string name="channel_section_new">節目新集數</string>
+    <string name="channel_section_library">在場次庫</string>
+    <string name="cd_open_channel">開啟節目頁</string>
+    <string name="cd_channel_group">%1$s，場次庫有 %2$d 集</string>
+    <string name="cd_filter_sources">依來源篩選</string>
 </resources>

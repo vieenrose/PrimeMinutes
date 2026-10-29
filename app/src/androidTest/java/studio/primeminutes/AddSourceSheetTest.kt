@@ -2,6 +2,8 @@ package studio.primeminutes
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -23,24 +25,24 @@ class AddSourceSheetTest {
     private val ctx get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     private class Spies {
-        var file = false; var record = false; var podcast = false; var youtube = false; var session = false; var dismiss = false
+        var file = false; var record = false; var podcast = false; var session = false; var dismiss = false
     }
 
     private fun host(s: Spies) {
         compose.setContent {
             AddSourceSheet(
                 onPickFile = { s.file = true }, onRecord = { s.record = true },
-                onPodcast = { s.podcast = true }, onYouTube = { s.youtube = true },
+                onPodcast = { s.podcast = true },
                 onOpenSession = { s.session = true }, onDismiss = { s.dismiss = true },
             )
         }
     }
 
     // Recording is the Studio's big button now; the sheet only adds existing audio.
-    @Test fun rendersAllFourSources() {
+    @Test fun rendersFileAndPodcastAndShowsAndSession() {
         host(Spies())
         listOf(R.string.source_audio_file, R.string.source_podcast,
-            R.string.source_youtube, R.string.source_session).forEach {
+            R.string.sub_source, R.string.source_session).forEach {
             compose.onNodeWithText(ctx.getString(it)).assertIsDisplayed()
         }
     }
@@ -51,10 +53,10 @@ class AddSourceSheetTest {
         assertTrue(s.podcast)
     }
 
-    @Test fun tappingYouTubeFiresYouTube() {
-        val s = Spies(); host(s)
-        compose.onNodeWithText(ctx.getString(R.string.source_youtube)).performClick()
-        assertTrue(s.youtube)
+    @Test fun noVideoSiteRow() {
+        host(Spies())
+        compose.onAllNodesWithText("YouTube", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("PeerTube", substring = true).assertCountEquals(0)
     }
 
     @Test fun tappingOpenSessionFiresOpenSession() {

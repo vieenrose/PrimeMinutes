@@ -19,6 +19,8 @@ data class PodcastSeries(
     val artist: String,
     val feedUrl: String,
     val episodeCount: Int,
+    /** The iTunes artwork (600 px, else 100 px); "" when none. */
+    val artworkUrl: String = "",
 )
 
 /** A podcast episode parsed from an RSS feed. */
@@ -27,6 +29,8 @@ data class Episode(
     val audioUrl: String,
     val published: String,
     val durationText: String,
+    /** itunes:duration as found in the feed. */
+    val durationRaw: String = "",
 )
 
 /**
@@ -51,9 +55,26 @@ object Podcast {
                 artist = o.optString("artistName", "Unknown"),
                 feedUrl = feed,
                 episodeCount = o.optInt("trackCount", 0),
+                artworkUrl = o.optString("artworkUrl600").ifBlank { o.optString("artworkUrl100") },
             )
         }
     }
+
+    /**
+     * The channel snapshot a single-episode import from search carries: the series' subscription id (so
+     * it groups with the channel, subscribed or not), its title, artist and artwork, the episode's date
+     * and length. [sub]: the subscription, when subscribed (its feed title and artwork win).
+     */
+    fun channelOf(s: PodcastSeries, e: Episode, sub: Subscription?) = studio.primeminutes.core.library.Provenance(
+        studio.primeminutes.core.library.Provenance.PODCAST,
+        seriesId = sub?.id ?: SubscriptionLogic.idOf(s.feedUrl),
+        channelTitle = sub?.title?.ifBlank { null } ?: s.title.ifBlank { null },
+        channelArtist = sub?.artist?.ifBlank { null } ?: s.artist.ifBlank { null },
+        artworkUrl = sub?.artworkUrl?.ifBlank { null } ?: s.artworkUrl.ifBlank { null },
+        feedUrl = sub?.feedUrl ?: s.feedUrl,
+        published = FeedParser.parseDate(e.published).coerceAtLeast(0),
+        durationSec = FeedParser.parseDuration(e.durationRaw),
+    )
 
     /** The iTunes store searched (and recorded with a subscription): the device's region, US when unknown. */
     fun searchCountry(): String = java.util.Locale.getDefault().country.lowercase().takeIf { it.length == 2 } ?: "us"
@@ -87,7 +108,7 @@ object Podcast {
                     XmlPullParser.END_TAG -> if (name.equals("item", true)) {
                         inItem = false
                         if (audio.isNotBlank()) {
-                            episodes += Episode(title.ifBlank { "Untitled Episode" }, audio, pub, formatDuration(dur))
+                            episodes += Episode(title.ifBlank { "Untitled Episode" }, audio, pub, formatDuration(dur), dur)
                         }
                     }
                 }

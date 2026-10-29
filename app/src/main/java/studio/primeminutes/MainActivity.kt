@@ -245,7 +245,6 @@ import studio.primeminutes.core.embed.LibraryIndexer
 import studio.primeminutes.core.embed.LibrarySearch
 import studio.primeminutes.core.embed.SessionIndex
 import studio.primeminutes.ui.highlightedTranscript
-import studio.primeminutes.ui.YouTubeSheet
 import studio.primeminutes.ui.theme.LanguageController
 import studio.primeminutes.ui.theme.LocalLanguageController
 import studio.primeminutes.ui.theme.LocalThemeController
@@ -552,14 +551,21 @@ class MainActivity : ComponentActivity() {
     /** A "Share to Prime Minutes" or "Open with Prime Minutes" hands us an audio/video Uri — surface it to the
      *  Compose layer (consumed once), which copies it into app storage and starts a run. */
     private fun handleIncoming(intent: Intent?) {
-        incomingAudioUri(intent)?.let { sharedAudioUri.value = it }
+        incomingAudioUri(intent)?.let { sharedAudioUri.value = it; return }
+        // A YouTube / PeerTube link (shared as text, or opened): no longer imported — say so instead.
+        val text = when (intent?.action) {
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+            Intent.ACTION_VIEW -> intent.dataString
+            else -> null
+        }
+        if (studio.primeminutes.online.VideoLinks.isVideoLink(text)) sharedVideoLink.value = true
     }
 
     private fun incomingAudioUri(intent: Intent?): Uri? {
         intent ?: return null
         return when (intent.action) {
             Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme != "http" && it.scheme != "https" }
             else -> null
         }
     }
@@ -567,6 +573,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Latest audio/video Uri received via share / open-with; the UI consumes it once. */
         val sharedAudioUri = MutableStateFlow<Uri?>(null)
+        /** A YouTube / PeerTube link reached the app: the UI explains once that it is not imported. */
+        val sharedVideoLink = MutableStateFlow(false)
+        /** Set once the online-import notice (personal use, your responsibility) has been accepted. */
+        const val ONLINE_NOTICE_KEY = "online_import_notice_ack"
         /** An import at least this long asks for the battery exemption ([maybeAskBatteryExemption]). */
         const val LONG_JOB_SEC = 600.0
         /** The remembered answer to the long-job battery question ("allow" / "not_now"). */
@@ -686,11 +696,20 @@ private fun TranscribeScreen(
         val q = devExtras?.getString("vox_podcast") ?: return@LaunchedEffect
         val n = devExtras.getInt("vox_podcast_ep", 2)
         runCatching {
-            val feed = studio.primeminutes.online.Podcast.searchSeries(q).first().feedUrl
-            val ep = studio.primeminutes.online.Podcast.fetchEpisodes(feed, n + 1)[n]
-            android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title}")
-            studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl)
+            val series = studio.primeminutes.online.Podcast.searchSeries(q).first()
+            val ep = studio.primeminutes.online.Podcast.fetchEpisodes(series.feedUrl, n + 1)[n]
+            android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title} (${series.title})")
+            studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl,
+                channel = studio.primeminutes.online.Podcast.channelOf(series, ep, null))
         }.onFailure { android.util.Log.w("primeminutes-dev", "vox_podcast failed", it) }
+    }
+
+    // DEV: `--es vox_legacy_dl "youtube|peertube" [--es vox_legacy_url <url>]` queues a download of a kind older
+    // versions imported, as one left in the library by an update (checks its clean failure).
+    LaunchedEffect(Unit) {
+        val kind = devExtras?.getString("vox_legacy_dl") ?: return@LaunchedEffect
+        val url = devExtras.getString("vox_legacy_url") ?: "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+        studio.primeminutes.online.ImportDownloads.submit(context, "Legacy $kind item", kind, url)
     }
 
     // DEV (podcast subscriptions, device checks without typing):
@@ -1182,6 +1201,12 @@ private fun TranscribeScreen(
                 val man = withContext(Dispatchers.IO) { SessionShare.readManifest(local) }
                 if (man != null && SessionShare.gate(man) == SessionShare.Gate.OK) {
                     receiveMeeting(local, man, fromOutside = u.scheme == "content")
+                    return@collect
+                }
+                // Not a meeting and not typed as audio (octet-stream / .pmin without a manifest): refuse.
+                if (man == null && !PrimeMinutesSession.importableAsAudio(withContext(Dispatchers.IO) { runCatching { context.contentResolver.getType(u) }.getOrNull() })) {
+                    local.delete(); vm.setStatus(context.getString(R.string.empty_status))
+                    vm.notify(context.getString(R.string.share_not_meeting))
                     return@collect
                 }
                 // Written by a newer app: say so, then import it as plain audio.
@@ -1735,19 +1760,44 @@ private fun TranscribeScreen(
 
     // "Share meeting": the enriched m4a (Quick Share, AirDrop-compatible), prepared with a cancellable progress.
     var sharePrep by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    fun shareEntryMeeting(e: SessionLibrary.Entry) {
+    // A meeting from an online source (podcast; YouTube / PeerTube on older items): its audio belongs to the
+    // publisher, so Share meeting asks first and defaults to the text alone.
+    var shareAsk by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
+    fun shareEntryText(e: SessionLibrary.Entry) {
+        val subject = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
+        val dir = File(context.cacheDir, "share_meeting")
+        scope.launch {
+            val f = withContext(Dispatchers.IO) {
+                dir.mkdirs(); dir.listFiles()?.forEach { it.delete() }
+                SessionLibrary.shareTextOnly(e, File(dir, PrimeMinutesSession.suggestFileName(subject, "txt")),
+                    { sid, names -> names[sid]?.name ?: context.getString(R.string.speaker_n, sid + 1) },
+                    context.getString(R.string.export_heading_summary) to context.getString(R.string.export_heading_transcript))
+            }
+            val shareUri = f?.let { runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it) }.getOrNull() }
+            if (shareUri == null) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, shareUri)
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            runCatching { context.startActivity(Intent.createChooser(send, context.getString(R.string.action_share_meeting))) }
+        }
+    }
+    fun shareEntryMeeting(e: SessionLibrary.Entry, askOnline: Boolean = true) {
+        if (askOnline && SessionLibrary.onlineSource(e) != null) { shareAsk = e; return }
         val subject = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
         val dir = File(context.cacheDir, "share_meeting")
         sharePrep = scope.launch {
             try {
                 val f = withContext(Dispatchers.IO) {
                     dir.mkdirs(); dir.listFiles()?.forEach { it.delete() }
-                    SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, "m4a")), vm.now.config.summaryScript)
+                    SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, PrimeMinutesSession.SHARE_EXT)), vm.now.config.summaryScript)
                 }
                 val shareUri = f?.let { runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it) }.getOrNull() }
                 if (shareUri == null) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
                 val send = Intent(Intent.ACTION_SEND).apply {
-                    type = PrimeMinutesSession.Format.M4A.mime
+                    type = PrimeMinutesSession.SHARE_MIME
                     putExtra(Intent.EXTRA_STREAM, shareUri)
                     putExtra(Intent.EXTRA_SUBJECT, subject)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -1758,6 +1808,15 @@ private fun TranscribeScreen(
                 throw c
             } finally { sharePrep = null }
         }
+    }
+    shareAsk?.let { e ->
+        AlertDialog(
+            onDismissRequest = { shareAsk = null },
+            title = { Text(stringResource(R.string.share_online_title)) },
+            text = { Text(stringResource(R.string.share_online_body)) },
+            confirmButton = { TextButton(onClick = { shareAsk = null; shareEntryText(e) }) { Text(stringResource(R.string.share_text_only)) } },
+            dismissButton = { TextButton(onClick = { shareAsk = null; shareEntryMeeting(e, askOnline = false) }) { Text(stringResource(R.string.share_with_audio)) } },
+        )
     }
     if (sharePrep != null) AlertDialog(
         onDismissRequest = {},
@@ -1810,7 +1869,7 @@ private fun TranscribeScreen(
     // Back inside the stack: Capture/Session → Studio (sheets keep their own handler below).
     BackHandler(
         s.screen != Screen.Studio && !s.showConfigSheet && !s.showPodcastSheet &&
-            !s.showAddSourceSheet && !s.showYouTubeSheet,
+            !s.showAddSourceSheet,
     ) { vm.leaveToStudio() }
 
     // Back during a session-wide search closes the search first: leaving the meeting while the
@@ -1819,7 +1878,7 @@ private fun TranscribeScreen(
     BackHandler(
         (s.screen == Screen.Session || s.screen == Screen.Capture) &&
             s.searchActive && !s.showConfigSheet && !s.showPodcastSheet &&
-            !s.showAddSourceSheet && !s.showYouTubeSheet && !s.showExportSheet,
+            !s.showAddSourceSheet && !s.showExportSheet,
     ) { closeSearch() }
 
     when (s.screen) {
@@ -1833,6 +1892,10 @@ private fun TranscribeScreen(
             LaunchedEffect(s.recentsVersion, s.queueItemId, dlChanges) {
                 withContext(Dispatchers.IO) { SessionLibrary.list(context) to ProcessingQueue.ids(context).toSet() }
                     .let { (e, q) -> studioEntries = e; studioQueuedIds = q }
+            }
+            // Provenance upkeep once per run (channel backfill from subscriptions, artwork cache): never blocks the list.
+            LaunchedEffect(Unit) {
+                if (withContext(Dispatchers.IO) { studio.primeminutes.online.LibrarySources.upkeepOnce(context) }) vm.bumpRecents()
             }
             // Titles saved in the other script read in the chosen one (the file itself is untouched).
             val titleConv by produceState<OpenCcConverter?>(null, s.config.summaryScript) {
@@ -1918,6 +1981,7 @@ private fun TranscribeScreen(
                 onSettings = { vm.showConfigSheet(true) },
                 updateBanner = updateBannerSlot,
                 people = studioPeople,
+                onOpenChannel = { key -> subsOpenId = key; subsOpen = true },
             )
         }
         Screen.Capture -> CaptureScreen(
@@ -2415,17 +2479,41 @@ private fun TranscribeScreen(
             onDismiss = { vm.showExportSheet(false) },
         )
     }
+    // Podcast search / Shows: a one-time notice first (personal use; the right to download is the user's to have).
+    var onlineAsk by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun gateOnline(go: () -> Unit) {
+        if (context.getSharedPreferences("primeminutes", android.content.Context.MODE_PRIVATE).getBoolean(MainActivity.ONLINE_NOTICE_KEY, false)) go()
+        else onlineAsk = go
+    }
     if (s.showAddSourceSheet) {
         AddSourceSheet(
             onPickFile = { picker.launch(arrayOf("audio/*", "video/*")) },
             onRecord = { requestRecord() },
-            onPodcast = { vm.showPodcastSheet(true) },
-            onYouTube = { vm.showYouTubeSheet(true) },
+            onPodcast = { gateOnline { vm.showPodcastSheet(true) } },
             onOpenSession = { sessionOpener.launch(arrayOf("audio/ogg", "application/ogg", "audio/mp4", "audio/x-m4a", "*/*")) },
             onDismiss = { vm.showAddSourceSheet(false) },
-            onShows = { subsOpenId = null; subsOpen = true },
+            onShows = { gateOnline { subsOpenId = null; subsOpen = true } },
         )
     }
+    onlineAsk?.let { go ->
+        AlertDialog(
+            onDismissRequest = { onlineAsk = null },
+            title = { Text(stringResource(R.string.online_notice_title)) },
+            text = { Text(stringResource(R.string.online_notice_body)) },
+            confirmButton = { TextButton(onClick = {
+                context.getSharedPreferences("primeminutes", android.content.Context.MODE_PRIVATE).edit().putBoolean(MainActivity.ONLINE_NOTICE_KEY, true).apply()
+                onlineAsk = null; go()
+            }) { Text(stringResource(R.string.online_notice_ok)) } },
+            dismissButton = { TextButton(onClick = { onlineAsk = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    val videoLink by MainActivity.sharedVideoLink.collectAsState()
+    if (videoLink) AlertDialog(
+        onDismissRequest = { MainActivity.sharedVideoLink.value = false },
+        title = { Text(stringResource(R.string.link_unsupported_title)) },
+        text = { Text(stringResource(R.string.link_unsupported_body)) },
+        confirmButton = { TextButton(onClick = { MainActivity.sharedVideoLink.value = false }) { Text(stringResource(R.string.online_notice_ok)) } },
+    )
     if (subsOpen) {
         studio.primeminutes.ui.SubscriptionsScreen(
             onClose = { subsOpen = false; subsOpenId = null },
@@ -2435,9 +2523,6 @@ private fun TranscribeScreen(
                 if (e.download != null || e.sourceOnly) vm.openDownload(e) else vm.openSessionUri(Uri.fromFile(e.audioFile))
             },
         )
-    }
-    if (s.showYouTubeSheet) {
-        YouTubeSheet(onDismiss = { vm.showYouTubeSheet(false) })
     }
     // An export that lands, felt — iOS fires `Haptics.success()` on the same completion. Armed on
     // the exporting edge, so a screen that opens while an export is already running stays silent.
@@ -2465,7 +2550,7 @@ private fun TranscribeScreen(
         ExportingOverlay(onDismiss = { vm.setExporting(false) })
     }
     if (s.opening) OpeningOverlay()
-    BackHandler(s.showConfigSheet || s.showPodcastSheet || s.showAddSourceSheet || s.showYouTubeSheet || s.showExportSheet) {
+    BackHandler(s.showConfigSheet || s.showPodcastSheet || s.showAddSourceSheet || s.showExportSheet) {
         vm.closeSheets()
     }
 }

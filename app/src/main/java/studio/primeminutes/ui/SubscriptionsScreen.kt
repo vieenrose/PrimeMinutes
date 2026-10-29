@@ -3,7 +3,9 @@ package studio.primeminutes.ui
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -112,7 +115,19 @@ fun SubscriptionsScreen(onClose: () -> Unit, onOpenEntry: (SessionLibrary.Entry)
         AppSnackbar.show(ctx, R.string.sub_moved); SubscriptionActions.consumeMoved()
     }
     val open = subs.firstOrNull { it.id == openId }
-    androidx.activity.compose.BackHandler { if (openId != null) openId = null else onClose() }
+    // The library items of the open channel (subscribed or not: an episode imported from search has its channel too).
+    val changes by ImportDownloads.changes.collectAsState()
+    var channelEntries by remember { mutableStateOf<List<SessionLibrary.Entry>>(emptyList()) }
+    LaunchedEffect(openId, changes, subs) {
+        val k = openId
+        channelEntries = if (k == null) emptyList() else withContext(Dispatchers.IO) {
+            SessionLibrary.list(ctx).filter { studio.primeminutes.core.library.Provenance.groupKey(it.source) == k }
+        }
+    }
+    val channelSrc = channelEntries.firstNotNullOfOrNull { it.source?.takeIf { s -> s.channelTitle != null } } ?: channelEntries.firstOrNull()?.source
+    // Opened on a channel (from the library, or a search hit): Back returns there, not to the list of shows.
+    fun back() { if (openId != null && openId != initialId) openId = null else onClose() }
+    androidx.activity.compose.BackHandler { back() }
     val barScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var menu by remember { mutableStateOf(false) }
     Scaffold(
@@ -121,28 +136,29 @@ fun SubscriptionsScreen(onClose: () -> Unit, onOpenEntry: (SessionLibrary.Entry)
         topBar = {
             LargeTopAppBar(
                 title = {
-                    Text(open?.title ?: stringResource(R.string.sub_source), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    Text(open?.title ?: channelSrc?.channelTitle?.takeIf { openId != null } ?: stringResource(R.string.sub_source), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() })
                 },
                 navigationIcon = {
-                    IconButton(onClick = { if (openId != null) openId = null else onClose() }) {
+                    IconButton(onClick = { back() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    if (open == null) {
+                    if (openId == null) {
                         IconButton(onClick = { pasteOpen = true }) { Icon(Icons.Filled.Link, contentDescription = stringResource(R.string.sub_paste)) }
                         IconButton(enabled = checking.isEmpty() && subs.any { !it.paused }, onClick = { scope.launch { SubscriptionActions.checkAll(ctx) } }) {
                             Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.sub_check_all))
                         }
-                    } else {
+                    } else if (open != null) {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.sub_more)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text(stringResource(if (open.paused) R.string.sub_resume else R.string.sub_pause)) },
                                 onClick = { menu = false; SubscriptionActions.setPaused(ctx, open.id, !open.paused) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.sub_share)) }, onClick = { menu = false; shareShow(ctx, open) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.sub_delete)) }, onClick = {
-                                menu = false; openId = null; deleteWithUndo(ctx, subs, open)
+                                // The channel page stays (its library items are kept), now with Subscribe.
+                                menu = false; deleteWithUndo(ctx, subs, open)
                             })
                         }
                     }
@@ -156,7 +172,9 @@ fun SubscriptionsScreen(onClose: () -> Unit, onOpenEntry: (SessionLibrary.Entry)
         },
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner)) {
-            if (open == null) ShowList(subs, checking, onOpen = { openId = it }) else ShowPage(open, open.id in checking, onOpenEntry)
+            val k = openId
+            if (k == null) ShowList(subs, checking, onOpen = { openId = it })
+            else ChannelPage(k, open, channelSrc, channelEntries, k in checking, onOpenEntry)
         }
     }
     if (pasteOpen) PasteFeedDialog(onDismiss = { pasteOpen = false }, onSubscribed = { pasteOpen = false; openId = it })
@@ -189,6 +207,8 @@ private fun ShowList(subs: List<Subscription>, checking: Set<String>, onOpen: (S
                     modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(s.id) }, onLongClick = { menu = true }).testTag("sub-row"),
                 ) {
                     Row(Modifier.padding(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                        studio.primeminutes.ui.components.ChannelArtwork(studio.primeminutes.online.ArtworkCache.keyOf(s.id, s.artworkUrl), s.artworkUrl, 40.dp)
+                        Spacer(Modifier.width(Spacing.md))
                         Column(Modifier.weight(1f)) {
                             Text(s.title, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             if (s.artist.isNotBlank()) Text(s.artist, style = MaterialTheme.typography.bodySmall, color = pal.Slate400, maxLines = 1)
@@ -223,38 +243,125 @@ private fun ShowList(subs: List<Subscription>, checking: Set<String>, onOpen: (S
     }
 }
 
+/**
+ * A channel's page (it replaced the subscription show page): artwork, title, subscription controls, the feed's
+ * episodes not in the library yet ("New in feed", subscribed only), then its episodes in the library. [key]: the
+ * channel's group key (its subscription id); [s]: its subscription, null when not subscribed; [src]: the channel
+ * snapshot its library items carry.
+ */
 @Composable
-private fun ShowPage(s: Subscription, checking: Boolean, onOpenEntry: (SessionLibrary.Entry) -> Unit) {
+private fun ChannelPage(
+    key: String, s: Subscription?, src: studio.primeminutes.core.library.Provenance?, entries: List<SessionLibrary.Entry>,
+    checking: Boolean, onOpenEntry: (SessionLibrary.Entry) -> Unit,
+) {
     val ctx = LocalContext.current
     val pal = LocalPrimeMinutesPalette.current
     val scope = rememberCoroutineScope()
     val changes by ImportDownloads.changes.collectAsState()
     var index by remember { mutableStateOf<Map<String, SessionLibrary.Entry>>(emptyMap()) }
-    LaunchedEffect(s.id) { SubscriptionActions.checkIfStale(ctx, s.id) }
-    // The "imported" scan: which episodes already have a library item (by guid, else audio URL).
-    LaunchedEffect(s.episodes, changes) {
+    var subscribing by remember { mutableStateOf(false) }
+    LaunchedEffect(s?.id) { if (s != null) SubscriptionActions.checkIfStale(ctx, s.id) }
+    // The "imported" scan: which feed episodes already have a library item (by guid, else audio URL).
+    LaunchedEffect(s?.episodes, changes) {
+        val eps = s?.episodes ?: run { index = emptyMap(); return@LaunchedEffect }
         index = withContext(Dispatchers.IO) {
             val ix = SubscriptionActions.libraryIndex(ctx)
-            s.episodes.mapNotNull { ep -> SubscriptionActions.entryFor(ix, ep)?.let { id -> SessionLibrary.byId(ctx, id)?.let { ep.guid to it } } }.toMap()
+            eps.mapNotNull { ep -> SubscriptionActions.entryFor(ix, ep)?.let { id -> SessionLibrary.byId(ctx, id)?.let { ep.guid to it } } }.toMap()
         }
     }
-    val seen = remember(s.seenGuids) { s.seenGuids.toHashSet() }
+    val seen = remember(s?.seenGuids) { s?.seenGuids?.toHashSet() ?: emptySet() }
+    val fresh = remember(s?.episodes, index) { s?.episodes?.filter { it.guid !in index } ?: emptyList() }
+    val library = remember(entries) { entries.sortedByDescending { it.source?.published?.takeIf { p -> p > 0 }?.times(1000) ?: it.createdAt } }
+    val title = s?.title ?: src?.channelTitle ?: stringResource(R.string.podcasts_other)
+    val artist = s?.artist?.ifBlank { null } ?: src?.channelArtist
+    val artUrl = s?.artworkUrl?.ifBlank { null } ?: src?.artworkUrl
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("sub-page"), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        item {
+        item(key = "head") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val head = listOfNotNull(s.artist.ifBlank { null }, pluralStringResource(R.plurals.podcast_episodes, s.episodes.size, s.episodes.size)).joinToString(" · ")
-                Text(head, color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
-                Text(if (s.paused) stringResource(R.string.sub_paused) else if (s.lastChecked == 0L) stringResource(R.string.sub_never_checked)
-                    else stringResource(R.string.sub_last_checked, SessionLibrary.shortDate(ctx, s.lastChecked * 1000, withTime = true)),
-                    color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
-                s.errorRes()?.let { Text(stringResource(R.string.sub_error, stringResource(it)), color = PrimeMinutesPalette.Red, style = MaterialTheme.typography.bodyMedium) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    studio.primeminutes.ui.components.ChannelArtwork(studio.primeminutes.online.ArtworkCache.keyOf(key, artUrl), artUrl, 72.dp)
+                    Spacer(Modifier.width(Spacing.md))
+                    Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                        artist?.let { Text(it, color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        val counts = listOfNotNull(
+                            stringResource(R.string.channel_in_library, entries.size),
+                            s?.let { pluralStringResource(R.plurals.podcast_episodes, it.episodes.size, it.episodes.size) },
+                        ).joinToString(" · ")
+                        Text(counts, color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
+                        if (s != null) Text(if (s.paused) stringResource(R.string.sub_paused) else if (s.lastChecked == 0L) stringResource(R.string.sub_never_checked)
+                            else stringResource(R.string.sub_last_checked, SessionLibrary.shortDate(ctx, s.lastChecked * 1000, withTime = true)),
+                            color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                s?.errorRes()?.let { Text(stringResource(R.string.sub_error, stringResource(it)), color = PrimeMinutesPalette.Red, style = MaterialTheme.typography.bodyMedium) }
                 Spacer(Modifier.padding(2.dp))
-                GradientButton(stringResource(if (checking) R.string.sub_checking else R.string.sub_check), enabled = !checking,
-                    onClick = { scope.launch { SubscriptionActions.check(ctx, s.id) } })
+                if (s != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("sub-subscribed")) {
+                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.CheckCircle, contentDescription = null, tint = pal.Sky,
+                            modifier = Modifier.padding(end = 6.dp))
+                        Text(stringResource(R.string.sub_subscribed), color = pal.Sky, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    }
+                    GradientButton(stringResource(if (checking) R.string.sub_checking else R.string.sub_check), enabled = !checking,
+                        onClick = { scope.launch { SubscriptionActions.check(ctx, s.id) } })
+                } else src?.feedUrl?.let { feed ->
+                    // Imported from a search without subscribing (or unsubscribed since): subscribe from here.
+                    androidx.compose.material3.OutlinedButton(enabled = !subscribing, modifier = Modifier.testTag("sub-subscribe"), onClick = {
+                        scope.launch {
+                            subscribing = true
+                            SubscriptionActions.subscribe(ctx, studio.primeminutes.online.PodcastSeries(title, artist ?: "", feed, 0, artUrl ?: ""))
+                                .onFailure { e -> AppSnackbar.show(ctx, (e as? SubscriptionActions.CheckFailed)?.error?.label() ?: R.string.podcast_failed) }
+                            subscribing = false
+                        }
+                    }) { Text(stringResource(if (subscribing) R.string.sub_checking else R.string.sub_subscribe)) }
+                }
                 Spacer(Modifier.padding(2.dp))
             }
         }
-        items(s.episodes, key = { it.guid }) { ep -> EpisodeRow(s, ep, isNew = ep.guid !in seen, entry = index[ep.guid], onOpenEntry) }
+        if (fresh.isNotEmpty()) {
+            item(key = "h-new") { ChannelSectionLabel(stringResource(R.string.channel_section_new)) }
+            items(fresh, key = { "f-" + it.guid }) { ep -> EpisodeRow(s!!, ep, isNew = ep.guid !in seen, entry = null, onOpenEntry) }
+        }
+        if (library.isNotEmpty()) {
+            item(key = "h-lib") { ChannelSectionLabel(stringResource(R.string.channel_section_library)) }
+            items(library, key = { "e-" + it.id }) { e -> LibraryEpisodeRow(e, onOpenEntry) }
+        }
+    }
+}
+
+@Composable
+private fun ChannelSectionLabel(text: String) {
+    val pal = LocalPrimeMinutesPalette.current
+    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = pal.Slate200,
+        modifier = Modifier.padding(top = Spacing.md, bottom = 2.dp).semantics { heading() })
+}
+
+/** An episode of the channel in the library: title, "date · length", its state; tapping opens it. */
+@Composable
+private fun LibraryEpisodeRow(e: SessionLibrary.Entry, onOpenEntry: (SessionLibrary.Entry) -> Unit) {
+    val ctx = LocalContext.current
+    val pal = LocalPrimeMinutesPalette.current
+    val dl by ImportDownloads.state.collectAsState()
+    val running = dl as? ImportDownloads.State.Running
+    val status: String = when {
+        e.download?.error != null -> stringResource(R.string.dl_failed_reason, e.download.error)
+        e.download != null && running?.entryId == e.id -> stringResource(running.stageRes)
+        e.download != null -> stringResource(R.string.dl_waiting)
+        e.status == SessionLibrary.Status.DONE -> stringResource(R.string.cd_status_done)
+        else -> stringResource(R.string.cd_status_new)
+    }
+    Surface(color = pal.InsetSurface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, pal.Hairline),
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenEntry(e) }.testTag("channel-entry")) {
+        Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(e.title ?: SessionLibrary.defaultTitle(ctx, e.createdAt), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val meta = listOfNotNull(
+                SessionLibrary.shortDate(ctx, e.source?.published?.takeIf { it > 0 }?.times(1000) ?: e.createdAt),
+                e.durationSec.takeIf { it > 0 }?.let { studio.primeminutes.fmtSec(it) },
+                status,
+            ).joinToString(" · ")
+            Text(meta, style = MaterialTheme.typography.bodySmall, color = if (e.download?.error != null) PrimeMinutesPalette.Red else pal.Slate400)
+        }
     }
 }
 

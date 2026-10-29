@@ -227,7 +227,6 @@ import studio.primeminutes.core.embed.LibraryIndexer
 import studio.primeminutes.core.embed.LibrarySearch
 import studio.primeminutes.core.embed.SessionIndex
 import studio.primeminutes.ui.highlightedTranscript
-import studio.primeminutes.ui.YouTubeSheet
 import studio.primeminutes.ui.theme.LanguageController
 import studio.primeminutes.ui.theme.LocalLanguageController
 import studio.primeminutes.ui.theme.LocalThemeController

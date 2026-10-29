@@ -9,20 +9,6 @@
 -keep class studio.primeminutes.core.llm.MfaEngine$TokenCallback { *; }
 -keepclassmembers class * implements studio.primeminutes.core.llm.MfaEngine$TokenCallback { *; }
 
-# NewPipeExtractor (YouTube) bundles Mozilla Rhino, which references desktop-JVM classes
-# (java.beans.*, javax.*) that don't exist on Android. R8 fails the release build on these
-# missing references unless told to ignore them. Rhino + the extractor also use reflection,
-# so keep them intact.
--keep class org.schabi.newpipe.extractor.** { *; }
--keep class org.mozilla.javascript.** { *; }
--dontwarn org.mozilla.javascript.**
--dontwarn java.beans.**
--dontwarn javax.script.**
--dontwarn javax.servlet.**
--dontwarn javax.xml.**
--dontwarn org.w3c.dom.**
--dontwarn org.xml.sax.**
-
 # (The llama.cpp bridge (LlmEngine / TextGen) and the sherpa diarizer callback (SegProgress) are
 #  gone, and their keep rules with them.)
 

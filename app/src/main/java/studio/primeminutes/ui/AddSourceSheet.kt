@@ -13,7 +13,6 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Subscriptions
-import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -36,7 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 
 /**
- * One place to add audio from any source — File / Record / Podcast / YouTube as list rows,
+ * One place to add audio from any source — File / Podcast / Shows / Session as list rows,
  * so the main screen carries a single "Add audio" button instead of competing buttons.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +44,6 @@ fun AddSourceSheet(
     onPickFile: () -> Unit,
     onRecord: () -> Unit,
     onPodcast: () -> Unit,
-    onYouTube: () -> Unit,
     onOpenSession: () -> Unit,
     onDismiss: () -> Unit,
     onShows: () -> Unit = {},
@@ -68,7 +66,6 @@ fun AddSourceSheet(
             )
             SourceRow(Icons.Filled.FolderOpen, stringResource(R.string.source_audio_file), stringResource(R.string.source_audio_file_desc)) { onDismiss(); onPickFile() }
             SourceRow(Icons.Filled.Podcasts, stringResource(R.string.source_podcast), stringResource(R.string.source_podcast_desc)) { onDismiss(); onPodcast() }
-            SourceRow(Icons.Filled.SmartDisplay, stringResource(R.string.source_youtube), stringResource(R.string.source_youtube_desc)) { onDismiss(); onYouTube() }
             SourceRow(Icons.Filled.Subscriptions, stringResource(R.string.sub_source), stringResource(R.string.sub_source_desc)) { onDismiss(); onShows() }
             SourceRow(Icons.Filled.FolderZip, stringResource(R.string.source_session), stringResource(R.string.source_session_desc)) { onDismiss(); onOpenSession() }
         }

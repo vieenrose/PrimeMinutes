@@ -10,7 +10,7 @@
     <string name="empty_status">Pick an audio file to begin.</string>
     <string name="status_stopped">Stopped</string>
     <string name="empty_headline">Transcribe &amp; summarize, fully offline</string>
-    <string name="empty_subtitle">Add an audio file, record a meeting, or paste a YouTube link to begin.</string>
+    <string name="empty_subtitle">Add an audio file, record a meeting, or find a podcast episode to begin.</string>
     <!-- Value pillars on the home screen -->
     <string name="pillar_private_title">Private by design</string>
     <string name="pillar_private_desc">Audio never leaves your device</string>
@@ -32,8 +32,6 @@
     <string name="source_record_desc">Capture &amp; transcribe live</string>
     <string name="source_podcast">Podcast</string>
     <string name="source_podcast_desc">Search &amp; download an episode</string>
-    <string name="source_youtube">YouTube</string>
-    <string name="source_youtube_desc">Search by keyword or paste a link</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -76,7 +74,6 @@
     <string name="model_kind_other">Other</string>
     <string name="settings_about">About</string>
     <string name="about_license">Your recordings and text stay on this device</string>
-    <string name="about_components">Licensed components</string>
 
     <!-- Model option card -->
 
@@ -85,21 +82,14 @@
     <string name="podcast_search_hint">Search podcasts</string>
     <string name="podcast_search">Search</string>
 
-    <!-- YouTube -->
-    <string name="youtube_fetch_failed">Couldn\'t fetch this video</string>
-    <string name="youtube_no_videos">No videos found</string>
-    <string name="youtube_search_failed">Search failed</string>
+    <string name="dl_fetch_failed">Couldn\'t download this item</string>
     <string name="podcast_failed">Podcast request failed</string>
     <string name="podcast_no_series">No podcast series found. Try another spelling or a shorter term.</string>
     <string name="podcast_no_episodes">This series offers no episode audio.</string>
     <string name="settings_inference_failed">Benchmark failed — the previous result is kept</string>
-    <string name="youtube_search_hint">Search videos or paste a link</string>
-    <string name="youtube_go">Go</string>
-    <string name="youtube_search">Search</string>
 
     <!-- Download / fetch progress -->
     <string name="dl_searching">Searching…</string>
-    <string name="dl_resolving">Resolving video…</string>
     <string name="dl_loading_episodes">Loading episodes…</string>
     <string name="dl_downloading">Downloading…</string>
 
@@ -398,27 +388,11 @@
     <string name="err_open_file">Could not open the file</string>
     <string name="err_no_decoder">This device has no decoder for %1$s audio</string>
     <string name="err_decode_failed">This device could not decode %1$s audio</string>
-    <string name="err_youtube_no_stream">No audio stream available for this video (it may be region- or login-gated).</string>
-    <string name="err_youtube_live">Live streams can\'t be transcribed; pick a regular video.</string>
-    <string name="err_youtube_no_decodable">This device can\'t decode any audio format this video offers (%1$s).</string>
-    <string name="err_peertube_bad_link">Not a PeerTube video link</string>
-    <string name="err_peertube_http">The PeerTube server replied with error %1$d</string>
-    <string name="err_peertube_live">Live streams can\'t be imported</string>
-    <string name="err_peertube_no_file">This video offers no downloadable file</string>
     <string name="network_error">Network error — check your connection and try again.</string>
     <plurals name="podcast_episodes">
         <item quantity="one">%d episode</item>
         <item quantity="other">%d episodes</item>
     </plurals>
-    <string name="lic_nemo">nemo-x-asr-diarizer (streaming ASR + diarization)</string>
-    <string name="lic_crispasr">CrispASR (X-ASR runtime)</string>
-    <string name="lic_audiocpp">audio.cpp (Nemotron-3 diarization runtime)</string>
-    <string name="lic_ggml">LiteRT · SentencePiece (AI notes)</string>
-    <string name="lic_xasr">X-ASR zh-en model</string>
-    <string name="lic_nemotron">Nemotron-3 Diarization model</string>
-    <string name="lic_opencc">OpenCC (zh-TW / zh-CN)</string>
-    <string name="lic_newpipe">NewPipeExtractor (YouTube)</string>
-    <string name="lic_compose" translatable="false">Jetpack Compose</string>
     <string name="settings_experimental">Experimental</string>
     <string name="settings_show_actions">Show action items</string>
     <string name="settings_show_actions_hint">Lists the action items the model extracts under the summary. About one in five may not match the transcript — tap a time to check.</string>
@@ -779,10 +753,36 @@
     <string name="share_dup_open">Open existing</string>
     <string name="share_dup_copy">Keep a copy</string>
     <string name="share_too_new">This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.</string>
+    <string name="share_not_meeting">This file is not a Prime Minutes meeting.</string>
     <string name="share_received">Meeting received and added to your library</string>
     <string name="share_hint_original">The meeting is now in Prime Minutes. You can delete the original file from Downloads.</string>
     <string name="confirm_resummarize_title">Replace your edited summary?</string>
     <string name="confirm_resummarize_body">You edited the summary or the action items. Re-summarizing writes new ones in their place (Undo stays available right after).</string>
     <string name="confirm_retranscribe_title">Discard your line edits?</string>
     <string name="confirm_retranscribe_body">You corrected the text of some lines. Re-transcribing rewrites the whole transcript from the audio, and those corrections will be lost.</string>
+    <!-- Online-import notice, unsupported video links, sharing an online-sourced meeting, licenses -->
+    <string name="import_video_unsupported">YouTube and PeerTube import is no longer supported</string>
+    <string name="link_unsupported_title">Video links aren\'t supported</string>
+    <string name="link_unsupported_body">Prime Minutes no longer imports YouTube or PeerTube links. To transcribe a video you have the right to use, save its audio as a file, then share or open that file here.</string>
+    <string name="online_notice_title">Before you import</string>
+    <string name="online_notice_body">Online imports are for personal use only. You are responsible for having the right to download and transcribe the content, and for respecting the publisher\'s terms.</string>
+    <string name="online_notice_ok">I understand</string>
+    <string name="share_online_title">Share without the audio?</string>
+    <string name="share_online_body">This meeting comes from an online source, and its audio belongs to the publisher. By default only the transcript and summary are shared.</string>
+    <string name="share_text_only">Text only</string>
+    <string name="share_with_audio">Include audio</string>
+    <string name="about_licenses">Open-source licenses</string>
+    <string name="about_licenses_desc">The components inside this app and their licenses</string>
+    <!-- Library by source (filters, podcast rows, channel page) -->
+    <string name="filter_meetings">Meetings (%d)</string>
+    <string name="filter_podcasts">Podcasts (%d)</string>
+    <string name="filter_received">Received (%d)</string>
+    <string name="label_received">Received</string>
+    <string name="podcasts_other">Other podcasts</string>
+    <string name="channel_in_library">%d in library</string>
+    <string name="channel_section_new">New in feed</string>
+    <string name="channel_section_library">In library</string>
+    <string name="cd_open_channel">Open the channel page</string>
+    <string name="cd_channel_group">%1$s, %2$d in library</string>
+    <string name="cd_filter_sources">Filter by source</string>
 </resources>
