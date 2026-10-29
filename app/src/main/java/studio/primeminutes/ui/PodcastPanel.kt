@@ -139,8 +139,8 @@ fun PodcastPanel(onStarted: () -> Unit, onOpenShow: (String) -> Unit = {}) {
                     }
                 }) {
                     Column(Modifier.padding(Spacing.md)) {
-                        Text(s.title, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200)
-                        Text("${s.artist} · ${pluralStringResource(R.plurals.podcast_episodes, s.episodeCount, s.episodeCount)}",
+                        Text(shownGen(s.title), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200)
+                        Text("${shownGen(s.artist)} · ${pluralStringResource(R.plurals.podcast_episodes, s.episodeCount, s.episodeCount)}",
                             style = MaterialTheme.typography.bodySmall, color = pal.Slate400)
                     }
                 }
@@ -148,7 +148,7 @@ fun PodcastPanel(onStarted: () -> Unit, onOpenShow: (String) -> Unit = {}) {
         } else {
             TextButton(onClick = { selected = null; episodes = emptyList() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp)); Text(sel.title)
+                Spacer(Modifier.width(6.dp)); Text(shownGen(sel.title))
             }
             // Subscribe (offline write once the feed is read; "Transcribe" below is unchanged).
             val subId = studio.primeminutes.online.SubscriptionLogic.idOf(sel.feedUrl)
@@ -179,7 +179,7 @@ fun PodcastPanel(onStarted: () -> Unit, onOpenShow: (String) -> Unit = {}) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(e.title, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
+                            Text(shownGen(e.title), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200)
                             val date = studio.primeminutes.online.FeedParser.parseDate(e.published).takeIf { it > 0 }
                                 ?.let { studio.primeminutes.core.library.SessionLibrary.shortDate(context, it * 1000) }
                             val meta = listOfNotNull(e.durationText.ifBlank { null }, date).joinToString(" · ")

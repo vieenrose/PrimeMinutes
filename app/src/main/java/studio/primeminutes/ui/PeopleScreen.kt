@@ -177,7 +177,7 @@ private fun PeopleContent(
                 items(sorted, key = { it.id }) { p ->
                     val ms = meetings[p.id].orEmpty()
                     val sub = buildList {
-                        if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it)) }
+                        if (p.note != null) add(p.note) else if (p.id in homonyms) ms.firstOrNull()?.entry?.let { add(entryTitle(context, it, LocalScreenScript.current)) }
                         add(meetingCount(ms.size))
                     }.joinToString(" · ")
                     Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = Spacing.sm),
@@ -199,7 +199,9 @@ private fun PeopleContent(
 private fun meetingCount(n: Int): String =
     if (n == 0) stringResource(R.string.people_no_meetings) else pluralStringResource(R.plurals.people_meetings, n, n)
 
-private fun entryTitle(context: android.content.Context, e: SessionLibrary.Entry) = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
+/** A meeting's title in the app's script (display only; person names and notes stay as the user wrote them). */
+private fun entryTitle(context: android.content.Context, e: SessionLibrary.Entry, cc: studio.primeminutes.core.text.ScreenScript?) =
+    e.title?.let { cc?.gen?.invoke(it) ?: it } ?: SessionLibrary.defaultTitle(context, e.createdAt)
 
 @Composable
 private fun PersonPage(
@@ -259,7 +261,7 @@ private fun PersonPage(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(entryTitle(context, m.entry), color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(entryTitle(context, m.entry, LocalScreenScript.current), color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(dateFmt.format(Date(m.entry.createdAt)), color = pal.Slate400, style = MaterialTheme.typography.bodySmall)
                 }
                 if (canCreate) Box {

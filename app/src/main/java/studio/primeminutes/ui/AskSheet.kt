@@ -176,7 +176,7 @@ fun AskSheet(
                         )
                     }
                     if (scope != null) Text(
-                        scope.title ?: scope.id, style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
+                        scope.title?.let { shownGen(it) } ?: scope.id, style = MaterialTheme.typography.labelMedium, color = pal.Slate400,
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
@@ -220,6 +220,9 @@ fun AskSheet(
                     color = pal.Slate400, modifier = Modifier.padding(top = 10.dp),
                 )
                 val ctx = androidx.compose.ui.platform.LocalContext.current
+                // The answer, the passages and the titles in the app's script; the questions stay as typed.
+                val cc = LocalScreenScript.current
+                val gen: (String) -> String = { cc?.gen?.invoke(it) ?: it }
                 // The earlier questions (saved), then this opening's; the saved ones are only shown.
                 (history + turns).forEachIndexed { n, t ->
                     if (n == history.size && history.isNotEmpty()) androidx.compose.material3.HorizontalDivider(
@@ -232,7 +235,7 @@ fun AskSheet(
                     // Selectable (long-press, then copy) like iOS's `.textSelection`; a tap on a citation still opens it.
                     if (t.answer.isNotBlank()) androidx.compose.foundation.text.selection.SelectionContainer {
                         Text(
-                            answerText(t.answer, t.pool, pal.Sky, onOpenAt, withTitle = scope == null,
+                            answerText(gen(t.answer), t.pool, pal.Sky, onOpenAt, withTitle = scope == null, title = gen,
                                 speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
                             style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
                         )
@@ -245,8 +248,8 @@ fun AskSheet(
                         t.excerpts.distinctBy { it.entry.id to it.sec / 60 }.forEach { x ->
                             Text(
                                 // In-meeting: the time and the passage's first words (the meeting is known; a saved turn has no text).
-                                if (scope != null) ReaderProtocol.formatTs(x.sec) + named(x, speakerN = { n -> ctx.getString(R.string.speaker_n, n) }).trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
-                                else "${x.entry.title ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
+                                if (scope != null) ReaderProtocol.formatTs(x.sec) + named(x.copy(text = cc?.tr?.invoke(x.text) ?: x.text), speakerN = { n -> ctx.getString(R.string.speaker_n, n) }).trim().replace('\n', ' ').let { if (it.isEmpty()) "" else "  $it" }
+                                else "${x.entry.title?.let(gen) ?: x.entry.id} · ${ReaderProtocol.formatTs(x.sec)}",
                                 style = MaterialTheme.typography.labelMedium, color = pal.Sky,
                                 // Two lines: at large font a long meeting title ate the timestamp, so sources looked identical.
                                 maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -324,6 +327,8 @@ private fun answerText(
     withTitle: Boolean = true,
     /** The localized "Speaker N" (1-based) for a speaker without a custom name. */
     speakerN: ((Int) -> String)? = null,
+    /** A meeting title as shown (the app's script). */
+    title: (String) -> String = { it },
 ): AnnotatedString = buildAnnotatedString {
     var raw = BULLET_RE.replace(BOGUS_TAG_RE.replace(OPEN_TAG_RE.replace(raw, ""), ""), "• ").trimEnd()
     // The model writes speakers as its S-numbers (from the notes): name them as each cited meeting does.
@@ -344,7 +349,7 @@ private fun answerText(
             tag = "cite-${e.id}@${x.sec}",
             styles = TextLinkStyles(style = SpanStyle(color = color, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)),
             linkInteractionListener = { onOpenAt(e, x.at) },   // the passage's exact start (a tag carries whole seconds)
-        )) { append(if (withTitle) "[${(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}]" else "[${ReaderProtocol.formatTs(x.sec)}]") }
+        )) { append(if (withTitle) "[${title(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}]" else "[${ReaderProtocol.formatTs(x.sec)}]") }
     }
     append(raw.substring(last))
 }

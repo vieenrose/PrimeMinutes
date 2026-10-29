@@ -136,7 +136,7 @@ fun SubscriptionsScreen(onClose: () -> Unit, onOpenEntry: (SessionLibrary.Entry)
         topBar = {
             LargeTopAppBar(
                 title = {
-                    Text(open?.title ?: channelSrc?.channelTitle?.takeIf { openId != null } ?: stringResource(R.string.sub_source), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    Text((open?.title ?: channelSrc?.channelTitle?.takeIf { openId != null })?.let { shownGen(it) } ?: stringResource(R.string.sub_source), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() })
                 },
                 navigationIcon = {
@@ -210,8 +210,8 @@ private fun ShowList(subs: List<Subscription>, checking: Set<String>, onOpen: (S
                         studio.primeminutes.ui.components.ChannelArtwork(studio.primeminutes.online.ArtworkCache.keyOf(s.id, s.artworkUrl), s.artworkUrl, 40.dp)
                         Spacer(Modifier.width(Spacing.md))
                         Column(Modifier.weight(1f)) {
-                            Text(s.title, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (s.artist.isNotBlank()) Text(s.artist, style = MaterialTheme.typography.bodySmall, color = pal.Slate400, maxLines = 1)
+                            Text(shownGen(s.title), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (s.artist.isNotBlank()) Text(shownGen(s.artist), style = MaterialTheme.typography.bodySmall, color = pal.Slate400, maxLines = 1)
                             val sub = when {
                                 s.id in checking -> stringResource(R.string.sub_checking)
                                 s.paused -> stringResource(R.string.sub_paused)
@@ -282,7 +282,7 @@ private fun ChannelPage(
                     studio.primeminutes.ui.components.ChannelArtwork(studio.primeminutes.online.ArtworkCache.keyOf(key, artUrl), artUrl, 72.dp)
                     Spacer(Modifier.width(Spacing.md))
                     Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-                        artist?.let { Text(it, color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        artist?.let { Text(shownGen(it), color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                         val counts = listOfNotNull(
                             stringResource(R.string.channel_in_library, entries.size),
                             s?.let { pluralStringResource(R.plurals.podcast_episodes, it.episodes.size, it.episodes.size) },
@@ -353,7 +353,7 @@ private fun LibraryEpisodeRow(e: SessionLibrary.Entry, onOpenEntry: (SessionLibr
         modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
             .clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenEntry(e) }.testTag("channel-entry")) {
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(e.title ?: SessionLibrary.defaultTitle(ctx, e.createdAt), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200,
+            Text(e.title?.let { shownGen(it) } ?: SessionLibrary.defaultTitle(ctx, e.createdAt), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
                 SessionLibrary.shortDate(ctx, e.source?.published?.takeIf { it > 0 }?.times(1000) ?: e.createdAt),
@@ -373,7 +373,7 @@ private fun EpisodeRow(s: Subscription, ep: FeedEpisode, isNew: Boolean, entry: 
     val dl by ImportDownloads.state.collectAsState()
     Surface(color = pal.InsetSurface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, pal.Hairline), modifier = Modifier.fillMaxWidth().testTag("sub-episode")) {
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(ep.title, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200)
+            Text(shownGen(ep.title), style = MaterialTheme.typography.bodyLarge, color = pal.Slate200)
             val meta = listOfNotNull(
                 ep.durationSec.takeIf { it > 0 }?.let { studio.primeminutes.online.formatDuration(it.toString()) },
                 ep.published.takeIf { it > 0 }?.let { SessionLibrary.shortDate(ctx, it * 1000) },
