@@ -42,6 +42,17 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
         check(first == again && first[0].hasPrefix("我们开会"), "stable")
         print(String(format: "3000 lines: cold %.0f ms, cached %.1f ms", cold * 1000, warm * 1000))
         check(warm < 0.05, "cached pass too slow: \(warm)")
+        // v2 (People, Ask, channels) through the static helpers: the test's interface script is Traditional.
+        check(ScreenScript.gen("陈经理") == "陳經理" && ScreenScript.said("请发送资料给团队。") == "請發送資料給團隊。", "static helpers")
+        check(ScreenScript.renamed("陳經理", stored: "陈经理") == nil, "person rename left as shown keeps the stored name")
+        check(ScreenScript.renamed(" 陳經理 ", stored: "陈经理") == nil, "trimmed shown name is no change")
+        check(ScreenScript.renamed("", stored: "陈经理") == nil, "blank is not a rename")
+        check(ScreenScript.renamed("陈经理", stored: "陈经理") == nil, "same as stored")
+        check(ScreenScript.renamed("王小明", stored: "陈经理") == "王小明", "typed name saved")
+        check(ScreenScript.renamed("陈经理二", stored: "陈经理") == "陈经理二", "typed Simplified name saved as typed")
+        // An Ask answer with a cite tag: the tag (UUID, seconds) survives the conversion.
+        let tag = "[[0C9E7A1B-2D3F-4A5B-8C6D-7E8F9A0B1C2D@95]]"
+        check(ScreenScript.gen("会议决定\(tag)。") == "會議決定\(tag)。", "answer cite tag kept")
         print("screen-script: OK")
     }
 }

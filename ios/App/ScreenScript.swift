@@ -41,3 +41,19 @@ final class ScreenScript: @unchecked Sendable {
     /// the same lines (character level, like the transcript).
     func query(_ q: String) -> String { tr(q) }
 }
+
+extension ScreenScript {
+    /// The current screen script's converters (AppLanguage.current.script; English keeps the stored script).
+    static var now: ScreenScript { of(AppLanguage.current.script) }
+    /// Generated text (titles, notes, names, answers) as shown.
+    static func gen(_ t: String) -> String { now.gen(t) }
+    /// Transcript text (quoted excerpts, episode text) as shown.
+    static func said(_ t: String) -> String { now.tr(t) }
+    /// A rename / note field opened on the shown `stored` text: what to save, or nil when nothing should change
+    /// (left as shown, blank, or equal to the stored text). Never a converted copy of the stored text.
+    static func renamed(_ draft: String, stored: String) -> String? {
+        let n = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, n != stored, typed(n, shown: gen(stored)) != nil else { return nil }
+        return n
+    }
+}

@@ -161,7 +161,7 @@ struct ChannelHeader: View {
         Button(action: open) {
             HStack(spacing: 10) {
                 if group.key != LibrarySources.otherKey { ChannelArtwork(seriesId: group.key, url: group.artworkUrl, size: typeSize.isAccessibilitySize ? 32 : 24) }
-                Text(group.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                Text(ScreenScript.gen(group.title)).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).multilineTextAlignment(.leading)
                 Text("\(group.sessionIds.count)").font(.subheadline).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
@@ -223,8 +223,8 @@ struct ChannelPage: View {
         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(alignment: .top, spacing: 14))) {
             if key != LibrarySources.otherKey { ChannelArtwork(seriesId: key, url: artwork, size: 72) }
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.title3.bold())
-                if !artist.isEmpty { Text(artist).font(.subheadline).foregroundStyle(.secondary) }
+                Text(ScreenScript.gen(title)).font(.title3.bold())
+                if !artist.isEmpty { Text(ScreenScript.gen(artist)).font(.subheadline).foregroundStyle(.secondary) }
                 Text(statusLine).font(.caption).foregroundStyle(.secondary)
                 if let e = sub?.error { Text(L("sub_error", L(e.key))).font(.caption).foregroundStyle(Vox.danger.color) }
                 if let notice { Text(notice).font(.footnote).foregroundStyle(.secondary) }
@@ -255,7 +255,7 @@ struct ChannelPage: View {
                             HStack(spacing: 12) {
                                 EpisodeTile(source: src, symbol: s.noSpeech ? "mic.slash" : "checkmark", tint: s.noSpeech ? .gray : Vox.success.color, status: L(s.noSpeech ? "status_no_speech" : "cd_status_done"))
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                                    Vox.head(s.title.isEmpty ? L("recent_untitled") : ScreenScript.gen(s.title)).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
                                     Vox.meta(episodeMeta(src, s, channel: false))
                                 }
                                 Spacer(minLength: 0)
@@ -266,7 +266,7 @@ struct ChannelPage: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(ScreenScript.gen(title)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let s = sub {
                 Menu {
@@ -293,7 +293,7 @@ struct ChannelPage: View {
         let entry = SubscriptionStore.entry(index, ep)
         let isNew = !s.seenGuids.contains(ep.guid)
         VStack(alignment: .leading, spacing: 4) {
-            Text(ep.title)
+            Text(ScreenScript.gen(ep.title))
             let meta = [ep.published > 0 ? Date(timeIntervalSince1970: TimeInterval(ep.published)).formatted(.dateTime.month().day()) : "",
                         ep.durationSec > 0 ? Podcast.formatDuration(String(ep.durationSec)) : ""].filter { !$0.isEmpty }
             if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
@@ -324,5 +324,5 @@ struct ChannelPage: View {
 /// An episode row's second line, "Channel · Oct 27 · 58:12" (the channel left out on its own channel page).
 func episodeMeta(_ src: EpisodeSource, _ s: Session, channel: Bool = true) -> String {
     let p = LibrarySources.episodeLine(channel: channel ? src.channelTitle : nil, published: src.published, fallbackDate: s.date, seconds: s.seconds)
-    return ([p.channel, p.date.formatted(.dateTime.month().day()), p.seconds.map { Export.mmss($0) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
+    return ([p.channel.map(ScreenScript.gen), p.date.formatted(.dateTime.month().day()), p.seconds.map { Export.mmss($0) }] as [String?]).compactMap { $0 }.joined(separator: " · ")
 }

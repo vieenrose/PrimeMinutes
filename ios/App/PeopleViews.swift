@@ -71,7 +71,7 @@ struct PersonPickerSheet: View {
         }
         return VStack(spacing: 0) {
             HStack {
-                Text(title).font(.headline).lineLimit(2)
+                Text(ScreenScript.gen(title)).font(.headline).lineLimit(2)
                 Spacer()
                 if let onPlaySample { Button(action: onPlaySample) { Image(systemName: "play.circle.fill").font(.title2) }.accessibilityLabel(L("people_play_sample")) }
             }.padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
@@ -127,7 +127,7 @@ struct PersonPickerSheet: View {
                             Button { addNew(query) } label: { Label(L(contacts == .denied ? "people_add_label" : "people_add_new", query.trimmingCharacters(in: .whitespacesAndNewlines)), systemImage: "plus").fontWeight(.semibold) }
                         }
                         if let id = current?.person, let p = store.doc.byId(id) {
-                            Button { store.askEmailFor = id } label: { Label(L(p.emails.isEmpty ? "email_add_for" : "email_add_another", p.name), systemImage: "envelope") }
+                            Button { store.askEmailFor = id } label: { Label(L(p.emails.isEmpty ? "email_add_for" : "email_add_another", ScreenScript.gen(p.name)), systemImage: "envelope") }
                                 .accessibilityIdentifier("picker-add-email")
                         }
                         if clearable, let c = current {
@@ -140,7 +140,7 @@ struct PersonPickerSheet: View {
         .background(Color(.systemGroupedBackground))
         .alert(sameAsk.map { a in
             let w = usage[a.1.id]?.lastTitle ?? a.1.note ?? ""
-            return w.isEmpty ? L("people_same_title_bare", a.1.name) : L("people_same_title", a.1.name, w)
+            return w.isEmpty ? L("people_same_title_bare", ScreenScript.gen(a.1.name)) : L("people_same_title", ScreenScript.gen(a.1.name), w)
         } ?? "", isPresented: Binding(get: { sameAsk != nil }, set: { if !$0 { sameAsk = nil } }), presenting: sameAsk) { a in
             Button(L("people_same_yes")) { sameAsk = nil; onPick(.existing(a.1)) }
             Button(L("people_same_no", a.0)) { sameAsk = nil; onPick(.new(a.0)) }
@@ -159,9 +159,9 @@ struct PersonPickerSheet: View {
         Button(action: tap) {
             HStack(spacing: 10) {
                 if dots > 0 { ConfidenceDots(level: dots) }
-                Text(name).fontWeight(.medium).foregroundStyle(greyed ? Color.secondary : Color.primary).lineLimit(1)
+                Text(ScreenScript.gen(name)).fontWeight(.medium).foregroundStyle(greyed ? Color.secondary : Color.primary).lineLimit(1)
                 Spacer(minLength: 8)
-                if let sub { Text(sub).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
+                if let sub { Text(ScreenScript.gen(sub)).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
             }.contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
@@ -222,10 +222,10 @@ struct SpeakerNameFlow: View {
     var body: some View {
         PersonPickerSheet(title: L("people_who_is", speaker.label), current: speaker, speakers: speakers, sessions: sessions,
                           suggestions: suggestions, voiceNote: voiceNote, onPlaySample: onPlaySample, onPick: picked)
-            .alert(mergeAsk.map { L("people_merge_title", $0.0.name, defaultLabel($0.1.id)) } ?? "",
+            .alert(mergeAsk.map { L("people_merge_title", ScreenScript.gen($0.0.name), defaultLabel($0.1.id)) } ?? "",
                    isPresented: Binding(get: { mergeAsk != nil }, set: { if !$0 { mergeAsk = nil } }), presenting: mergeAsk) { a in
                 Button(L("speaker_merge")) { mergeAsk = nil; onMerge(a.1.id) }
-                Button(L("people_both", a.0.name)) { mergeAsk = nil; onLink(a.0) }
+                Button(L("people_both", ScreenScript.gen(a.0.name))) { mergeAsk = nil; onLink(a.0) }
                 Button(L("cancel"), role: .cancel) { mergeAsk = nil; onDismiss() }
             } message: { a in Text(L("people_merge_text", speaker.label, a.1.label)) }
             .task(id: contactAsk?.1) {   // DEV: VOX_CONTACT_SAVE=<s> presses Save on "Name in Prime Minutes" after <s> seconds
@@ -240,7 +240,7 @@ struct SpeakerNameFlow: View {
                 Button(L("people_save")) { contactAsk = nil; contactNamed(a.0, a.1, contactName) }
                 Button(L("cancel"), role: .cancel) { contactAsk = nil }
             } message: { a in Text(a.1) }
-            .alert(contactSame.map { L("people_same_title_bare", $0.3.name) } ?? "", isPresented: Binding(get: { contactSame != nil }, set: { if !$0 { contactSame = nil } }), presenting: contactSame) { a in
+            .alert(contactSame.map { L("people_same_title_bare", ScreenScript.gen($0.3.name)) } ?? "", isPresented: Binding(get: { contactSame != nil }, set: { if !$0 { contactSame = nil } }), presenting: contactSame) { a in
                 Button(L("people_same_yes")) { contactSame = nil; PeopleStore.shared.linkContact(a.3.id, a.0, chosen: a.1); picked(.existing(PeopleStore.shared.doc.byId(a.3.id) ?? a.3)) }
                 Button(L("people_same_no", a.2)) { contactSame = nil; picked(.existing(PeopleStore.shared.createFromContact(a.2, a.0, chosen: a.1))) }
                 Button(L("cancel"), role: .cancel) { contactSame = nil }
@@ -287,14 +287,14 @@ struct PeopleScreen: View {
                     NavigationLink(value: p.id) {
                         HStack(spacing: 12) {
                             Image(systemName: "person.fill").foregroundStyle(.secondary).accessibilityHidden(true)   // the name beside it is the label
-                            VStack(alignment: .leading, spacing: 2) { Text(p.name).fontWeight(.medium); Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                            VStack(alignment: .leading, spacing: 2) { Text(ScreenScript.gen(p.name)).fontWeight(.medium); Text(ScreenScript.gen(sub)).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
                     .swipeActions { Button(L("people_delete"), systemImage: "trash", role: .destructive) { deletingRow = p } }
                 }
             }
         }
-        .alert(deletingRow.map { L("people_delete_title", $0.name) } ?? "", isPresented: Binding(get: { deletingRow != nil }, set: { if !$0 { deletingRow = nil } }), presenting: deletingRow) { p in
+        .alert(deletingRow.map { L("people_delete_title", ScreenScript.gen($0.name)) } ?? "", isPresented: Binding(get: { deletingRow != nil }, set: { if !$0 { deletingRow = nil } }), presenting: deletingRow) { p in
             let n = meetings[p.id]?.count ?? 0
             Button(L("people_delete"), role: .destructive) { Task { await store.delete(p.id, clearNames: false) }; Haptics.destructive() }
             if n > 0 { Button(L("people_delete_clear", n), role: .destructive) { Task { await store.delete(p.id, clearNames: true) }; Haptics.destructive() } }
@@ -339,10 +339,10 @@ private struct PersonPage: View {
     private func page(_ p: Person) -> some View {
         let meetings = store.meetingsByPerson(library.sessions)[p.id] ?? []
         return List {
-            if let n = p.note { Text(n).foregroundStyle(.secondary) }
+            if let n = p.note { Text(ScreenScript.gen(n)).foregroundStyle(.secondary) }
             Section {
-                Button(L("people_rename")) { draft = p.name; renaming = true }
-                Button(L("people_note_short")) { draft = p.note ?? ""; noting = true }
+                Button(L("people_rename")) { draft = ScreenScript.gen(p.name); renaming = true }
+                Button(L("people_note_short")) { draft = ScreenScript.gen(p.note ?? ""); noting = true }
                 if store.doc.people.count > 1 { Button(L("people_merge_into")) { merging = true } }
                 Button(L("people_delete"), role: .destructive) { deleting = true }
             }
@@ -350,7 +350,7 @@ private struct PersonPage: View {
             // contact card's "Merge" only chooses: the alert below asks for the ok (Android: same fix).
             PersonContactSections(person: p) { o in mergeConfirm = o }
             PersonVoiceRow(person: p)
-            Section(L("people_meetings_of", p.name)) {
+            Section(L("people_meetings_of", ScreenScript.gen(p.name))) {
                 if meetings.isEmpty { Text(L("people_no_meetings")).foregroundStyle(.secondary) }
                 ForEach(meetings) { s in
                     let spk = Set((s.speakerPeople ?? [:]).filter { $0.value == p.id }.compactMap { Int($0.key) })
@@ -359,29 +359,29 @@ private struct PersonPage: View {
                             openMeeting(s, s.lines.first { spk.contains($0.speaker) }?.start ?? 0)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(s.title).lineLimit(2).foregroundStyle(Color.primary)
+                                Text(ScreenScript.gen(s.title)).lineLimit(2).foregroundStyle(Color.primary)
                                 Text(s.date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(AppLanguage.current.locale))).font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                         Menu {
-                            Button(L("people_split", p.name)) { draft = ""; splitting = s }
+                            Button(L("people_split", ScreenScript.gen(p.name))) { draft = ""; splitting = s }
                         } label: { Image(systemName: "ellipsis.circle").foregroundStyle(.secondary) }.accessibilityLabel(L("cd_more_options"))
                     }
                 }
             }
         }
-        .navigationTitle(p.name).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(ScreenScript.gen(p.name)).navigationBarTitleDisplayMode(.inline)
         .alert(L("people_rename"), isPresented: $renaming) {
             TextField(L("speaker_name"), text: $draft)
                 .textContentType(.name).autocorrectionDisabled()
-                .submitLabel(.done).onSubmit { let n = draft.trimmingCharacters(in: .whitespacesAndNewlines); if !n.isEmpty, n != p.name { Task { await store.renameEverywhere(p.id, n) } } }
-            Button(L("people_save")) { let n = draft.trimmingCharacters(in: .whitespacesAndNewlines); if !n.isEmpty, n != p.name { Task { await store.renameEverywhere(p.id, n) } } }
+                .submitLabel(.done).onSubmit { if let n = ScreenScript.renamed(draft, stored: p.name) { Task { await store.renameEverywhere(p.id, n) } } }
+            Button(L("people_save")) { if let n = ScreenScript.renamed(draft, stored: p.name) { Task { await store.renameEverywhere(p.id, n) } } }
             Button(L("cancel"), role: .cancel) {}
         }
         .alert(L("people_note"), isPresented: $noting) {
             TextField(L("people_note_short"), text: $draft)
-                .submitLabel(.done).onSubmit { store.setNote(p.id, draft) }
-            Button(L("people_save")) { store.setNote(p.id, draft) }
+                .submitLabel(.done).onSubmit { if ScreenScript.typed(draft, shown: ScreenScript.gen(p.note ?? "")) != nil { store.setNote(p.id, draft) } }
+            Button(L("people_save")) { if ScreenScript.typed(draft, shown: ScreenScript.gen(p.note ?? "")) != nil { store.setNote(p.id, draft) } }
             Button(L("cancel"), role: .cancel) {}
         }
         .alert(L("people_split_title"), isPresented: Binding(get: { splitting != nil }, set: { if !$0 { splitting = nil } }), presenting: splitting) { s in
@@ -396,7 +396,7 @@ private struct PersonPage: View {
             if !meetings.isEmpty { Button(L("people_delete_clear", meetings.count), role: .destructive) { Task { await store.delete(p.id, clearNames: true) }; Haptics.destructive() } }
             Button(L("cancel"), role: .cancel) {}
         } message: { Text(L("people_delete_text")) }
-        .alert(L("people_merge_pick", p.name), isPresented: Binding(get: { mergeConfirm != nil }, set: { if !$0 { mergeConfirm = nil } }), presenting: mergeConfirm) { o in
+        .alert(L("people_merge_pick", ScreenScript.gen(p.name)), isPresented: Binding(get: { mergeConfirm != nil }, set: { if !$0 { mergeConfirm = nil } }), presenting: mergeConfirm) { o in
             Button(L("contact_merge"), role: .destructive) { mergeConfirm = nil; mergeNow(p.id, o.id) }
             Button(L("cancel"), role: .cancel) { mergeConfirm = nil }
         } message: { o in Text(L("people_merge_text", p.name, o.name)) }
@@ -405,10 +405,10 @@ private struct PersonPage: View {
                 List(store.doc.people.filter { $0.id != p.id }.sorted { PersonNames.normalize($0.name) < PersonNames.normalize($1.name) }) { o in
                     Button(o.name + (o.note.map { " · " + $0 } ?? "")) { pickConfirm = o }
                 }
-                .navigationTitle(L("people_merge_pick", p.name)).navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(L("people_merge_pick", ScreenScript.gen(p.name))).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { merging = false } } }
                 // Confirmed inside the sheet: the picker stays put, and the page behind never races it.
-                .alert(L("people_merge_pick", p.name), isPresented: Binding(get: { pickConfirm != nil }, set: { if !$0 { pickConfirm = nil } }), presenting: pickConfirm) { o in
+                .alert(L("people_merge_pick", ScreenScript.gen(p.name)), isPresented: Binding(get: { pickConfirm != nil }, set: { if !$0 { pickConfirm = nil } }), presenting: pickConfirm) { o in
                     Button(L("contact_merge"), role: .destructive) { pickConfirm = nil; merging = false; mergeNow(p.id, o.id) }
                     Button(L("cancel"), role: .cancel) { pickConfirm = nil }
                 } message: { o in Text(L("people_merge_text", p.name, o.name)) }
@@ -435,7 +435,7 @@ struct PeopleFilterChips: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
                     chip(L("people_filter_all"), selected == nil) { selected = nil }
-                    ForEach(people, id: \.0.id) { p, n in chip("\(p.name) · \(n)", selected == p.id) { selected = selected == p.id ? nil : p.id } }
+                    ForEach(people, id: \.0.id) { p, n in chip("\(ScreenScript.gen(p.name)) · \(n)", selected == p.id) { selected = selected == p.id ? nil : p.id } }
                 }.padding(.horizontal, 16)
             }.padding(.bottom, 8)
             .onChange(of: people.map(\.0.id)) { _, ids in if let s = selected, !ids.contains(s) { selected = nil } }
