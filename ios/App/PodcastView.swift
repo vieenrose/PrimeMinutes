@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct PodcastView: View {
-    let pick: (Episode) -> Void
+    /// The episode picked, with its channel (the series it was listed under) and the feed id it belongs to.
+    let pick: (Episode, Imports.Channel, String) -> Void
     var openShow: (String) -> Void = { _ in }
     @ObservedObject private var subs = SubscriptionStore.shared
     @State private var pasting = false
@@ -33,7 +34,7 @@ struct PodcastView: View {
                         Button { subscribe(cur) } label: { Label(L("sub_subscribe"), systemImage: "plus.circle") }.disabled(busy).accessibilityIdentifier("sub-subscribe")
                     }
                     ForEach(episodes) { e in
-                        Button { pick(e); dismiss() } label: {
+                        Button { pick(e, .init(title: cur.title, artist: cur.artist, artworkUrl: cur.artworkUrl, feedUrl: cur.feedUrl), SubscriptionLogic.idOf(cur.feedUrl)); dismiss() } label: {
                             VStack(alignment: .leading) {
                                 Text(e.title)
                                 Text(L("podcast_transcribe")).font(.caption2.weight(.semibold)).foregroundStyle(.blue)

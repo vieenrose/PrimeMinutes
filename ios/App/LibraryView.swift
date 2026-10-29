@@ -9,6 +9,10 @@ struct LibraryView: View {
     let onSettings: () -> Void
     @State private var query = ""
     @State private var filter = Filter.all
+    /// The source filter (library by source): All / Meetings / Podcasts / Received.
+    @State private var source: SourceFilter = Dev.env["VOX_SOURCE"].flatMap(SourceFilter.init(rawValue:)) ?? .all
+    /// Podcast provenance by job / session id (episode_sources.json), reread when the library or the queue changes.
+    @State private var sources: [String: EpisodeSource] = [:]
     /// The person whose meetings the list is narrowed to (nil: everyone).
     @State private var personFilter: String? = Dev.env["VOX_FILTER"].flatMap { n in PeopleStore.shared.doc.people.first { PersonNames.same($0.name, n, PeopleStore.fold) }?.id }
     @State private var renaming: Session?
@@ -81,8 +85,20 @@ struct LibraryView: View {
     private func isNew(_ s: Session) -> Bool { false }
     /// Done = processed with something to read: a recording without speech is not (Android RowStatus.NoSpeech).
     private func isDone(_ s: Session) -> Bool { !isNew(s) && !s.noSpeech }
+    private func kind(_ s: Session) -> SourceKind { LibrarySources.kind(received: s.isReceived, source: sources[s.id.uuidString]) }
+    private func kind(_ j: Job) -> SourceKind { LibrarySources.kind(received: false, source: sources[j.id.uuidString]) }
+    /// The source chips on offer with their counts: All, then each source the library holds (none when only one does).
+    private var sourceOptions: [(SourceFilter, Int)] {
+        let ks = m.library.sessions.map(kind) + m.runner.waiting.map(kind)
+        let present = SourceFilter.allCases.dropFirst().map { f in (f, ks.filter { f.matches($0) }.count) }.filter { $0.1 > 0 }
+        return present.count < 2 && source == .all ? [] : [(.all, ks.count)] + present
+    }
+    /// Queued items under the source filter (a podcast item is a Podcast; recordings and imports are Meetings).
+    private var shownJobs: [Job] { m.runner.waiting.filter { source.matches(kind($0)) } }
+    private func reloadSources() { sources = LibrarySources.index(EpisodeSources.all()) }
     private var shown: [Session] {
         let base = m.library.sessions.filter { s in
+            guard source.matches(kind(s)) else { return false }
             guard personFilter.map({ p in s.speakerPeople?.values.contains(p) == true }) ?? true else { return false }
             switch filter { case .all: return true; case .new: return isNew(s); case .done: return isDone(s) }
         }
@@ -90,10 +106,16 @@ struct LibraryView: View {
         let order = Dictionary(uniqueKeysWithValues: hits.enumerated().map { ($0.element.session.id, $0.offset) })
         return base.filter { order[$0.id] != nil }.sorted { order[$0.id]! < order[$1.id]! }
     }
-    private var days: [(Date, [Session])] {
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty { return shown.isEmpty ? [] : [(Date.distantPast, shown)] }   // search: ranked, not by day
+    /// The list's sections: one per day; under Podcasts one per channel (header: the channel page); search: one ranked.
+    private var sections: [LibrarySection] {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty { return shown.isEmpty ? [] : [LibrarySection(id: "search", title: nil, channel: nil, items: shown)] }
+        if source == .podcasts {
+            let by = Dictionary(uniqueKeysWithValues: shown.map { ($0.id, $0) })
+            return LibrarySources.groups(shown.map { (id: $0.id, source: sources[$0.id.uuidString]) }, otherTitle: L("source_other_podcasts"))
+                .map { g in LibrarySection(id: "ch-" + g.key, title: g.title, channel: g, items: g.sessionIds.compactMap { by[$0] }) }
+        }
         let g = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
-        return g.keys.sorted(by: >).map { ($0, g[$0]!) }
+        return g.keys.sorted(by: >).map { LibrarySection(id: "d-\($0.timeIntervalSince1970)", title: label($0), channel: nil, items: g[$0]!) }
     }
     private func label(_ d: Date) -> String {
         if Calendar.current.isDateInToday(d) { return L("today") }
@@ -118,7 +140,7 @@ struct LibraryView: View {
     }
     /// One session row as the list draws it (actions wired to this screen's state).
     private func row(_ s: Session) -> LibraryRow {
-        LibraryRow(s: s, isNew: isNew(s), done: isDone(s), searching: !query.isEmpty, passages: passages(s),
+        LibraryRow(s: s, isNew: isNew(s), done: isDone(s), source: sources[s.id.uuidString], searching: !query.isEmpty, passages: passages(s),
                    indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
                    onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = $0 }, onShareMeeting: { shareMeeting(s) },
@@ -154,9 +176,15 @@ struct LibraryView: View {
             Button { if !editing { path.append(.job(j.id)) } } label: {
                 // At AX sizes the glyph goes above the text, which then keeps the full row width.
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
-                    JobGlyph(m: m, j: j)
+                    if let src = sources[j.id.uuidString] {
+                        let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
+                        EpisodeTile(source: src, symbol: failed ? "exclamationmark" : dl ? "arrow.down" : active ? "waveform" : "clock",
+                                    tint: failed ? Vox.danger.color : dl ? Vox.info.color : Vox.warning.color,
+                                    status: L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
+                    } else { JobGlyph(m: m, j: j) }
                     VStack(alignment: .leading, spacing: 2) {
                         Vox.head(j.title ?? L("meeting")).lineLimit(2)
+                        if let src = sources[j.id.uuidString], let c = src.channelTitle, !c.isEmpty { Vox.meta(c) }
                         Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger.color : .secondary).lineLimit(2)
                         if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color).padding(.top, 4) }
                     }
@@ -186,11 +214,19 @@ struct LibraryView: View {
         guard let id = renameTarget ?? renaming?.id, var s = m.library.sessions.first(where: { $0.id == id }) else { return }
         renameTarget = nil; s.rename(draft); m.library.update(s)
     }
-    private func devOnAppear() { if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+    private func devOnAppear() { if Dev.env["VOX_OPEN_CHANNEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if let k = sections.first(where: { $0.channel != nil && $0.channel?.key != LibrarySources.otherKey })?.channel?.key { path.append(.channel(k)) } } }; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+    /// The list with the source bookkeeping (split from `body`: one chain was too long to type-check).
+    private var list: some View {
+        LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, sourceOptions: sourceOptions, source: $source, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), sections: sections, jobs: shownJobs, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
+                    filtered: filter != .all || personFilter != nil || source != .all, selection: $selected, row: row, rowKey: rowKey, job: { jobCard($0) },
+                    openChannel: { path.append(.channel($0)) },
+                    clearFilters: { query = ""; filter = .all; personFilter = nil; source = .all })
+        .task { LibrarySourcesSetup.run(); reloadSources() }
+        .onChange(of: m.library.sessions.count) { _, _ in reloadSources() }
+        .onChange(of: m.runner.waiting.count) { _, _ in reloadSources() }
+    }
     var body: some View {
-        LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), days: days, label: label, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
-                    filtered: filter != .all || personFilter != nil, selection: $selected, row: row, rowKey: rowKey, job: { jobCard($0) },
-                    clearFilters: { query = ""; filter = .all; personFilter = nil })
+        list
         .environment(\.editMode, $editMode)
         .scrollDismissesKeyboard(.interactively)   // the search keyboard: dragging the list drops it
         .onAppear { devOnAppear() }
@@ -667,6 +703,8 @@ struct LibraryRow: View {
     let s: Session
     let isNew: Bool
     let done: Bool
+    /// The podcast provenance: an episode row draws its channel artwork and "Channel · date · length".
+    var source: EpisodeSource? = nil
     let searching: Bool
     let passages: [LibrarySearch.Passage]
     let indexing: Bool
@@ -702,14 +740,22 @@ struct LibraryRow: View {
     private var content: some View {
         // At AX sizes the status glyph goes above the title, which then keeps the full row width.
         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
-            Image(systemName: isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark")
-                .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                .foregroundStyle(done ? Vox.success.color : Color.secondary)
-                .voxTint(done ? Vox.success.color : Color.secondary, Vox.radiusSM)
-                .accessibilityLabel(L(isNew ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done"))
+            let symbol = isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark"
+            let status = L(isNew ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done")
+            if let source {
+                EpisodeTile(source: source, symbol: symbol, tint: done ? Vox.success.color : Color.gray, status: status)
+            } else {
+                Image(systemName: symbol)
+                    .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
+                    .foregroundStyle(done ? Vox.success.color : Color.secondary)
+                    .voxTint(done ? Vox.success.color : Color.secondary, Vox.radiusSM)
+                    .accessibilityLabel(status)
+            }
             VStack(alignment: .leading, spacing: 2) {
-                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(2)
-                Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))")
+                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                if let source { Vox.meta(episodeMeta(source, s)) }
+                else if s.isReceived { receivedText("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("received-label") }
+                else { Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))") }
                 if searching { passageList }
                 if indexing { Vox.micro(L("studio_indexing")) }
             }
@@ -748,6 +794,8 @@ struct LibraryRow: View {
 struct LibraryHeader: View {
     @ObservedObject var m: Model
     @ObservedObject var downloads: ModelDownloads
+    let sourceOptions: [(SourceFilter, Int)]
+    @Binding var source: SourceFilter
     let filterOptions: [(LibraryView.Filter, String)]
     @Binding var filter: LibraryView.Filter
     @Binding var personFilter: String?
@@ -764,6 +812,7 @@ struct LibraryHeader: View {
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
             }
+            if !sourceOptions.isEmpty { SourceChips(options: sourceOptions, selection: $source).padding(.top, 10) }
             if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter).padding(.horizontal, Vox.gutter).padding(.vertical, 10) }
             PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
         }
@@ -840,8 +889,8 @@ struct LibraryNoMatch: View {
 struct LibraryList: View {
     @ObservedObject var m: Model
     let header: LibraryHeader
-    let days: [(Date, [Session])]
-    let label: (Date) -> String
+    let sections: [LibrarySection]
+    let jobs: [Job]
     let searching: Bool
     let densePending: Bool
     let filtered: Bool
@@ -849,6 +898,7 @@ struct LibraryList: View {
     let row: (Session) -> LibraryRow
     let rowKey: (Session) -> String
     let job: (Job) -> AnyView
+    let openChannel: (String) -> Void
     let clearFilters: () -> Void
     var body: some View {
         List(selection: $selection) {
@@ -856,23 +906,34 @@ struct LibraryList: View {
             if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {
                 Section { LibraryEmpty(downloads: m.downloads).padding(.top, 24).listRowBackground(Color.clear) }
             }
-            if !m.library.sessions.isEmpty && days.isEmpty {
+            if !m.library.sessions.isEmpty && sections.isEmpty && jobs.isEmpty {
                 Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear) }
             }
-            if !m.runner.waiting.isEmpty {
+            if !jobs.isEmpty {
                 Section {
                     // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
-                    ForEach(m.runner.waiting) { job($0).id("job-" + $0.id.uuidString).selectionDisabled() }
+                    ForEach(jobs) { job($0).id("job-" + $0.id.uuidString).selectionDisabled() }
                 }
             }
-            ForEach(days, id: \.0) { day, items in
+            ForEach(sections) { sec in
                 Section {
-                    ForEach(items) { s in row(s).id(rowKey(s)).tag(s.id) }
-                } header: { if day != .distantPast { Text(label(day)) } }
+                    ForEach(sec.items) { s in row(s).id(rowKey(s)).tag(s.id) }
+                } header: {
+                    if let g = sec.channel { ChannelHeader(group: g) { openChannel(g.key) } }
+                    else if let t = sec.title { Text(t) }
+                }
             }
         }
         .listStyle(.insetGrouped)
     }
+}
+
+/// One section of the library list: a day, a channel (Podcasts filter) or the ranked search hits.
+struct LibrarySection: Identifiable {
+    let id: String
+    let title: String?
+    let channel: ChannelGroup?
+    let items: [Session]
 }
 
 /// Under the list: what the engines are doing (tap: the running job), Process all, and the record button.

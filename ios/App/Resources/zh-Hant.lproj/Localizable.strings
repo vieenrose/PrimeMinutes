@@ -699,3 +699,17 @@
 "online_notice_ok" = "我了解";
 "about_licenses" = "開放原始碼授權";
 "about_licenses_desc" = "App 內含的元件及其授權";
+
+/* Library by source */
+"source_all" = "全部";
+"source_meetings" = "會議";
+"source_podcasts" = "Podcast";
+"source_received" = "收到的";
+"source_received_label" = "收到";
+"source_other_podcasts" = "其他 Podcast";
+"cd_source_filter" = "依來源顯示";
+"cd_channel_header" = "%@，%d 集";
+"cd_channel_open" = "開啟頻道頁面";
+"channel_in_library" = "資料庫中 %d 集";
+"channel_in_library_header" = "已在資料庫";
+"channel_new_in_feed" = "節目新集數";

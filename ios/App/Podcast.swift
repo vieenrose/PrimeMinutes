@@ -1,6 +1,6 @@
 import Foundation
 
-struct PodcastSeries: Identifiable, Hashable { var id: String { feedUrl }; let title, artist, feedUrl: String; let episodeCount: Int }
+struct PodcastSeries: Identifiable, Hashable { var id: String { feedUrl }; let title, artist, feedUrl: String; let episodeCount: Int; var artworkUrl: String = "" }
 struct Episode: Identifiable, Hashable, Codable { var id: String { audioUrl }; let title, audioUrl, published, duration: String }
 
 /// Podcast input (port of Android `Podcast`): iTunes Search API (no key) → RSS episodes (XMLParser) → enclosure download.
@@ -23,7 +23,7 @@ enum Podcast {
         return res.compactMap { o in
             guard let feed = o["feedUrl"] as? String, !feed.isEmpty else { return nil }
             return PodcastSeries(title: o["collectionName"] as? String ?? "Untitled", artist: o["artistName"] as? String ?? "",
-                                 feedUrl: feed, episodeCount: o["trackCount"] as? Int ?? 0)
+                                 feedUrl: feed, episodeCount: o["trackCount"] as? Int ?? 0, artworkUrl: o["artworkUrl100"] as? String ?? "")
         }
     }
 

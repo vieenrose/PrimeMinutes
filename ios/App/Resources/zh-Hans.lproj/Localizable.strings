@@ -699,3 +699,17 @@
 "online_notice_ok" = "我了解";
 "about_licenses" = "开源许可";
 "about_licenses_desc" = "应用内含的组件及其许可";
+
+/* Library by source */
+"source_all" = "全部";
+"source_meetings" = "会议";
+"source_podcasts" = "播客";
+"source_received" = "收到的";
+"source_received_label" = "收到";
+"source_other_podcasts" = "其他播客";
+"cd_source_filter" = "按来源显示";
+"cd_channel_header" = "%@，%d 集";
+"cd_channel_open" = "打开频道页面";
+"channel_in_library" = "资料库中 %d 集";
+"channel_in_library_header" = "已在资料库";
+"channel_new_in_feed" = "节目新集数";

@@ -699,3 +699,17 @@
 "online_notice_ok" = "I understand";
 "about_licenses" = "Open-source licenses";
 "about_licenses_desc" = "The components inside this app and their licenses";
+
+/* Library by source */
+"source_all" = "All";
+"source_meetings" = "Meetings";
+"source_podcasts" = "Podcasts";
+"source_received" = "Received";
+"source_received_label" = "Received";
+"source_other_podcasts" = "Other podcasts";
+"cd_source_filter" = "Show by source";
+"cd_channel_header" = "%@, %d episodes";
+"cd_channel_open" = "Opens the channel page";
+"channel_in_library" = "%d in library";
+"channel_in_library_header" = "In library";
+"channel_new_in_feed" = "New in feed";

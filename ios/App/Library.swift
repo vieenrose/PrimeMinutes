@@ -46,6 +46,10 @@ struct Session: Identifiable, Codable, Hashable {
     /// Restored from a shared file (.pmin, AirDrop, Files): the reader id the sender's summary came with. While the
     /// summary is still that one, opening the meeting does not offer a re-summarize (UserEdits.summaryStale). nil = ours.
     var receivedReader: String? = nil
+    /// Restored from a .pmin or a shared manifest (SessionFile.session): the library's "Received" source. Sessions
+    /// restored before the flag are known by `receivedReader` (set by the same restore when the sender had a summary).
+    var received: Bool? = nil
+    var isReceived: Bool { received == true || receivedReader != nil }
     /// The user's rename: a blank draft gives the title back to the automatic one.
     mutating func rename(_ draft: String) {
         let r = TitleEdit.apply(draft, auto: lines.first.map { String($0.text.prefix(20)) } ?? L("meeting"))

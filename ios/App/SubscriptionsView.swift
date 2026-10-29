@@ -1,17 +1,25 @@
 import SwiftUI
 
-/// Where an imported podcast episode came from (Android source.json): job id (== the session's id), audio URL, guid.
-/// Kept in Application Support/episode_sources.json, so a subscribed episode is known as imported after its job ends.
+/// Where an imported podcast episode came from (Android source.json): job id (== the session's id), audio URL, guid,
+/// and the channel snapshot taken at import (LibrarySources). Kept in Application Support/episode_sources.json, so a
+/// subscribed episode is known as imported after its job ends, and the library can group it by channel offline.
 enum EpisodeSources {
-    struct Source: Codable { var jobId: String; var sourceUrl: String; var guid: String?; var seriesId: String? }
+    typealias Source = EpisodeSource
     private static let url = JobQueue.support.appendingPathComponent("episode_sources.json")
     private static let lock = NSLock()
-    static func all() -> [Source] { lock.lock(); defer { lock.unlock() }; return read() }
-    private static func read() -> [Source] { (try? JSONDecoder().decode([Source].self, from: Data(contentsOf: url))) ?? [] }
+    static func all() -> [Source] { lock.lock(); defer { lock.unlock() }; return LibrarySources.read(url) }
     static func add(_ s: Source) {
         lock.lock(); defer { lock.unlock() }
-        var a = read(); a.append(s)
-        try? JSONEncoder().encode(a).write(to: url, options: .atomic)
+        var a = LibrarySources.read(url); a.append(s)
+        LibrarySources.write(a, to: url)
+    }
+    /// Once per launch: episodes imported before the channel snapshot get it from the subscriptions still here.
+    static func backfill(_ subs: [Subscription]) {
+        lock.lock(); defer { lock.unlock() }
+        let chans = subs.map { ChannelInfo(seriesId: $0.id, title: $0.title, artist: $0.artist, artworkUrl: $0.artworkUrl,
+                                           episodes: $0.episodes.map { (guid: $0.guid, audioUrl: $0.audioUrl, published: $0.published, durationSec: $0.durationSec) }) }
+        let (out, changed) = LibrarySources.backfill(LibrarySources.read(url), channels: chans)
+        if changed { LibrarySources.write(out, to: url); StatusLog.add("episode sources backfilled") }
     }
 }
 
@@ -43,7 +51,7 @@ enum EpisodeSources {
         if let s = byId(SubscriptionLogic.idOf(feedUrl)) { return s }
         var f = feed; if f.title.isEmpty { f.title = title }; if f.artist.isEmpty { f.artist = artist }
         let s = SubscriptionLogic.baseline(feedUrl, f, country: Self.country, now: Int64(Date().timeIntervalSince1970))
-        put(s); return s
+        put(s); if !s.artworkUrl.isEmpty { ArtworkCache.shared.prefetch(seriesId: s.id, url: s.artworkUrl) }; return s
     }
 
     /// Subscribes from a search hit or a pasted link (fetches the feed first).
@@ -105,14 +113,17 @@ enum EpisodeSources {
         let need = SubscriptionLogic.spaceNeeded(ep.lengthBytes)
         let free = (try? JobQueue.support.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage) ?? Int64.max
         if forceLowSpace || (need > 0 && free < need) { return .noSpace }
-        let id = m.imports.addEpisode(Episode(title: ep.title, audioUrl: ep.audioUrl, published: "", duration: ""), seriesId: subId, guid: ep.guid)
+        let sub = byId(subId)
+        let id = m.imports.addEpisode(Episode(title: ep.title, audioUrl: ep.audioUrl, published: "", duration: ""), seriesId: subId, guid: ep.guid,
+                                      channel: sub.map { .init(title: $0.title, artist: $0.artist, artworkUrl: $0.artworkUrl, feedUrl: $0.feedUrl) },
+                                      published: ep.published > 0 ? ep.published : nil, durationSec: ep.durationSec > 0 ? ep.durationSec : nil)
         justQueued.insert(id)   // its job is added asynchronously: a second tap must still see it
         if let s = byId(subId) { put(SubscriptionLogic.markSeen(s, guid: ep.guid, entryId: id.uuidString)) }
         return .started(id)
     }
 }
 
-private func lastCheckedText(_ s: Subscription, time: Bool = false) -> String {
+func lastCheckedText(_ s: Subscription, time: Bool = false) -> String {
     if s.lastChecked == 0 { return L("sub_never_checked") }
     let d = Date(timeIntervalSince1970: TimeInterval(s.lastChecked))
     return L("sub_last_checked", time ? d.formatted(date: .abbreviated, time: .shortened) : d.formatted(.dateTime.month().day()))
@@ -156,7 +167,7 @@ struct SubscriptionsView: View {
             .overlay { if store.subs.isEmpty { ContentUnavailableView(L("sub_source"), systemImage: "square.stack", description: Text(L("sub_empty"))) } }
             .modifier(SearchIfLong(on: store.subs.count > 8, text: $query))
             .navigationTitle(L("sub_source"))
-            .navigationDestination(for: String.self) { id in ShowPage(id: id, onOpen: onOpen) }
+            .navigationDestination(for: String.self) { id in ChannelPage(key: id, onOpen: onOpen) }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
                 ToolbarItem { Button(L("sub_paste"), systemImage: "link") { pasting = true } }
@@ -196,86 +207,6 @@ private struct ShowRow: View {
             if n > 0 { Text(L("sub_new_count", n)).font(.caption.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 2).background(Color.accentColor, in: Capsule()).foregroundStyle(.white) }
         }
     }
-}
-
-private struct ShowPage: View {
-    let id: String
-    let onOpen: (UUID) -> Void
-    private var m: Model { Model.shared }
-    @ObservedObject private var store = SubscriptionStore.shared
-    @ObservedObject private var imports: Imports
-    @ObservedObject private var runner: JobRunner
-    @State private var index: [String: UUID] = [:]
-    @State private var notice: String?
-    @State private var deleting = false
-    @Environment(\.dismiss) private var dismiss
-    init(id: String, onOpen: @escaping (UUID) -> Void) { self.id = id; self.onOpen = onOpen; _imports = ObservedObject(wrappedValue: Model.shared.imports); _runner = ObservedObject(wrappedValue: Model.shared.runner) }
-    var body: some View {
-        if let s = store.byId(id) {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text([s.artist, L("sub_episodes_n", s.episodes.count)].filter { !$0.isEmpty }.joined(separator: " · ")).foregroundStyle(.secondary)
-                        Text(s.paused ? L("sub_paused") : lastCheckedText(s, time: true)).font(.caption).foregroundStyle(.secondary)
-                        if let e = s.error { Text(L("sub_error", L(e.key))).foregroundStyle(.red) }
-                        if let notice { Text(notice).font(.footnote).foregroundStyle(.secondary) }
-                    }
-                    Button(store.checking.contains(id) ? L("sub_checking") : L("sub_check")) { Task { await store.check(id); await refresh() } }
-                        .disabled(store.checking.contains(id)).accessibilityIdentifier("sub-check")
-                }
-                Section {
-                    ForEach(s.episodes) { ep in episodeRow(s, ep) }
-                }
-            }
-            .navigationTitle(s.title)
-            .toolbar {
-                Menu {
-                    Button(L(s.paused ? "sub_resume" : "sub_pause"), systemImage: s.paused ? "play" : "pause") { store.setPaused(id, !s.paused) }
-                    ShareLink(item: shareText(s)) { Label(L("sub_share"), systemImage: "square.and.arrow.up") }
-                    Button(L("sub_delete"), systemImage: "trash", role: .destructive) { deleting = true }
-                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("sub_more")) }
-            }
-            .alert(L("sub_delete"), isPresented: $deleting) {
-                Button(L("sub_delete"), role: .destructive) { store.remove(id); dismiss() }
-                Button(L("cancel"), role: .cancel) {}
-            } message: { Text(L("sub_delete_note")) }
-            .task { await store.checkIfStale(id); await refresh() }
-            .onReceive(runner.$waiting) { _ in Task { await refresh() } }
-        } else { ContentUnavailableView(L("sub_source"), systemImage: "square.stack") }
-    }
-    private func refresh() async { index = await store.libraryIndex(m) }
-
-    @ViewBuilder private func episodeRow(_ s: Subscription, _ ep: FeedEpisode) -> some View {
-        let entry = SubscriptionStore.entry(index, ep)
-        let isNew = !s.seenGuids.contains(ep.guid)
-        VStack(alignment: .leading, spacing: 4) {
-            Text(ep.title)
-            let meta = [ep.durationSec > 0 ? Podcast.formatDuration(String(ep.durationSec)) : "",
-                        ep.published > 0 ? Date(timeIntervalSince1970: TimeInterval(ep.published)).formatted(.dateTime.month().day()) : ""].filter { !$0.isEmpty }
-            if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
-            HStack {
-                if let entry {
-                    let job = runner.waiting.first { $0.id == entry }
-                    Text(job.map { m.jobStatus($0) } ?? L("sub_imported")).font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    if job == nil { Button(L("sub_open")) { open(entry) }.font(.subheadline.weight(.semibold)).buttonStyle(.borderless) }
-                } else {
-                    if isNew { Text(L("sub_new")).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor) }
-                    Spacer()
-                    Button(L("sub_download")) { Task { await queue(s, ep) } }.font(.subheadline.weight(.semibold)).buttonStyle(.borderless)
-                }
-            }
-        }.accessibilityIdentifier("sub-episode")
-    }
-    private func queue(_ s: Subscription, _ ep: FeedEpisode) async {
-        switch await store.queue(s.id, ep, model: m) {
-        case .started: notice = nil
-        case .already(let e): notice = L("sub_already"); open(e)
-        case .noSpace: notice = L("sub_no_space")
-        }
-        await refresh()
-    }
-    private func open(_ id: UUID) { onOpen(id) }
 }
 
 /// "Paste RSS link": previews the feed (clipboard prefilled when it holds a link), then subscribes.

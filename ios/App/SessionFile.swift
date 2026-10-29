@@ -41,6 +41,7 @@ extension SessionFile {
         if s.notes.isEmpty, let t = m.notes, MeetingNotes.parse(t) != nil { s.legacyNotes = t }   // Android: v2 NOTES first, else the journal
         s.reader = m.llm_model   // Android sessionModels: the summary stays attributed to the model that wrote it
         s.receivedReader = m.llm_model   // the sender's summary: not stale here (UserEdits.summaryStale)
+        s.received = true   // the library's "Received" source
         // Android saves its action items as shown, edits included: keep them when they are not what the notes give.
         if let a = m.action_items?.trimmingCharacters(in: .whitespacesAndNewlines), a != "-", !a.isEmpty, a != s.derivedActions { s.actionsEdited = a }
         return s

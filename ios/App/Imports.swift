@@ -23,13 +23,21 @@ import AVFoundation
     private var worker: Task<Void, Never>?
     private var itemTask: Task<Void, Error>?
 
-    @discardableResult func addEpisode(_ ep: Episode, seriesId: String? = nil, guid: String? = nil) -> UUID {
+    /// The channel an episode belongs to, snapshotted at import (LibrarySources): the library groups and draws it
+    /// offline, and it survives an unsubscribe.
+    struct Channel { var title = "", artist = "", artworkUrl = "", feedUrl = "" }
+    @discardableResult func addEpisode(_ ep: Episode, seriesId: String? = nil, guid: String? = nil, channel: Channel? = nil, published: Int64? = nil, durationSec: Int? = nil) -> UUID {
         var j = Job(audio: UUID().uuidString + "." + Podcast.ext(ep.audioUrl), title: ep.title)
         j.captureStart = -1   // a podcast episode: no meeting time to show
         j.download = JobDownload(url: ep.audioUrl)
         StatusLog.add("podcast item \(j.id): \(ep.title)")
         // Provenance (outlives the job: the session keeps the job's id), so a subscribed episode is known as imported.
-        EpisodeSources.add(.init(jobId: j.id.uuidString, sourceUrl: ep.audioUrl, guid: guid, seriesId: seriesId))
+        let pub = published ?? { let p = FeedParser.parseDate(ep.published); return p > 0 ? p : nil }()
+        let dur = durationSec ?? { let d = FeedParser.parseDuration(ep.duration); return d > 0 ? d : nil }()
+        EpisodeSources.add(.init(jobId: j.id.uuidString, sourceUrl: ep.audioUrl, guid: guid, seriesId: seriesId, kind: SourceKind.podcast.rawValue,
+                                 channelTitle: channel?.title, channelArtist: channel?.artist, artworkUrl: channel?.artworkUrl.isEmpty == false ? channel?.artworkUrl : nil,
+                                 episodeTitle: ep.title, published: pub, durationSec: dur, feedUrl: channel?.feedUrl.isEmpty == false ? channel?.feedUrl : nil))
+        if let a = channel?.artworkUrl, !a.isEmpty { ArtworkCache.shared.prefetch(seriesId: seriesId, url: a) }
         Task { await runner.queue.add(j); await runner.syncQueue(); kick() }
         return j.id
     }
@@ -99,6 +107,8 @@ import AVFoundation
             case .success:
                 now.download = nil
                 StatusLog.add("podcast item \(j.id) downloaded")
+                // DEV (library check on a shared phone): keep the downloaded episode unprocessed, no model run.
+                if Dev.env["VOX_UNQUEUE_DL"] != nil { runner.unqueue(now); continue }
                 await runner.queue.update(now); await runner.syncQueue(); runner.drain()
             case .failure(let e):
                 // A cancel without a delete (cannot happen today) leaves it to resume at the next launch.
@@ -198,7 +208,7 @@ import AVFoundation
             if s.title.isEmpty { s.title = url.deletingPathExtension().lastPathComponent }
             if let t = AVURLAsset(url: JobQueue.url(j)).duration.seconds as Double?, t.isFinite, t > s.seconds { s.seconds = t }
             StatusLog.add("import: meeting \(s.id) v\(man0.primeminutes_version ?? 1), \(s.lines.count) lines")
-            if man0.session_id != nil, let old = library.sessions.first(where: { $0.id == s.id }) { duplicate = Duplicate(incoming: s, existing: old); return }
+            if man0.session_id != nil, let old = library.sessions.first(where: { $0.id == s.id }) { duplicate = Duplicate(incoming: s, existing: old); if Dev.env["VOX_DUPCOPY"] != nil { resolveDuplicate(keepCopy: true) }; return }
             library.update(s); openRequest = s; return
         }
         // When the meeting took place: the file's own creation date, never the import time (none: the time is left out).
