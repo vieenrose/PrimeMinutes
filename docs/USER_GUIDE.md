@@ -12,15 +12,14 @@
 ```mermaid
 flowchart TD
     Home["首頁（場次庫）"]
-    Home -->|"⋮"| RowMenu["場次選單<br/>開啟・重新命名・分享音訊・刪除<br/>立即處理・從佇列移除・停止處理"]
+    Home -->|"⋮"| RowMenu["場次選單<br/>開啟・重新命名・分享・刪除<br/>立即處理・從佇列移除・停止處理"]
     Home -->|長按| Select["多選模式<br/>全選・刪除"]
     Home -->|搜尋框| Search["依語意搜尋・提問<br/>（第 1a 節）"]
     Home -->|＋| Add["加入音訊"]
-    Add --> File["音訊檔案"]
+    Add --> File["匯入<br/>音訊・影片・.pmin（含雲端硬碟）"]
     Add --> Podcast["Podcast"]
     Add --> Shows["節目（訂閱）"]
     Podcast --> Shows
-    Add --> Open["開啟場次 .ogg/.m4a"]
     Home -->|設定圖示| Settings["設定"]
     Home -->|錄音| Booth["錄音室<br/>即時逐字稿・AI 筆記"]
     Booth -->|下一場| Booth
@@ -29,17 +28,16 @@ flowchart TD
     File --> Session
     Podcast --> Session
     Shows --> Session
-    Open --> Session
     Session --> Summary["摘要分頁<br/>AI 筆記卡片・摘要・語者比例"]
     Settings --> People["說話者名錄<br/>辨識聲音・人物頁"]
-    People --> Contact["人物頁：手機聯絡人・電子郵件"]
+    People --> Contact["人物頁：手機聯絡人"]
     Session --> Transcript["逐字稿分頁<br/>點句播放・長按選單・語者是誰？"]
     Session -->|"放大鏡"| InSearch["在這場會議內搜尋<br/>AI 筆記・逐字稿・≈・✦ 問這場會議"]
     Transcript -->|"⇕"| Boundary["調整說話者分界<br/>拖曳・點字・‹ ›・試聽・從這裡分開・復原"]
     Session --> Player["播放列<br/>播放・±5 秒・進度・音量"]
-    Session -->|"⋮ 更多選項"| More["問這場會議・寄給與會者・重新轉錄・重新摘要・匯出與分享・設定"]
-    More --> Mail["寄給與會者<br/>收件人・內容・附件・預覽"]
-    More --> Export["匯出<br/>.m4a・PDF・MD・TXT・SRT・VTT・LRC"]
+    Session -->|"⋮ 更多選項"| More["問這場會議・分享・重新轉錄・重新摘要・設定"]
+    More --> Share["分享<br/>內容：整場會議・摘要＋逐字稿（PDF／Word）・只有錄音<br/>傳送到：附近・電子郵件・其他 App"]
+    RowMenu --> Share
     More --> Settings
     Recovery["復原對話框<br/>（錄音中被終止後）"] -->|完成轉錄| Session
 ```
@@ -106,7 +104,7 @@ flowchart TD
 
 ## 2. 場次 ⋮ 選單
 
-<img src="guide/02-row-menu.png" width="270" alt="場次選單"> <img src="guide/03-swipe-delete.png" width="270" alt="左滑刪除與復原"> <img src="guide/52-share-text-only.png" width="270" alt="Podcast 場次：不附音訊分享？">
+<img src="guide/02-row-menu.png" width="270" alt="場次選單"> <img src="guide/03-swipe-delete.png" width="270" alt="左滑刪除與復原"> <img src="guide/56-share-sheet.png" width="270" alt="分享面板">
 
 每列右側的 **⋮** 依場次狀態提供不同操作。
 
@@ -114,9 +112,7 @@ flowchart TD
 |---|---|---|---|
 | 開啟 | 已完成 | 開啟場次 | ✅ 手動 |
 | 重新命名 | 一律 | 對話框輸入新標題，確定後列上標題更新（新場次的預設標題為日期時間，如「10月6日 00:11」，摘要完成後換成 AI 擬的標題） | ✅ 手動 |
-| 分享會議 | 已完成 | 把整場會議（音訊、逐字稿、摘要、AI 筆記與你的修改）存成 `.pmin` 檔，透過系統分享面板送出（例如 Quick Share，或傳到 iPhone）；對方用 Prime Minutes 開啟後直接還原，不需模型、不必重新處理 | ✅ 手動（Note 10+ → Galaxy A53） |
-| 分享音訊 | 一律 | 系統分享面板，附 `.m4a` | ✅ 手動 |
-| 分享會議（線上來源） | 來自 Podcast 等線上來源的場次 | 先問「不附音訊分享？」：預設「只分享文字」（逐字稿與摘要的 .txt），也可選「附上音訊」 | ✅ 手動（Note 10+） |
+| 分享 | 已完成 | 開啟分享面板：先選內容，再選傳送到哪裡（第 2a 節） | ✅ 手動（Note 10+、Galaxy A53） |
 | 刪除（或在列上向左滑） | 一律 | 立即從清單移除，底部顯示「已刪除「…」」與 **復原**；幾秒內點復原即放回原處，否則才真正刪除 | ✅ 手動（Note 10+） |
 | 繼續處理 | 處理被中斷（停止、App 被終止）且已留有進度 | 從已存的最後穩定段落接續語音辨識，語者編號與先前一致；已完成的部分不重做 | ✅ 手動 |
 | 立即處理 | 未處理，或已排入佇列且沒有正在處理的項目 | 開始轉錄與摘要；在「停止」之後也能再次開始 | ✅ 手動 |
@@ -127,14 +123,40 @@ flowchart TD
 
 <img src="guide/29-resume-prompt.png" width="270" alt="繼續中斷的場次"> <img src="guide/30-resume-menu.png" width="270" alt="繼續處理">
 
-### 2a. 分享整場會議（.pmin）
+### 2a. 分享與匯出
 
-<img src="guide/02-row-menu.png" width="270" alt="場次動作：分享會議"> <img src="guide/52-share-text-only.png" width="270" alt="Podcast 場次：不附音訊分享？"> <img src="guide/55-received.png" width="270" alt="收到的會議：直接打開，提示可刪除原始檔">
+<img src="guide/56-share-sheet.png" width="270" alt="分享面板：內容"> <img src="guide/57-share-word.png" width="270" alt="摘要＋逐字稿：PDF 或 Word，附上錄音">
 
-1. **送出**：場次列的 ⋮（或場次畫面右上角 ⋮）→ **分享會議** → 在系統分享面板選 **Quick Share**（傳給 iPhone 時對方用 AirDrop 收的 iPhone 版也能開）。檔案是 `標題.pmin`，裡面有音訊、逐字稿、摘要、AI 筆記與你的修改。
-2. **Podcast 等線上來源的場次**：先問「不附音訊分享？」，預設 **只分享文字**（逐字稿與摘要的 .txt）；要連音訊一起送請選「附上音訊」。
-3. **接收**：在 Quick Share 通知或「我的檔案」點 `.pmin`。Samsung「我的檔案」會先跳出 App 選單，選 **Prime Minutes**；App 直接還原整場會議（不需模型、不必重新處理），列上標示 **收到的**，並提示「會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。」
-4. **重複收到同一場**：詢問「資料庫中已有這場會議」→「開啟現有的」或「保留副本」。
+場次列的 ⋮（或場次畫面右上角 ⋮）→ **分享**。面板分兩步：上面選 **內容**，下面選 **傳送到**。每個選項旁顯示檔案大小。
+
+**內容**
+
+1. **整場會議（.pmin）**：錄音、逐字稿、說話者、摘要、待辦事項、AI 筆記與你的修改，對方用 Prime Minutes（Android 或 iPhone）開啟後直接還原，不需模型、不必重新處理。
+2. **摘要＋逐字稿**：上方選 **PDF** 或 **Word**（記得上次的選擇）。文件依序是標題（日期、長度、與會者）、摘要、待辦事項、逐字稿；摘要與待辦事項裡的每個時間都連到它引用的那段逐字稿，那段旁邊有「↑ 摘要」可跳回。AI 筆記不放進文件（只在 .pmin 裡）。待辦事項一律附上，不受「顯示行動項目」設定影響。開啟 **附上錄音** 會另外附一個 `.m4a`；錄音很大或來自 Podcast 等線上來源時預設關閉。
+3. **只有錄音（.m4a）**。
+
+含錄音的選項會提醒「含所有與會者的聲音」；線上來源的場次提醒版權屬於發布者。
+
+**傳送到**
+
+- **附近（Quick Share）**：傳到旁邊的手機或電腦（傳給 iPhone 時，對方用 AirDrop 收的 iPhone 版也能開 .pmin）。
+- **電子郵件**：直接開啟郵件 App，檔案已附上、主旨是會議標題，由你填收件人再寄出；超過 25 MB 時提醒很多郵件伺服器會拒收。
+- **其他 App…**：系統分享面板（LINE 等）。
+
+App 不登入任何帳號，也不直接上傳到雲端。
+
+<img src="guide/59-pdf-page1.png" width="270" alt="PDF 第一頁：標題、摘要、待辦事項"> <img src="guide/60-pdf-transcript.png" width="270" alt="PDF 逐字稿頁：時間欄與說話者"> <img src="guide/61-docx.png" width="270" alt="Word 文件"> <img src="guide/62-mail-chooser.png" width="270" alt="電子郵件：選擇郵件 App，檔案已附上">
+
+**接收**：在 Quick Share 通知、「我的檔案」或雲端硬碟 App 點 `.pmin`（Samsung「我的檔案」會先跳出 App 選單，選 **Prime Minutes**）。App 直接還原整場會議，列上標示 **收到的**，並提示「會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。」；資料庫已有同一場時詢問「開啟現有的」或「保留副本」。
+
+<img src="guide/55-received.png" width="270" alt="收到的會議">
+
+| 節點 | 預期結果 | 驗證 |
+|---|---|---|
+| 分享面板 | 內容三選一（含大小）、PDF／Word、附上錄音、傳送到三類 | ✅ 手動（Note 10+、Galaxy A53）、✅ 自動（ShareKitTest） |
+| PDF／Word | 標題、摘要、待辦事項、逐字稿；時間連到逐字稿、「↑ 摘要」連回；無 AI 筆記 | ✅ 自動（PdfExportTest、DocxExportTest、ExportNotesTest） |
+| 電子郵件 | 只列郵件 App（有多個時讓你選），選定後開啟撰寫畫面，檔案已附上 | ✅ 手動（Galaxy A53：選擇畫面；撰寫畫面未截圖，避免顯示帳號） |
+| 收到 .pmin | 還原、標示「收到的」、重複時詢問 | ✅ 手動（Galaxy A53） |
 
 ## 3. 多選模式
 
@@ -152,19 +174,18 @@ flowchart TD
 
 ## 4. 加入音訊
 
-<img src="guide/07-add-source.png" width="270" alt="加入音訊"> <img src="guide/54-online-notice.png" width="270" alt="匯入前請留意"> <img src="guide/08-podcast.png" width="270" alt="Podcast">
+<img src="guide/63-import-cloud.png" width="270" alt="加入音訊：匯入（含雲端）"> <img src="guide/54-online-notice.png" width="270" alt="匯入前請留意"> <img src="guide/08-podcast.png" width="270" alt="Podcast">
 
 處理事先錄好的音訊。也可以從其他 App 把音訊「分享」給 Prime Minutes。
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
-| 音訊檔案 | ＋ → 音訊檔案 | 系統檔案選擇器；選取後轉錄並摘要（長時間的靜音會快速略過） | ✅ 手動、✅ 自動（AddSourceSheetTest） |
+| 匯入 | ＋ → 匯入 | 系統檔案選擇器，可選音訊、影片或 `.pmin` 會議，也可從 Google Drive、Dropbox、OneDrive 選檔（第 4b 節）；音訊與影片轉錄並摘要（長時間的靜音會快速略過），`.pmin` 直接還原 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
 | Podcast → 搜尋 → 節目 → 轉錄 | ＋ → Podcast | 列出單集與長度；選取後首頁立刻出現這一集（標題即單集名稱），標示下載進度，下載完成後自動轉錄（正在處理其他項目時排在其後） | ✅ 手動、✅ 自動（SourceSheetsTest，搜尋） |
 
 <img src="guide/27-podcast-episodes.png" width="270" alt="Podcast 單集">
 | YouTube／PeerTube 連結 | 其他 App 把 YouTube 或 PeerTube 連結傳給 Prime Minutes（Prime Minutes 不在文字的分享選單中，一般不會發生） | 不再匯入：顯示「不支援影片連結」說明。舊版排入但尚未下載的影片會標示「已不再支援匯入 YouTube 與 PeerTube」，可刪除；已轉錄的場次不受影響 | ✅ 手動（Note 10+） |
 | 第一次線上匯入 | 第一次按 ＋ → Podcast 或 節目 | 先顯示「匯入前請留意」：僅供個人使用、須自行確認有權下載與轉錄、遵守發布者條款；按「我了解」後不再出現 | ✅ 手動（Note 10+） |
-| 開啟場次（.ogg / .m4a） | ＋ → 開啟場次 | 開啟先前匯出的 Prime Minutes 檔，含逐字稿與摘要 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
 | 收到的會議（.pmin） | 在 Quick Share、檔案管理（例如 Samsung「我的檔案」）或其他 App 點 `.pmin` 檔 | 開啟 Prime Minutes 並還原整場會議，列在「收到的」，提示「會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。」；資料庫已有同一場時詢問「開啟現有的」或「保留副本」 | ✅ 手動（Galaxy A53） |
 | 從其他 App 分享 | 其他 App → 分享 → Prime Minutes | 閒置時直接轉錄；處理中時詢問「匯入這個檔案？」（匯入會中斷處理） | ✅ 手動 |
 | Podcast 下載中斷線 | 下載單集音訊時網路中斷 | 不當成失敗：該列與場次畫面顯示「下載已暫停 · 會自動繼續」；網路恢復、回到 App 或按「立即繼續」後從中斷處接續，下載完成後照常轉錄 | ✅ 手動（Note 10+，Podcast：下載中切斷 Wi‑Fi 與行動數據 → 暫停、已下載部分保留 → 恢復後接續） |
@@ -173,11 +194,17 @@ flowchart TD
 
 <img src="guide/26-import-confirm.png" width="270" alt="匯入確認"> <img src="guide/41-import-paused.png" width="270" alt="下載中的 Podcast 單集：首頁的一列"> <img src="guide/42-item-download.png" width="270" alt="下載中的場次畫面">
 
+### 4b. 從雲端匯入
+
+錄音存在 Google Drive、Dropbox 或 OneDrive（例如會議室電腦錄好後上傳）時：＋ → **匯入** → 在系統檔案選擇器左上角的選單選該雲端（手機上要先安裝並登入那個 App），再點檔案。檔案會先下載到手機，再像一般匯入一樣在手機上轉錄；`.pmin` 會議直接還原。Prime Minutes 本身不登入任何雲端帳號。選擇器裡看不到某個雲端時，先打開那個 App 一次，或在選擇器的「瀏覽」中啟用它。
+
 ### 4a. Podcast 訂閱（節目）
 
 <img src="guide/43-subs-list.png" width="270" alt="節目清單"> <img src="guide/44-subs-show.png" width="270" alt="節目頁"> <img src="guide/50-podcast-filter.png" width="270" alt="首頁的 Podcast 篩選：單集依節目分組">
 
-**訂閱＝儲存節目連結，不付費、無背景連線。** App 不會在背景自動檢查或下載；新集數只在你按「檢查新集數」／「全部檢查」，或打開超過 24 小時沒檢查的節目頁時才去抓（一次一個 RSS 請求）。取得的單集走與上面「Podcast → 轉錄」完全相同的下載與轉錄流程。
+**訂閱＝儲存節目連結，不付費。** 新集數在你按「檢查新集數」／「全部檢查」，或打開超過 24 小時沒檢查的節目頁時去抓（一次一個 RSS 請求）。開啟 **設定 → 在背景檢查新集數** 後，App 每天在 Wi‑Fi 下讀一次已訂閱節目的 RSS（暫停的節目略過），有新集時發通知；背景只讀節目清單，不下載任何單集。這個開關預設關閉；關閉時 App 完全不在背景連線。取得的單集走與上面「Podcast → 轉錄」完全相同的下載與轉錄流程。
+
+<img src="guide/64-bg-check.png" width="270" alt="設定：在背景檢查新集數"> <img src="guide/66-channel.png" width="270" alt="節目頁">
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -188,6 +215,7 @@ flowchart TD
 | 下載並轉錄 | 節目頁 → 某集「下載並轉錄」 | 首頁立刻出現這一集並下載、轉錄；同一集再按一次不會產生第二列，而是提示「已在場次庫 · 開啟該場次」 | ✅ 手動（Note 10+，重複提交只得一列） |
 | 空間不足 | 可用空間不足以放下這一集（約檔案 3 倍＋200 MB） | 不下載，提示「空間不足 · 等待空間」；下載途中磁碟寫滿時該列顯示同一句並暫停（保留已下載部分），有空間後自動接續，不標為失敗 | ✅ 手動（Note 10+，`vox_sub_lowspace` 模擬）、✅ 自動（以錯誤訊息判斷，網路錯誤不誤判） |
 | 暫停／繼續訂閱、分享、刪除 | 節目清單長按一列，或節目頁右上角 ⋮ | 暫停後「全部檢查」略過它（節目頁手動檢查仍可用）；分享送出「節目名稱 — RSS 連結」；刪除後可在提示列「復原」，已下載的場次保留 | ✅ 手動（Note 10+，暫停後全部檢查略過） |
+| 在背景檢查新集數 | 設定 → Podcast | 預設關閉；開啟後每天在 Wi‑Fi 下檢查一次，有新集時通知「新增 N 集」，點通知開節目清單；通知被關閉時只在節目清單顯示徽章；不下載內容 | ✅ 手動（Galaxy A53）、✅ 自動（BackgroundCheckTest） |
 | 節目搬家 | 節目的 RSS 永久轉址（301/308） | 自動改用新連結並提示「訂閱連結已搬家 · 已追隨新連結」；已看過的集數不受影響；暫時轉址不改連結 | ✅ 自動（SubscriptionsTest） |
 | 檢查失敗 | 來源已下架、需付費、不是 RSS、沒有音訊 | 節目頁顯示「訂閱來源失效：原因」，保留上次的單集清單 | ✅ 自動（SubscriptionsTest） |
 
@@ -297,9 +325,9 @@ flowchart TD
 
 ## 8. 播放列與場次選單
 
-<img src="guide/16-volume.png" width="270" alt="音量"> <img src="guide/20-session-menu.png" width="270" alt="場次選單"> <img src="guide/21-export.png" width="270" alt="匯出">
+<img src="guide/16-volume.png" width="270" alt="音量"> <img src="guide/20-session-menu.png" width="270" alt="場次選單">
 
-播放列的色塊代表語者，點或拖曳可跳轉。右上 **⋮**（更多選項）提供重新處理與匯出。
+播放列的色塊代表語者，點或拖曳可跳轉。右上 **⋮**（更多選項）提供重新處理與分享。
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -310,10 +338,7 @@ flowchart TD
 | 重新轉錄 | ⋮ | 重跑語音辨識與語者分離，標題保留；若你改過逐字稿文字，會先詢問「要捨棄你修改的逐字稿嗎？」 | ✅ 手動、✅ 自動（SessionReducerTest） |
 | 重新摘要 | ⋮ | 只重跑 AI 筆記與摘要；筆記不重複。若你改過摘要或行動項目，會先詢問「要取代你編輯過的摘要嗎？」，完成後仍可按「復原」取回 | ✅ 手動、✅ 自動（SessionReducerTest） |
 | 問這場會議 | ⋮ | 只根據這場會議作答（第 7b 節） | ✅ 手動（Note 10+、模擬器） |
-| 寄給與會者… | ⋮ | 寄給與會者面板（第 9b 節） | ✅ 手動（Note10+） |
-| 匯出與分享… | ⋮ | 匯出選單 | ✅ 手動、✅ 自動（ExportSheetTest） |
-| 匯出：.m4a／PDF／MD／TXT／SRT／VTT／LRC → 儲存或分享 | 匯出選單 | 存檔或系統分享 | ✅ 手動（MD 儲存）、✅ 自動（ExportSheetTest、PdfExportTest） |
-| 複製逐字稿 | 匯出選單底部 | 提示「已複製逐字稿」 | ✅ 手動 |
+| 分享 | ⋮ | 分享面板（第 2a 節） | ✅ 手動（Note 10+、Galaxy A53） |
 | 設定 | ⋮ | 設定（第 9 節） | ✅ 手動 |
 
 ## 9. 設定
@@ -335,7 +360,8 @@ flowchart TD
 | 語音轉寫延遲：0.16／0.48／0.96／1.92 秒（預設 1.92 秒） | 說話後文字出現所需的時間；延遲越長，文字越準確（即時顯示與儲存的逐字稿皆是）。選擇新的延遲會在背景下載對應的語音模型（約 155 MB，依下載設定），下載完成前仍以已安裝、最接近的模型轉寫；新模型第一次載入後刪除其他延遲的模型 | ✅ 手動（模擬器：切換、下載、刪除舊模型）、✅ 自動（AsrRegistryTest、DownloadPlanTest） |
 | AI 筆記模型：行動版 E2B／行動版 E4B | 下次閱讀時使用所選模型（未下載時先下載）；E4B 只在 RAM 8 GB 以上的手機可選 | ✅ 手動（Note 10+：E2B、E4B） |
 | 推論：執行 AI 基準測試 | 以一段 60 秒的會議錄音測量本機的語音辨識、語者分離與摘要速度，約需一到兩分鐘 | ⬜ |
-| 實驗功能：顯示行動項目 | 摘要下方出現行動項目卡片 | ✅ 手動 |
+| 實驗功能：顯示行動項目 | 摘要下方出現行動項目卡片（分享的 PDF／Word 一律附上待辦事項，不受此設定影響） | ✅ 手動 |
+| Podcast：在背景檢查新集數 | 預設關閉；開啟後每天在 Wi‑Fi 下讀已訂閱節目的 RSS，有新集時通知（第 4a 節） | ✅ 手動（Galaxy A53）、✅ 自動（BackgroundCheckTest） |
 | 向會議提問（預設開啟） | 首頁搜尋框右側出現「提問」（第 1a 節）；需要 AI 筆記模型與搜尋模型 | ✅ 手動（Note 10+） |
 | 儲存空間：下載搜尋模型／為舊會議建立索引 | 未下載時顯示「下載搜尋模型（約 160 MB）」；下載後顯示待建立索引的會議數與「為舊會議建立索引」，全部完成時顯示「所有會議都已建立搜尋索引。」 | ✅ 手動 |
 | 儲存空間：模型與刪除 | 顯示用量；刪除前確認「刪除這個模型？」，刪除後下次使用時重新下載 | ✅ 手動 |
@@ -365,23 +391,17 @@ flowchart TD
 | 人物頁：全部改名、備註、合併、刪除、分出某場會議 | 改寫每場相關會議；以新的人命名後重開仍在 | ✅ 手動、✅ 自動（單元測試） |
 
 
-## 9b. 聯絡人與寄給與會者
+## 9b. 聯絡人
 
-<p><img src="screenshots/people-contact.png" width="200" alt="人物頁：聯絡人與可直接新增、移除的電子郵件"> <img src="screenshots/mail-participants.png" width="200" alt="寄給與會者"></p>
+<p><img src="screenshots/people-contact.png" width="200" alt="人物頁：聯絡人"></p>
 
-人物頁的 **聯絡人** 卡片顯示「聯絡人：名字」與 **在聯絡人中編輯**（開啟系統聯絡人 App）；聯絡人在系統中被刪除時，會議裡仍保留這個名字。**電子郵件** 卡片列出聯絡人上的地址：★ 為寄信時預設使用的地址；**新增電子郵件** 與每個地址旁的移除，都直接寫回手機聯絡人（重複或格式錯誤會提示）。為語者命名為新的人之後，App 會順手詢問電子郵件（可略過）。「我」的人物頁可用 **聯絡人中的我…** 連結到你自己的聯絡人卡片。
-
-會議選單 → **寄給與會者…**（語者卡片也有按鈕）：收件人預先勾選這場會議中有電子郵件的人，「我」不勾選；沒有地址的人可直接輸入（存入此人）；未命名的語者顯示「命名」；「新增其他收件人」只用於這封信，不存入名錄。內容：摘要、紀要、只要決議與待辦；附件：無、PDF、TXT、`.m4a`（超過 20 MB 時提醒）；郵件語言（只換範本文字，筆記不翻譯）；「預覽」顯示完整內文。**在郵件 App 中開啟** 只交給郵件 App（有多個時讓你選），沒有郵件 App 時改用分享選單並複製地址；**分享到其他 App…** 送出較短的聊天版本。App 不知道信是否送出，只記錄「上次分享」。
+人物頁的 **聯絡人** 卡片顯示「聯絡人：名字」與 **在聯絡人中編輯**（開啟系統聯絡人 App）；聯絡人在系統中被刪除時，會議裡仍保留這個名字。「我」的人物頁可用 **聯絡人中的我…** 連結到你自己的聯絡人卡片。要把會議寄給別人，用 **分享 → 電子郵件**（第 2a 節）。
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
-| 命名為新的人 | 在手機聯絡人中建立這個人，可順手新增電子郵件；未允許聯絡人權限時只能輸入這場會議的名字 | ✅ 手動（Note10+）、✅ 自動（OsContactsTest、ContactEmailOpsTest） |
+| 命名為新的人 | 在手機聯絡人中建立這個人；未允許聯絡人權限時只能輸入這場會議的名字 | ✅ 手動（Note10+）、✅ 自動（OsContactsTest） |
 | 加入聯絡人卡片 | 舊版 App 內的人員依電子郵件或名字連結到既有聯絡人，其餘新建；不重複 | ✅ 自動（OsContactsTest） |
-| 【會議資訊】時間 | 錄音：實際開始到結束的時間；匯入：檔案本身記錄的建立時間（如手機錄音檔），沒有時就不列時間、只列日期；更新前的舊會議照舊 | ✅ 手動（模擬器：有日期與無日期的匯入）、✅ 自動（MediaDateTest、MeetingMailTest） |
-| 郵件內文 | 與設計範本逐位元相同（中文、英文、只要決議與待辦、mailto 長度上限、聊天版） | ✅ 自動（Android 與 iOS 共用的黃金檔） |
-| 在郵件 App 中開啟 | 只開郵件 App，帶收件人、主旨、內文與附件 | ✅ 手動（Note10+ 開啟 Outlook；內容未在已登入的郵件 App 中確認） |
-| 分享到其他 App | 系統分享選單，附件一併帶出 | ✅ 手動（Note10+） |
-| 刪除某人 | 從各會議的上次分享紀錄移除 | ✅ 自動（單元測試） |
+
 ## 10. 中斷錄音的復原
 
 <img src="guide/25-recovery.png" width="270" alt="復原對話框">
@@ -428,9 +448,9 @@ Compose 介面測試需在實機上執行（x86_64 模擬器上會出現 “Unab
 
 <p><img src="screenshots/people-voice-zh.gif" width="220" alt="為語者命名：依聲音建議陳經理"><br><sub>在尾牙示範會議命名「陳經理」後，App 在辦公室搬遷會議依聲音建議他。英文介面（AMI 公開會議）：<a href="screenshots/people-voice-en.gif">為語者命名</a>、<a href="screenshots/people-people-en.png">名錄</a>、<a href="screenshots/people-person-en.png">人物頁</a>、<a href="screenshots/people-voice-explain-en.png">說明</a>。</sub></p>
 
-| 匯出 | 重新處理 | 設定 | 匯入 |
+| 分享 | 重新處理 | 設定 | 匯入 |
 |:---:|:---:|:---:|:---:|
-| <img src="screenshots/export.png" width="200" alt="匯出"> | <img src="screenshots/reprocess.png" width="200" alt="重新處理"> | <img src="screenshots/settings.png" width="200" alt="設定"> | <img src="screenshots/import.png" width="200" alt="匯入"> |
+| <img src="screenshots/share.gif" width="200" alt="分享：Word 寄出"> | <img src="screenshots/reprocess.png" width="200" alt="重新處理"> | <img src="screenshots/settings.png" width="200" alt="設定"> | <img src="screenshots/import.png" width="200" alt="匯入"> |
 
 ## 附錄 B. 運作方式
 
