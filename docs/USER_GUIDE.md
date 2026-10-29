@@ -426,7 +426,7 @@ App 不登入任何帳號，也不直接上傳到雲端。
 ### 如何重跑自動測試
 
 ```bash
-scripts/test-on-device.sh <實機序號> -- -e class studio.primeminutes.AddSourceSheetTest,studio.primeminutes.SourceSheetsTest,studio.primeminutes.UiComponentsTest,studio.primeminutes.SettingsContentTest,studio.primeminutes.ExportSheetTest,studio.primeminutes.TranscriptUiTest,studio.primeminutes.TranscriptFlowTest
+scripts/test-on-device.sh <實機序號> -- -e class studio.primeminutes.AddSourceSheetTest,studio.primeminutes.SourceSheetsTest,studio.primeminutes.UiComponentsTest,studio.primeminutes.SettingsContentTest,studio.primeminutes.TranscriptUiTest,studio.primeminutes.TranscriptFlowTest
 ```
 
 Compose 介面測試需在實機上執行（x86_64 模擬器上會出現 “Unable to resolve activity”，見腳本開頭說明）。
