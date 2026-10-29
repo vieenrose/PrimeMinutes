@@ -145,7 +145,7 @@ flowchart TD
 
 App 不登入任何帳號，也不直接上傳到雲端。
 
-<img src="guide/59-pdf-page1.png" width="270" alt="PDF 第一頁：標題、摘要、待辦事項"> <img src="guide/60-pdf-transcript.png" width="270" alt="PDF 逐字稿頁：時間欄與說話者"> <img src="guide/61-docx.png" width="270" alt="Word 文件"> <img src="guide/62-mail-chooser.png" width="270" alt="電子郵件：選擇郵件 App，檔案已附上">
+<img src="guide/59-pdf-page1.png" width="270" alt="PDF 第一頁：標題、摘要、待辦事項"> <img src="guide/60-pdf-transcript.png" width="270" alt="PDF 逐字稿頁：時間欄與說話者"> <img src="guide/61-docx.png" width="270" alt="Word 文件"> <img src="guide/62-mail-chooser.png" width="270" alt="電子郵件：選擇郵件 App，檔案已附上"> <img src="guide/69-mail-compose.png" width="270" alt="郵件撰寫畫面：主旨是會議標題，PDF 與錄音已附上">
 
 **接收**：在 Quick Share 通知、「我的檔案」或雲端硬碟 App 點 `.pmin`（Samsung「我的檔案」會先跳出 App 選單，選 **Prime Minutes**）。App 直接還原整場會議，列上標示 **收到的**，並提示「會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。」；資料庫已有同一場時詢問「開啟現有的」或「保留副本」。
 
@@ -155,7 +155,7 @@ App 不登入任何帳號，也不直接上傳到雲端。
 |---|---|---|
 | 分享面板 | 內容三選一（含大小）、PDF／Word、附上錄音、傳送到三類 | ✅ 手動（Note 10+、Galaxy A53）、✅ 自動（ShareKitTest） |
 | PDF／Word | 標題、摘要、待辦事項、逐字稿；時間連到逐字稿、「↑ 摘要」連回；無 AI 筆記 | ✅ 自動（PdfExportTest、DocxExportTest、ExportNotesTest） |
-| 電子郵件 | 只列郵件 App（有多個時讓你選），選定後開啟撰寫畫面，檔案已附上 | ✅ 手動（Galaxy A53：選擇畫面；撰寫畫面未截圖，避免顯示帳號） |
+| 電子郵件 | 只列郵件 App（有多個時讓你選），選定後開啟撰寫畫面，檔案已附上 | ✅ 手動（Galaxy A53：選擇畫面與 Gmail 撰寫畫面，寄件者已遮蓋） |
 | 收到 .pmin | 還原、標示「收到的」、重複時詢問 | ✅ 手動（Galaxy A53） |
 
 ## 3. 多選模式
@@ -205,6 +205,8 @@ App 不登入任何帳號，也不直接上傳到雲端。
 **訂閱＝儲存節目連結，不付費。** 新集數在你按「檢查新集數」／「全部檢查」，或打開超過 24 小時沒檢查的節目頁時去抓（一次一個 RSS 請求）。開啟 **設定 → 在背景檢查新集數** 後，App 每天在 Wi‑Fi 下讀一次已訂閱節目的 RSS（暫停的節目略過），有新集時發通知；背景只讀節目清單，不下載任何單集。這個開關預設關閉；關閉時 App 完全不在背景連線。取得的單集走與上面「Podcast → 轉錄」完全相同的下載與轉錄流程。
 
 <img src="guide/64-bg-check.png" width="270" alt="設定：在背景檢查新集數"> <img src="guide/66-channel.png" width="270" alt="節目頁">
+
+<img src="guide/67-new-episodes-notification.png" width="400" alt="通知：新增 1 集（6 Minute English）">
 
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
@@ -378,6 +380,8 @@ App 不登入任何帳號，也不直接上傳到雲端。
 設定 → 說話者名錄：你命名過的每個人，與他出現的會議。**人就是手機的聯絡人**：把語者命名為新的人時，App 在系統「聯絡人」中建立這個人，App 本身只記住與聯絡人的連結和聲音；電子郵件等資料存在聯絡人裡。第一次需要允許存取聯絡人；不允許時仍可為這場會議輸入名字，但不會成為人員（沒有電子郵件，也不辨識聲音）。舊版在 App 內命名過的人，名錄頂端會出現「要把 N 位人員加入聯絡人嗎？」：已在聯絡人中的人（電子郵件或名字相同）直接連結，不會重複建立，聲音與會議都保留。點逐字稿的語者名稱會開啟選人面板：依聲音建議（開啟辨識聲音時）、這場會議中、最近、聯絡人，以及搜尋、「新增為新的人」、「清除名字」。名字跨會議共用：在人物頁全部改名，每場會議都跟著更新。
 
 **辨識聲音**（選用，預設關閉）：開啟前先說明隱私（只在這支手機上，不上傳，不含於匯出與備份；「聲音」是最多 60 秒語音算出的一串數字；建議絕不自動套用；可忘記某人的聲音或刪除所有聲音資料；刪除會議也刪除它的聲音樣本；命名前請先徵得同意）。聲音模型（約 29 MB，Hugging Face `Luigi/primeminutes-speaker-litert` 版本 `8b7a1151`）開啟時下載一次並驗證 SHA-256。
+
+<img src="guide/68-voice-status.png" width="270" alt="選人面板的聲音比對狀態：尚未學到任何聲音">
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
