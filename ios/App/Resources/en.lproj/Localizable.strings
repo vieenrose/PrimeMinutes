@@ -115,7 +115,6 @@
 "storage_delete_body" = "%@ (%@) will be downloaded again the next time it is needed.";
 "settings_about" = "About";
 "about_license" = "Your recordings and text stay on this device";
-"about_components" = "Licensed components";
 "settings_reader_model" = "AI notes model";
 "settings_inference" = "Inference";
 "add_audio" = "Add audio";
@@ -191,13 +190,6 @@
 "agent_first_soon" = "First reading in under a minute";
 "agent_first_pending" = "First reading when the bar fills";
 "agent_first_short" = "Stopping sooner? The notes are written after you stop.";
-"lic_nemo" = "nemo-x-asr-diarizer (streaming ASR + diarization)";
-"lic_crispasr" = "CrispASR (X-ASR runtime)";
-"lic_audiocpp" = "audio.cpp (Nemotron-3 diarization runtime)";
-"lic_ggml" = "LiteRT · SentencePiece (AI notes)";
-"lic_xasr" = "X-ASR zh-en model";
-"lic_nemotron" = "Nemotron-3 Diarization model";
-"lic_opencc" = "OpenCC (zh-TW / zh-CN)";
 "cd_status_new" = "New";
 "cd_status_processing" = "Processing";
 "cd_status_done" = "Done";
@@ -613,12 +605,6 @@
 "settings_asr_latency_balanced" = "balanced";
 "settings_asr_latency_accurate" = "most accurate";
 "settings_asr_latency_hint" = "How long after speech the words appear. Longer = more accurate words, live and in the saved transcript. A new choice downloads its speech model (about 155 MB) in the background; the current one keeps working until it is ready.";
-"source_peertube" = "PeerTube";
-"source_peertube_desc" = "Paste a video link";
-"peertube_bad_link" = "Not a PeerTube video link";
-"peertube_live" = "Live streams cannot be imported";
-"peertube_no_file" = "This video offers no downloadable file";
-"peertube_add" = "Add";
 "transcript_empty" = "Nothing transcribed yet — the transcript shows up here after processing.";
 "transcript_empty_title" = "No transcript yet";
 "cd_volume" = "Volume";
@@ -630,7 +616,6 @@
 "podcast_no_results" = "No Results";
 "podcast_no_results_hint" = "No podcasts match “%@”. Check the spelling or try another search.";
 "podcast_too_large" = "This file is too large to download (over 500 MB).";
-"peertube_http" = "The PeerTube server could not provide this video (HTTP %d).";
 
 /* People == Contacts */
 "contacts_denied" = "Prime Minutes has no access to your contacts, so it cannot add people: a speaker gets a plain name only (no e-mail, no voice recognition). Allow Contacts in Settings to name people.";
@@ -705,3 +690,12 @@
 "share_dup_open" = "Open existing";
 "share_dup_copy" = "Keep a copy";
 "share_too_new" = "This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.";
+/* Online-import notice, unsupported video links, licenses */
+"import_video_unsupported" = "PeerTube import is no longer supported";
+"link_unsupported_title" = "Video links aren't supported";
+"link_unsupported_body" = "Prime Minutes no longer imports YouTube or PeerTube links. To transcribe a video you have the right to use, save its audio as a file, then share or open that file here.";
+"online_notice_title" = "Before you import";
+"online_notice_body" = "Online imports are for personal use only. You are responsible for having the right to download and transcribe the content, and for respecting the publisher's terms.";
+"online_notice_ok" = "I understand";
+"about_licenses" = "Open-source licenses";
+"about_licenses_desc" = "The components inside this app and their licenses";

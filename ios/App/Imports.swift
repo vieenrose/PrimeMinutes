@@ -76,6 +76,13 @@ import AVFoundation
     }
     private func work() async {
         while let j = await runner.queue.all.first(where: { $0.download != nil && $0.download?.error == nil }), let d = j.download {
+            // A PeerTube video queued by an older version: PeerTube import was removed (0.55). It fails for good with
+            // the reason on its row (Delete removes it); nothing is fetched.
+            if VideoLinks.isPeerTubeFile(d.url) {
+                var now = j; now.download?.error = L("import_video_unsupported")
+                StatusLog.add("podcast item \(j.id) failed: PeerTube import removed")
+                await runner.queue.update(now); await runner.syncQueue(); continue
+            }
             dlId = j.id; dlBytes = nil; dlPaused = false
             let ep = Episode(title: j.title ?? "", audioUrl: d.url, published: "", duration: "")
             let t = Task<Void, Error> {

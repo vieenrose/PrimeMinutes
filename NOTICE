@@ -1,0 +1,30 @@
+Prime Minutes for iOS
+Copyright (C) the Prime Minutes authors
+Licensed under the GNU General Public License v3.0 or later
+(https://github.com/vieenrose/PrimeMinutes/blob/android/LICENSE).
+
+This product includes third-party components, listed below with their
+licenses. The full license texts ship with each component's source or are
+available at the URLs given. Settings > About > Open-source licenses shows
+the same list inside the app. (The Android app's list is in NOTICE on the
+android branch.)
+
+Speech, speakers and AI notes (native code)
+-------------------------------------------
+nemo-x-asr-diarizer      Apache-2.0   https://github.com/vieenrose/nemo-x-asr-diarizer.cpp
+                                       (vendored in app/src/main/cpp/nemo, Copyright 2026 ShugoAI LLC)
+LiteRT                   Apache-2.0   https://github.com/google-ai-edge/LiteRT
+LiteRT-LM fork           Apache-2.0   https://github.com/vieenrose/LiteRT-LM (branch mobile-fused-attention;
+                                       CLiteRTLM.framework)
+SentencePiece            Apache-2.0   https://github.com/google/sentencepiece
+
+Models and data (downloaded on first use, or bundled)
+-----------------------------------------------------
+X-ASR zh-en speech model         Apache-2.0          https://huggingface.co/Luigi/primeminutes-nemo-litert
+Nemotron-3 Diarization model     OpenMDW-1.1         https://huggingface.co/Luigi/primeminutes-nemo-litert
+Gemma-4 E2B / E4B meeting models Apache-2.0          https://huggingface.co/Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT
+EmbeddingGemma 2 270M            Gemma Terms of Use  https://ai.google.dev/gemma/terms
+CAM++ zh-en (3D-Speaker)         Apache-2.0          https://huggingface.co/Luigi/primeminutes-speaker-litert
+OpenCC dictionaries (bundled)    Apache-2.0          https://github.com/BYVoid/OpenCC
+
+The app uses only Apple system frameworks otherwise (no third-party Swift packages).
