@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
     init() { BackgroundWork.register() }
     var body: some Scene {
         WindowGroup { ContentView().hapticFeedback().modifier(TextSize(steps: Prefs.typeSizeSteps(textSize))) }
-            .onChange(of: phase) { if phase == .background { BackgroundWork.schedule() } else if phase == .active { PeopleStore.shared.syncContacts() } }
+            .onChange(of: phase) { if phase == .background { BackgroundWork.schedule(); BackgroundWork.scheduleRefresh() } else if phase == .active { PeopleStore.shared.syncContacts() } }
     }
 }
 
@@ -150,6 +150,8 @@ struct ContentView: View {
             .fullScreenCover(isPresented: Binding(get: { m.capture.recording }, set: { _ in })) { CaptureView(m: m) }
             .sheet(isPresented: $showPodcast) { PodcastView(pick: { ep, ch, sid in m.downloads.withModels { m.imports.addEpisode(ep, seriesId: sid, channel: ch) } }, openShow: { id in showPodcast = false; subsId = id; Task { try? await Task.sleep(nanoseconds: 400_000_000); showSubs = true } }) }
             .onAppear { SubDev.run(m) { id in subsId = id; showSubs = true } }
+            // A tapped new-episodes notification (M4): the channel page, on top of the library.
+            .onReceive(NotificationRoute.shared.$channel) { id in guard let id else { return }; NotificationRoute.shared.channel = nil; showSettings = false; showSubs = false; path = [.channel(id)] }
             .sheet(isPresented: $showSettings) { SettingsView(m: m, language: $language, theme: $theme) { s, t in
                 // The People screen opens a meeting at the person's first line: Settings closes, the meeting opens.
                 showSettings = false; LibraryView.markSeen(s.id); m.openAt = (s.id, t); path = [.session(s)]

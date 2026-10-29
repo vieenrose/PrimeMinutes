@@ -675,3 +675,8 @@
 "source_import" = "從檔案或雲端匯入";
 "source_import_desc" = "音訊、影片或 .pmin 會議檔；可從 iCloud / Google Drive / Dropbox / OneDrive 選檔";
 "share_doc_format" = "格式";
+"settings_sub_bg_check" = "背景檢查新集數";
+"settings_sub_bg_check_hint" = "在 Wi‑Fi 下讀取已訂閱節目的 RSS，有新集數時通知你，不會下載音訊。iOS 會在適當時機檢查，不保證準時；從多工畫面滑掉 App 後就不會檢查。";
+"sub_bg_notif_body" = "%d 集新集數";
+"sub_bg_last_run" = "背景檢查：%@";
+"sub_bg_never_run" = "背景檢查：尚未執行";

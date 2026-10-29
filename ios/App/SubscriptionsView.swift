@@ -1,4 +1,6 @@
 import SwiftUI
+import Network
+import UserNotifications
 
 /// Where an imported podcast episode came from (Android source.json): job id (== the session's id), audio URL, guid,
 /// and the channel snapshot taken at import (LibrarySources). Kept in Application Support/episode_sources.json, so a
@@ -51,7 +53,11 @@ enum EpisodeSources {
         if let s = byId(SubscriptionLogic.idOf(feedUrl)) { return s }
         var f = feed; if f.title.isEmpty { f.title = title }; if f.artist.isEmpty { f.artist = artist }
         let s = SubscriptionLogic.baseline(feedUrl, f, country: Self.country, now: Int64(Date().timeIntervalSince1970))
-        put(s); if !s.artworkUrl.isEmpty { ArtworkCache.shared.prefetch(seriesId: s.id, url: s.artworkUrl) }; return s
+        put(s); if !s.artworkUrl.isEmpty { ArtworkCache.shared.prefetch(seriesId: s.id, url: s.artworkUrl) }
+        // Subscribing is a foreground action: the moment to ask for notifications when the background check is on.
+        if BackgroundCheck.enabled { Notifier.requestPermission() }
+        BackgroundWork.scheduleRefresh()
+        return s
     }
 
     /// Subscribes from a search hit or a pasted link (fetches the feed first).
@@ -90,8 +96,13 @@ enum EpisodeSources {
         guard let s = byId(id), !s.paused, Int64(Date().timeIntervalSince1970) - s.lastChecked > 24 * 3600 else { return }
         await check(id)
     }
-    func setPaused(_ id: String, _ p: Bool) { guard var s = byId(id) else { return }; s.paused = p; put(s) }
-    func remove(_ id: String) { subs.removeAll { $0.id == id }; save() }
+    func setPaused(_ id: String, _ p: Bool) { guard var s = byId(id) else { return }; s.paused = p; put(s); BackgroundWork.scheduleRefresh() }
+    func remove(_ id: String) {
+        subs.removeAll { $0.id == id }; save(); BackgroundWork.scheduleRefresh()
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [BackgroundCheck.notificationId(id)])
+    }
+    /// DEV: forget the newest episode of a subscription, as if the feed had just published it.
+    func rollBack(_ id: String) { if let s = byId(id) { put(BackgroundCheckLogic.rollBack(s)) } }
 
     /// Library items by episode (guid, else audio URL) → job/session id, only those still in the library or queue.
     func libraryIndex(_ m: Model) async -> [String: UUID] {
@@ -121,6 +132,69 @@ enum EpisodeSources {
         if let s = byId(subId) { put(SubscriptionLogic.markSeen(s, guid: ep.guid, entryId: id.uuidString)) }
         return .started(id)
     }
+}
+
+/// M4 background check (BGAppRefreshTask, BackgroundWork.refreshId): every non-paused subscription gets the same
+/// check as "Check all" (conditional GET, 301/308 rekey, failure classes), serialized and time-boxed; episodes that
+/// became new are announced by one local notification per channel; tapping it opens the channel page. Nothing is
+/// downloaded. Off by default (Settings); only on an unmetered network.
+enum BackgroundCheck {
+    static let enabledKey = "subBgCheck"
+    static let lastRunKey = "subBgLastRun"
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+    static var lastRun: Date? { let t = UserDefaults.standard.double(forKey: lastRunKey); return t > 0 ? Date(timeIntervalSince1970: t) : nil }
+    static func notificationId(_ subId: String) -> String { "sub-new-" + subId }
+    static let channelKey = "channel"
+
+    /// One-shot: the current path is usable and neither cellular / hotspot nor Low Data Mode (2 s at most).
+    static func unmetered() async -> Bool {
+        if Dev.env["VOX_BGCHECK_ANYNET"] != nil { return true }
+        let m = NWPathMonitor()
+        let ok: Bool = await withCheckedContinuation { c in
+            let once = OnceFlag()
+            m.pathUpdateHandler = { p in if once.take() { c.resume(returning: p.status == .satisfied && !p.isExpensive && !p.isConstrained) } }
+            m.start(queue: .global(qos: .utility))
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if once.take() { c.resume(returning: false) } }
+        }
+        m.cancel(); return ok
+    }
+
+    /// The handler body (the refresh task and the DEV hook run the same code). Returns the channels notified.
+    @MainActor @discardableResult static func run() async -> [BackgroundCheckLogic.Found] {
+        let st = SubscriptionStore.shared
+        guard enabled else { StatusLog.add("trace sub bg check: off"); return [] }
+        guard await unmetered() else { StatusLog.add("trace sub bg check: metered network, skipped"); return [] }
+        let before = st.subs, deadline = Date().addingTimeInterval(BackgroundCheckLogic.budget)
+        var after: [String: Subscription] = [:]
+        for id in BackgroundCheckLogic.toCheck(before) {
+            if Task.isCancelled || Date() > deadline { StatusLog.add("trace sub bg check: out of time"); break }
+            let nid = await st.check(id)
+            if let s = st.byId(nid) { after[id] = s }
+        }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastRunKey)
+        let found = BackgroundCheckLogic.found(before: before, after: after)
+        StatusLog.add("trace sub bg check: \(after.count) checked, \(found.count) with new episodes")
+        for f in found { notify(f) }
+        return found
+    }
+
+    static func notify(_ f: BackgroundCheckLogic.Found) {
+        let c = UNMutableNotificationContent()
+        c.title = f.title; c.body = L("sub_bg_notif_body", f.episodes.count) + (f.episodes.first.map { "\n" + $0 } ?? "")
+        c.sound = .default; c.threadIdentifier = f.id; c.userInfo = [channelKey: f.id]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notificationId(f.id), content: c, trigger: nil))
+    }
+}
+
+final class OnceFlag: @unchecked Sendable {
+    private let l = NSLock(); private var done = false
+    func take() -> Bool { l.lock(); defer { l.unlock() }; if done { return false }; done = true; return true }
+}
+
+/// A tapped new-episodes notification: the channel to open (ContentView pushes its page).
+@MainActor final class NotificationRoute: ObservableObject {
+    static let shared = NotificationRoute()
+    @Published var channel: String?
 }
 
 func lastCheckedText(_ s: Subscription, time: Bool = false) -> String {
@@ -265,7 +339,7 @@ enum SubDev {
     @MainActor static var ran = false
     @MainActor static func run(_ m: Model, open: @escaping (String?) -> Void) {
         let e = Dev.env
-        guard !ran, ["VOX_SUB", "VOX_SUBFEED", "VOX_SUBCHECK", "VOX_SUBPAUSE", "VOX_SUBOPEN"].contains(where: { e[$0] != nil }) else { return }
+        guard !ran, ["VOX_SUB", "VOX_SUBFEED", "VOX_SUBCHECK", "VOX_SUBPAUSE", "VOX_SUBOPEN", "VOX_BGCHECK", "VOX_SUBROLLBACK", "VOX_SUBREMOVE"].contains(where: { e[$0] != nil }) else { return }
         ran = true
         Task { @MainActor in
             let st = SubscriptionStore.shared; var log = ""
@@ -283,6 +357,15 @@ enum SubDev {
                 try? await Task.sleep(nanoseconds: 1_100_000_000); await st.checkAll()
                 say("pause \(first.id) skipped=\(st.byId(first.id)!.lastChecked == before)")
             }
+            // VOX_SUBROLLBACK=<title substring>: forget that show's newest episode. VOX_BGCHECK=<s>: s seconds later
+            // (time to leave the app), run the background-check handler. VOX_SUBREMOVE=<title substring>: unsubscribe.
+            if let t = e["VOX_SUBROLLBACK"] { for s in st.subs where s.title.localizedCaseInsensitiveContains(t) { st.rollBack(s.id); say("rollback \(s.id) '\(s.title)' episodes=\(st.byId(s.id)?.episodes.count ?? -1)") } }
+            if let d = e["VOX_BGCHECK"] {
+                say("bg check enabled=\(BackgroundCheck.enabled) in \(d) s")
+                try? await Task.sleep(nanoseconds: UInt64((Double(d) ?? 0) * 1e9))
+                let f = await BackgroundCheck.run(); say("bg check found \(f.map { "\($0.id) '\($0.title)' \($0.episodes.count)" })")
+            }
+            if let t = e["VOX_SUBREMOVE"] { for s in st.subs where s.title.localizedCaseInsensitiveContains(t) { st.remove(s.id); say("removed \(s.id) '\(s.title)'") } }
             if e["VOX_SUBCHECK"] != nil { await st.checkAll(); for s in st.subs { say("check \(s.id) new=\(s.newEpisodes.count) error=\(s.checkError ?? "nil") paused=\(s.paused)") } }
             if let s = sub, let n = Int(e["VOX_SUBEP"] ?? ""), n < s.episodes.count {
                 let ep = s.episodes[n]

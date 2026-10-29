@@ -675,3 +675,8 @@
 "source_import" = "Import from Files / cloud";
 "source_import_desc" = "Audio, video or a .pmin meeting. Pick files from iCloud / Google Drive / Dropbox / OneDrive";
 "share_doc_format" = "Format";
+"settings_sub_bg_check" = "Check for new episodes in the background";
+"settings_sub_bg_check_hint" = "On Wi-Fi, reads the RSS of the shows you follow and notifies you of new episodes. Nothing is downloaded. iOS picks the time: checks are not guaranteed to be on schedule, and stop if you swipe the app away.";
+"sub_bg_notif_body" = "New episodes: %d";
+"sub_bg_last_run" = "Background check: %@";
+"sub_bg_never_run" = "Background check: not run yet";

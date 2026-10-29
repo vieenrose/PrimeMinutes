@@ -11,8 +11,8 @@
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>zh-Hans</string></array>
-<key>UIBackgroundModes</key><array><string>audio</string><string>processing</string></array>
-<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>tw.com.pesi.primeminutes.queue</string><string>tw.com.pesi.primeminutes.process.*</string></array>
+<key>UIBackgroundModes</key><array><string>audio</string><string>fetch</string><string>processing</string></array>
+<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>tw.com.pesi.primeminutes.queue</string><string>tw.com.pesi.primeminutes.subcheck</string><string>tw.com.pesi.primeminutes.process.*</string></array>
 <!-- YES: Files (where AirDrop leaves a .pmin in Downloads) hands a tapped meeting to the owner app only if it opens
      documents in place; NO showed a Quick Look preview and never launched the app. The URL is security-scoped and the
      file is the user's: Imports.open reads it under a coordinated read and copies it, never moves or deletes it.
