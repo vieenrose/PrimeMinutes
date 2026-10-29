@@ -35,11 +35,7 @@ d "dump"
 # 3. The person page (contact card + e-mails), then its "Choose from contacts…" → the picker.
 shot c-person-page "3" "\"VOX_SETTINGS\":\"1\",\"VOX_PEOPLE\":\"$P\""
 shot c-person-picker "3,5,9" "\"VOX_SETTINGS\":\"1\",\"VOX_PEOPLE\":\"$P\",\"VOX_CONTACT_TAP\":\"person\",\"VOX_CONTACT_CLOSE\":\"6\""
-# 4. The other participants, then the meeting, the participants sheet and its preview.
+# 4. The other participants, then the meeting.
 d "$OPS"
 shot d-summary "3" "\"VOX_OPEN\":\"id:$M\",\"VOX_TAB\":\"0\""
-shot d-mail-sheet "3" "\"VOX_OPEN\":\"id:$M\",\"VOX_MAIL\":\"1\""
-shot d-mail-preview "3.5" "\"VOX_OPEN\":\"id:$M\",\"VOX_MAIL\":\"preview\""
-# 5. "Open in mail app": the composer if Mail has an account (closed unsent after 5 s), else mailto:, else the share sheet.
-shot e-mail-open "1,4,9" "\"VOX_OPEN\":\"id:$M\",\"VOX_MAIL\":\"send\",\"VOX_MAIL_CLOSE\":\"5\""
 d "dump"

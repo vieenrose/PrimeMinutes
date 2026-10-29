@@ -15,8 +15,7 @@ swiftc -parse-as-library -O $D/../App/Transcript.swift $D/../App/BoundaryEdits.s
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/VoiceTests.swift -o $O/voice-tests
 VOX_SPEAKER_CARDS=$D/../App/Resources/speaker_cards $O/voice-tests
 swiftc -parse-as-library -O $D/../App/People.swift $D/../App/Voice.swift $D/../App/VoiceGeneration.swift $D/VoiceGenerationTests.swift -o $O/voice-gen-tests && $O/voice-gen-tests
-swiftc -parse-as-library -O $D/../App/People.swift $D/../App/MeetingMail.swift $D/MeetingMailTests.swift -o $O/mail-tests
-VOX_MAIL_DIR=$D/../App/Resources/mail $O/mail-tests $D/golden_mail $D/../App/Resources/model_cards/gemma4-meeting-agent-zh.json
+swiftc -parse-as-library -O $D/../App/NoteCites.swift $D/../App/ShareCore.swift $D/../App/ShareDocx.swift $D/ShareCoreTests.swift -o $O/share-core-tests && SHARE_DOCX_OUT=$O/sample.docx $O/share-core-tests
 swiftc -parse-as-library -O $D/../App/MeetingSearch.swift $D/MeetingSearchTests.swift -o $O/meeting-search-tests && $O/meeting-search-tests
 swiftc -parse-as-library -O $D/../App/EmbedGate.swift $D/EmbedGateTests.swift -o $O/embed-gate-tests && $O/embed-gate-tests
 swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $R/ReaderSummarizer.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $D/ProseTests.swift -o $O/prose-tests

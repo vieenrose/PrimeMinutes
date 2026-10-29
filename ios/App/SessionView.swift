@@ -55,7 +55,7 @@ import AVFoundation
     func endPreview() { if previewStop != nil { previewStop?.cancel(); previewStop = nil; pause() } }
 }
 
-/// One finished meeting: player, summary (timestamps seek), notes, searchable transcript, rename, export.
+/// One finished meeting: player, summary (timestamps seek), notes, searchable transcript, rename, share.
 struct SessionView: View {
     @State var s: Session
     let save: (Session) -> Void
@@ -76,7 +76,7 @@ struct SessionView: View {
     /// (from, into) awaiting confirmation: a merge rewrites every line of a speaker, one tap away in a menu.
     @State private var merging: (Int, Int)?
     @State private var transcriptDirty = false
-    /// An error or a mail-send result: shown as a system alert (copies and edits confirm with a haptic instead).
+    /// An error: shown as a system alert (copies and edits confirm with a haptic instead).
     @State private var alertText: String?
     @State private var editingSummary = false
     /// A re-run waiting for the user's yes: true = re-transcribe, false = re-summarize (UserEdits).
@@ -98,14 +98,8 @@ struct SessionView: View {
     struct Step { let before: [Utterance]; let beforeNames: [String: String]?; let beforePeople: [String: String]?; let after: [Utterance]; let afterNames: [String: String]?; let afterPeople: [String: String]? }
     @State private var undoSteps: [Step] = []
     @State private var redoSteps: [Step] = []
-    @State private var exporting = false
-    @State private var exportProgress: Float?
-    @State private var shareTask: Task<Void, Never>?
-    @State private var exportFile: URL?
-    @State private var showExport = Dev.env["VOX_EXPORT"] != nil
-    /// "Email participants" (docs/design/speaker-contacts.md §4). DEV: VOX_MAIL=1 (or preview) opens it.
-    @State private var mailOpen = Dev.env["VOX_MAIL"] != nil
-    @State private var mailCopied = false
+    /// Share v2: the one Share sheet (what, then where). DEV: VOX_SHARE=1 opens it.
+    @State private var sharing: ShareTarget?
     @ObservedObject private var peopleStore = PeopleStore.shared
 
     let openAt: Double?
@@ -229,7 +223,6 @@ struct SessionView: View {
             busy: busy,
             showActions: showActions,
             showProcess: showProcess,
-            hasMailRecipients: peopleStore.peopleOf(s).values.contains(where: { !$0.emails.isEmpty }),
             palette: Self.palette,
             names: names,
             refs: { refs($0) },
@@ -240,8 +233,6 @@ struct SessionView: View {
             onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
             onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
             onToggleProcess: { withAnimation { showProcess.toggle() } },
-            onOpenMail: { mailOpen = true },
-            mailCopied: mailCopied,
             notesSection: { AnyView(notesSection($0, $1)) }
         )
     }
@@ -314,50 +305,6 @@ struct SessionView: View {
             if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
             if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
         }
-    }
-    /// Export-format picked: write the file, then hand it to the share sheet (or alert on failure).
-    private func pickExport(_ f: Export.Format) {
-        showExport = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { alertText = L("export_share_failed") }
-        }
-    }
-    /// "Save session" picked: the same file as Share meeting.
-    private func saveSessionExport() { showExport = false; shareMeeting(delay: true) }
-    /// "Share meeting": the enriched .pmin, MPEG-4 (AirDrop, Messages, Files…), with progress and Cancel while the audio encodes.
-    private func shareMeeting(delay: Bool = false) {
-        exporting = true; exportProgress = 0
-        shareTask = Task {
-            let u = await SessionFile.export(s) { p in Task { @MainActor in if exporting { exportProgress = p } } }
-            let cancelled = Task.isCancelled
-            exporting = false; exportProgress = nil; shareTask = nil
-            if cancelled { SessionFile.clearShareDir(); return }
-            if delay { try? await Task.sleep(nanoseconds: 400_000_000) }
-            if let u { Haptics.success(); exportFile = u } else { alertText = L("session_share_failed") }
-        }
-    }
-    /// The addresses went to the clipboard: the mail glyphs turn to a checkmark for 2 s and VoiceOver hears it
-    /// (as the other copies; an alert is kept for real errors).
-    private func mailCopiedFlash() {
-        withAnimation { mailCopied = true }; announce(L("mail_addresses_copied"))
-        Task { try? await Task.sleep(nanoseconds: 2_000_000_000); withAnimation { mailCopied = false } }
-    }
-    /// Mail "send" picked: close the sheet, then send after the dismiss animation.
-    private func sendMail(_ r: MailRequest) {
-        mailOpen = false
-        let cur = s
-        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.send(cur, r, copied: { mailCopiedFlash() }) { alertText = $0 } }
-    }
-    /// Mail "share chat" picked: close the sheet, then share after the dismiss animation.
-    private func shareMailChat(_ r: MailRequest) {
-        mailOpen = false
-        let cur = s
-        Task { try? await Task.sleep(nanoseconds: 600_000_000); await MailOpener.shareChat(cur, r) }
-    }
-    /// Mail "name speaker" picked: close the sheet, then open the rename sheet for k.
-    private func nameMailSpeaker(_ k: Int) {
-        mailOpen = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { draft = ""; renamingSpeaker = k }
     }
     /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
     private func undoResummary() {
@@ -456,11 +403,9 @@ struct SessionView: View {
             canUndo: canUndo, canRedo: canRedo, busy: busy,
             hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
             askMeetingReady: askMeetingReady, title: s.title, displayTitle: refs(s.title, screen: false),
-            shareText: Export.text(s, .txt),
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
             onRename: { draft = s.title; renamingTitle = true },
-            onAsk: { askMeeting = "" }, onMail: { mailOpen = true }, mailCopied: mailCopied,
-            onExport: { showExport = true }, onShareMeeting: { shareMeeting() },
+            onAsk: { askMeeting = "" }, onShare: { sharing = .of(s) },
             onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) })
     }
     /// The scroll page, out of the body chain so the solver sees one call.
@@ -519,19 +464,10 @@ struct SessionView: View {
         .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar() }
-        .sheet(isPresented: $showExport) {
-            ExportSheet(s: s, onPick: { pickExport($0) }, onSession: { saveSessionExport() })
-                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { if let f = exportFile, f.path.hasPrefix(SessionFile.shareDir.path) { try? FileManager.default.removeItem(at: f) }; exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
+        .sheet(item: $sharing) { t in MeetingShareSheet(target: t) { sharing = nil } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
         .sheet(isPresented: Binding(get: { askMeeting != nil }, set: { if !$0 { askMeeting = nil } })) {
             AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
-        }
-        .sheet(isPresented: $mailOpen) {
-            SessionMailSheet(session: s, busy: busy,
-                onSend: { sendMail($0) }, onShareChat: { shareMailChat($0) },
-                onNameSpeaker: { nameMailSpeaker($0) }, onDismiss: { mailOpen = false })
         }
         .alert(L("rename"), isPresented: $renamingTitle) {
             TextField(L("title"), text: $draft)
@@ -625,10 +561,8 @@ struct SessionView: View {
         .task { await devUserEditTask() }
         .task { await devMergeTask() }
         .task { checkSummaryStale() }
+        .task { if Dev.env["VOX_SHARE"] != nil { try? await Task.sleep(nanoseconds: 1_500_000_000); sharing = .of(s) } }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
-        .overlay {
-            if exporting { SessionExporting(progress: exportProgress, title: L("share_preparing"), onCancel: { shareTask?.cancel() }) }
-        }
         .overlay(alignment: .bottom) {
             if undoable != nil {
                 SessionResummaryUndo(session: $s, onUndo: { undoResummary() }, onExpire: { undoable = nil })
@@ -858,46 +792,6 @@ struct UserScrollWatch: ViewModifier {
         }
     }
 }
-
-struct ShareSheet: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [url], applicationActivities: nil) }
-    func updateUIViewController(_ c: UIActivityViewController, context: Context) {}
-}
-
-
-/// Android ExportSheet: grouped formats (document / subtitles) plus copy transcript; sharing goes through the system sheet (which also offers Save to Files).
-struct ExportSheet: View {
-    let s: Session
-    let onPick: (Export.Format) -> Void
-    var onSession: () -> Void = {}
-    @State private var copied = false
-
-    private func group(_ title: String, _ desc: String, _ fs: [Export.Format]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Vox.head(title)
-            Vox.fine(desc)
-            HStack { ForEach(fs) { f in Button(f.rawValue.uppercased()) { onPick(f) }.buttonStyle(.bordered) } }
-        }
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Vox.title(L("export_sheet_title"))
-            group(L("export_group_document"), L("export_group_document_desc"), [.pdf, .md, .txt])
-            group(L("export_group_subtitles"), L("export_group_subtitles_desc"), [.srt, .vtt, .lrc])
-            if s.audio != nil {
-                VStack(alignment: .leading, spacing: 8) {
-                    Vox.head(L("export_group_session"))
-                    Vox.fine(L("export_group_session_desc"))
-                    Button(L("export_action_save")) { onSession() }.buttonStyle(.bordered)
-                }
-            }
-            Button { UIPasteboard.general.string = Export.text(s, .txt); copied = true; Haptics.success(); UIAccessibility.post(notification: .announcement, argument: L("transcript_copied")) } label: { Label(L("export_copy_transcript"), systemImage: copied ? "checkmark" : "doc.on.doc") }
-            Spacer()
-        }.padding(Vox.gutterWide).frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 
 /// Android AgentPanel NoteCard: timestamp pill (seeks), coloured tag chip, text, and a "verify" link on the error-prone tags.
 struct NoteRow: View {

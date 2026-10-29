@@ -295,7 +295,7 @@ struct SessionLineEditSheet: View {
     }
 }
 
-/// The session's ⋯ menu (rename, Ask, mail, export, share, re-run). Split out
+/// The session's ⋯ menu (rename, Ask, share, re-run). Split out
 /// of SessionView's toolbar; takes plain values and closures.
 struct SessionMoreMenu: View {
     let hasLines: Bool
@@ -304,24 +304,17 @@ struct SessionMoreMenu: View {
     let askMeetingReady: Bool
     let busy: Bool
     let title: String
-    let shareText: String
     let onRename: () -> Void
     let onAsk: () -> Void
-    let onMail: () -> Void
-    var mailCopied = false
-    let onExport: () -> Void
-    var onShareMeeting: () -> Void = {}
+    let onShare: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
     var body: some View {
         Menu {
             Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-            if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: mailCopied ? "checkmark" : "envelope") }.disabled(busy) }
-            // The meeting as one file (AirDrop, Messages, Files…): first, it is what a colleague wants.
-            if hasAudio && hasLines { Button(L("action_share_meeting"), systemImage: "square.and.arrow.up") { onShareMeeting() }.disabled(busy).accessibilityIdentifier("shareMeeting") }
-            Button(L("export_menu_entry")) { onExport() }.disabled(busy)
-            if hasLines { ShareLink(item: shareText, subject: Text(title)) { Text(L("export_share_transcript")) }.disabled(busy) }
+            // Share v2: the one entry (the whole session, the PDF, the audio; AirDrop, mail, cloud drives, other apps).
+            if hasAudio || hasLines { Button(L("share_title"), systemImage: "square.and.arrow.up") { onShare() }.disabled(busy).accessibilityIdentifier("shareMeeting") }
             if hasAudio {
                 Button(L("re_transcribe")) { onRetranscribe() }.disabled(busy)
                 if !noSpeech { Button(L("re_summarize")) { onResummarize() }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
@@ -374,16 +367,12 @@ struct SessionToolbar: ToolbarContent {
     let title: String
     /// The title as shown (speaker refs resolved): the nav bar's tap-to-rename button.
     let displayTitle: String
-    let shareText: String
     let onUndo: () -> Void
     let onRedo: () -> Void
     let onSearch: () -> Void
     let onRename: () -> Void
     let onAsk: () -> Void
-    let onMail: () -> Void
-    var mailCopied = false
-    let onExport: () -> Void
-    var onShareMeeting: () -> Void = {}
+    let onShare: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
     var body: some ToolbarContent {
@@ -410,8 +399,7 @@ struct SessionToolbar: ToolbarContent {
             SessionMoreMenu(
                 hasLines: hasLines, hasAudio: hasAudio, noSpeech: noSpeech,
                 askMeetingReady: askMeetingReady, busy: busy, title: title,
-                shareText: shareText,
-                onRename: onRename, onAsk: onAsk, onMail: onMail, mailCopied: mailCopied, onExport: onExport, onShareMeeting: onShareMeeting,
+                onRename: onRename, onAsk: onAsk, onShare: onShare,
                 onRetranscribe: onRetranscribe, onResummarize: onResummarize)
         }
     }
@@ -569,20 +557,6 @@ struct SessionInsets: ViewModifier {
                     .padding(.vertical, 8).frame(maxWidth: .infinity).background(Vox.page)
             }
             .modifier(SessionFollow(scroll: follow))
-    }
-}
-
-/// The "Email participants" sheet. Split out of SessionView's sheet so the
-/// four closures leave the body chain.
-struct SessionMailSheet: View {
-    let session: Session
-    let busy: Bool
-    let onSend: (MailRequest) -> Void
-    let onShareChat: (MailRequest) -> Void
-    let onNameSpeaker: (Int) -> Void
-    let onDismiss: () -> Void
-    var body: some View {
-        EmailParticipantsSheet(session: session, busy: busy, onSend: onSend, onShareChat: onShareChat, onNameSpeaker: onNameSpeaker, onDismiss: onDismiss)
     }
 }
 

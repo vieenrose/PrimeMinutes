@@ -56,33 +56,46 @@ extension SessionFile {
         for f in (try? fm.contentsOfDirectory(at: fm.temporaryDirectory, includingPropertiesForKeys: nil)) ?? [] where f.lastPathComponent.hasPrefix("primeminutes_raw_") { try? fm.removeItem(at: f) }
     }
 
-    /// The meeting as a shared file: AAC .m4a with the share manifest (no people links; its id, date, script).
-    /// `progress` gets 0…1 while the audio encodes; a cancelled Task cancels the encode and returns nil.
-    static func export(_ s: Session, progress: @escaping @Sendable (Float) -> Void = { _ in }) async -> URL? {
-        guard let a = s.audio else { return nil }
+    /// The recording as AAC in an MPEG-4 container at `dest` (AVAssetExportPresetAppleM4A). `progress` gets 0…1;
+    /// a cancelled Task cancels the encode and returns false.
+    static func encodeM4A(_ s: Session, to dest: URL, progress: @escaping @Sendable (Float) -> Void) async -> Bool {
+        guard let a = s.audio else { return false }
         let asset = AVURLAsset(url: JobQueue.audioDir.appendingPathComponent(a))
-        clearShareDir()
-        let dir = shareDir
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let raw = dir.appendingPathComponent("primeminutes_raw_\(UUID().uuidString).m4a")
-        defer { try? FileManager.default.removeItem(at: raw) }
-        guard let ex = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { return nil }
-        ex.outputURL = raw; ex.outputFileType = .m4a
+        try? FileManager.default.removeItem(at: dest)
+        guard let ex = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { return false }
+        ex.outputURL = dest; ex.outputFileType = .m4a
         nonisolated(unsafe) let session = ex
         let poll = Task { while !Task.isCancelled { progress(session.progress); try? await Task.sleep(nanoseconds: 200_000_000) } }
         await withTaskCancellationHandler {
             await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in session.exportAsynchronously { c.resume() } }
         } onCancel: { session.cancelExport() }
         poll.cancel()
-        guard ex.status == .completed, !Task.isCancelled else { return nil }
+        guard ex.status == .completed, !Task.isCancelled else { try? FileManager.default.removeItem(at: dest); return false }
         progress(1)
+        return true
+    }
+
+    /// The recording alone as `<base>.m4a` in the share dir (share v2 "Audio only" / the PDF's attached audio).
+    static func exportAudio(_ s: Session, base: String, progress: @escaping @Sendable (Float) -> Void = { _ in }) async -> URL? {
+        try? FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        let out = shareDir.appendingPathComponent(base + ".m4a")
+        return await encodeM4A(s, to: out, progress: progress) ? out : nil
+    }
+
+    /// The meeting as a shared file: AAC .m4a with the share manifest (no people links; its id, date, script), named
+    /// `<base>.pmin`. `progress` gets 0…1 while the audio encodes; a cancelled Task cancels the encode and returns nil.
+    static func export(_ s: Session, base: String, progress: @escaping @Sendable (Float) -> Void = { _ in }) async -> URL? {
+        guard s.audio != nil else { return nil }
+        let dir = shareDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let raw = dir.appendingPathComponent("primeminutes_raw_\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: raw) }
+        guard await encodeM4A(s, to: raw, progress: progress) else { return nil }
         let man = forShare(manifest(s), sessionId: s.id.uuidString, createdAt: s.meetingStart, script: AppLanguage.current.script.rawValue,
                            userEdited: .init(summary: s.summaryUserSet == true, lines: s.linesUserEdited == true))
         guard let blob = blob(man) else { return nil }
-        let safe = String(s.title.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) ? Character($0) : "_" }.prefix(60))
-        let name = safe.replacingOccurrences(of: "_{2,}", with: "_", options: .regularExpression)
-        let out = dir.appendingPathComponent((name.trimmingCharacters(in: CharacterSet(charactersIn: "_")).isEmpty ? "primeminutes_session" : name) + "." + shareExtension)
+        let out = dir.appendingPathComponent(base + "." + shareExtension)
         try? FileManager.default.removeItem(at: out)
-        return write(src: raw, dest: out, title: s.title, summary: s.summary, lrc: Export.text(s, .lrc), blob: blob) ? out : nil
+        return write(src: raw, dest: out, title: s.title, summary: s.summary, lrc: Export.lrc(s), blob: blob) ? out : nil
     }
 }

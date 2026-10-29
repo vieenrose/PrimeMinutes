@@ -1,9 +1,8 @@
 import XCTest
 
-/// Device checks of the contacts + "Email participants" flows with real taps (no app code: the installed DEV app
+/// Device checks of the contacts flows with real taps (no app code: the installed DEV app
 /// is driven by bundle id). Demo meetings D0AB1E00-…-C1 (AMI IS1009c, en) / -C2 (move, zh) must be in the library;
 /// ios/uitests/run.zsh puts them there and removes them, with the people directory restored, afterwards.
-/// The flows never send mail: the composer is always cancelled and its draft deleted.
 final class ContactsMailUITests: XCTestCase {
     let app = XCUIApplication(bundleIdentifier: "tw.com.pesi.primeminutes")
     var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -88,39 +87,6 @@ final class ContactsMailUITests: XCTestCase {
             if let same = waitAny(["Same person", "同一人"], 2) { same.tap() }
             sleep(2); shot("speaker-named", tree: true)
         }
-    }
-
-    /// The meeting menu → "Email participants…" → the sheet → preview → open the mail; the composer is cancelled
-    /// and its draft deleted (never sent); mailto / share sheet fallbacks are only observed.
-    func testEmailParticipants() {
-        launch(["VOX_OPEN": "id:" + String(meeting.prefix(36)), "VOX_TAB": "0"])
-        sleep(4)
-        let more = app.navigationBars.buttons.allElementsBoundByIndex.last
-        XCTAssertNotNil(more)
-        more?.tap(); sleep(1); shot("menu", tree: true)
-        guard let entry = waitAny(["Email participants…", "寄給與會者…", "发给与会者…"], 4) else { XCTFail("menu entry"); return }
-        entry.tap(); sleep(2); shot("mail-sheet", tree: true)
-        if env["PM_ADDR"] != nil, let add = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", env["PM_ADDR_BUTTON"] ?? (lang == "en" ? "Add" : "新增"))).allElementsBoundByIndex.first {
-            add.tap(); sleep(1)
-            let f = app.textFields["mail-inline-address"]; if f.waitForExistence(timeout: 3) { f.tap(); f.typeText(env["PM_ADDR"]!); sleep(1); shot("mail-inline", tree: true); app.keyboards.buttons.allElementsBoundByIndex.last?.tap() }
-            sleep(1); shot("mail-after-inline", tree: true)
-        }
-        let pv = app.buttons["mail-preview"]
-        if pv.waitForExistence(timeout: 4) { pv.tap(); sleep(2); shot("mail-preview", tree: true)
-            if let close = waitAny(["Close", "關閉", "关闭", "Done", "完成"], 3) { close.tap() }; sleep(1) }
-        guard env["PM_OPEN"] != nil else { return }
-        let open = app.buttons["mail-open"]
-        if !open.isHittable { app.swipeUp() }
-        open.tap(); sleep(5); shot("mail-opened", tree: true)
-        // The composer (in process tree as a remote view): Cancel → Delete Draft. Never Send.
-        if let c = button(Self.cancel) {
-            c.tap(); sleep(2); shot("composer-cancel", tree: true)
-            if let del = waitAny(["Delete Draft", "刪除草稿", "删除草稿"], 4) { del.tap() }
-            sleep(2)
-        }
-        let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let t = XCTAttachment(string: sb.debugDescription); t.name = "springboard.tree"; t.lifetime = .keepAlways; add(t)
-        shot("mail-end", tree: true)
     }
 
     // MARK: player <-> transcript sync (real taps and slider drags on the newest meeting, which must have audio)
@@ -216,7 +182,7 @@ final class ContactsMailUITests: XCTestCase {
     }
 
     /// A NEW person (PM_NAME, default "PMTEST Nia") → "Add an e-mail for X" right away → typed + Save → the contact has it
-    /// (Contacts app search), and the meeting's mail sheet lists it as a recipient.
+    /// (Contacts app search).
     func testNewPersonEmail() {
         let name = env["PM_NAME"] ?? "PMTEST N\(Int(Date().timeIntervalSince1970) % 100000)", addr = env["PM_ADDR"] ?? "nia.pmtest@example.com"
         launch(["VOX_OPEN": "id:" + meeting, "VOX_TAB": "1", "VOX_DIALOG": "speaker", "VOX_SPEAKER": "2", "VOX_PICKAUTO": name])
@@ -233,8 +199,6 @@ final class ContactsMailUITests: XCTestCase {
         shot("ne-4-contacts", tree: true)
         XCTAssertTrue(contacts.staticTexts[addr].exists || contacts.buttons[addr].exists || contacts.debugDescription.contains(addr), "address in Contacts")
         contacts.terminate()
-        launch(["VOX_OPEN": "id:" + meeting, "VOX_MAIL": "1"]); sleep(4); shot("ne-5-mail", tree: true)
-        XCTAssertTrue(app.debugDescription.contains(addr), "address as a mail recipient")
     }
 
     /// "Download the AI models?" → Later: the prompt stays away (it came back a few seconds later, on a network

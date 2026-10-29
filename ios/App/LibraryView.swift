@@ -26,9 +26,8 @@ struct LibraryView: View {
     private func setEditing(_ on: Bool) { withAnimation { editMode = on ? .active : .inactive }; if !on { selected = [] } }
     @State private var deletingMany = false
     @State private var dlDeleteAsk: UUID?   // download item awaiting its delete confirmation
-    @State private var sharing: URL?
-    @State private var shareProgress: Float?
-    @State private var shareTask: Task<Void, Never>?
+    /// Share v2: the one Share sheet of a row.
+    @State private var sharing: ShareTarget?
     @AppStorage("seenSessions") private var seenRaw = ""
     @ObservedObject private var indexer = LibraryIndexer.shared
     @State private var hits: [LibrarySearch.Hit] = []
@@ -143,19 +142,8 @@ struct LibraryView: View {
         LibraryRow(s: s, isNew: isNew(s), done: isDone(s), source: sources[s.id.uuidString], searching: !query.isEmpty, passages: passages(s),
                    indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
-                   onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = $0 }, onShareMeeting: { shareMeeting(s) },
+                   onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = .of(s) },
                    onRename: { draft = s.title; renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
-    }
-    /// "Share meeting": the enriched .pmin (MPEG-4), encoded with progress and Cancel, then the system share sheet.
-    private func shareMeeting(_ s: Session) {
-        shareProgress = 0
-        shareTask = Task {
-            let u = await SessionFile.export(s) { p in Task { @MainActor in if shareProgress != nil { shareProgress = p } } }
-            let cancelled = Task.isCancelled
-            shareProgress = nil; shareTask = nil
-            if cancelled { SessionFile.clearShareDir(); return }
-            if let u { Haptics.success(); sharing = u } else { m.screen.status = L("session_share_failed") }
-        }
     }
     private func activate(_ s: Session) {
         Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
@@ -260,8 +248,7 @@ struct LibraryView: View {
             Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; setEditing(false); Haptics.destructive() }
             Button(L("cancel"), role: .cancel) {}
         }
-        .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { if let f = sharing, f.path.hasPrefix(SessionFile.shareDir.path) { try? FileManager.default.removeItem(at: f) }; sharing = nil } })) { if let sharing { ShareSheet(url: sharing) } }
-        .overlay { if let p = shareProgress { SessionExporting(progress: p, title: L("share_preparing"), onCancel: { shareTask?.cancel() }) } }
+        .sheet(item: $sharing) { t in MeetingShareSheet(target: t) { sharing = nil } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
         .alert(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
@@ -274,12 +261,12 @@ struct LibraryView: View {
     }
 }
 
-/// "Add audio" bottom sheet (Android AddSourceSheet: file, podcast, shows, session).
+/// "Add audio" bottom sheet (Android AddSourceSheet): import from Files / cloud (audio, video or a .pmin meeting),
+/// podcast, shows.
 struct AddSourceSheet: View {
     let onFile: () -> Void
     let onPodcast: () -> Void
     var onShows: () -> Void = {}
-    let onSession: () -> Void
     @Environment(\.dismiss) private var dismiss
     private func row(_ icon: String, _ title: String, _ desc: String, _ action: @escaping () -> Void) -> some View {
         Button { dismiss(); action() } label: {
@@ -296,10 +283,9 @@ struct AddSourceSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(L("add_audio")).font(.title3.bold()).padding(.bottom, 8)
-            row("folder", L("source_audio_file"), L("source_audio_file_desc"), onFile)
+            row("icloud.and.arrow.down", L("source_import"), L("source_import_desc"), onFile)
             row("dot.radiowaves.left.and.right", L("source_podcast"), L("source_podcast_desc"), onPodcast)
             row("square.stack", L("sub_source"), L("sub_source_desc"), onShows)
-            row("doc.badge.arrow.up", L("source_session"), L("source_session_desc"), onSession)
             Spacer(minLength: 0)
         }
         // medium/large, not a fixed 450 pt: a fixed sheet clips its rows at large text sizes.
@@ -698,7 +684,7 @@ struct LibraryToolbar: ToolbarContent {
 }
 
 /// A library session row: status glyph, title, time · length, and while searching the passages that matched.
-/// Swipe left: Delete; swipe right: Rename / Share audio; long-press: the full menu (Select enters edit mode).
+/// Swipe left: Delete; swipe right: Rename / Share; long-press: the full menu (Select enters edit mode).
 struct LibraryRow: View {
     let s: Session
     let isNew: Bool
@@ -713,8 +699,7 @@ struct LibraryRow: View {
     let onActivate: () -> Void
     let onPassage: (LibrarySearch.Passage) -> Void
     let onSelect: () -> Void
-    let onShare: (URL) -> Void
-    var onShareMeeting: () -> Void = {}
+    let onShare: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -774,15 +759,13 @@ struct LibraryRow: View {
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button { onRename() } label: { Label(L("rename"), systemImage: "pencil") }.tint(Color.accentColor)
-            if audio != nil, done, !s.lines.isEmpty { Button { onShareMeeting() } label: { Label(L("action_share_meeting"), systemImage: "square.and.arrow.up") }.tint(Vox.info.color) }
-            else if let audio { Button { onShare(audio) } label: { Label(L("action_share_audio"), systemImage: "square.and.arrow.up") }.tint(Vox.info.color) }
+            if audio != nil || done && !s.lines.isEmpty { Button { onShare() } label: { Label(L("share_title"), systemImage: "square.and.arrow.up") }.tint(Vox.info.color) }
         }
         .contextMenu {
             Button(L("action_open"), systemImage: "play.fill") { onActivate() }
             Button(L("action_select"), systemImage: "checkmark.circle") { onSelect() }
             Button(L("rename"), systemImage: "pencil") { onRename() }
-            if audio != nil, done, !s.lines.isEmpty { Button(L("action_share_meeting"), systemImage: "square.and.arrow.up") { onShareMeeting() } }
-            if let audio { Button(L(done && !s.lines.isEmpty ? "action_share_audio_only" : "action_share_audio"), systemImage: "waveform") { onShare(audio) } }
+            if audio != nil || done && !s.lines.isEmpty { Button(L("share_title"), systemImage: "square.and.arrow.up") { onShare() } }
             Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
         }
         .accessibilityAction(named: L("select")) { onSelect() }

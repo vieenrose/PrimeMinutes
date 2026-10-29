@@ -1,7 +1,7 @@
 import XCTest
 
 /// AirDrop of a meeting between two phones (P0 baseline + P1 checks), with real taps. The sender test opens the newest
-/// meeting (VOX_OPEN), shares it (PM_MODE=p1: "Share meeting"; else the older Export > Save) and picks the receiver in
+/// meeting (VOX_OPEN), shares it (⋯ → Share → Whole meeting → AirDrop) and picks the receiver in
 /// AirDrop (PM_TARGET, a substring of its AirDrop name). The receiver test, started first on the other phone, watches
 /// SpringBoard for the AirDrop alert / app chooser for PM_WAIT seconds, taps Accept and Prime Minutes when offered
 /// (PM_OPEN=1), and attaches what it saw. Run with ios/uitests/airdrop.zsh.
@@ -42,15 +42,11 @@ final class AirDropUITests: XCTestCase {
         guard nav.waitForExistence(timeout: 10) else { XCTFail("no More options"); return }
         let more = nav
         more.tap(); sleep(1); shot("s2-menu")
-        if env["PM_MODE"] == "p1" {
-            guard let share = first(["Share meeting"], in: app, 5) else { XCTFail("no Share meeting"); return }
-            share.tap(); sleep(2); shot("s3-preparing")
-        } else {
-            guard let ex = first(["Export & share"], in: app, 5) else { XCTFail("no Export"); return }
-            ex.tap(); sleep(2)
-            guard let save = first(["Save"], in: app, 5) else { XCTFail("no Save"); return }
-            save.tap()
-        }
+        // Share v2: ⋯ → Share → Whole meeting → AirDrop.
+        guard let share = first(["Share"], in: app, 5) else { XCTFail("no Share"); return }
+        share.tap(); sleep(2)
+        app.buttons["share-what-session"].tap(); sleep(1)
+        app.buttons["share-to-nearby"].tap(); sleep(2); shot("s3-preparing")
         let airdrop = app.cells.matching(NSPredicate(format: "identifier == 'shareCell' AND label == 'AirDrop'")).firstMatch
         guard airdrop.waitForExistence(timeout: 90) else { shot("s4-nosheet"); XCTFail("no AirDrop in the share sheet"); return }
         shot("s4-sheet"); airdrop.tap(); sleep(5); shot("s5-airdrop")

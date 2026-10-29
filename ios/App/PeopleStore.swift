@@ -132,9 +132,7 @@ import Foundation
         VoiceHooks.impl?.onMerge(from: from, into: into)
     }
     func delete(_ id: String, clearNames: Bool) async {
-        let addresses = Set(doc.byId(id)?.emails.map { EmailRules.key($0.address) } ?? [])
         mutate { PeopleOps.delete($0, id) }
-        Self.scrubShares(person: id, addresses: addresses)
         await rewriteSessions { LinkOps.delete($1, id, clearNames: clearNames) }
         VoiceHooks.impl?.onDeletePerson(id)
     }
@@ -148,7 +146,7 @@ import Foundation
         return p
     }
     /// A meeting was deleted (SessionLibrary.remove): its links went with its file; announce it (voice samples).
-    func onMeetingDeleted(_ id: UUID) { objectWillChange.send(); try? FileManager.default.removeItem(at: ShareHistory.url(id)); VoiceHooks.impl?.onMeetingDeleted(id) }
+    func onMeetingDeleted(_ id: UUID) { objectWillChange.send(); VoiceHooks.impl?.onMeetingDeleted(id) }
 
     // MARK: addresses and contact link (docs/design/speaker-contacts.md §3)
 
@@ -243,14 +241,11 @@ import Foundation
     func setMe(_ id: String) {
         mutate { d in var n = d; n.people = d.people.map { var p = $0; p.me = $0.id == id; return p }; return n }
     }
-    /// A deleted person leaves no trace in the meetings' "last shared".
-    private nonisolated static func scrubShares(person: String, addresses: Set<String>) {
-        let fm = FileManager.default
-        for f in (try? fm.contentsOfDirectory(at: ShareHistory.dir, includingPropertiesForKeys: nil)) ?? [] where f.pathExtension == "json" {
-            let old = ShareHistory.decode(try? Data(contentsOf: f))
-            let new = ShareHistory.scrub(old, person: person, addresses: addresses)
-            if new != old { try? ShareHistory.encode(new).write(to: f, options: .atomic) }
-        }
+    /// The e-mail share history of the removed "Email participants" (recipients per meeting, Application
+    /// Support/shared): nothing reads it since share v2, so it goes, addresses included.
+    nonisolated static func dropMailHistory() {
+        let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("shared")
+        if FileManager.default.fileExists(atPath: d.path) { try? FileManager.default.removeItem(at: d) }
     }
 
     // MARK: migration
