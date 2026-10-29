@@ -161,3 +161,22 @@ enum Zip {
         return out
     }
 }
+
+/// The shared PDF / .docx in the interface's Han script (Android ExportScript): `generated` (span-gated OpenCC for
+/// generated text) for the title, meta, summary, action items and speaker names, `transcript` (character level)
+/// for what was said. Only the export view: the stored session and the .pmin keep their text. Links survive:
+/// cites are `[m:ss]` and anchors turn seconds, both found in the converted text; OpenCC leaves digits,
+/// brackets, colons and the U+2060 cite joiner alone, so no offset can drift when a phrase changes length.
+enum ExportScript {
+    static func doc(_ d: ShareDocx.Doc, generated g: (String) -> String, transcript t: (String) -> String) -> ShareDocx.Doc {
+        var d = d
+        d.title = g(d.title); d.meta = d.meta.map(g); d.summary = d.summary.map(g)
+        d.sections = d.sections.map { s in
+            ShareDocx.Section(heading: g(s.heading), groups: s.groups.map { ShareDocx.Group(label: $0.label.map(g), items: $0.items.map(g)) })
+        }
+        d.turns = d.turns.map { var u = $0; u.speaker = g(u.speaker); u.text = t(u.text); return u }
+        return d
+    }
+    /// Speaker names (index → name), as generated text.
+    static func names(_ n: [String: String]?, generated g: (String) -> String) -> [String: String]? { n?.mapValues(g) }
+}

@@ -167,7 +167,8 @@ enum Export {
     /// then the transcript (the AI notes stay in the .pmin) as speaker turns (grey clock gutter, hanging indent). Every cite is a link to
     /// the turn it cites; every turn is a destination with a "↑" back to the first cite of it (else to the summary).
     /// A4, CJK in PingFang (embedded subsets), a running title and page numbers.
-    static func pdf(_ s0: Session) -> Data {
+    static func pdf(_ s1: Session) -> Data {
+        let s0 = inScript(s1)
         var s = s0
         s.title = refs(s0.title, s0); s.summary = refs(s0.summary, s0)
         let acts = s0.actionItems.map { refs($0, s0) }
@@ -338,6 +339,11 @@ enum Export {
     /// The Word document's model: the same content and order as the PDF (title block, summary, action items,
     /// transcript turns).
     static func docModel(_ s0: Session) -> ShareDocx.Doc {
+        let d = rawDocModel(s0)
+        guard let c = scriptConverters() else { return d }
+        return ExportScript.doc(d, generated: c.gen.convert, transcript: c.tr.convert)
+    }
+    private static func rawDocModel(_ s0: Session) -> ShareDocx.Doc {
         var s = s0
         s.title = refs(s0.title, s0); s.summary = refs(s0.summary, s0)
         let zh = AppLanguage.current.resolved != .en
@@ -355,6 +361,24 @@ enum Export {
             transcriptHeading: L("export_heading_transcript"),
             turns: turns(s.lines).map { ShareDocx.Turn(clock: gutterClock($0.u.start, pad), speaker: s.name($0.u.speaker), text: $0.text, sec: Int(max(0, $0.u.start)), cont: $0.cont) },
             backLabel: L("share_pdf_back"), zh: zh, simplified: AppLanguage.current.script == .simplified)
+    }
+    /// The converters of the interface's Han script; nil for an English interface (the text is left as stored).
+    private static func scriptConverters() -> (gen: OpenCC, tr: OpenCC)? {
+        let l = AppLanguage.current
+        guard l.resolved != .en else { return nil }
+        return (OpenCC.generated(l.script), OpenCC.transcript(l.script))
+    }
+    /// The meeting as the PDF shows it: Chinese text in the interface's script (the stored session is not changed).
+    static func inScript(_ s0: Session) -> Session {
+        guard let c = scriptConverters() else { return s0 }
+        let g = c.gen.convert, t = c.tr.convert
+        var s = s0
+        s.title = g(s.title); s.summary = g(s.summary)
+        s.lines = s.lines.map { var u = $0; u.text = t(u.text); return u }
+        s.notes = s.notes.map { var n = $0; n.text = g(n.text); return n }
+        s.speakerNames = ExportScript.names(s.speakerNames, generated: g)
+        s.actionsEdited = s.actionsEdited.map(g); s.legacyNotes = s.legacyNotes.map(g)
+        return s
     }
     static func docxFile(_ s: Session, base: String, dir: URL) -> URL? {
         let url = dir.appendingPathComponent(base + ".docx")
