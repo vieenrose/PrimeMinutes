@@ -1250,13 +1250,10 @@ private fun TranscribeScreen(
         studio.primeminutes.core.reader.SpeakerRefs.resolve(t, speakerLabel, s.utterances.mapNotNull { it.speaker }.toSet().ifEmpty { null },
             wrap = if (screen) ::unbreakable else ({ n -> n }))
     }
-    // Action items are an opt-in experiment: exported only when shown in the app.
-    // Documents carry no AI notes (spec v2, addendum 2): without the extractor's list, the reader's
-    // ACTION notes are the action items.
+    // Shared documents always carry the action items (spec v2, as on iOS), whatever the "show
+    // action items" setting; without the extractor's list, the reader's ACTION notes stand in.
     fun exportActions(): studio.primeminutes.core.export.ExportNotes.Section? =
-        (if (s.config.showActionItems) studio.primeminutes.core.export.ExportNotes.actions(context.getString(R.string.export_heading_actions), s.actionItems) { refs(it) ?: it } else null)
-            ?: studio.primeminutes.core.export.ExportNotes.section(context.getString(R.string.export_heading_actions),
-                agent.notes.filter { studio.primeminutes.core.export.ExportNotes.fullTag(it.tag) == "ACTION" }.map { it.copy(tag = "-") }, { null }) { refs(it) ?: it }
+        studio.primeminutes.core.export.ExportNotes.documentActions(context.getString(R.string.export_heading_actions), s.actionItems, agent.notes) { refs(it) ?: it }
     // Active utterance for the synced highlight: the line whose [start, end] holds the playhead.
     // In an inter-utterance gap (silence), switch to the next line at the gap's MIDPOINT so the
     // highlight anticipates upcoming speech instead of staying a line behind during the pause.
@@ -1597,7 +1594,7 @@ private fun TranscribeScreen(
             val known = utts.mapNotNull { it.speaker }.toSet().ifEmpty { null }
             val r: (String?) -> String? = { t -> t?.let { studio.primeminutes.core.reader.SpeakerRefs.resolve(it, label, known) } }
             val actH = context.getString(R.string.export_heading_actions)
-            val acts = (if (s.config.showActionItems) studio.primeminutes.core.export.ExportNotes.actions(actH, c.actionItems) { r(it) ?: it } else null)
+            val acts = studio.primeminutes.core.export.ExportNotes.actions(actH, c.actionItems) { r(it) ?: it }
                 ?: c.notes?.let { studio.primeminutes.core.llm.MeetingNotes.parse(it) }?.actions?.takeIf { it.isNotEmpty() }
                     ?.let { l -> studio.primeminutes.core.export.ExportNotes.actions(actH, l.joinToString("\n") { "- $it" }) { r(it) ?: it } }
             doc = studio.primeminutes.core.export.PdfExport.Doc(utts, label, r(c.title ?: e.title) ?: shareTitle(e), emptyList(), r(c.summary), sumH, txH,

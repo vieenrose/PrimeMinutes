@@ -136,4 +136,16 @@ class ExportNotesTest {
         val junk = "not a pdf".toByteArray()
         assertTrue(PdfLinker.link(junk, listOf(PdfLinker.Link(0, floatArrayOf(0f, 0f, 1f, 1f), 0, 1f))).contentEquals(junk))
     }
+
+    /** Spec v2 (as on iOS): the PDF / Word always carry the action items, the extractor's list first. */
+    @Test fun documentActionsAlwaysPresentExtractorFirstElseActionNotes() {
+        val withAction = notes + Note(6, 0, "30:00", "ACTION", "張經理週五前回報報價")
+        val fromList = ExportNotes.documentActions("待辦事項", "- 寄出合約 [2:05]", withAction)!!
+        assertEquals(listOf(ExportNotes.Item("寄出合約", "2:05")), fromList.groups.single().items)
+        val fromNotes = ExportNotes.documentActions("待辦事項", null, withAction)!!
+        assertEquals("待辦事項", fromNotes.heading)
+        assertEquals(listOf(ExportNotes.Item("張經理週五前回報報價", "30:00")), fromNotes.groups.single().items)
+        assertEquals(null, fromNotes.groups.single().label)
+        assertEquals(null, ExportNotes.documentActions("待辦事項", "  ", notes))
+    }
 }

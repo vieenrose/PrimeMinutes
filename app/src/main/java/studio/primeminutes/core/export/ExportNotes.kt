@@ -60,6 +60,15 @@ object ExportNotes {
         return if (items.isEmpty()) null else Section(heading, listOf(Group(null, items)))
     }
 
+    /**
+     * The action items of a shared PDF / Word document: always present, whatever the "show action
+     * items" setting (as on iOS, spec v2 order: summary, then action items). The extractor's list
+     * [raw] wins; without it, the reader's ACTION notes stand in (documents carry no AI notes).
+     */
+    fun documentActions(heading: String, raw: String?, notes: List<Note>?, refs: (String) -> String = { it }): Section? =
+        actions(heading, raw, refs)
+            ?: section(heading, notes.orEmpty().filter { fullTag(it.tag) == "ACTION" }.map { it.copy(tag = "-") }, { null }, refs)
+
     /** A note's text with its cite at the end, glued (`…條款。⁠[1:12]`). */
     fun line(i: Item): String = i.text + Cites.itemCite(i.text, i.ts)
 
