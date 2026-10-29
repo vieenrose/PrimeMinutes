@@ -122,15 +122,26 @@ import AVFoundation
 
     /// A file handed to the app. A Prime Minutes meeting restores at once, models or not; plain audio (or a
     /// meeting from a newer app, imported as audio after a notice) goes through `gate`, the model download consent.
+    /// Files opens a document in place (Info.plist LSSupportsOpeningDocumentsInPlace): the URL is the user's own file,
+    /// security-scoped, maybe not yet downloaded (iCloud Drive), so it is read off the main thread under a coordinated read.
     func open(_ url: URL, gate: @escaping (@escaping () -> Void) -> Void) {
-        let man: SessionFile.Manifest? = {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            return SessionFile.read(url)
-        }()
-        if let man, SessionFile.supported(man) { importAudio(url); return }
-        if man != nil { notice = L("share_too_new"); StatusLog.add("import: newer manifest \(man?.primeminutes_version ?? 0), as audio") }
-        gate { self.importAudio(url, plain: true) }
+        StatusLog.add("import: open \(Self.isInbox(url) ? "inbox" : "in place") \(url.path)")
+        Task {
+            let man = await Task.detached { Self.reading(url) { SessionFile.read($0) } ?? nil }.value
+            if let man, SessionFile.supported(man) { importAudio(url); return }
+            if man != nil { notice = L("share_too_new"); StatusLog.add("import: newer manifest \(man?.primeminutes_version ?? 0), as audio") }
+            gate { self.importAudio(url, plain: true) }
+        }
+    }
+
+    /// `body` on a readable `url`: inside its security scope (a file opened in place, a picked file) and a coordinated
+    /// read (a cloud file is downloaded first). nil when the file cannot be read.
+    nonisolated static func reading<T>(_ url: URL, _ body: (URL) -> T) -> T? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        var out: T?, err: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &err) { out = body($0) }
+        return out
     }
 
     /// AirDrop and Open in… hand over a copy in Documents/Inbox: ours is in the audio directory once copied.
@@ -162,9 +173,7 @@ import AVFoundation
         let before = screen.status; screen.status = L("status_importing")   // Android: a long share (big file, cloud provider) shows progress
         Task {
             let ok = await Task.detached {
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                let ok = (try? FileManager.default.copyItem(at: url, to: JobQueue.url(j))) != nil
+                let ok = Self.reading(url) { (try? FileManager.default.copyItem(at: $0, to: JobQueue.url(j))) != nil } ?? false
                 if ok, Self.isInbox(url) { try? FileManager.default.removeItem(at: url) }
                 return ok
             }.value

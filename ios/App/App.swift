@@ -3,6 +3,7 @@ import AVFoundation
 import UserNotifications
 import os
 import Combine
+import UniformTypeIdentifiers
 
 @main struct PrimeMinutesApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -146,7 +147,7 @@ struct ContentView: View {
             } }
             // A received meeting restores at once (no model needed); plain audio asks for the models first.
             .onOpenURL { u in m.imports.open(u) { a in m.downloads.withModels(a) } }
-            .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mpeg4Audio]) { if case .success(let u) = $0 { m.imports.open(u) { a in m.downloads.withModels(a) } } }
+            .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mpeg4Audio, UTType(exportedAs: "tw.com.pesi.primeminutes.session")]) { if case .success(let u) = $0 { m.imports.open(u) { a in m.downloads.withModels(a) } } }
             .onReceive(m.imports.$openRequest) { s in guard let s else { return }; m.imports.openRequest = nil; LibraryView.markSeen(s.id); path = [.session(s)] }
             .alert(L("share_dup_title"), isPresented: Binding(get: { m.imports.duplicate != nil }, set: { if !$0 && m.imports.duplicate != nil { m.imports.resolveDuplicate(keepCopy: false) } }), presenting: m.imports.duplicate) { _ in
                 Button(L("share_dup_open")) { m.imports.resolveDuplicate(keepCopy: false) }
