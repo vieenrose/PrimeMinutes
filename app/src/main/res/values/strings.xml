@@ -773,4 +773,16 @@
     <string name="share_with_audio">Include audio</string>
     <string name="about_licenses">Open-source licenses</string>
     <string name="about_licenses_desc">The components inside this app and their licenses</string>
+    <!-- Library by source (filters, podcast rows, channel page) -->
+    <string name="filter_meetings">Meetings (%d)</string>
+    <string name="filter_podcasts">Podcasts (%d)</string>
+    <string name="filter_received">Received (%d)</string>
+    <string name="label_received">Received</string>
+    <string name="podcasts_other">Other podcasts</string>
+    <string name="channel_in_library">%d in library</string>
+    <string name="channel_section_new">New in feed</string>
+    <string name="channel_section_library">In library</string>
+    <string name="cd_open_channel">Open the channel page</string>
+    <string name="cd_channel_group">%1$s, %2$d in library</string>
+    <string name="cd_filter_sources">Filter by source</string>
 </resources>

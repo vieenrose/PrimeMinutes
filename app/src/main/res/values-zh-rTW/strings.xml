@@ -758,4 +758,16 @@
     <string name="share_with_audio">附上音訊</string>
     <string name="about_licenses">開放原始碼授權</string>
     <string name="about_licenses_desc">App 內含的元件及其授權</string>
+    <!-- Library by source (filters, podcast rows, channel page) -->
+    <string name="filter_meetings">會議（%d）</string>
+    <string name="filter_podcasts">Podcast（%d）</string>
+    <string name="filter_received">收到的（%d）</string>
+    <string name="label_received">收到的</string>
+    <string name="podcasts_other">其他 Podcast</string>
+    <string name="channel_in_library">場次庫有 %d 集</string>
+    <string name="channel_section_new">節目新集數</string>
+    <string name="channel_section_library">在場次庫</string>
+    <string name="cd_open_channel">開啟節目頁</string>
+    <string name="cd_channel_group">%1$s，場次庫有 %2$d 集</string>
+    <string name="cd_filter_sources">依來源篩選</string>
 </resources>

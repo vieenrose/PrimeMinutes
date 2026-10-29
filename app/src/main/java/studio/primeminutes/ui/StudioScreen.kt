@@ -60,6 +60,8 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoveToInbox
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.SearchBarDefaults
@@ -141,6 +143,16 @@ private val Gutter = 16.dp
 /** Filter over the entry list. Processing is a runtime concept (not an Entry status), so the
  *  filter is limited to the two persistent states plus All. */
 private enum class StatusFilter { ALL, NEW, DONE }
+
+/** Where the items came from (their provenance, [studio.primeminutes.core.library.Provenance]): a derived view, never a place. */
+private enum class SourceFilter { ALL, MEETINGS, PODCASTS, RECEIVED }
+
+private fun SourceFilter.category() = when (this) {
+    SourceFilter.ALL -> null
+    SourceFilter.MEETINGS -> studio.primeminutes.core.library.Provenance.Category.MEETING
+    SourceFilter.PODCASTS -> studio.primeminutes.core.library.Provenance.Category.PODCAST
+    SourceFilter.RECEIVED -> studio.primeminutes.core.library.Provenance.Category.RECEIVED
+}
 
 /** A row's single derived state (computed once at the list call site) — one priority definition, so
  *  the color and glyph decoders can't silently drift out of order. Selection is an orthogonal overlay. */
@@ -231,6 +243,8 @@ fun StudioScreen(
     onRetryDownload: (SessionLibrary.Entry) -> Unit = {},
     /** The people of the directory with the meetings they are linked in: the "meetings with X" filter. */
     people: List<Pair<studio.primeminutes.core.people.Person, Set<String>>> = emptyList(),
+    /** A channel header of the Podcasts view was tapped: its channel page (key: [studio.primeminutes.core.library.Provenance.groupKey]). */
+    onOpenChannel: (String) -> Unit = {},
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -300,6 +314,7 @@ fun StudioScreen(
     }
     var query by remember { mutableStateOf(initialQuery) }
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
+    var sourceFilter by remember { mutableStateOf(SourceFilter.ALL) }
     /** The person whose meetings the list is narrowed to (null: everyone). */
     var personFilter by remember { mutableStateOf<String?>(null) }
     val personIds = people.firstOrNull { it.first.id == personFilter }?.second
@@ -349,16 +364,34 @@ fun StudioScreen(
     // A stray space is not a query: blank-after-trim falls through to the full list (like
     // iOS) instead of a no-match screen from zero lexical hits.
     val searching = query.trim().isNotEmpty()
-    fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) &&
+    val wantSource = sourceFilter.category()
+    fun inSource(e: SessionLibrary.Entry) = wantSource == null || e.category == wantSource
+    fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) && inSource(e) &&
         when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
-    val shownHits = remember(hits, statusFilter, personIds) { hits.filter { wanted(it.entry) } }
-    val shown = remember(entries, searching, shownHits, statusFilter, personIds) {
+    val shownHits = remember(hits, statusFilter, sourceFilter, personIds) { hits.filter { wanted(it.entry) } }
+    val shown = remember(entries, searching, shownHits, statusFilter, sourceFilter, personIds) {
         if (searching) shownHits.map { it.entry }
         else entries.filter(::wanted)
     }
     // Group ONCE (LinkedHashMap preserves the newest-first order of the already-sorted list) instead
     // of allocating a Calendar per entry on every recomposition inside the LazyColumn lambda.
     val groups = remember(shown) { shown.groupBy { dayStart(it.createdAt) } }
+    // The Podcasts view: one group per channel (the newest-touched channel first, "Other podcasts" last),
+    // its episodes newest published first.
+    val byChannel = remember(shown, sourceFilter) {
+        if (sourceFilter != SourceFilter.PODCASTS) emptyList()
+        else shown.groupBy { studio.primeminutes.core.library.Provenance.groupKey(it.source) }.entries
+            .sortedWith(compareBy<Map.Entry<String, List<SessionLibrary.Entry>>> { it.key.isEmpty() }.thenByDescending { g -> g.value.maxOf { it.createdAt } })
+            .map { (k, v) -> k to v.sortedByDescending { it.source?.published?.takeIf { p -> p > 0 }?.times(1000) ?: it.createdAt } }
+    }
+    // Source counts over the whole library; a source chip shows only when there are two sources or more.
+    val sourceCounts = remember(entries) { entries.groupingBy { it.category }.eachCount() }
+    val showSources = sourceCounts.size >= 2
+    LaunchedEffect(sourceCounts) {
+        val c = sourceFilter.category()
+        if (c != null && (sourceCounts[c] ?: 0) == 0) sourceFilter = SourceFilter.ALL
+    }
+    val inSourceEntries = remember(entries, sourceFilter) { entries.filter(::inSource) }
     // Day anchors: remember keyed on an hourly bucket so StudioScreen's per-progress-tick
     // recompositions don't re-allocate two Calendars each, while the anchors still self-correct
     // across midnight (the key rolls over ~hourly). Yesterday via CALENDAR (a day isn't 86.4e6 ms — DST).
@@ -367,14 +400,40 @@ fun StudioScreen(
     val yesterday = remember(dayTick) {
         Calendar.getInstance().apply { timeInMillis = today; add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
     }
-    val doneCount = remember(entries) { entries.count(::isDone) }
-    val newCount = remember(entries) { entries.count { it.status == SessionLibrary.Status.RECORDED } }
+    // The status chips count within the chosen source (source × status narrow together).
+    val doneCount = remember(inSourceEntries) { inSourceEntries.count(::isDone) }
+    val newCount = remember(inSourceEntries) { inSourceEntries.count { it.status == SessionLibrary.Status.RECORDED } }
     // The active filter's chip stops rendering once its count hits 0 (e.g. the last New session was
     // processed, or all Done were batch-deleted) — reset to ALL so we don't strand the list on an
     // empty 'no match' screen with no way back except guessing to tap All.
     LaunchedEffect(newCount, doneCount) {
         if ((statusFilter == StatusFilter.NEW && newCount == 0) || (statusFilter == StatusFilter.DONE && doneCount == 0)) {
             statusFilter = StatusFilter.ALL
+        }
+    }
+
+    @Composable fun libraryRow(e: SessionLibrary.Entry) {
+        val status = rowStatus(e, processingId, queuedIds, foregroundId)
+        SwipeToDelete(enabled = !selectionMode && status != RowStatus.Processing, onDelete = { requestDelete(e) }) {
+            SessionRow(
+                entry = e, status = status,
+                // Feed live progress ONLY to the processing row — otherwise every tick
+                // changes the args of every visible row and defeats skipping (a full
+                // e-ink refresh per tick).
+                processingLabel = rowLabel(e, status),
+                processingFraction = rowFraction(e, status),
+                selectionMode = selectionMode,
+                selected = e.id in selected,
+                onClick = {
+                    if (selectionMode) {
+                        if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
+                    } else onRowTap(e, status)
+                },
+                onLongClick = {
+                    if (!selectionMode) { selectionMode = true; selected[e.id] = Unit }
+                },
+                onManage = { actionsFor = e },
+            )
         }
     }
 
@@ -500,18 +559,36 @@ fun StudioScreen(
             // Status filter chips — pairs with multi-select for "clear all junk" (New → Select all → Delete).
             // A chip that would list exactly what "All" lists is noise, so it is left out; with
             // nothing left to choose between, so is the whole row.
-            val showNew = newCount > 0 && newCount < entries.size
-            val showDone = doneCount > 0 && doneCount < entries.size
-            if (showNew || showDone) {
+            // One row, source chips then status chips (the study's merge: a third chip row was too much with
+            // People below). All clears both; a source chip picks a source (tap again: all sources); New / Done
+            // narrow within it, toggled.
+            val showNew = newCount > 0 && (newCount < inSourceEntries.size || statusFilter == StatusFilter.NEW)
+            val showDone = doneCount > 0 && (doneCount < inSourceEntries.size || statusFilter == StatusFilter.DONE)
+            if (showSources || showNew || showDone) {
                 Row(
                     // Scrolls sideways at large font scales instead of squeezing the last chip to a column.
                     Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(start = Gutter, end = Gutter, top = Spacing.sm),
+                        .padding(start = Gutter, end = Gutter, top = Spacing.sm).testTag("source-filter"),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilterChip(stringResource(R.string.filter_all, entries.size), statusFilter == StatusFilter.ALL) { statusFilter = StatusFilter.ALL }
-                    if (showNew) FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) { statusFilter = StatusFilter.NEW }
-                    if (showDone) FilterChip(stringResource(R.string.filter_done, doneCount), statusFilter == StatusFilter.DONE) { statusFilter = StatusFilter.DONE }
+                    FilterChip(stringResource(R.string.filter_all, entries.size), sourceFilter == SourceFilter.ALL && statusFilter == StatusFilter.ALL) {
+                        sourceFilter = SourceFilter.ALL; statusFilter = StatusFilter.ALL
+                    }
+                    if (showSources) {
+                        for ((f, res) in listOf(SourceFilter.MEETINGS to R.string.filter_meetings, SourceFilter.PODCASTS to R.string.filter_podcasts,
+                                SourceFilter.RECEIVED to R.string.filter_received)) {
+                            val n = sourceCounts[f.category()!!] ?: 0
+                            if (n > 0) FilterChip(stringResource(res, n), sourceFilter == f) { sourceFilter = if (sourceFilter == f) SourceFilter.ALL else f }
+                        }
+                    }
+                    if (showSources && (showNew || showDone)) Box(Modifier.width(1.dp).height(24.dp).background(pal.Hairline))
+                    if (showNew) FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) {
+                        statusFilter = if (statusFilter == StatusFilter.NEW) StatusFilter.ALL else StatusFilter.NEW
+                    }
+                    if (showDone) FilterChip(stringResource(R.string.filter_done, doneCount), statusFilter == StatusFilter.DONE) {
+                        statusFilter = if (statusFilter == StatusFilter.DONE) StatusFilter.ALL else StatusFilter.DONE
+                    }
                 }
             }
 
@@ -544,7 +621,7 @@ fun StudioScreen(
                 Modifier.weight(1f).fillMaxWidth().padding(32.dp),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val firstRun = query.isBlank() && statusFilter == StatusFilter.ALL && personFilter == null
+                val firstRun = query.isBlank() && statusFilter == StatusFilter.ALL && sourceFilter == SourceFilter.ALL && personFilter == null
                 if (firstRun) {
                     // First run: a clear invitation, not a faint glyph in a void. Record is the big
                     // button below; importing a file is the other way in, so it gets a button here.
@@ -571,11 +648,11 @@ fun StudioScreen(
                 )
                 // A no-match from a search + filters was a dead end: the only way out was clearing the
                 // field by hand and finding the filter chips behind the empty list.
-                val filtered = query.trim().isNotEmpty() || statusFilter != StatusFilter.ALL || personFilter != null
+                val filtered = query.trim().isNotEmpty() || statusFilter != StatusFilter.ALL || sourceFilter != SourceFilter.ALL || personFilter != null
                 if (!firstRun && densePending == null && filtered) {
                     Spacer(Modifier.height(Spacing.xl))
                     androidx.compose.material3.OutlinedButton(
-                        onClick = { query = ""; statusFilter = StatusFilter.ALL; personFilter = null },
+                        onClick = { query = ""; statusFilter = StatusFilter.ALL; sourceFilter = SourceFilter.ALL; personFilter = null },
                         border = androidx.compose.foundation.BorderStroke(1.dp, pal.Slate600),
                         modifier = Modifier.testTag("studio-clear-filters"),
                     ) { Text(stringResource(R.string.studio_clear_filters), color = pal.Sky) }
@@ -639,6 +716,11 @@ fun StudioScreen(
                             }
                         }
                     }
+                } else if (sourceFilter == SourceFilter.PODCASTS) byChannel.forEach { (key, list) ->
+                    stickyHeader(key = "channel-$key", contentType = "channel") {
+                        ChannelHeader(key, list, onOpen = if (key.isNotEmpty()) ({ onOpenChannel(key) }) else null)
+                    }
+                    items(list, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
                 } else groups.forEach { (day, list) ->
                     stickyHeader(key = "day-$day", contentType = "header") {
                         Text(
@@ -648,30 +730,7 @@ fun StudioScreen(
                             modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad).padding(start = Gutter, top = Spacing.md, bottom = Spacing.xs),
                         )
                     }
-                    items(list, key = { it.id }, contentType = { "row" }) { e ->
-                        val status = rowStatus(e, processingId, queuedIds, foregroundId)
-                        SwipeToDelete(enabled = !selectionMode && status != RowStatus.Processing, onDelete = { requestDelete(e) }) {
-                        SessionRow(
-                            entry = e, status = status,
-                            // Feed live progress ONLY to the processing row — otherwise every tick
-                            // changes the args of every visible row and defeats skipping (a full
-                            // e-ink refresh per tick).
-                            processingLabel = rowLabel(e, status),
-                            processingFraction = rowFraction(e, status),
-                            selectionMode = selectionMode,
-                            selected = e.id in selected,
-                            onClick = {
-                                if (selectionMode) {
-                                    if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
-                                } else onRowTap(e, status)
-                            },
-                            onLongClick = {
-                                if (!selectionMode) { selectionMode = true; selected[e.id] = Unit }
-                            },
-                            onManage = { actionsFor = e },
-                        )
-                        }
-                    }
+                    items(list, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
                 }
             }
         }
@@ -936,7 +995,14 @@ private fun SessionRow(
         RowStatus.Downloading -> R.string.cd_status_downloading
         RowStatus.DownloadFailed -> R.string.cd_status_download_failed
     })
-    val rowDesc = "${entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)}, $statusLabel"
+    val src = entry.source
+    val podcast = entry.category == studio.primeminutes.core.library.Provenance.Category.PODCAST
+    val received = entry.category == studio.primeminutes.core.library.Provenance.Category.RECEIVED
+    val channel = src?.channelTitle?.takeIf { podcast }
+    val receivedLabel = stringResource(R.string.label_received)
+    // "<title>, <channel>, <status>[, Received]": the artwork is decorative, the channel is said.
+    val rowDesc = listOfNotNull(entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale), channel, statusLabel,
+        receivedLabel.takeIf { received }).joinToString(", ")
     val longLabel = stringResource(R.string.cd_start_selection)
     val isSelected = selected
     Column(
@@ -960,19 +1026,22 @@ private fun SessionRow(
             when {
                 selectionMode && selected -> GlyphTile(pal.Sky, filled = true) { Icon(Icons.Filled.CheckCircle, null, tint = pal.OnSky, modifier = Modifier.size(20.dp)) }   // OnSky: white on the dark theme's light-blue accent was ~2.6:1
                 selectionMode -> GlyphTile(pal.Slate400, outlined = true) {}
+                // A podcast episode: its channel's artwork, the status glyph as a corner badge (same shapes).
+                podcast -> Box(Modifier.size(36.dp)) {
+                    studio.primeminutes.ui.components.ChannelArtwork(
+                        studio.primeminutes.online.ArtworkCache.keyOf(src?.seriesId, src?.artworkUrl), src?.artworkUrl, 36.dp)
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(18.dp).clip(CircleShape)
+                            .background(pal.PanelSurface).padding(1.dp).clip(CircleShape).background(statusColor.copy(alpha = 0.22f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (status == RowStatus.Processing) Icon(Icons.Filled.GraphicEq, null, tint = statusColor, modifier = Modifier.size(12.dp))
+                        else Icon(statusIcon(status), null, tint = statusColor, modifier = Modifier.size(12.dp))
+                    }
+                }
                 status == RowStatus.Processing -> GlyphTile(statusColor) { WaveBars(statusColor) }
                 else -> GlyphTile(statusColor, outlined = status == RowStatus.New) {
-                    Icon(
-                        when (status) {
-                            RowStatus.Done -> Icons.Filled.CheckCircle
-                            RowStatus.NoSpeech -> Icons.Filled.MicOff
-                            RowStatus.Queued -> Icons.Filled.Schedule
-                            RowStatus.Downloading -> Icons.Filled.Download
-                            RowStatus.DownloadFailed -> Icons.Filled.ErrorOutline
-                            else -> Icons.Filled.GraphicEq
-                        },
-                        contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp),
-                    )
+                    Icon(statusIcon(status), contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp))
                 }
             }
             Spacer(Modifier.width(Spacing.md))
@@ -982,7 +1051,11 @@ private fun SessionRow(
                     color = pal.Slate200, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
                 val meta = buildString {
-                    append(TIME_FMT.format(Date(entry.createdAt)))
+                    // A podcast episode: "Channel · date · length" (its publication date when known).
+                    if (podcast) {
+                        channel?.let { append(it); append(" · ") }
+                        append(DATE_FMT.format(Date(src?.published?.takeIf { it > 0 }?.times(1000) ?: entry.createdAt)))
+                    } else append(TIME_FMT.format(Date(entry.createdAt)))
                     // A download item has no length yet (or only the feed's): its state says more.
                     if (entry.durationSec > 0 || entry.download == null) {
                         append(" · ")
@@ -992,7 +1065,13 @@ private fun SessionRow(
                     if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }
                 }
                 Text(meta, color = if (status == RowStatus.DownloadFailed) PrimeMinutesPalette.Red else pal.Slate400,
-                    style = MaterialTheme.typography.labelMedium, maxLines = if (status == RowStatus.DownloadFailed) 2 else 1, overflow = TextOverflow.Ellipsis)
+                    style = MaterialTheme.typography.labelMedium, maxLines = if (status == RowStatus.DownloadFailed || podcast) 2 else 1, overflow = TextOverflow.Ellipsis)
+                // Received from someone (a .pmin / shared meeting): a label with an icon, never a colour alone.
+                if (received) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    Icon(Icons.Filled.MoveToInbox, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(receivedLabel, color = pal.Sky, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
             }
             // In selection mode the leading glyph IS the checkbox, so no trailing control.
             if (!selectionMode) {
@@ -1018,6 +1097,42 @@ private fun SessionRow(
                 progress = { processingFraction }, color = PrimeMinutesPalette.Warning, trackColor = pal.Slate700, modifier = barMod,
             ) else LinearProgressIndicator(color = PrimeMinutesPalette.Warning, trackColor = pal.Slate700, modifier = barMod)
         }
+    }
+}
+
+private fun statusIcon(status: RowStatus): ImageVector = when (status) {
+    RowStatus.Done -> Icons.Filled.CheckCircle
+    RowStatus.NoSpeech -> Icons.Filled.MicOff
+    RowStatus.Queued -> Icons.Filled.Schedule
+    RowStatus.Downloading -> Icons.Filled.Download
+    RowStatus.DownloadFailed -> Icons.Filled.ErrorOutline
+    else -> Icons.Filled.GraphicEq
+}
+
+/** The Podcasts view's sticky channel header: artwork, channel, "N in library", a chevron to the channel page. */
+@Composable
+private fun ChannelHeader(key: String, list: List<SessionLibrary.Entry>, onOpen: (() -> Unit)?) {
+    val pal = LocalPrimeMinutesPalette.current
+    val src = list.firstNotNullOfOrNull { it.source?.takeIf { s -> s.channelTitle != null } } ?: list.firstOrNull()?.source
+    val title = src?.channelTitle ?: stringResource(R.string.podcasts_other)
+    val desc = stringResource(R.string.cd_channel_group, title, list.size)
+    val openLabel = stringResource(R.string.cd_open_channel)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad)
+            .then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen) else Modifier)
+            .semantics(mergeDescendants = true) { contentDescription = desc; heading() }
+            .heightIn(min = 48.dp).padding(start = Gutter, end = Gutter, top = Spacing.sm, bottom = Spacing.xs),
+    ) {
+        if (key.isNotEmpty()) studio.primeminutes.ui.components.ChannelArtwork(
+            studio.primeminutes.online.ArtworkCache.keyOf(src?.seriesId, src?.artworkUrl), src?.artworkUrl, 28.dp)
+        else studio.primeminutes.ui.components.ChannelArtwork(null, null, 28.dp)
+        Spacer(Modifier.width(Spacing.sm))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.channel_in_library, list.size), style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
+        }
+        if (onOpen != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
     }
 }
 

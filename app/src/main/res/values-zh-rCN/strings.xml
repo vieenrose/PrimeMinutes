@@ -758,4 +758,16 @@
     <string name="share_with_audio">附上音频</string>
     <string name="about_licenses">开源许可</string>
     <string name="about_licenses_desc">应用内含的组件及其许可</string>
+    <!-- Library by source (filters, podcast rows, channel page) -->
+    <string name="filter_meetings">会议（%d）</string>
+    <string name="filter_podcasts">Podcast（%d）</string>
+    <string name="filter_received">收到的（%d）</string>
+    <string name="label_received">收到的</string>
+    <string name="podcasts_other">其他 Podcast</string>
+    <string name="channel_in_library">场次库有 %d 集</string>
+    <string name="channel_section_new">节目新集数</string>
+    <string name="channel_section_library">在场次库</string>
+    <string name="cd_open_channel">打开节目页</string>
+    <string name="cd_channel_group">%1$s，场次库有 %2$d 集</string>
+    <string name="cd_filter_sources">按来源筛选</string>
 </resources>

@@ -696,10 +696,11 @@ private fun TranscribeScreen(
         val q = devExtras?.getString("vox_podcast") ?: return@LaunchedEffect
         val n = devExtras.getInt("vox_podcast_ep", 2)
         runCatching {
-            val feed = studio.primeminutes.online.Podcast.searchSeries(q).first().feedUrl
-            val ep = studio.primeminutes.online.Podcast.fetchEpisodes(feed, n + 1)[n]
-            android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title}")
-            studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl)
+            val series = studio.primeminutes.online.Podcast.searchSeries(q).first()
+            val ep = studio.primeminutes.online.Podcast.fetchEpisodes(series.feedUrl, n + 1)[n]
+            android.util.Log.i("primeminutes-dev", "vox_podcast: ${ep.title} (${series.title})")
+            studio.primeminutes.online.ImportDownloads.submit(context, ep.title, SessionLibrary.PendingDownload.PODCAST, ep.audioUrl,
+                channel = studio.primeminutes.online.Podcast.channelOf(series, ep, null))
         }.onFailure { android.util.Log.w("primeminutes-dev", "vox_podcast failed", it) }
     }
 
@@ -1892,6 +1893,10 @@ private fun TranscribeScreen(
                 withContext(Dispatchers.IO) { SessionLibrary.list(context) to ProcessingQueue.ids(context).toSet() }
                     .let { (e, q) -> studioEntries = e; studioQueuedIds = q }
             }
+            // Provenance upkeep once per run (channel backfill from subscriptions, artwork cache): never blocks the list.
+            LaunchedEffect(Unit) {
+                if (withContext(Dispatchers.IO) { studio.primeminutes.online.LibrarySources.upkeepOnce(context) }) vm.bumpRecents()
+            }
             // Titles saved in the other script read in the chosen one (the file itself is untouched).
             val titleConv by produceState<OpenCcConverter?>(null, s.config.summaryScript) {
                 value = withContext(Dispatchers.IO) {
@@ -1976,6 +1981,7 @@ private fun TranscribeScreen(
                 onSettings = { vm.showConfigSheet(true) },
                 updateBanner = updateBannerSlot,
                 people = studioPeople,
+                onOpenChannel = { key -> subsOpenId = key; subsOpen = true },
             )
         }
         Screen.Capture -> CaptureScreen(
