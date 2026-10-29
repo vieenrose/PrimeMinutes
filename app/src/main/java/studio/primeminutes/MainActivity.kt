@@ -1611,11 +1611,16 @@ private fun TranscribeScreen(
     }
     /** The PDF and the .docx of [e], side by side in cache/share_pdf (built when the sheet opens: their sizes are shown). */
     suspend fun buildDocs(e: SessionLibrary.Entry): Pair<File?, File?> {
-        val d = pdfDocFor(e) ?: return null to null
-        val zh = when (SummaryScript.scriptFor(vm.now.config.summaryScript, context)) {
+        val raw = pdfDocFor(e) ?: return null to null
+        val script = SummaryScript.scriptFor(vm.now.config.summaryScript, context)
+        val zh = when (script) {
             ChineseScript.TRADITIONAL -> "zh-TW"; ChineseScript.SIMPLIFIED -> "zh-CN"; else -> null
         }
         return withContext(Dispatchers.IO) {
+            // The documents follow the Settings script, like the screens (the stored session is left as is).
+            val gen = OpenCcConverter.get(context, script)
+            val tr = if (script == ChineseScript.TRADITIONAL) OpenCcConverter.getTranscriptTraditional(context) else OpenCcConverter.getTranscriptSimplified(context)
+            val d = studio.primeminutes.core.export.ExportScript.apply(raw, gen::convert, tr::convert)
             val dir = File(context.cacheDir, "share_pdf").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
             val pdf = runCatching {
                 File(dir, PrimeMinutesSession.suggestFileName(shareTitle(e), "pdf")).also { f -> f.outputStream().use { studio.primeminutes.core.export.PdfExport.write(it, d) } }
