@@ -79,6 +79,8 @@ struct SessionView: View {
     /// An error or a mail-send result: shown as a system alert (copies and edits confirm with a haptic instead).
     @State private var alertText: String?
     @State private var editingSummary = false
+    /// A re-run waiting for the user's yes: true = re-transcribe, false = re-summarize (UserEdits).
+    @State private var confirmRerun: Bool? = nil
     @State private var editingActions = false
     @State private var summaryStale = false
     @State private var undoable: Session?
@@ -353,7 +355,7 @@ struct SessionView: View {
     /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
     private func undoResummary() {
         guard let old = undoable else { return }
-        s.summary = old.summary; s.title = old.title; s.titleUserSet = old.titleUserSet; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.reader = old.reader; save(s)
+        s.summary = old.summary; s.title = old.title; s.titleUserSet = old.titleUserSet; s.notes = old.notes; s.actionsEdited = old.actionsEdited; s.summaryUserSet = old.summaryUserSet; s.reader = old.reader; save(s)
         withAnimation { undoable = nil }
     }
     /// The speaker-undo banner timed out: clear it, and ask "re-summarize?" if the edit changed what was said.
@@ -375,13 +377,18 @@ struct SessionView: View {
     private func indexingLanded(_ ids: Set<UUID>) {
         if semIndexing, !ids.contains(s.id), hasIndex { semSearch() }
     }
+    /// Re-transcribe (true) / re-summarize (false), asking first when it would replace the user's own edits.
+    private func askRerun(_ transcribe: Bool) {
+        if UserEdits.needsConfirm(summaryEdited: s.summaryUserSet, linesEdited: s.linesUserEdited, transcribe: transcribe) { confirmRerun = transcribe }
+        else { rerun(s, transcribe) }
+    }
     /// Whether the summary-edit Done button is enabled (non-blank draft).
     private var summaryEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the summary edit.
     private func saveSummaryEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         editingSummary = false
-        if t != s.summary { s.summary = t; save(s) }
+        if t != s.summary { s.summary = t; s.summaryUserSet = true; save(s) }
     }
     /// Whether the actions-edit Done button is enabled (non-blank draft).
     private var actionsEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -389,10 +396,23 @@ struct SessionView: View {
     private func saveActionsEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         editingActions = false
-        if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; save(s) }
+        if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; s.summaryUserSet = true; save(s) }
     }
     // DEV: VOX_RESUM re-runs the summary on appear (README-animation harness).
     private func devResumTask() { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
+    // DEV: VOX_USEREDIT=summary|line makes a real hand-edit through the sheets' Done; VOX_ASKRERUN=resum|retx then
+    // asks for that re-run (the confirm alert shows when the meeting holds hand-edits, also after a relaunch).
+    private func devUserEditTask() async {
+        guard Dev.on, Dev.env["VOX_USEREDIT"] != nil || Dev.env["VOX_ASKRERUN"] != nil else { return }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        switch Dev.env["VOX_USEREDIT"] {
+        case "summary": draft = "✎ " + s.summary; saveSummaryEdit()
+        case "line": if let l = s.lines.first { tab = 1; editingLine = l.id; draft = "✎ " + l.text; saveLineEdit() }
+        default: break
+        }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        if let k = Dev.env["VOX_ASKRERUN"] { askRerun(k == "retx") }
+    }
     // DEV: VOX_BOUNDARY=N opens the editor on the N-th speaker change, VOX_SPLIT=N the split editor on line N.
     private func devBoundaryTask() async {
         guard Dev.on, Dev.env["VOX_BOUNDARY"] != nil || Dev.env["VOX_SPLIT"] != nil else { return }
@@ -433,7 +453,7 @@ struct SessionView: View {
             onRename: { draft = s.title; renamingTitle = true },
             onAsk: { askMeeting = "" }, onMail: { mailOpen = true }, mailCopied: mailCopied,
             onExport: { showExport = true },
-            onRetranscribe: { rerun(s, true) }, onResummarize: { rerun(s, false) })
+            onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) })
     }
     /// The scroll page, out of the body chain so the solver sees one call.
     private func scrollPage(_ proxy: ScrollViewProxy) -> some View {
@@ -452,7 +472,7 @@ struct SessionView: View {
     private func saveLineEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
-            let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; record(before); edited() }
+            let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; s.linesUserEdited = true; record(before); edited() }
         editingLine = nil
     }
     /// A run saved this meeting (JobRunner posts voxSessionSaved): re-read it, drop a
@@ -570,9 +590,14 @@ struct SessionView: View {
         }
         .task { await devBoundaryTask() }
         .alert(L("transcript_changed_resummarize"), isPresented: Binding(get: { transcriptDirty && !busy }, set: { transcriptDirty = $0 })) {
-            if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { rerun(s, false) } }
+            if s.audio != nil && !s.noSpeech { Button(L("re_summarize")) { askRerun(false) } }
             Button(L("cancel"), role: .cancel) {}
         }
+        // A re-run would replace what the user typed: ask first (Android RerunAsk).
+        .alert(L(confirmRerun == true ? "confirm_retranscribe_title" : "confirm_resummarize_title"), isPresented: Binding(get: { confirmRerun != nil }, set: { if !$0 { confirmRerun = nil } })) {
+            Button(L(confirmRerun == true ? "re_transcribe" : "re_summarize"), role: .destructive) { if let t = confirmRerun { confirmRerun = nil; rerun(s, t) } }
+            Button(L("cancel"), role: .cancel) { confirmRerun = nil }
+        } message: { Text(L(confirmRerun == true ? "confirm_retranscribe_body" : "confirm_resummarize_body")) }
         .alert(alertText ?? "", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
             Button(L("ok"), role: .cancel) {}
         }
@@ -585,10 +610,11 @@ struct SessionView: View {
                 onCancel: { editingActions = false }, onDone: { saveActionsEdit() })
         }
         .alert(L("summary_settings_changed"), isPresented: $summaryStale) {
-            Button(L("re_summarize")) { rerun(s, false) }
+            Button(L("re_summarize")) { askRerun(false) }
             Button(L("cancel"), role: .cancel) {}
         }
         .task { devResumTask() }
+        .task { await devUserEditTask() }
         .task { await devMergeTask() }
         .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }

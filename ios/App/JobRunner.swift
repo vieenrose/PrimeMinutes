@@ -103,7 +103,7 @@ final class ReaderWorker: @unchecked Sendable {
         // edited while the reader ran were overwritten by the snapshot taken at the tap.
         if let old {
             let cur = await library.all().first { $0.id == s.id } ?? old
-            s.lines = cur.lines; s.speakerNames = cur.speakerNames; s.speakerPeople = cur.speakerPeople
+            s.lines = cur.lines; s.speakerNames = cur.speakerNames; s.speakerPeople = cur.speakerPeople; s.linesUserEdited = cur.linesUserEdited
             if cur.title != old.title { s.title = cur.title }
         } else if liveNamed.isEmpty, job != nil, let prev = await library.all().first(where: { $0.id == s.id }), prev.speakerNames?.isEmpty == false, !prev.lines.isEmpty, !lines.isEmpty {
             // A re-transcribe renumbers the speakers: the names (and person links) follow the new speakers that cover

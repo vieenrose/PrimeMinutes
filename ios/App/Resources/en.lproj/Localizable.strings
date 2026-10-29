@@ -686,3 +686,7 @@
 "sub_preview" = "Preview";
 "sub_empty" = "No shows yet. Go to + → Podcast to search and subscribe.";
 "sub_more" = "More actions";
+"confirm_resummarize_title" = "Replace your edited summary?";
+"confirm_resummarize_body" = "You edited the summary or the action items. Re-summarizing writes new ones in their place (Undo stays available right after).";
+"confirm_retranscribe_title" = "Discard your line edits?";
+"confirm_retranscribe_body" = "You corrected the text of some lines. Re-transcribing rewrites the whole transcript from the audio, and those corrections will be lost.";

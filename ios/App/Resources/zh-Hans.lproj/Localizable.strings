@@ -686,3 +686,7 @@
 "sub_preview" = "预览";
 "sub_empty" = "尚未订阅节目，到 ＋ → Podcast 搜索订阅。";
 "sub_more" = "更多操作";
+"confirm_resummarize_title" = "要替换你编辑过的摘要吗？";
+"confirm_resummarize_body" = "你改过摘要或待办事项。重新摘要会写出新的内容替换它们（完成后仍可立即撤销）。";
+"confirm_retranscribe_title" = "要舍弃你修改的逐字稿吗？";
+"confirm_retranscribe_body" = "你修正过部分段落的文字。重新转录会依录音重写整份逐字稿，这些修正将会丢失。";

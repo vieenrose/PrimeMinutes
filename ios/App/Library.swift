@@ -39,6 +39,10 @@ struct Session: Identifiable, Codable, Hashable {
     var captureStart: Double? = nil
     /// The user typed this title (TitleEdit): no run, reader or re-import replaces it. nil = generated.
     var titleUserSet: Bool? = nil
+    /// The user edited the summary or the action items (UserEdits): a re-summarize asks before replacing them. nil = never.
+    var summaryUserSet: Bool? = nil
+    /// The user edited a line's text (UserEdits): a re-transcribe asks before dropping it. nil = never.
+    var linesUserEdited: Bool? = nil
     /// The user's rename: a blank draft gives the title back to the automatic one.
     mutating func rename(_ draft: String) {
         let r = TitleEdit.apply(draft, auto: lines.first.map { String($0.text.prefix(20)) } ?? L("meeting"))
