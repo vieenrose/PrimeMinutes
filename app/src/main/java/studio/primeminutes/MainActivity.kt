@@ -1651,40 +1651,6 @@ private fun TranscribeScreen(
         }
         return out
     }
-    val cloudPrefs = remember { context.getSharedPreferences("share_cloud", android.content.Context.MODE_PRIVATE) }
-    var cloudQueue by remember { mutableStateOf<Triple<studio.primeminutes.core.share.ShareKit.Cloud, List<Pair<File, String>>, Int>?>(null) }
-    fun createDocIntent(cloud: studio.primeminutes.core.share.ShareKit.Cloud, f: File, mime: String, initial: Uri?) =
-        Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = mime
-            putExtra(Intent.EXTRA_TITLE, f.name)
-            // Opens where the last save to this provider went (its "Prime Minutes" folder).
-            (initial ?: cloudPrefs.getString(cloud.name, null)?.let(Uri::parse))?.let {
-                if (android.os.Build.VERSION.SDK_INT >= 26) putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, it)
-            }
-        }
-    lateinit var cloudSaverRef: androidx.activity.result.ActivityResultLauncher<Intent>
-    val cloudSaver = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        val q = cloudQueue ?: return@rememberLauncherForActivityResult
-        val uri = res.data?.data
-        if (res.resultCode != android.app.Activity.RESULT_OK || uri == null) { cloudQueue = null; return@rememberLauncherForActivityResult }
-        val (cloud, files, i) = q
-        scope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.openOutputStream(uri)?.use { os -> files[i].first.inputStream().use { it.copyTo(os) } } != null }.getOrDefault(false)
-            }
-            if (!ok) { cloudQueue = null; vm.notify(context.getString(R.string.share_cloud_failed, cloud.label)); return@launch }
-            cloudPrefs.edit().putString(cloud.name, uri.toString()).apply()
-            if (i + 1 < files.size) {
-                cloudQueue = Triple(cloud, files, i + 1)
-                runCatching { cloudSaverRef.launch(createDocIntent(cloud, files[i + 1].first, files[i + 1].second, uri)) }
-            } else {
-                cloudQueue = null
-                vm.notify(context.getString(R.string.share_cloud_saved, cloud.label))
-            }
-        }
-    }
-    cloudSaverRef = cloudSaver
     fun sendIntent(files: List<Pair<File, String>>, subject: String): Intent? {
         val uris = files.map { (f, _) -> runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f) }.getOrNull() ?: return null }
         val mime = studio.primeminutes.core.share.ShareKit.mimeOf(files.map { studio.primeminutes.core.share.ShareKit.Item(it.first.extension, it.second) })
@@ -1698,21 +1664,14 @@ private fun TranscribeScreen(
     }
     fun doShare(e: SessionLibrary.Entry, what: studio.primeminutes.core.share.ShareKit.What, attach: Boolean,
                 format: studio.primeminutes.core.share.ShareKit.DocFormat,
-                where: studio.primeminutes.core.share.ShareKit.Where, cloud: studio.primeminutes.core.share.ShareKit.Cloud?) {
+                where: studio.primeminutes.core.share.ShareKit.Where) {
         val subject = shareTitle(e)
         sharePrep = scope.launch {
             try {
                 val files = prepareShare(e, what, attach, format)
                 if (files.isNullOrEmpty()) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
                 shareFor = null
-                when (where) {
-                    studio.primeminutes.core.share.ShareKit.Where.CLOUD -> {
-                        val c = cloud ?: return@launch
-                        cloudQueue = Triple(c, files, 0)
-                        runCatching { cloudSaver.launch(createDocIntent(c, files[0].first, files[0].second, null)) }
-                            .onFailure { cloudQueue = null; vm.notify(context.getString(R.string.share_cloud_failed, c.label)) }
-                    }
-                    else -> {
+                run {
                         val send = sendIntent(files, subject) ?: run { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
                         when (where) {
                             studio.primeminutes.core.share.ShareKit.Where.NEARBY -> {
@@ -1751,7 +1710,6 @@ private fun TranscribeScreen(
                             }
                             else -> runCatching { context.startActivity(Intent.createChooser(send, context.getString(R.string.share_title))) }
                         }
-                    }
                 }
             } catch (c: kotlinx.coroutines.CancellationException) {
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { File(context.cacheDir, "share_out").listFiles()?.forEach { it.delete() } }
@@ -1760,12 +1718,6 @@ private fun TranscribeScreen(
         }
     }
     shareFor?.let { e ->
-        val clouds = remember {
-            studio.primeminutes.core.share.ShareKit.Cloud.entries.map { c ->
-                val icon = runCatching { context.packageManager.getApplicationIcon(c.pkg) }.getOrNull()
-                studio.primeminutes.ui.CloudTarget(c, icon != null, icon?.let { it.toBitmap(96, 96).asImageBitmap() })
-            }
-        }
         studio.primeminutes.ui.ShareSheet(
             title = shareTitle(e),
             hasSession = e.sessionFile.isFile && e.status == SessionLibrary.Status.DONE,
@@ -1777,8 +1729,7 @@ private fun TranscribeScreen(
             format = runCatching { studio.primeminutes.core.share.ShareKit.DocFormat.valueOf(sharePrefs.getString("doc_format", "PDF")!!) }
                 .getOrDefault(studio.primeminutes.core.share.ShareKit.DocFormat.PDF),
             onFormat = { sharePrefs.edit().putString("doc_format", it.name).apply() },
-            clouds = clouds,
-            onGo = { what, attach, format, where, cloud -> doShare(e, what, attach, format, where, cloud) },
+            onGo = { what, attach, format, where -> doShare(e, what, attach, format, where) },
             onDismiss = { shareFor = null },
         )
     }

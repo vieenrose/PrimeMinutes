@@ -721,14 +721,9 @@
     <string name="share_where_nearby_desc">傳到旁邊的手機或電腦</string>
     <string name="share_where_mail">電子郵件</string>
     <string name="share_where_mail_desc">開啟郵件 App，檔案已附上</string>
-    <string name="share_mail_too_big">超過 25 MB，很多郵件伺服器會拒收。可改用附近分享或雲端。</string>
+    <string name="share_mail_too_big">超過 25 MB，很多郵件伺服器會拒收。可改用附近分享。</string>
     <string name="share_mail_body">附件是 Prime Minutes 的會議「%1$s」。</string>
     <string name="share_mail_none">沒有可以開啟的郵件 App。</string>
-    <string name="share_cloud_heading">存到雲端</string>
-    <string name="share_cloud_desc">透過系統對話框儲存，建議放在「%1$s」資料夾</string>
-    <string name="share_cloud_missing">安裝 %1$s App 後才能存到這裡</string>
-    <string name="share_cloud_saved">已存到 %1$s</string>
-    <string name="share_cloud_failed">無法存到 %1$s</string>
     <string name="share_other_apps">其他 App…</string>
     <string name="share_nearby_missing">這支手機沒有 Quick Share，請改選其他 App。</string>
     <string name="share_pdf_back">↑ 摘要</string>

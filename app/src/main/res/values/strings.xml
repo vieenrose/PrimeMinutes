@@ -736,14 +736,9 @@
     <string name="share_where_nearby_desc">To a phone or computer close by</string>
     <string name="share_where_mail">E-mail</string>
     <string name="share_where_mail_desc">Your mail app opens with the files attached</string>
-    <string name="share_mail_too_big">Over 25 MB: many mail servers refuse it. Try Nearby or the cloud.</string>
+    <string name="share_mail_too_big">Over 25 MB: many mail servers refuse it. Try Nearby instead.</string>
     <string name="share_mail_body">Attached: the meeting “%1$s”, from Prime Minutes.</string>
     <string name="share_mail_none">No mail app could open it.</string>
-    <string name="share_cloud_heading">Save to the cloud</string>
-    <string name="share_cloud_desc">Saved through the system dialog; keep them in “%1$s”</string>
-    <string name="share_cloud_missing">Install the %1$s app to save there</string>
-    <string name="share_cloud_saved">Saved to %1$s</string>
-    <string name="share_cloud_failed">Could not save to %1$s</string>
     <string name="share_other_apps">Other apps…</string>
     <string name="share_nearby_missing">Quick Share isn\'t available on this phone: pick an app instead.</string>
     <string name="share_pdf_back">↑ Summary</string>

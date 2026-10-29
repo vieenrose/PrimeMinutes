@@ -16,7 +16,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.MusicNote
@@ -63,13 +62,9 @@ import studio.primeminutes.core.share.ShareKit.Where
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
 
-/** A cloud destination as the sheet shows it: [icon] is the provider app's own icon (null: not installed). */
-class CloudTarget(val cloud: ShareKit.Cloud, val installed: Boolean, val icon: ImageBitmap?)
-
 /**
  * The one "Share" sheet (spec v2): WHAT (whole session `.pmin` / PDF ± the recording / audio only),
- * then WHERE (Nearby = Quick Share, e-mail with the files attached, a cloud provider through the
- * system save dialog, or any other app). Sizes on every "what"; a privacy hint on a recording's
+ * then WHERE (Nearby = Quick Share, e-mail with the files attached, or any other app). Sizes on every "what"; a privacy hint on a recording's
  * voices, a copyright hint on an online source's audio.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,8 +82,7 @@ fun ShareSheet(
     /** The remembered document format, and where a new choice is saved. */
     format: ShareKit.DocFormat,
     onFormat: (ShareKit.DocFormat) -> Unit,
-    clouds: List<CloudTarget>,
-    onGo: (What, attachAudio: Boolean, ShareKit.DocFormat, Where, ShareKit.Cloud?) -> Unit,
+    onGo: (What, attachAudio: Boolean, ShareKit.DocFormat, Where) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
@@ -98,7 +92,7 @@ fun ShareSheet(
     val docBytes = if (fmt == ShareKit.DocFormat.PDF) pdfBytes else docxBytes
     var attach by remember { mutableStateOf(ShareKit.attachAudioByDefault(online, audioBytes)) }
     val total = ShareKit.size(what, attach, sessionBytes, audioBytes, docBytes)
-    fun go(where: Where, cloud: ShareKit.Cloud? = null) { onGo(what, what == What.PDF && attach, fmt, where, cloud) }
+    fun go(where: Where) { onGo(what, what == What.PDF && attach, fmt, where) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = Spacing.xxl).testTag("share-sheet")) {
@@ -151,11 +145,6 @@ fun ShareSheet(
             WhereRow(Icons.Filled.Email, null, stringResource(R.string.share_where_mail),
                 if ((total ?: 0L) > ShareKit.MAIL_LIMIT) stringResource(R.string.share_mail_too_big) else stringResource(R.string.share_where_mail_desc),
                 true, "share-where-mail", warn = (total ?: 0L) > ShareKit.MAIL_LIMIT) { go(Where.MAIL) }
-            Text(stringResource(R.string.share_cloud_heading), style = MaterialTheme.typography.labelLarge, color = pal.Slate400,
-                modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm))
-            for (c in clouds) WhereRow(Icons.Filled.Cloud, c.icon, c.cloud.label,
-                if (c.installed) stringResource(R.string.share_cloud_desc, ShareKit.FOLDER) else stringResource(R.string.share_cloud_missing, c.cloud.label),
-                c.installed, "share-cloud-${c.cloud.name.lowercase()}") { go(Where.CLOUD, c.cloud) }
             HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(vertical = Spacing.xs))
             ListItem(
                 headlineContent = { Text(stringResource(R.string.share_other_apps), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium) },

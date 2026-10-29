@@ -16,21 +16,7 @@ object ShareKit {
     }
 
     /** The three channels besides "other apps". */
-    enum class Where { NEARBY, MAIL, CLOUD, OTHER }
-
-    /**
-     * A cloud destination, saved through the system document picker (ACTION_CREATE_DOCUMENT): the
-     * provider app's own DocumentsProvider does the network, the app holds no account or token.
-     * [pkg] is the provider app (enabled only when installed); [authority] its documents provider.
-     */
-    enum class Cloud(val pkg: String, val authority: String, val label: String) {
-        DRIVE("com.google.android.apps.docs", "com.google.android.apps.docs.storage", "Google Drive"),
-        DROPBOX("com.dropbox.android", "com.dropbox.product.android.dbapp.document_provider.documents", "Dropbox"),
-        ONEDRIVE("com.microsoft.skydrive", "com.microsoft.skydrive.content.StorageAccessProvider", "OneDrive"),
-    }
-
-    /** The folder the cloud saves go to (the user picks / creates it once; later saves open there). */
-    const val FOLDER = "Prime Minutes"
+    enum class Where { NEARBY, MAIL, OTHER }
 
     /** Above this, many mail servers refuse the message. */
     const val MAIL_LIMIT = 25L * 1000 * 1000
