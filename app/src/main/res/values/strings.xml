@@ -792,4 +792,12 @@
     <string name="cd_open_channel">Open the channel page</string>
     <string name="cd_channel_group">%1$s, %2$d in library</string>
     <string name="cd_filter_sources">Filter by source</string>
+    <string name="bg_check_title">Check for new episodes in the background</string>
+    <string name="bg_check_hint">Once a day on Wi‑Fi, reads the RSS of your subscribed shows (paused ones skipped) and notifies you of new episodes. Nothing is downloaded.</string>
+    <string name="bg_check_no_notif">Notifications are off for Prime Minutes: new episodes only show as a badge on the shows list.</string>
+    <string name="bg_check_channel">New episodes</string>
+    <plurals name="bg_check_found">
+        <item quantity="one">%d new episode</item>
+        <item quantity="other">%d new episodes</item>
+    </plurals>
 </resources>

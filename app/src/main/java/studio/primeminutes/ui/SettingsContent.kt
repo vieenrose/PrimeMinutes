@@ -219,6 +219,18 @@ fun SettingsContent(
         )
         }
 
+        Section(stringResource(R.string.sub_source)) {
+        var bgOn by remember { mutableStateOf(studio.primeminutes.online.BackgroundCheck.enabled(ctx)) }
+        SwitchRow(stringResource(R.string.bg_check_title), bgOn, enabled) {
+            bgOn = it; studio.primeminutes.online.BackgroundCheck.setEnabled(ctx, it)
+        }
+        Text(
+            stringResource(if (bgOn && !studio.primeminutes.online.BackgroundCheck.canNotify(ctx)) R.string.bg_check_no_notif else R.string.bg_check_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = pal.Slate400,
+        )
+        }
+
         Section(stringResource(R.string.ask_title)) {
         SwitchRow(stringResource(R.string.settings_ask), config.askEnabled, enabled) {
             onChange(config.copy(askEnabled = it))

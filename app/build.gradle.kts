@@ -134,6 +134,8 @@ dependencies {
     // unused icons, so release-APK impact is negligible. BOM supplies the version.
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.kotlinx.coroutines.android)
+    // M4: the daily background check for new podcast episodes.
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     testImplementation("junit:junit:4.13.2")
@@ -143,6 +145,7 @@ dependencies {
     // Robolectric: the library/queue persistence (files, SharedPreferences) tested on the JVM, in CI.
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.work:work-testing:2.10.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
