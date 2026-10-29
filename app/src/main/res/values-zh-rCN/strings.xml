@@ -750,4 +750,14 @@
     <plurals name="sub_new_count">
         <item quantity="other">%d 集新</item>
     </plurals>
+    <string name="action_share_meeting">分享会议</string>
+    <string name="action_share_audio_only">仅分享音频</string>
+    <string name="share_preparing">正在准备会议…</string>
+    <string name="share_dup_title">资料库中已有这场会议</string>
+    <string name="share_dup_message">“%1$s”已在你的资料库中。</string>
+    <string name="share_dup_open">打开现有的</string>
+    <string name="share_dup_copy">保留副本</string>
+    <string name="share_too_new">这场会议来自较新版本的 Prime Minutes。请更新 App 以还原；目前先以一般音频导入。</string>
+    <string name="share_received">已收到会议并加入资料库</string>
+    <string name="share_hint_original">会议已存入 Prime Minutes，可以删除“下载”中的原始文件。</string>
 </resources>

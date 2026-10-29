@@ -74,6 +74,9 @@ object SessionLibrary {
          *  [UNKNOWN_START]: an import whose file carries no date (the mail then omits the time). Null: an entry saved
          *  before the field, read as [createdAt] (its save time) as before. Separate from [createdAt], which ids derive from. */
         val captureStart: Long? = null,
+        /** The meeting's identity across devices ([studio.primeminutes.core.session.SessionShare]): given
+         *  on the first share, or the sender's for a received meeting. Null until then. */
+        val sessionId: String? = null,
     ) {
         val wavFile: File get() = File(dir, WAV_NAME)
         val sessionFile: File get() = File(dir, SESSION_NAME)
@@ -283,6 +286,85 @@ object SessionLibrary {
             )?.file
         }
     }
+
+    // --- sharing a meeting between devices (AirDrop / Quick Share; docs: SessionShare) ---
+
+    /** [entry]'s cross-device id, given (and kept in its meta) on first use. */
+    fun ensureSessionId(entry: Entry): Entry = synchronized(metaLock) {
+        val cur = readMeta(entry.dir) ?: entry
+        if (cur.sessionId != null) return cur
+        cur.copy(sessionId = java.util.UUID.randomUUID().toString()).also { runCatching { writeMeta(it) } }
+    }
+
+    /** The library entry holding the meeting [sessionId] (shared from here, or received before). */
+    fun findBySessionId(context: Context, sessionId: String): Entry? =
+        list(context).firstOrNull { it.sessionId.equals(sessionId, ignoreCase = true) && it.sessionFile.isFile }
+
+    /**
+     * [entry] as a meeting to send, at [dest]: its session file re-tagged (no re-encode) with the
+     * share manifest: pending edits included, people links dropped, its id, date and [script].
+     * Null when the entry has no processed session or the build failed.
+     */
+    suspend fun shareMeeting(context: Context, entry: Entry, dest: File, script: String?): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (!entry.sessionFile.isFile) return@withContext null
+        val e = ensureSessionId(entry)
+        val loaded = PrimeMinutesSession.peek(e.sessionFile) ?: return@withContext null
+        val c = Content.of(loaded)
+        withBuildLock(e.id) {
+            PrimeMinutesSession.buildSession(
+                context, dest.parentFile!!, Uri.fromFile(e.sessionFile), c.utterances, c.speakerNames, c.summary, c.actionItems,
+                c.title ?: e.title, c.notes, c.asrModelId, c.asrBackend, c.llmModelId, fileName = dest.name,
+                format = PrimeMinutesSession.Format.M4A,
+                share = studio.primeminutes.core.session.SessionShare.Meta(e.sessionId, meetingStart(e), script),
+            )?.takeIf { it.transcriptEmbedded }?.file
+        }
+    }
+
+    /** [entry]'s audio alone at [dest]: its m4a without the embedded meeting (title kept), or the WAV. */
+    suspend fun shareAudioOnly(entry: Entry, dest: File, title: String?): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val src = entry.audioFile
+        runCatching {
+            if (src == entry.sessionFile && studio.primeminutes.core.audio.Mp4Tags.write(src, dest, primeminutes = null, title = title, description = null, coverJpeg = null, lyrics = null)) dest
+            else src.copyTo(dest, overwrite = true)
+        }.getOrNull()
+    }
+
+    /**
+     * A received meeting file ([file], app-private, MOVED here) becomes a DONE library entry, restored
+     * as sent: no model needed. [manifest] is its embedded manifest; [convert] puts its text in this
+     * device's Han script (null: unchanged). [keepId]: the entry takes the sender's id (false: "Keep a
+     * copy" of a meeting already here, which gets an id of its own).
+     */
+    fun importShared(
+        context: Context, file: File, manifest: JSONObject,
+        convert: ((JSONObject) -> JSONObject)?, keepId: Boolean,
+    ): Entry? = runCatching {
+        val share = studio.primeminutes.core.session.SessionShare
+        val createdAt = System.currentTimeMillis()
+        val base = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(createdAt))
+        var dir = File(root(context), base)
+        var n = 2
+        while (dir.exists()) dir = File(root(context), "$base-${n++}")
+        dir.mkdirs()
+        val dest = File(dir, SESSION_NAME)
+        if (!file.renameTo(dest)) { file.copyTo(dest, overwrite = true); file.delete() }
+        val m = convert?.invoke(manifest) ?: manifest
+        // Text in another script: the converted manifest is the entry's pending edit, folded into its m4a later.
+        if (m.toString() != manifest.toString()) EditJournal.write(dir, JSONObject(m.toString()).put(EditJournal.REV, EditJournal.nextRev(dir, manifest.optLong(EditJournal.REV, 0L))))
+        val loaded = PrimeMinutesSession.loaded(m, dest)
+        val sec = loaded.utterances.maxOfOrNull { it.endSec }?.toInt() ?: 0
+        val entry = Entry(
+            dir.name, dir, title = loaded.title?.trim()?.ifBlank { null }, createdAt = createdAt, durationSec = sec,
+            status = Status.DONE, noSpeech = !SpeechCheck.hasSpeech(loaded.utterances.map { it.text }),
+            captureStart = share.createdAtMs(manifest) ?: UNKNOWN_START,
+            sessionId = (if (keepId) share.sessionId(manifest) else null) ?: java.util.UUID.randomUUID().toString(),
+        )
+        writeMeta(entry)
+        RecentSessions.add(context, Uri.fromFile(dest).toString(), entry.title ?: defaultTitle(context, createdAt), createdAt)
+        studio.primeminutes.core.embed.LibraryIndexer.request(context, entry.id)
+        Log.i(TAG, "received meeting ${entry.sessionId} restored as ${entry.id} ($sec s)")
+        entry
+    }.onFailure { Log.w(TAG, "could not restore the received meeting", it) }.getOrNull()
 
     /** Builds [entry]'s session file from [c] at revision [rev] (caller holds the entry's build lock). */
     private suspend fun attachLocked(context: Context, entry: Entry, c: Content, audio: Uri, rev: Long): Entry? {
@@ -651,6 +733,7 @@ object SessionLibrary {
             .put("noSpeech", entry.noSpeech)
         entry.title?.let { o.put("title", it) }
         entry.captureStart?.let { o.put("captureStart", it) }
+        entry.sessionId?.let { o.put("sessionId", it) }
         File(entry.dir, META).writeTextAtomic(o.toString())
     }
 
@@ -676,6 +759,7 @@ object SessionLibrary {
                 },
                 sourceOnly = status == Status.RECORDED && File(dir, IMPORT_SOURCE).isFile && !File(dir, WAV_NAME).exists(),
                 captureStart = if (o.has("captureStart")) o.getLong("captureStart") else null,
+                sessionId = o.optString("sessionId", "").ifEmpty { null },
             )
         }.onFailure { Log.w(TAG, "corrupt library meta in ${dir.name}", it) }.getOrNull()
     }

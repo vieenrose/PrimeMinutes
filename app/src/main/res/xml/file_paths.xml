@@ -9,4 +9,6 @@
     <cache-path name="share_export" path="share_export/" />
     <!-- "Email participants" attachments (PDF / TXT / .m4a), cleared on each mail. -->
     <cache-path name="share_mail" path="share_mail/" />
+    <!-- "Share meeting": the enriched m4a (Quick Share, AirDrop-compatible), cleared on each share. -->
+    <cache-path name="share_meeting" path="share_meeting/" />
 </paths>

@@ -878,6 +878,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                         this@TranscriptionService, dir, req.audioUri, req.utterances, req.speakerNames,
                         req.summary, req.actionItems, req.title, req.notes, req.asrModelId, req.asrBackend,
                         req.llmModelId, req.coverEnabled, req.fileName, req.format,
+                        share = studio.primeminutes.core.session.SessionShare.Meta(null, null, null),
                     )
                     if (built != null)
                         TranscriptEvent.ExportDone(true, if (built.transcriptEmbedded) "FULL" else "PARTIAL", built.file.absolutePath)
@@ -891,6 +892,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                                 this@TranscriptionService, os, req.audioUri, req.utterances, req.speakerNames,
                                 req.summary, req.actionItems, req.title, req.notes, req.asrModelId, req.asrBackend,
                                 req.llmModelId, req.coverEnabled, req.format,
+                                share = studio.primeminutes.core.session.SessionShare.Meta(null, null, null),
                             )
                         }
                     } ?: PrimeMinutesSession.SaveOutcome.FAILED

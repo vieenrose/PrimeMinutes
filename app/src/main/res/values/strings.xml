@@ -765,4 +765,14 @@
         <item quantity="one">%d new</item>
         <item quantity="other">%d new</item>
     </plurals>
+    <string name="action_share_meeting">Share meeting</string>
+    <string name="action_share_audio_only">Share audio only</string>
+    <string name="share_preparing">Preparing the meeting…</string>
+    <string name="share_dup_title">Already in your library</string>
+    <string name="share_dup_message">“%1$s” is already in your library.</string>
+    <string name="share_dup_open">Open existing</string>
+    <string name="share_dup_copy">Keep a copy</string>
+    <string name="share_too_new">This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.</string>
+    <string name="share_received">Meeting received and added to your library</string>
+    <string name="share_hint_original">The meeting is now in Prime Minutes. You can delete the original file from Downloads.</string>
 </resources>

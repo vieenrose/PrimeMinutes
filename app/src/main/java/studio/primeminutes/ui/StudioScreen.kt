@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.QuestionAnswer
@@ -200,6 +201,8 @@ fun StudioScreen(
     onProcessAll: () -> Unit,
     onRename: (SessionLibrary.Entry, String) -> Unit,
     onShareAudio: (SessionLibrary.Entry) -> Unit,
+    /** "Share meeting": the processed meeting as one enriched file (Quick Share / AirDrop / any app). */
+    onShareMeeting: (SessionLibrary.Entry) -> Unit = {},
     onDelete: (SessionLibrary.Entry) -> Unit,
     onDeleteMany: (List<SessionLibrary.Entry>) -> Unit,
     onImport: () -> Unit,
@@ -758,7 +761,10 @@ fun StudioScreen(
                     ActionRow(Icons.Filled.PlayArrow, stringResource(R.string.action_open)) { actionsFor = null; onOpen(e) }
                 }
                 ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
-                ActionRow(Icons.Filled.Share, stringResource(R.string.action_share_audio)) { actionsFor = null; onShareAudio(e) }
+                if (e.status == SessionLibrary.Status.DONE && e.sessionFile.isFile) {
+                    ActionRow(Icons.Filled.Share, stringResource(R.string.action_share_meeting)) { actionsFor = null; onShareMeeting(e) }
+                    ActionRow(Icons.Filled.MusicNote, stringResource(R.string.action_share_audio_only)) { actionsFor = null; onShareAudio(e) }
+                } else ActionRow(Icons.Filled.Share, stringResource(R.string.action_share_audio)) { actionsFor = null; onShareAudio(e) }
                 ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { actionsFor = null; requestDelete(e) }
                 }
             }

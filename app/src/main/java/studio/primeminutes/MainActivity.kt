@@ -204,6 +204,7 @@ import studio.primeminutes.core.config.TranscriptionConfig
 import studio.primeminutes.core.power.BackgroundReliability
 import studio.primeminutes.core.text.ChineseScript
 import studio.primeminutes.core.text.OpenCcConverter
+import studio.primeminutes.core.session.SessionShare
 import studio.primeminutes.core.events.TranscriptEvent
 import studio.primeminutes.core.models.LlmRegistry
 import studio.primeminutes.core.models.ModelManager
@@ -1121,6 +1122,50 @@ private fun TranscribeScreen(
     // A share / "open with" from another app lands in MainActivity.sharedAudioUri. Copy the stream
     // into app storage while its transient grant is live, then transcribe it like any other source.
     // A shared file may itself be a saved Prime Minutes session (.ogg/.m4a) — recover it instead.
+    // --- a received meeting (docs: SessionShare): restore into the library, duplicate check by session id ---
+    var dupImport by remember { mutableStateOf<Triple<File, org.json.JSONObject, SessionLibrary.Entry>?>(null) }
+    fun restoreShared(local: File, man: org.json.JSONObject, keepId: Boolean, fromOutside: Boolean) {
+        scope.launch {
+            val script = SummaryScript.scriptFor(vm.now.config.summaryScript, context)
+            val entry = withContext(Dispatchers.IO) {
+                val gen = OpenCcConverter.get(context, script)
+                val tr = if (script == ChineseScript.TRADITIONAL) OpenCcConverter.getTranscriptTraditional(context) else OpenCcConverter.getTranscriptSimplified(context)
+                SessionLibrary.importShared(context, local, man, { SessionShare.convertScript(it, gen::convert, tr::convert) }, keepId)
+            }
+            vm.setStatus("")
+            if (entry == null) { vm.notify(context.getString(R.string.import_failed)); return@launch }
+            vm.bumpRecents()
+            if (vm.now.isRecording || (vm.now.running && !vm.now.watchingQueue)) vm.notify(context.getString(R.string.share_received))
+            else vm.openSessionUri(Uri.fromFile(entry.sessionFile))
+            // Quick Share / Files leave the original where it landed (Downloads): ours is a copy. Said once.
+            val prefs = context.getSharedPreferences("share", android.content.Context.MODE_PRIVATE)
+            if (fromOutside && !prefs.getBoolean("hint_original_shown", false)) {
+                prefs.edit().putBoolean("hint_original_shown", true).apply()
+                delay(1500)
+                vm.notify(context.getString(R.string.share_hint_original))
+            }
+        }
+    }
+    fun receiveMeeting(local: File, man: org.json.JSONObject, fromOutside: Boolean) {
+        scope.launch {
+            val existing = SessionShare.sessionId(man)?.let { id -> withContext(Dispatchers.IO) { SessionLibrary.findBySessionId(context, id) } }
+            if (existing != null) dupImport = Triple(local, man, existing)
+            else restoreShared(local, man, keepId = true, fromOutside = fromOutside)
+        }
+    }
+    dupImport?.let { (local, man, existing) ->
+        AlertDialog(
+            onDismissRequest = { dupImport = null; local.delete(); vm.setStatus("") },
+            title = { Text(stringResource(R.string.share_dup_title)) },
+            text = { Text(stringResource(R.string.share_dup_message, existing.title ?: SessionLibrary.defaultTitle(context, existing.createdAt))) },
+            confirmButton = { TextButton(onClick = {
+                dupImport = null; local.delete(); vm.setStatus("")
+                vm.openSessionUri(Uri.fromFile(existing.sessionFile))
+            }) { Text(stringResource(R.string.share_dup_open)) } },
+            dismissButton = { TextButton(onClick = { dupImport = null; restoreShared(local, man, keepId = false, fromOutside = false) }) { Text(stringResource(R.string.share_dup_copy)) } },
+        )
+    }
+
     var pendingSharedImport by remember { mutableStateOf<Uri?>(null) }
     LaunchedEffect(Unit) {
         MainActivity.sharedAudioUri.collect { u ->
@@ -1133,12 +1178,18 @@ private fun TranscribeScreen(
                 val luri = Uri.fromFile(local)
                 // Until the service saves it into the library, this copy is the only one: mark it
                 // so a kill mid-import offers to finish it on the next launch.
-                if (!PrimeMinutesSession.hasEmbeddedSession(local)) ImportRecovery.markStarted(context, local, SessionViewModel.documentLabel(context, u))
-                // If it embeds a session, route to recovery; otherwise transcribe it.
-                if (PrimeMinutesSession.hasEmbeddedSession(local)) pendingSharedImport = luri
+                // A shared meeting (AirDrop from iOS, Quick Share, any app): restored as sent, no model needed.
+                val man = withContext(Dispatchers.IO) { SessionShare.readManifest(local) }
+                if (man != null && SessionShare.gate(man) == SessionShare.Gate.OK) {
+                    receiveMeeting(local, man, fromOutside = u.scheme == "content")
+                    return@collect
+                }
+                // Written by a newer app: say so, then import it as plain audio.
+                if (man != null) vm.notify(context.getString(R.string.share_too_new))
+                ImportRecovery.markStarted(context, local, SessionViewModel.documentLabel(context, u))
                 // Importing supersedes the open session/recording: a share arriving mid-recording
                 // must not silently kill a live capture — confirm first.
-                else if (vm.now.isRecording || (vm.now.running && !vm.now.watchingQueue)) importConfirm = luri
+                if (vm.now.isRecording || (vm.now.running && !vm.now.watchingQueue)) importConfirm = luri
                 else withModels { vm.launchAudio(luri) }
             } else {
                 vm.setStatus(context.getString(R.string.empty_status))
@@ -1682,6 +1733,40 @@ private fun TranscribeScreen(
     // Blank slate → the EmptyState hero carries the primary "Add audio" CTA.
     val isEmptyState = utterances.isEmpty() && !s.running && player == null && s.downloadEntryId == null
 
+    // "Share meeting": the enriched m4a (Quick Share, AirDrop-compatible), prepared with a cancellable progress.
+    var sharePrep by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun shareEntryMeeting(e: SessionLibrary.Entry) {
+        val subject = e.title ?: SessionLibrary.defaultTitle(context, e.createdAt)
+        val dir = File(context.cacheDir, "share_meeting")
+        sharePrep = scope.launch {
+            try {
+                val f = withContext(Dispatchers.IO) {
+                    dir.mkdirs(); dir.listFiles()?.forEach { it.delete() }
+                    SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, "m4a")), vm.now.config.summaryScript)
+                }
+                val shareUri = f?.let { runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it) }.getOrNull() }
+                if (shareUri == null) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = PrimeMinutesSession.Format.M4A.mime
+                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                    putExtra(Intent.EXTRA_SUBJECT, subject)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                runCatching { context.startActivity(Intent.createChooser(send, context.getString(R.string.action_share_meeting))) }
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { dir.listFiles()?.forEach { it.delete() } }
+                throw c
+            } finally { sharePrep = null }
+        }
+    }
+    if (sharePrep != null) AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.share_preparing)) },
+        text = { androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth()) },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = { sharePrep?.cancel() }) { Text(stringResource(R.string.cancel)) } },
+    )
+
     // Share a library entry's audio via the FileProvider (files/library is an exported path).
     fun shareEntryAudio(e: SessionLibrary.Entry) {
         val f = e.audioFile
@@ -1695,7 +1780,7 @@ private fun TranscribeScreen(
                     val dir = File(context.cacheDir, "share_audio").apply { mkdirs() }
                     dir.listFiles()?.forEach { it.delete() }
                     // With edits not yet folded into the entry's file, the copy is built with them.
-                    SessionLibrary.shareableCopy(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, f.extension)))
+                    SessionLibrary.shareAudioOnly(e, File(dir, PrimeMinutesSession.suggestFileName(subject, f.extension)), subject)
                 }.getOrNull()
             } ?: return@launch
             val shareUri = runCatching {
@@ -1826,6 +1911,7 @@ private fun TranscribeScreen(
                     scope.launch { withContext(Dispatchers.IO) { SessionLibrary.rename(context, e.dir, n) }; vm.bumpRecents() }
                 },
                 onShareAudio = { e -> shareEntryAudio(e) },
+                onShareMeeting = { e -> shareEntryMeeting(e) },
                 onDelete = { e -> vm.deleteEntries(listOf(e)) },
                 onDeleteMany = vm::deleteEntries,
                 onImport = { vm.showAddSourceSheet(true) },
@@ -1904,6 +1990,7 @@ private fun TranscribeScreen(
                 onOpenExport = { vm.showExportSheet(true) },
                 onEmailParticipants = { mailOpen = true },
                 onAskMeeting = if (askMeetingAvailable) ({ askMeeting = "" }) else null,
+                onShareMeeting = s.libraryDir?.takeIf { !s.running }?.let { d -> { SessionLibrary.byId(context, d.name)?.takeIf { it.sessionFile.isFile }?.let { shareEntryMeeting(it) } ?: vm.notify(context.getString(R.string.session_share_failed)) } },
                 scrollBehavior = sessionBarScroll,
             )
         },

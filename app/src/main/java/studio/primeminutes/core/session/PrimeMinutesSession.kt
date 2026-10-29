@@ -45,7 +45,7 @@ object PrimeMinutesSession {
         M4A("m4a", "audio/mp4"),
     }
 
-    private const val VERSION = 1
+    private const val VERSION = SessionShare.SCHEMA_MAJOR
     private const val FIELD = "PRIMEMINUTES"
     // base64 ceiling before decode. Generous on purpose: a long meeting's transcript can exceed a
     // couple MB once base64'd (especially less-compressible CJK / dense text), and the REAL protection
@@ -143,6 +143,9 @@ object PrimeMinutesSession {
         format: Format,
         /** Revision embedded with the session ([EditJournal.REV]); 0 outside the library. */
         editRev: Long = 0L,
+        /** A copy leaving the device (share, save to a file): the manifest goes through the
+         *  [SessionShare.forShare] allowlist (no people links) and carries this identity. */
+        share: SessionShare.Meta? = null,
     ): Built? = withContext(Dispatchers.IO) {
         if (audioUri == null) return@withContext null
         dir.mkdirs()
@@ -185,7 +188,8 @@ object PrimeMinutesSession {
         // No generated cover art: the per-session identicon read as a random logo and was removed.
         // [coverEnabled] is kept for call-site compatibility and ignored.
         val coverJpeg: ByteArray? = null; val coverW = 0; val coverH = 0
-        val blob = encodeSession(manifest(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, editRev))
+        val m0 = manifest(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, editRev)
+        val blob = encodeSession(share?.let { SessionShare.forShare(m0, it.sessionId, it.createdAtMs, it.script) } ?: m0)
         val cleanTitle = title?.replace('\n', ' ')?.trim()?.ifBlank { null }
         val cleanSummary = summary?.trim()?.ifBlank { null }
         // Player-facing lyrics (©lyr / LYRICS) = LRC-style SYNCHRONIZED lyrics: an `[mm:ss.xx]` timestamp
@@ -242,10 +246,12 @@ object PrimeMinutesSession {
         summary: String?, actionItems: String?, title: String?, notes: String?,
         asrModelId: String?, asrBackend: String?, llmModelId: String?,
         coverEnabled: Boolean = true, format: Format,   // no default — see buildSession
+        share: SessionShare.Meta? = null,
     ): SaveOutcome = withContext(Dispatchers.IO) {
         out.use { o ->
             val dir = File(context.cacheDir, "primeminutes_save").apply { mkdirs() }
-            val built = buildSession(context, dir, audioUri, utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, coverEnabled, "session.${format.ext}", format)
+            val built = buildSession(context, dir, audioUri, utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, coverEnabled, "session.${format.ext}", format,
+                share = share)
                 ?: return@use SaveOutcome.FAILED
             built.file.inputStream().use { it.copyTo(o) }
             built.file.delete()
@@ -277,6 +283,9 @@ object PrimeMinutesSession {
         // valid gzip+JSON but semantically off (a future schema, a hand-edited or truncated file —
         // a non-object utterance, a non-integer speaker key) must degrade to plain audio, not crash
         // the open flow. parseManifest's strict getInt/getJSONObject calls are inside this guard.
+        // Written by a newer app (a newer manifest major): never guessed at, it opens as plain audio.
+        if (SessionShare.gate(json) == SessionShare.Gate.TOO_NEW)
+            return@withContext Loaded(audio, emptyList(), emptyMap(), null, null, null, null, null, null, recovered = false, coverJpeg = coverJpeg)
         return@withContext runCatching {
             val m = parseManifest(json, audio, coverJpeg)
             // A library meeting: its speaker sidecar and the people directory name its speakers.

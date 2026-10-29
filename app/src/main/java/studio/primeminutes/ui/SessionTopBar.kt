@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -100,6 +101,9 @@ fun SessionTopBar(
     onEmailParticipants: () -> Unit = {},
     /** "Ask this meeting" in the ⋮ menu; null when the in-meeting Ask is not available. */
     onAskMeeting: (() -> Unit)? = null,
+    /** "Share meeting" (the enriched file through the system sheet: Quick Share, AirDrop on iOS); null when
+     *  the open meeting is not a processed library entry. */
+    onShareMeeting: (() -> Unit)? = null,
     /** Tap on the title: edit it (null → not editable, e.g. no title yet). */
     onTitleClick: (() -> Unit)? = null,
     /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
@@ -170,7 +174,7 @@ fun SessionTopBar(
                 OverflowMenu(
                     canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
                     canResume, onResume,
-                    canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting,
+                    canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting, onShareMeeting,
                 )
             },
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
@@ -225,6 +229,7 @@ private fun OverflowMenu(
     onSettings: () -> Unit,
     onEmailParticipants: () -> Unit,
     onAskMeeting: (() -> Unit)?,
+    onShareMeeting: (() -> Unit)?,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     var open by remember { mutableStateOf(false) }
@@ -253,6 +258,9 @@ private fun OverflowMenu(
             // groups them by what you get. A dropdown this long also meant several slow full-page
             // repaints on e-ink.
             if (canExport) {
+                if (onShareMeeting != null) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Share, null, Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.action_share_meeting)) }, onClick = pick(onShareMeeting),
+                    modifier = Modifier.testTag("menu-share-meeting"))
                 DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Email, null, Modifier.size(18.dp)) },
                     text = { Text(stringResource(R.string.mail_menu_entry)) }, onClick = pick(onEmailParticipants),
                     modifier = Modifier.testTag("menu-email-participants"))
