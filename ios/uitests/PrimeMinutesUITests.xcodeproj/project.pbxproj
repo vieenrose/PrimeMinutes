@@ -9,11 +9,13 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* ContactsMailUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* ContactsMailUITests.swift */; };
 		A10000000000000000000101 /* DynamicTypeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000102 /* DynamicTypeUITests.swift */; };
+		A10000000000000000000201 /* AirDropUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000202 /* AirDropUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000002 /* ContactsMailUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsMailUITests.swift; sourceTree = "<group>"; };
 		A10000000000000000000102 /* DynamicTypeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicTypeUITests.swift; sourceTree = "<group>"; };
+		A10000000000000000000202 /* AirDropUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirDropUITests.swift; sourceTree = "<group>"; };
 		A10000000000000000000003 /* PrimeMinutesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PrimeMinutesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -41,6 +43,7 @@
 			children = (
 				A10000000000000000000002 /* ContactsMailUITests.swift */,
 				A10000000000000000000102 /* DynamicTypeUITests.swift */,
+				A10000000000000000000202 /* AirDropUITests.swift */,
 			);
 			path = PrimeMinutesUITests;
 			sourceTree = "<group>";
@@ -107,6 +110,7 @@
 			files = (
 				A10000000000000000000001 /* ContactsMailUITests.swift in Sources */,
 				A10000000000000000000101 /* DynamicTypeUITests.swift in Sources */,
+				A10000000000000000000201 /* AirDropUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
