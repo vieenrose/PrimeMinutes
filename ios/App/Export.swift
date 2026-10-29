@@ -362,11 +362,10 @@ enum Export {
             turns: turns(s.lines).map { ShareDocx.Turn(clock: gutterClock($0.u.start, pad), speaker: s.name($0.u.speaker), text: $0.text, sec: Int(max(0, $0.u.start)), cont: $0.cont) },
             backLabel: L("share_pdf_back"), zh: zh, simplified: AppLanguage.current.script == .simplified)
     }
-    /// The converters of the interface's Han script; nil for an English interface (the text is left as stored).
+    /// The converters of the script generation uses (AppLanguage.script; an English interface keeps it, as on Android).
     private static func scriptConverters() -> (gen: OpenCC, tr: OpenCC)? {
-        let l = AppLanguage.current
-        guard l.resolved != .en else { return nil }
-        return (OpenCC.generated(l.script), OpenCC.transcript(l.script))
+        let sc = AppLanguage.current.script
+        return (OpenCC.generated(sc), OpenCC.transcript(sc))
     }
     /// The meeting as the PDF shows it: Chinese text in the interface's script (the stored session is not changed).
     static func inScript(_ s0: Session) -> Session {

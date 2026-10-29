@@ -40,6 +40,11 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
         let trad = ExportScript.doc(doc, generated: OpenCC.generated(.traditional).convert, transcript: OpenCC.transcript(.traditional).convert)
         check(ShareDocx.documentXML(trad) == before, "繁體 leaves a Traditional meeting as is")
 
+        // English interface: the stored script setting (Traditional here) still applies, English text unchanged.
+        var hans = doc; hans.title = "周会纪录"; hans.turns[0].text = "我们开会讨论这个问题。"
+        let en = ExportScript.doc(hans, generated: OpenCC.generated(AppLanguage.current.script).convert, transcript: OpenCC.transcript(AppLanguage.current.script).convert)
+        check(en.title == "週會紀錄" && en.turns[0].text == "我們開會討論這個問題。" && en.turns[2].text == "Let's ship it.", "English UI follows the stored script: \(en.title)")
+
         if let dir = ProcessInfo.processInfo.environment["EXPORT_SCRIPT_OUT"] {
             try? ShareDocx.data(simp).write(to: URL(fileURLWithPath: dir + "/ios-export-zh-CN.docx"))
             try? ShareDocx.data(trad).write(to: URL(fileURLWithPath: dir + "/ios-export-zh-TW.docx"))
