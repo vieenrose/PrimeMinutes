@@ -324,7 +324,7 @@ struct SessionView: View {
     }
     /// "Save session" picked: the same file as Share meeting.
     private func saveSessionExport() { showExport = false; shareMeeting(delay: true) }
-    /// "Share meeting": the enriched .primeminutes, MPEG-4 (AirDrop, Messages, Files…), with progress and Cancel while the audio encodes.
+    /// "Share meeting": the enriched .pmin, MPEG-4 (AirDrop, Messages, Files…), with progress and Cancel while the audio encodes.
     private func shareMeeting(delay: Bool = false) {
         exporting = true; exportProgress = 0
         shareTask = Task {

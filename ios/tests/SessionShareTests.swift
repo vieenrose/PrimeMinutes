@@ -51,7 +51,7 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
         }
         let fut = SessionFile.read(f("future_v3.m4a")); ok(fut != nil && !SessionFile.supported(fut!), "future_v3 refused")
         // share extension: stored as .m4a, other extensions kept
-        ok(SessionFile.storedExtension("primeminutes") == "m4a" && SessionFile.storedExtension("PrimeMinutes") == "m4a", "share ext stored as m4a")
+        ok(SessionFile.storedExtension("pmin") == "m4a" && SessionFile.storedExtension("PMIN") == "m4a" && SessionFile.storedExtension("primeminutes") == "primeminutes" && SessionFile.storedExtension("m4a") == "m4a", "share ext stored as m4a")
         ok(SessionFile.storedExtension("") == "m4a" && SessionFile.storedExtension("m4a") == "m4a" && SessionFile.storedExtension("mp3") == "mp3", "other ext kept")
         // allowlist + identity
         let s = SessionFile.forShare(meetingV1(), sessionId: sid, createdAt: nil, script: "zh-Hans")
