@@ -117,7 +117,12 @@ struct SessionView: View {
         default: break
         }
     }
-    private var shown: [Utterance] { s.lines }
+    /// The meeting as shown: Chinese text in the app's script (ScreenScript; cached). `s` stays the stored text that
+    /// every edit changes and saves.
+    private var v: Session { ScreenScript.shown(s) }
+    /// The search query in the shown script, so either script finds the shown lines.
+    private var sq: String { ScreenScript.of(AppLanguage.current.script).query(query) }
+    private var shown: [Utterance] { v.lines }
     private var current: UUID? {
         guard player.engaged else { return nil }
         return s.lines.last(where: { (l: Utterance) -> Bool in l.start <= player.time })?.id
@@ -128,19 +133,20 @@ struct SessionView: View {
     @State private var match = 0
     @FocusState private var searchFocus: Bool
     private static let palette = speakerPalette
-    private var names: [(String, Color)] { Array(Set(s.lines.map(\.speaker))).sorted().map { (SpeakerRefs.unbreakable(s.name($0)), tint($0)) } }
+    private var names: [(String, Color)] { let v = v; return Array(Set(v.lines.map(\.speaker))).sorted().map { (SpeakerRefs.unbreakable(v.name($0)), tint($0)) } }
     /// Model text as shown: its S1, S2 become the transcript's speaker names (Android refs(screen = true)).
     private func refs(_ t: String, screen: Bool = true) -> String {
-        SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: screen ? SpeakerRefs.unbreakable : { $0 })
+        let v = v; return SpeakerRefs.resolve(t, label: { v.name($0) }, known: Set(v.lines.map(\.speaker)), wrap: screen ? SpeakerRefs.unbreakable : { $0 })
     }
     private func tint(_ spk: Int) -> Color { Self.palette[max(0, spk) % Self.palette.count] }
     /// Lexical matches, plus (≈ on) the utterances of the semantic chunks the index ranks for the query, in transcript order.
     private var hits: [Utterance] {
         if query.isEmpty { return [] }
-        let lex = s.lines.filter { $0.text.localizedCaseInsensitiveContains(query) }
+        let lines = v.lines, q = sq
+        let lex = lines.filter { $0.text.localizedCaseInsensitiveContains(q) }
         guard semantic, !semIds.isEmpty else { return lex }
         let ids = Set(lex.map(\.id)).union(semIds)
-        return s.lines.filter { ids.contains($0.id) }
+        return lines.filter { ids.contains($0.id) }
     }
     @State private var semantic = false
     @State private var semIds = Set<UUID>()
@@ -158,8 +164,9 @@ struct SessionView: View {
     static func preloadEmbedder() { guard EmbedHost.ready else { return }; Task.detached(priority: .utility) { _ = EmbedHost.use(threads: 2) { _ in 0 } } }
     private var meetingResults: [MeetingSearch.Result] {
         guard searching else { return [] }
-        return MeetingSearch.results(query, lines: s.lines.map { MeetingSearch.Line(start: $0.start, text: $0.text, speaker: $0.speaker) },
-                                     notes: s.notes.map { MeetingSearch.NoteIn(ts: $0.ts, text: $0.text) }, dense: semantic ? semPassages : [])
+        let v = v
+        return MeetingSearch.results(sq, lines: v.lines.map { MeetingSearch.Line(start: $0.start, text: $0.text, speaker: $0.speaker) },
+                                     notes: v.notes.map { MeetingSearch.NoteIn(ts: $0.ts, text: $0.text) }, dense: semantic ? semPassages : [])
     }
     /// A result tapped: the list folds, the transcript shows the line, the player is parked there (paused).
     private func pick(_ r: MeetingSearch.Result) {
@@ -219,7 +226,7 @@ struct SessionView: View {
     private var playerBar: some View { PlayerBar(player: player) }
     private var summaryTab: some View {
         SessionSummaryTab(
-            session: s,
+            session: v,
             busy: busy,
             showActions: showActions,
             showProcess: showProcess,
@@ -228,10 +235,10 @@ struct SessionView: View {
             refs: { refs($0) },
             playerAvailable: player.available,
             onSeekPlay: { player.seekPlay($0) },
-            onCopySummary: { UIPasteboard.general.string = refs(s.summary, screen: false); Haptics.success(); announce(L("summary_copied")) },
-            onEditSummary: { draft = s.summary; editingSummary = true },
-            onCopyActions: { if let a = s.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
-            onEditActions: { if let a = s.actionItems { draft = a; editingActions = true } },
+            onCopySummary: { UIPasteboard.general.string = refs(v.summary, screen: false); Haptics.success(); announce(L("summary_copied")) },
+            onEditSummary: { draft = v.summary; editingSummary = true },
+            onCopyActions: { if let a = v.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
+            onEditActions: { if let a = v.actionItems { draft = a; editingActions = true } },
             onToggleProcess: { withAnimation { showProcess.toggle() } },
             notesSection: { AnyView(notesSection($0, $1)) }
         )
@@ -273,10 +280,10 @@ struct SessionView: View {
                 noSpeech: s.noSpeech,
                 busy: busy,
                 currentId: current,
-                query: query,
+                query: sq,
                 matchId: hits.indices.contains(match) ? hits[match].id : nil,
                 tint: { tint($0) },
-                name: { s.name($0) },
+                name: { [v] in v.name($0) },
                 marked: { Self.marked($0, $1) },
                 onSeekPlay: { if player.available { player.seekPlay($0) } },
                 onRenameSpeaker: { renamingSpeaker = $0 },
@@ -342,7 +349,8 @@ struct SessionView: View {
     private func saveSummaryEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         editingSummary = false
-        if t != s.summary { s.summary = t; s.summaryUserSet = true; save(s) }
+        // Saved unchanged: the stored text stays (not the converted copy the sheet opened on).
+        if ScreenScript.typed(t, shown: v.summary.trimmingCharacters(in: .whitespacesAndNewlines)) != nil, t != s.summary { s.summary = t; s.summaryUserSet = true; save(s) }
     }
     /// Whether the actions-edit Done button is enabled (non-blank draft).
     private var actionsEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -350,7 +358,7 @@ struct SessionView: View {
     private func saveActionsEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         editingActions = false
-        if t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; s.summaryUserSet = true; save(s) }
+        if ScreenScript.typed(t, shown: (v.actionItems ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) != nil, t != s.actionItems { s.actionsEdited = t.isEmpty ? "-" : t; s.summaryUserSet = true; save(s) }
     }
     // DEV: VOX_RESUM re-runs the summary on appear (README-animation harness).
     private func devResumTask() { if Dev.env["VOX_RESUM"] != nil { rerun(s, false) } }
@@ -395,16 +403,16 @@ struct SessionView: View {
         if UserEdits.summaryStale(reader: s.reader, current: Prefs.readerId, received: s.receivedReader, hasSummary: !s.summary.isEmpty, hasAudio: s.audio != nil) { summaryStale = true }
     }
     /// The rename alert's Done: the user's title (a blank one restores the automatic title).
-    private func commitTitle() { let before = (s.title, s.titleUserSet); s.rename(draft); if (s.title, s.titleUserSet) != before { save(s) } }
+    private func commitTitle() { guard ScreenScript.typed(draft, shown: v.title) != nil else { return }; let before = (s.title, s.titleUserSet); s.rename(draft); if (s.title, s.titleUserSet) != before { save(s) } }
     /// The session toolbar, out of the body chain so the solver sees one call.
     @ToolbarContentBuilder private func toolbar() -> some ToolbarContent {
         SessionToolbar(
             showUndo: !undoSteps.isEmpty || !redoSteps.isEmpty,
             canUndo: canUndo, canRedo: canRedo, busy: busy,
             hasLines: !s.lines.isEmpty, hasAudio: s.audio != nil, noSpeech: s.noSpeech,
-            askMeetingReady: askMeetingReady, title: s.title, displayTitle: refs(s.title, screen: false),
+            askMeetingReady: askMeetingReady, title: v.title, displayTitle: refs(v.title, screen: false),
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
-            onRename: { draft = s.title; renamingTitle = true },
+            onRename: { draft = v.title; renamingTitle = true },
             onAsk: { askMeeting = "" }, onShare: { sharing = .of(s) },
             onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) })
     }
@@ -417,14 +425,17 @@ struct SessionView: View {
     }
     /// The pinned tabs + speaker strip (SessionInsets' top inset).
     private var stickyHeader: some View {
-        SessionStickyHeader(tab: $tab, speakers: Array(Set(s.lines.map(\.speaker))).sorted(), tint: { tint($0) }, name: { s.name($0) })
+        SessionStickyHeader(tab: $tab, speakers: Array(Set(s.lines.map(\.speaker))).sorted(), tint: { tint($0) }, name: { [v] in v.name($0) })
     }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     /// Save the line-text edit (like Android: an emptied line is not a save).
     private func saveLineEdit() {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let id = editingLine, !t.isEmpty, let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
+        // Saved unchanged: the stored line stays (the sheet opened on the converted text).
+        let shownText = v.lines.first(where: { $0.id == editingLine })?.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let id = editingLine, !t.isEmpty, shownText.map({ ScreenScript.typed(t, shown: $0) != nil }) ?? true,
+           let i = s.lines.firstIndex(where: { $0.id == id }), s.lines[i].text != t {
             let before = (s.lines, s.speakerNames, s.speakerPeople); s.lines[i].text = t; s.linesUserEdited = true; record(before); edited() }
         editingLine = nil
     }
@@ -461,8 +472,8 @@ struct SessionView: View {
         ScrollViewReader { proxy in
             scrollPage(proxy)
         }
-        .environment(\.speakerRefs, { [s] t in SpeakerRefs.resolve(t, label: { s.name($0) }, known: Set(s.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
-        .navigationTitle(refs(s.title, screen: false)).navigationBarTitleDisplayMode(.inline)
+        .environment(\.speakerRefs, { [v] t in SpeakerRefs.resolve(t, label: { v.name($0) }, known: Set(v.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
+        .navigationTitle(refs(v.title, screen: false)).navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar() }
         .sheet(item: $sharing) { t in MeetingShareSheet(target: t) { sharing = nil } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
@@ -497,7 +508,7 @@ struct SessionView: View {
                 SessionLineEditSheet(draft: $draft, doneEnabled: lineEditDoneEnabled, onCancel: { editingLine = nil }, onDone: { saveLineEdit() })
             }
         }
-        .confirmationDialog(merging.map { L("speaker_merge_confirm", s.name($0.0), s.name($0.1)) } ?? "",
+        .confirmationDialog(merging.map { L("speaker_merge_confirm", v.name($0.0), v.name($0.1)) } ?? "",
                             isPresented: Binding(get: { merging != nil }, set: { if !$0 { merging = nil } }), titleVisibility: .visible) {
             Button(L("speaker_merge")) { if let (f, t) = merging { merge(f, t) }; merging = nil }
             Button(L("cancel"), role: .cancel) { merging = nil }
@@ -507,7 +518,7 @@ struct SessionView: View {
             if let id = moveLine, let i = s.lines.firstIndex(where: { $0.id == id }) {
                 SessionMoveLineSheet(lineId: id, lineSpeaker: s.lines[i].speaker,
                     speakers: Array(Set(s.lines.map(\.speaker))).sorted(),
-                    tint: { tint($0) }, name: { s.name($0) },
+                    tint: { tint($0) }, name: { [v] in v.name($0) },
                     onPick: { moveLine = nil; reassign(id, $0) },
                     onCancel: { moveLine = nil })
             }
@@ -515,7 +526,7 @@ struct SessionView: View {
         .sheet(isPresented: Binding(get: { seamAt != nil }, set: { if !$0 { player.endPreview(); seamAt = nil } })) {
             if let k = seamAt, k >= 1, k < s.lines.count {
                 SessionSeamSheet(seam: k, lines: s.lines,
-                    tint: { tint($0) }, name: { s.name($0) },
+                    tint: { tint($0) }, name: { [v] in v.name($0) },
                     canPlay: player.available,
                     onPreview: { player.preview(from: $0, to: $1) },
                     onApply: { player.endPreview(); seamAt = nil; moveBoundary(k, $0) },
@@ -525,7 +536,7 @@ struct SessionView: View {
         .sheet(isPresented: Binding(get: { splitAt != nil }, set: { if !$0 { player.endPreview(); splitAt = nil } })) {
             if let li = splitAt, s.lines.indices.contains(li) {
                 SessionSplitSheet(index: li, lines: s.lines,
-                    tint: { tint($0) }, name: { s.name($0) },
+                    tint: { tint($0) }, name: { [v] in v.name($0) },
                     canPlay: player.available,
                     onPreview: { player.preview(from: $0, to: $1) },
                     onApply: { player.endPreview(); splitAt = nil; splitLine(li, $0, $1) },
@@ -588,8 +599,8 @@ struct SessionView: View {
         }
         let others = Array(Set(s.lines.map(\.speaker))).sorted().filter { $0 != l.speaker }
         if !others.isEmpty {
-            Section(L("speaker_move_line")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { reassign(l.id, k) } } }
-            Section(L("speaker_merge_into")) { ForEach(others, id: \.self) { k in Button(s.name(k)) { merging = (l.speaker, k) } } }
+            Section(L("speaker_move_line")) { ForEach(others, id: \.self) { k in Button(v.name(k)) { reassign(l.id, k) } } }
+            Section(L("speaker_merge_into")) { ForEach(others, id: \.self) { k in Button(v.name(k)) { merging = (l.speaker, k) } } }
         }
     }
     /// Android SpeakerEdits: plain relabels, ids kept (labels and colours stay put); a speaker left without lines loses its name.
@@ -614,9 +625,9 @@ struct SessionView: View {
     // MARK: people (docs/design/speaker-tags.md): the picker's choices, undoable like a merge
     private var pickerSpeakers: [PickerSpeaker] {
         let doc = PeopleStore.shared.doc
-        return Array(Set(s.lines.map(\.speaker))).sorted().map { k in PickerSpeaker(id: k, label: s.name(k), person: s.speakerPeople?[String(k)].flatMap { doc.byId($0)?.id }) }
+        return Array(Set(s.lines.map(\.speaker))).sorted().map { k in PickerSpeaker(id: k, label: v.name(k), person: s.speakerPeople?[String(k)].flatMap { doc.byId($0)?.id }) }
     }
-    private func pickerSpeaker(_ k: Int) -> PickerSpeaker { pickerSpeakers.first { $0.id == k } ?? PickerSpeaker(id: k, label: s.name(k), person: nil) }
+    private func pickerSpeaker(_ k: Int) -> PickerSpeaker { pickerSpeakers.first { $0.id == k } ?? PickerSpeaker(id: k, label: v.name(k), person: nil) }
     /// `k` is `p` of the directory.
     private func link(_ k: Int, _ p: Person) {
         let before = (s.lines, s.speakerNames, s.speakerPeople)
@@ -714,12 +725,12 @@ struct SessionView: View {
 extension SessionView {
     /// The unfolded search-results list under the transcript search bar.
     var sessionResultsList: some View {
-        let q = query
+        let q = sq, v = v
         return SessionResultsList(
             results: meetingResults,
             query: q,
             askMeetingReady: askMeetingReady,
-            name: { [s] in s.name($0) },
+            name: { v.name($0) },
             pick: { [self] in pick($0) },
             askMeeting: { [self] in askMeeting = query.trimmingCharacters(in: .whitespaces) }
         )
@@ -732,7 +743,7 @@ extension SessionView {
 
     /// One tappable result row (time pill, ≈ marker, speaker, marked snippet).
     func sessionResultRow(_ r: MeetingSearch.Result) -> some View {
-        SessionResultRow(result: r, query: query, name: { [s] in s.name($0) }, pick: { [self] in pick($0) })
+        SessionResultRow(result: r, query: sq, name: { [v] in v.name($0) }, pick: { [self] in pick($0) })
     }
 }
 

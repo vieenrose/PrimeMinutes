@@ -370,7 +370,10 @@ enum Export {
     /// The meeting as the PDF shows it: Chinese text in the interface's script (the stored session is not changed).
     static func inScript(_ s0: Session) -> Session {
         guard let c = scriptConverters() else { return s0 }
-        let g = c.gen.convert, t = c.tr.convert
+        return inScript(s0, generated: c.gen.convert, transcript: c.tr.convert)
+    }
+    /// The same with given converters (the screens pass ScreenScript's memoized ones).
+    static func inScript(_ s0: Session, generated g: (String) -> String, transcript t: (String) -> String) -> Session {
         var s = s0
         s.title = g(s.title); s.summary = g(s.summary)
         s.lines = s.lines.map { var u = $0; u.text = t(u.text); return u }
@@ -390,4 +393,31 @@ enum Export {
         do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); try pdf(s).write(to: url, options: .atomic); return url } catch { return nil }
     }
 
+}
+
+extension ScreenScript {
+    /// The meeting as the screens show it, in the current script (memoized converters; nothing is saved).
+    /// Cached per session and script: a redraw with the same text reuses the last view (arrays are shared, not copied).
+    static func shown(_ s: Session) -> Session {
+        let sc = AppLanguage.current.script, k = s.id.uuidString + sc.rawValue
+        viewLock.lock(); let hit = views[k]; viewLock.unlock()
+        let v: Session
+        if let hit, sameText(hit.raw, s) { v = hit.view } else {
+            v = of(sc).view(s)
+            viewLock.lock(); if views.count > 64 { views.removeAll() }; views[k] = (s, v); viewLock.unlock()
+        }
+        var out = s
+        out.title = v.title; out.summary = v.summary; out.lines = v.lines; out.notes = v.notes
+        out.speakerNames = v.speakerNames; out.actionsEdited = v.actionsEdited; out.legacyNotes = v.legacyNotes
+        return out
+    }
+    private static let viewLock = NSLock()
+    nonisolated(unsafe) private static var views: [String: (raw: Session, view: Session)] = [:]   // guarded by viewLock
+    private static func sameText(_ a: Session, _ b: Session) -> Bool {
+        a.title == b.title && a.summary == b.summary && a.speakerNames == b.speakerNames && a.actionsEdited == b.actionsEdited
+            && a.legacyNotes == b.legacyNotes && a.notes == b.notes && a.lines == b.lines
+    }
+    func view(_ s: Session) -> Session { Export.inScript(s, generated: { self.gen($0) }, transcript: { self.tr($0) }) }
+    /// A library title as shown.
+    static func title(_ t: String) -> String { of(AppLanguage.current.script).gen(t) }
 }
