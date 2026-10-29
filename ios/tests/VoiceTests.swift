@@ -137,12 +137,15 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             check(L.note(code: 2, empty: true, status: .modelMissing, model: .downloading(0.42)) == .downloading(42), "downloading 42 %")
             check(L.note(code: 0, empty: true, status: .modelMissing, model: .downloading(1)) == .downloading(99), "never 100 % before ready")
             check(L.note(code: 2, empty: true, status: .modelMissing, model: .failed) == .downloadFailed, "download failed: error + Retry")
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: .paused) == .downloadPaused, "paused: waiting for the network")
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: .downloading(0.6)) == .downloading(60), "resumed: progress again")
+            check(L.note(code: 0, empty: false, status: nil, model: .paused) == nil, "a paused download hides no suggestions")
             check(L.note(code: 2, empty: true, status: .failed, model: .failed) == .failed, "a matching failure stays a matching failure")
             check(L.note(code: 2, empty: true, status: .queued(.queue), model: nil) == .waitQueue, "ready: the meeting is queued")
             check(L.note(code: 0, empty: false, status: nil, model: .downloading(0.5)) == nil, "a download elsewhere hides no suggestions")
             check(L.key(.downloading(nil)) == "voice_note_downloading" && L.key(.downloading(7)) == "voice_note_downloading_pct", "progress keys")
             let keys: [L.Note] = [.short, .noneYet, .noMatch, .computing, .waitTranscription, .waitBattery, .waitQueue, .failed, .modelMissing,
-                                  .downloading(nil), .downloading(1), .downloadFailed]
+                                  .downloading(nil), .downloading(1), .downloadPaused, .downloadFailed]
             check(Set(keys.map(L.key)).count == keys.count, "one string per note")
             // Every note key in the three languages, placeholders in sync.
             if let dir = ProcessInfo.processInfo.environment["VOX_SPEAKER_CARDS"] {

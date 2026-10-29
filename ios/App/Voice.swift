@@ -319,9 +319,9 @@ enum VoiceLane {
     enum Wait: Equatable { case transcription, battery, queue }
     enum Status: Equatable { case queued(Wait), computing, failed, modelMissing }
     enum Note: Equatable { case short, noneYet, noMatch, computing, waitTranscription, waitBattery, waitQueue, failed, modelMissing,
-        downloading(Int?), downloadFailed }
+        downloading(Int?), downloadPaused, downloadFailed }
     /// The voice model's download (VoiceStore.download, downloadFailed): nil when idle and not failed.
-    enum Model: Equatable { case downloading(Double), failed }
+    enum Model: Equatable { case downloading(Double), paused, failed }
 
     /// Nil when the lane may compute a meeting now, else what it waits for. The meeting on screen (`front`) is computed
     /// even while a transcription, a reading or Ask runs: only its selected lines are decoded, a few seconds at low
@@ -342,6 +342,7 @@ enum VoiceLane {
         case .modelMissing?:
             switch model {
             case .downloading(let p)?: return .downloading(p > 0 ? min(99, Int(p * 100)) : nil)
+            case .paused?: return .downloadPaused
             case .failed?: return .downloadFailed
             case nil: return .modelMissing
             }
@@ -377,6 +378,7 @@ enum VoiceLane {
         case .failed: return "voice_note_failed"
         case .modelMissing: return "voice_note_model_missing"
         case .downloading(let p): return p == nil ? "voice_note_downloading" : "voice_note_downloading_pct"
+        case .downloadPaused: return "voice_note_download_paused"
         case .downloadFailed: return "voice_note_download_failed"
         }
     }

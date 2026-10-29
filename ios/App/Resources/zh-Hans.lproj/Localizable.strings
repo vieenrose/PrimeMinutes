@@ -479,6 +479,7 @@
 "voice_note_downloading" = "正在下载声音模型…";
 "voice_note_downloading_pct" = "正在下载声音模型：%d%%";
 "voice_note_download_failed" = "声音模型下载失败，请检查网络连接。";
+"voice_note_download_paused" = "下载已暂停，等待网络连接…";
 "voice_note_failed" = "这场会议的声音比对失败。";
 "voice_note_wait_queue" = "等候比对声音…";
 "voice_note_wait_battery" = "电量低于 20%，充电时才会比对声音。";

@@ -42,6 +42,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
     @Published private(set) var download: Double?
     /// The last download of the model failed (the sheet says so, with Retry); cleared when one starts.
     @Published private(set) var downloadFailed = false
+    /// The download is paused by DownloadResumer (no network, suspended): it resumes on its own.
+    @Published private(set) var downloadPaused = false
     /// A confirmed name whose voice does not match the person's other meetings.
     struct Outlier: Equatable { let session: UUID, speaker: Int, person: String }
     @Published var outlier: Outlier?
@@ -130,11 +132,11 @@ final class SpeakerEmbedder: @unchecked Sendable {
             download = 0; downloadFailed = false
             let store = ModelStore(), m = Self.model
             do {
-                try await DownloadResumer.shared.run("voice model", onPause: { _ in }) {
-                    try await store.download(m) { d, t in Task { @MainActor in VoiceStore.shared.download = Double(d) / Double(max(t, 1)) } }
+                try await DownloadResumer.shared.run("voice model", onPause: { p in VoiceStore.shared.downloadPaused = p }) {
+                    try await store.download(m) { d, t in Task { @MainActor in let v = VoiceStore.shared; v.download = Double(d) / Double(max(t, 1)); v.downloadPaused = false } }
                 }
             } catch { StatusLog.add("voice: model download failed: \(error)") }
-            download = nil
+            download = nil; downloadPaused = false
             guard Self.modelReady() else { downloadFailed = true; return false }
             StatusLog.add("voice: model downloaded (\(Self.card.id))")
         }
@@ -248,7 +250,7 @@ final class SpeakerEmbedder: @unchecked Sendable {
     func retry(_ id: UUID) { status[id] = nil; request(id, front: true) }
     /// "Download" when the model is missing: downloads it, then backfills.
     /// The model's download as the sheet shows it.
-    var modelState: VoiceLane.Model? { download.map { .downloading($0) } ?? (downloadFailed ? .failed : nil) }
+    var modelState: VoiceLane.Model? { download.map { downloadPaused ? .paused : .downloading($0) } ?? (downloadFailed ? .failed : nil) }
     func downloadModel() { Task { if await enable() { for (id, st) in status where st == .modelMissing { status[id] = nil; request(id) } } } }
     /// Every finished meeting with audio and speech (a fresh sidecar makes the lane skip it at once).
     func catchUp() {
