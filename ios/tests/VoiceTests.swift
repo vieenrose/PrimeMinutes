@@ -115,6 +115,25 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             check(t.map(\.speaker) == [0, -9, 1, 0], "sparse line belongs to nobody")
             check(CleanSpeech.ordered(t, speaker: 0).map { ($0.start * 10).rounded() / 10 }.sorted() == [0.1, 70.1], "sparse line not read")
         }
+        do {   // theLaneNeverSaysComparingWhenNothingRuns
+            typealias L = VoiceLane
+            check(L.note(code: 2, empty: true, status: nil) == .waitQueue, "no vectors, not running: waiting, not comparing")
+            check(L.note(code: 2, empty: true, status: .queued(.transcription)) == .waitTranscription, "waits for the transcription")
+            check(L.note(code: 2, empty: true, status: .queued(.battery)) == .waitBattery, "waits for the battery")
+            check(L.note(code: 2, empty: true, status: .computing) == .computing, "computing")
+            check(L.note(code: 2, empty: true, status: .failed) == .failed, "failed: retry")
+            check(L.note(code: 0, empty: true, status: .modelMissing) == .modelMissing && L.note(code: 2, empty: true, status: .modelMissing) == .modelMissing, "model missing: download")
+            check(L.note(code: 1, empty: true, status: nil) == .short && L.note(code: 3, empty: true, status: nil) == .noneYet, "short, none yet")
+            check(L.note(code: 0, empty: true, status: nil) == .noMatch && L.note(code: 0, empty: false, status: nil) == nil, "ranked")
+            check(L.note(code: 0, empty: false, status: .computing) == nil, "a stale sidecar recomputing keeps its suggestions")
+            check(L.note(code: 0, empty: false, status: .failed) == nil, "a failed recompute keeps the old suggestions")
+            check(L.wait(front: true, busy: true, batteryOk: false) == nil, "the meeting on screen goes even while busy")
+            check(L.wait(front: false, busy: true, batteryOk: true) == .transcription, "the backlog waits while busy")
+            check(L.wait(front: false, busy: false, batteryOk: false) == .battery, "the backlog waits for the battery")
+            check(L.wait(front: false, busy: false, batteryOk: true) == nil, "idle: the backlog runs")
+            let keys: [L.Note] = [.short, .noneYet, .noMatch, .computing, .waitTranscription, .waitBattery, .waitQueue, .failed, .modelMissing]
+            check(Set(keys.map(L.key)).count == keys.count, "one string per note")
+        }
         print(failures == 0 ? "VoiceTests PASS" : "VoiceTests: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)
     }

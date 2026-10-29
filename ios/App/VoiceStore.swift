@@ -36,6 +36,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
     @Published private(set) var version = 0
     /// Meetings whose vectors are being computed (the sheet says "Comparing voices…").
     @Published private(set) var working: Set<UUID> = []
+    /// Where each queued, running or failed meeting stands (the sheet's note); absent once its vectors are written.
+    @Published private(set) var status: [UUID: VoiceLane.Status] = [:]
     /// Download of the model (fraction), nil when idle.
     @Published private(set) var download: Double?
     /// A confirmed name whose voice does not match the person's other meetings.
@@ -48,6 +50,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
     private var exemplars: [VoiceFiles.Exemplar]?
     private var queue: [UUID] = []
     private var running = false
+    /// The meeting whose rename sheet is open: computed first, even while the app is busy.
+    private var front: UUID?
 
     private nonisolated static let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     nonisolated static let peopleFile = support.appendingPathComponent("people/voices.bin")
@@ -230,11 +234,18 @@ final class SpeakerEmbedder: @unchecked Sendable {
 
     // MARK: the lane
 
-    func request(_ id: UUID) {
+    func request(_ id: UUID, front isFront: Bool = false) {
         guard enabled else { return }
+        if isFront { front = id }
+        guard Self.modelReady() else { status[id] = .modelMissing; return }
         queue.removeAll { $0 == id }; queue.insert(id, at: 0)
+        if status[id] != .computing { status[id] = .queued(.queue) }
         kick()
     }
+    /// "Retry" after a failure.
+    func retry(_ id: UUID) { status[id] = nil; request(id, front: true) }
+    /// "Download" when the model is missing: downloads it, then backfills.
+    func downloadModel() { Task { if await enable() { for (id, st) in status where st == .modelMissing { status[id] = nil; request(id) } } } }
     /// Every finished meeting with audio and speech (a fresh sidecar makes the lane skip it at once).
     func catchUp() {
         guard enabled, Self.modelReady(), let library else { return }
@@ -255,55 +266,75 @@ final class SpeakerEmbedder: @unchecked Sendable {
     private func loop() async {
         var model: SpeakerEmbedder?
         while !queue.isEmpty {
-            guard enabled, Self.modelReady() else { queue = []; break }
-            if busy() || !batteryOk() { try? await Task.sleep(nanoseconds: 1_000_000_000); continue }
-            let id = queue.removeFirst()
-            guard let s = library?.sessions.first(where: { $0.id == id }) else { continue }
-            working.insert(id)
+            guard enabled else { for id in queue { status[id] = nil }; queue = []; break }
+            guard Self.modelReady() else {
+                // Never a silent stop: every meeting that waited says the model is missing (Download).
+                StatusLog.add("voice: model missing, \(queue.count) meeting(s) waiting")
+                for id in queue { status[id] = .modelMissing }; queue = []; break
+            }
+            // The meeting on screen first, wherever it is in the backlog.
+            if let f = front, let i = queue.firstIndex(of: f), i > 0 { queue.remove(at: i); queue.insert(f, at: 0) }
+            let id = queue[0]
+            if let w = VoiceLane.wait(front: id == front, busy: busy(), batteryOk: batteryOk()) {
+                if status[id] != .queued(w) { status[id] = .queued(w) }
+                try? await Task.sleep(nanoseconds: 1_000_000_000); continue
+            }
+            queue.removeFirst()
+            // Not in the library yet: a meeting still being transcribed (named mid-run). JobRunner requests it at the end.
+            guard let s = library?.sessions.first(where: { $0.id == id }) else { status[id] = .queued(.transcription); continue }
+            working.insert(id); status[id] = .computing
             if model == nil {
                 let path = Self.modelDir.appendingPathComponent(Self.card.graph).path
                 model = await Task.detached(priority: .utility) { SpeakerEmbedder(path: path, threads: Self.threads, card: Self.card) }.value
-                if model == nil { StatusLog.add("voice: model load failed"); working.remove(id); queue = []; break }
+                if model == nil {
+                    StatusLog.add("voice: model load failed")
+                    working.remove(id); status[id] = .failed
+                    for q in queue { status[q] = nil }; queue = []; break
+                }
             }
             let m = model!, gen = Self.generation.current
             let r = await Task.detached(priority: .utility) { Self.compute(s, m, gen: gen) }.value
             working.remove(id)
-            if let cost = r { StatusLog.add(cost); version += 1 }
+            switch r {
+            case .written(let cost): StatusLog.add(cost); status[id] = nil; version += 1
+            case .unchanged: status[id] = nil
+            case .failed: status[id] = .failed; version += 1
+            }
+            if id == front { front = nil }
             if gen == Self.generation.current { syncMeeting(id) }
         }
     }
 
-    /// Computes the meeting's sidecar if it is missing or stale: its cost line when it was written, else nil.
+    enum Computed: Sendable { case written(String), unchanged, failed }
+
+    /// Computes the meeting's sidecar if it is missing or stale. Only the lines the vectors use are decoded (seeking
+    /// into the recording), so a long meeting costs about the same as a short one and an edit does not re-decode it all.
     /// Nothing is written when recognition went off or its data was deleted since `gen`.
-    nonisolated static func compute(_ s: Session, _ m: SpeakerEmbedder, gen: Int) -> String? {
+    nonisolated static func compute(_ s: Session, _ m: SpeakerEmbedder, gen: Int) -> Computed {
         let card = Self.card
         let turns = CleanSpeech.voiceTurns(s.lines)
         let speakers = Array(Set(s.lines.map(\.speaker))).sorted()
         var spans: [Int: [CleanSpeech.Span]] = [:]
         for k in speakers { spans[k] = CleanSpeech.ordered(turns, speaker: k) }
         let fp = VoiceFiles.fingerprint(spans)
-        if readMeeting(s.id)?.fingerprint == fp { return nil }
-        guard let a = s.audio else { return nil }
+        if readMeeting(s.id)?.fingerprint == fp { return .unchanged }
+        guard let a = s.audio else { StatusLog.add("voice \(s.id): no audio"); return .failed }
+        let url = JobQueue.audioDir.appendingPathComponent(a)
+        guard FileManager.default.fileExists(atPath: url.path) else { StatusLog.add("voice \(s.id): audio file missing"); return .failed }
         let t0 = Date()
-        // The meeting's audio at 16 kHz, decoded once to a raw float file (an hour never sits in memory).
-        let raw = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(s.id.uuidString).f32")
-        defer { try? FileManager.default.removeItem(at: raw) }
-        guard FileManager.default.createFile(atPath: raw.path, contents: nil), let w = try? FileHandle(forWritingTo: raw) else { return nil }
-        do {
-            try AudioDecode.stream(JobQueue.audioDir.appendingPathComponent(a)) { c in
-                c.withUnsafeBufferPointer { w.write(Data(buffer: $0)) }; return true
-            }
-        } catch { try? w.close(); StatusLog.add("voice \(s.id): audio decode failed: \(error)"); return nil }
-        try? w.close()
-        guard let r = try? FileHandle(forReadingFrom: raw) else { return nil }
-        defer { try? r.close() }
-        let total = ((try? FileManager.default.attributesOfItem(atPath: raw.path)[.size] as? Int) ?? 0) / 4
+        var decodeSec = 0.0, failed = false
+        /// [a, b) samples at 16 kHz on the player timeline, decoded from the file with a seek.
         func read(_ a: Int, _ b: Int) -> [Float] {
-            let a = max(0, min(a, total)), b = max(a, min(b, total))
-            guard b > a, (try? r.seek(toOffset: UInt64(a * 4))) != nil, let d = try? r.read(upToCount: (b - a) * 4) else { return [] }
-            var f = [Float](repeating: 0, count: d.count / 4)
-            _ = f.withUnsafeMutableBytes { d.copyBytes(to: $0) }
-            return f
+            guard b > a else { return [] }
+            let need = b - a, td = Date()
+            var out: [Float] = []; out.reserveCapacity(need)
+            do {
+                try AudioDecode.stream(url, from: Double(a) / 16_000) { c in
+                    out.append(contentsOf: c.prefix(need - out.count)); return out.count < need
+                }
+            } catch { failed = true; StatusLog.add("voice \(s.id): audio decode failed at \(a / 16_000) s: \(error)") }
+            decodeSec += Date().timeIntervalSince(td)
+            return out
         }
         let t1 = Date()
         let sr = 16_000, cap = Int(card.capSec * Double(sr))
@@ -320,6 +351,7 @@ final class SpeakerEmbedder: @unchecked Sendable {
             }
             let sec = Double(have) / Double(sr)
             if sec < card.minCleanSec { continue }
+            if failed { return .failed }
             if let v = m.embed(pieces.flatMap { $0 }, lens: pieces.map(\.count)) {
                 out.append(VoiceFiles.SpeakerVoice(speaker: k, seconds: Float(sec), vector: v))
                 speech += sec
@@ -328,10 +360,11 @@ final class SpeakerEmbedder: @unchecked Sendable {
         let t2 = Date()
         do {
             let mv = VoiceFiles.MeetingVoices(modelId: card.id, fingerprint: fp, speakers: out)
-            guard try storeSidecar(s.id, mv, gen: gen) else { StatusLog.add("voice \(s.id): dropped, recognition off or its data deleted meanwhile"); return nil }
-        } catch { StatusLog.add("voice \(s.id): could not write: \(error)"); return nil }
-        return String(format: "voice %@: %d/%d speakers, %.0f s speech, decode %d ms, embed %d ms", s.id.uuidString, out.count, speakers.count,
-                      speech, Int(t1.timeIntervalSince(t0) * 1000), Int(t2.timeIntervalSince(t1) * 1000))
+            guard try storeSidecar(s.id, mv, gen: gen) else { StatusLog.add("voice \(s.id): dropped, recognition off or its data deleted meanwhile"); return .unchanged }
+        } catch { StatusLog.add("voice \(s.id): could not write: \(error)"); return .failed }
+        return .written(String(format: "voice %@: %d/%d speakers, %.0f s speech, decode %d ms, embed %d ms (total %d ms)", s.id.uuidString, out.count,
+                               speakers.count, speech, Int(decodeSec * 1000), Int((t2.timeIntervalSince(t1) - decodeSec) * 1000),
+                               Int(t2.timeIntervalSince(t0) * 1000)))
     }
 
     /// Writes a meeting's sidecar computed under `gen`; false (nothing written) after a `disable` / `deleteAll` since.
@@ -366,7 +399,7 @@ final class SpeakerEmbedder: @unchecked Sendable {
         let mv = Self.readMeeting(s.id)
         var spans: [Int: [CleanSpeech.Span]] = [:]
         for k in Set(s.lines.map(\.speaker)) { spans[k] = CleanSpeech.ordered(turns, speaker: k) }
-        if mv == nil || mv?.fingerprint != VoiceFiles.fingerprint(spans) { request(s.id) }
+        if mv == nil || mv?.fingerprint != VoiceFiles.fingerprint(spans) { request(s.id, front: true) }
         if clean < card.minCleanSec { return ([], 1) }
         guard let mv else { return ([], 2) }
         if mv.of(speaker) == nil { return ([], 1) }   // its lines hold too little voice

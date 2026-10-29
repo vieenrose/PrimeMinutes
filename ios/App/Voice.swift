@@ -311,3 +311,62 @@ enum VoiceGate {
         return merged.filter { Double($0.1 - $0.0) * frame >= minRun }.map { $0.0 * n..<$0.1 * n }
     }
 }
+
+/// Where a meeting's voice vectors stand in the voice lane, and the note the rename sheet shows for it (Android
+/// VoiceLane). The note never says "Comparing voices…" unless the lane is computing that meeting: a meeting that waits
+/// says what it waits for, a failure offers Retry, a missing model offers Download.
+enum VoiceLane {
+    enum Wait: Equatable { case transcription, battery, queue }
+    enum Status: Equatable { case queued(Wait), computing, failed, modelMissing }
+    enum Note: Equatable { case short, noneYet, noMatch, computing, waitTranscription, waitBattery, waitQueue, failed, modelMissing }
+
+    /// Nil when the lane may compute a meeting now, else what it waits for. The meeting on screen (`front`) is computed
+    /// even while a transcription, a reading or Ask runs: only its selected lines are decoded, a few seconds at low
+    /// priority. A backlog meeting waits for the app to be idle and the battery above the floor (or charging).
+    static func wait(front: Bool, busy: Bool, batteryOk: Bool) -> Wait? {
+        if front { return nil }
+        if busy { return .transcription }
+        if !batteryOk { return .battery }
+        return nil
+    }
+
+    /// The sheet's note. `code`: VoiceStore.rank's (0 ranked, 1 too little voice, 2 no vectors yet, 3 no voice learned
+    /// yet); `empty`: no suggestion; `status`: the lane's state for the meeting (nil: not queued).
+    static func note(code: Int, empty: Bool, status: Status?) -> Note? {
+        switch status {
+        case .modelMissing?: return .modelMissing
+        case .failed? where code == 2: return .failed
+        case .computing? where code == 2 || empty: return .computing
+        default: break
+        }
+        switch code {
+        case 1: return .short
+        case 2:
+            switch status {
+            case .queued(.transcription)?: return .waitTranscription
+            case .queued(.battery)?: return .waitBattery
+            case .computing?: return .computing
+            case .failed?: return .failed
+            default: return .waitQueue
+            }
+        case 3: return .noneYet
+        default: return empty ? .noMatch : nil
+        }
+    }
+
+    /// The localized key of a note.
+    static func key(_ n: Note) -> String {
+        switch n {
+        case .short: return "voice_note_short"
+        case .noneYet: return "voice_note_none_yet"
+        case .noMatch: return "voice_note_no_match"
+        case .computing: return "voice_note_working"
+        case .waitTranscription: return "voice_note_wait_run"
+        case .waitBattery: return "voice_note_wait_battery"
+        case .waitQueue: return "voice_note_wait_queue"
+        case .failed: return "voice_note_failed"
+        case .modelMissing: return "voice_note_model_missing"
+        }
+    }
+
+}

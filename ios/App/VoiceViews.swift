@@ -18,17 +18,35 @@ struct VoiceSuggested<Content: View>: View {
 
     var body: some View {
         content(people.doc.voice ? ranked?.0 ?? [] : [], note)
+            .environment(\.voiceNoteAction, action)
             .task(id: Key(speaker: speaker, version: voice.version, on: people.doc.voice, links: session.speakerPeople, people: people.doc.people.count)) {
                 ranked = people.doc.voice ? voice.rank(session, speaker: speaker) : nil
             }
     }
-    private var note: String? {
+    private var lane: VoiceLane.Note? {
         guard people.doc.voice, let r = ranked else { return nil }
-        if r.1 == 1 { return L("voice_note_short") }
-        if r.1 == 2 || voice.working.contains(session.id) { return L("voice_note_working") }
-        if r.1 == 3 { return L("voice_note_none_yet") }
-        return r.0.isEmpty ? L("voice_note_no_match") : nil
+        return VoiceLane.note(code: r.1, empty: r.0.isEmpty, status: voice.status[session.id])
     }
+    private var note: String? { lane.map { L(VoiceLane.key($0)) } }
+    /// Retry after a failure, Download when the model is missing.
+    private var action: VoiceNoteAction? {
+        switch lane {
+        case .failed?: let id = session.id; return VoiceNoteAction(label: L("voice_retry")) { VoiceStore.shared.retry(id) }
+        case .modelMissing?: return VoiceNoteAction(label: L("voice_download")) { VoiceStore.shared.downloadModel() }
+        default: return nil
+        }
+    }
+}
+
+/// The button under the voice note of the rename sheet (Retry, Download).
+struct VoiceNoteAction { let label: String; let run: () -> Void }
+private struct VoiceNoteActionKey: EnvironmentKey { static let defaultValue: VoiceNoteAction? = nil }
+extension EnvironmentValues {
+    var voiceNoteAction: VoiceNoteAction? {
+        get { self[VoiceNoteActionKey.self] }
+        set { self[VoiceNoteActionKey.self] = newValue }
+    }
+}
 }
 
 /// The "Recognise voices" switch, its explanation and the "Me" enrolment, at the top of the People screen.
