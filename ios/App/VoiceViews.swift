@@ -25,14 +25,19 @@ struct VoiceSuggested<Content: View>: View {
     }
     private var lane: VoiceLane.Note? {
         guard people.doc.voice, let r = ranked else { return nil }
-        return VoiceLane.note(code: r.1, empty: r.0.isEmpty, status: voice.status[session.id])
+        return VoiceLane.note(code: r.1, empty: r.0.isEmpty, status: voice.status[session.id], model: voice.modelState)
     }
-    private var note: String? { lane.map { L(VoiceLane.key($0)) } }
+    private var note: String? {
+        guard let n = lane else { return nil }
+        if case .downloading(let p?) = n { return String(format: L(VoiceLane.key(n)), p) }
+        return L(VoiceLane.key(n))
+    }
     /// Retry after a failure, Download when the model is missing.
     private var action: VoiceNoteAction? {
         switch lane {
         case .failed?: let id = session.id; return VoiceNoteAction(label: L("voice_retry")) { VoiceStore.shared.retry(id) }
         case .modelMissing?: return VoiceNoteAction(label: L("voice_download")) { VoiceStore.shared.downloadModel() }
+        case .downloadFailed?: return VoiceNoteAction(label: L("voice_retry")) { VoiceStore.shared.downloadModel() }
         default: return nil
         }
     }

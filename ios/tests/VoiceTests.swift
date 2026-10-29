@@ -131,8 +131,28 @@ struct Utterance { var speaker: Int, start: Double, end: Double, text: String } 
             check(L.wait(front: false, busy: true, batteryOk: true) == .transcription, "the backlog waits while busy")
             check(L.wait(front: false, busy: false, batteryOk: false) == .battery, "the backlog waits for the battery")
             check(L.wait(front: false, busy: false, batteryOk: true) == nil, "idle: the backlog runs")
-            let keys: [L.Note] = [.short, .noneYet, .noMatch, .computing, .waitTranscription, .waitBattery, .waitQueue, .failed, .modelMissing]
+            // The model's download on the sheet: not downloaded → downloading p → failed (Retry) → ready.
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: nil) == .modelMissing, "not downloaded: Download")
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: .downloading(0)) == .downloading(nil), "download started, size unknown: indeterminate")
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: .downloading(0.42)) == .downloading(42), "downloading 42 %")
+            check(L.note(code: 0, empty: true, status: .modelMissing, model: .downloading(1)) == .downloading(99), "never 100 % before ready")
+            check(L.note(code: 2, empty: true, status: .modelMissing, model: .failed) == .downloadFailed, "download failed: error + Retry")
+            check(L.note(code: 2, empty: true, status: .failed, model: .failed) == .failed, "a matching failure stays a matching failure")
+            check(L.note(code: 2, empty: true, status: .queued(.queue), model: nil) == .waitQueue, "ready: the meeting is queued")
+            check(L.note(code: 0, empty: false, status: nil, model: .downloading(0.5)) == nil, "a download elsewhere hides no suggestions")
+            check(L.key(.downloading(nil)) == "voice_note_downloading" && L.key(.downloading(7)) == "voice_note_downloading_pct", "progress keys")
+            let keys: [L.Note] = [.short, .noneYet, .noMatch, .computing, .waitTranscription, .waitBattery, .waitQueue, .failed, .modelMissing,
+                                  .downloading(nil), .downloading(1), .downloadFailed]
             check(Set(keys.map(L.key)).count == keys.count, "one string per note")
+            // Every note key in the three languages, placeholders in sync.
+            if let dir = ProcessInfo.processInfo.environment["VOX_SPEAKER_CARDS"] {
+                let res = URL(fileURLWithPath: dir).deletingLastPathComponent()
+                for lang in ["en", "zh-Hant", "zh-Hans"] {
+                    let t = (try? String(contentsOf: res.appendingPathComponent("\(lang).lproj/Localizable.strings"), encoding: .utf8)) ?? ""
+                    for k in keys.map(L.key) + ["voice_download", "voice_retry"] { check(t.contains("\"\(k)\" = "), "\(lang) has \(k)") }
+                    check(t.components(separatedBy: "\n").first { $0.hasPrefix("\"voice_note_downloading_pct\"") }?.contains("%d") == true, "\(lang) progress has %d")
+                }
+            }
         }
         print(failures == 0 ? "VoiceTests PASS" : "VoiceTests: \(failures) FAILED")
         exit(failures == 0 ? 0 : 1)

@@ -318,7 +318,10 @@ enum VoiceGate {
 enum VoiceLane {
     enum Wait: Equatable { case transcription, battery, queue }
     enum Status: Equatable { case queued(Wait), computing, failed, modelMissing }
-    enum Note: Equatable { case short, noneYet, noMatch, computing, waitTranscription, waitBattery, waitQueue, failed, modelMissing }
+    enum Note: Equatable { case short, noneYet, noMatch, computing, waitTranscription, waitBattery, waitQueue, failed, modelMissing,
+        downloading(Int?), downloadFailed }
+    /// The voice model's download (VoiceStore.download, downloadFailed): nil when idle and not failed.
+    enum Model: Equatable { case downloading(Double), failed }
 
     /// Nil when the lane may compute a meeting now, else what it waits for. The meeting on screen (`front`) is computed
     /// even while a transcription, a reading or Ask runs: only its selected lines are decoded, a few seconds at low
@@ -332,9 +335,16 @@ enum VoiceLane {
 
     /// The sheet's note. `code`: VoiceStore.rank's (0 ranked, 1 too little voice, 2 no vectors yet, 3 no voice learned
     /// yet); `empty`: no suggestion; `status`: the lane's state for the meeting (nil: not queued).
-    static func note(code: Int, empty: Bool, status: Status?) -> Note? {
+    /// `model`: the model's download. While it runs a meeting waiting for the model shows its progress (percent, nil
+    /// while the size is unknown); after a failed download, an error with Retry instead of Download.
+    static func note(code: Int, empty: Bool, status: Status?, model: Model? = nil) -> Note? {
         switch status {
-        case .modelMissing?: return .modelMissing
+        case .modelMissing?:
+            switch model {
+            case .downloading(let p)?: return .downloading(p > 0 ? min(99, Int(p * 100)) : nil)
+            case .failed?: return .downloadFailed
+            case nil: return .modelMissing
+            }
         case .failed? where code == 2: return .failed
         case .computing? where code == 2 || empty: return .computing
         default: break
@@ -366,6 +376,8 @@ enum VoiceLane {
         case .waitQueue: return "voice_note_wait_queue"
         case .failed: return "voice_note_failed"
         case .modelMissing: return "voice_note_model_missing"
+        case .downloading(let p): return p == nil ? "voice_note_downloading" : "voice_note_downloading_pct"
+        case .downloadFailed: return "voice_note_download_failed"
         }
     }
 

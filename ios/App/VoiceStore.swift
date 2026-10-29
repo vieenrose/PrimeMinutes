@@ -40,6 +40,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
     @Published private(set) var status: [UUID: VoiceLane.Status] = [:]
     /// Download of the model (fraction), nil when idle.
     @Published private(set) var download: Double?
+    /// The last download of the model failed (the sheet says so, with Retry); cleared when one starts.
+    @Published private(set) var downloadFailed = false
     /// A confirmed name whose voice does not match the person's other meetings.
     struct Outlier: Equatable { let session: UUID, speaker: Int, person: String }
     @Published var outlier: Outlier?
@@ -125,7 +127,7 @@ final class SpeakerEmbedder: @unchecked Sendable {
     /// Turns recognition on (downloading the model once) and starts the backfill of the library.
     func enable() async -> Bool {
         if !Self.modelReady() {
-            download = 0
+            download = 0; downloadFailed = false
             let store = ModelStore(), m = Self.model
             do {
                 try await DownloadResumer.shared.run("voice model", onPause: { _ in }) {
@@ -133,7 +135,7 @@ final class SpeakerEmbedder: @unchecked Sendable {
                 }
             } catch { StatusLog.add("voice: model download failed: \(error)") }
             download = nil
-            guard Self.modelReady() else { return false }
+            guard Self.modelReady() else { downloadFailed = true; return false }
             StatusLog.add("voice: model downloaded (\(Self.card.id))")
         }
         PeopleStore.shared.setVoice(true)
@@ -245,6 +247,8 @@ final class SpeakerEmbedder: @unchecked Sendable {
     /// "Retry" after a failure.
     func retry(_ id: UUID) { status[id] = nil; request(id, front: true) }
     /// "Download" when the model is missing: downloads it, then backfills.
+    /// The model's download as the sheet shows it.
+    var modelState: VoiceLane.Model? { download.map { .downloading($0) } ?? (downloadFailed ? .failed : nil) }
     func downloadModel() { Task { if await enable() { for (id, st) in status where st == .modelMissing { status[id] = nil; request(id) } } } }
     /// Every finished meeting with audio and speech (a fresh sidecar makes the lane skip it at once).
     func catchUp() {

@@ -476,6 +476,9 @@
 "voice_download" = "Download";
 "voice_retry" = "Retry";
 "voice_note_model_missing" = "The voice model isn’t downloaded.";
+"voice_note_downloading" = "Downloading the voice model…";
+"voice_note_downloading_pct" = "Downloading the voice model: %d %%";
+"voice_note_download_failed" = "Couldn’t download the voice model. Check the connection.";
 "voice_note_failed" = "Couldn’t compare voices in this meeting.";
 "voice_note_wait_queue" = "Waiting to compare voices…";
 "voice_note_wait_battery" = "Battery below 20 %: voices will be compared when charging.";
