@@ -25,8 +25,8 @@
     <string name="re_summarize">重新摘要</string>
     <string name="stop">停止</string>
     <string name="stop_resumable">停止（可繼續處理）</string>
-    <string name="source_audio_file">音訊檔案</string>
-    <string name="source_audio_file_desc">從裝置選擇檔案</string>
+    <string name="source_audio_file">匯入</string>
+    <string name="source_audio_file_desc">音訊、影片或 .pmin 會議；可從 Google Drive / Dropbox / OneDrive 選檔</string>
     <string name="source_record">錄音</string>
     <string name="source_record_desc">即時擷取並轉錄</string>
     <string name="source_podcast">Podcast</string>
@@ -157,8 +157,6 @@
     <string name="update_check_failed">無法檢查更新</string>
 
     <!-- Session as a self-describing .ogg + share -->
-    <string name="source_session">開啟場次（.ogg / .m4a）</string>
-    <string name="source_session_desc">重新載入已儲存的 .ogg 或 .m4a 以繼續編輯逐字稿</string>
     <string name="session_save_m4a">儲存場次（.m4a）</string>
     <string name="session_share_m4a">分享場次（.m4a）</string>
     <string name="session_saved">場次已儲存</string>
@@ -172,17 +170,8 @@
     <string name="cd_copy_actions">複製行動項目</string>
     <string name="exporting">正在匯出場次…</string>
     <string name="exporting_hint">將在背景繼續完成，您可以繼續使用應用程式</string>
-    <string name="export_copy_transcript">複製逐字稿</string>
-    <string name="export_share_transcript">分享逐字稿…</string>
-    <string name="export_txt">另存純文字（.txt）</string>
-    <string name="export_srt">另存字幕（.srt）</string>
-    <string name="export_vtt">另存字幕（.vtt）</string>
-    <string name="export_lrc">另存同步歌詞（.lrc）</string>
-    <string name="export_md">另存 Markdown（.md）</string>
-    <string name="export_pdf">另存 PDF（.pdf）</string>
     <string name="export_heading_summary">摘要</string>
     <string name="export_heading_transcript">逐字稿</string>
-    <string name="transcript_copied">已複製逐字稿</string>
     <string name="status_importing">正在匯入分享的音訊…</string>
     <string name="import_failed">無法匯入該檔案</string>
     <string name="recent_sessions">最近</string>
@@ -250,7 +239,6 @@
     <string name="action_open">開啟</string>
     <string name="action_rename">重新命名</string>
     <string name="action_select">選取</string>
-    <string name="action_share_audio">分享音訊</string>
     <string name="action_delete">刪除</string>
     <string name="delete_confirm">確定要永久刪除「%s」嗎？音訊與逐字稿都會被移除。</string>
 
@@ -360,22 +348,11 @@
     <plurals name="agent_outcome">
         <item quantity="other">已讀 %1$d 個片段 · %2$s</item>
     </plurals>
-    <string name="export_menu_entry">匯出與分享…</string>
     <string name="agent_tag_proposal">提議</string>
     <string name="agent_verify">核對</string>
     <string name="actions_verify_hint">約五分之一的項目可能與逐字稿不符——點時間即可聽原話核對。</string>
     <string name="export_interrupted">匯出中斷，請再試一次。</string>
-    <string name="export_sheet_title">匯出</string>
-    <string name="export_group_session">Prime Minutes 場次（.m4a）</string>
-    <string name="export_group_session_desc">音訊、逐字稿、語者、摘要與行動項目合為一個檔案。可在 Prime Minutes 重新開啟，任何播放器都能播放。</string>
-    <string name="export_group_document">文件</string>
-    <string name="export_group_document_desc">標題、摘要、行動項目與含時間戳的逐字稿。</string>
-    <string name="export_group_subtitles">字幕</string>
-    <string name="export_group_subtitles_desc">含語者標籤的時間軸字幕，適用於影音播放器。</string>
-    <string name="export_action_save">儲存</string>
-    <string name="export_action_share">分享</string>
     <string name="export_heading_actions">行動項目</string>
-    <string name="export_share_failed">無法準備要分享的檔案</string>
     <string name="asr_language_changed">語言已變更 —— 請用「重新轉錄」（⋮ 選單）套用。</string>
     <string name="err_no_audio_source">沒有音訊來源</string>
     <string name="err_open_file">無法開啟檔案</string>
@@ -613,50 +590,6 @@
     <string name="email_remove">移除</string>
     <string name="email_add">新增電子郵件</string>
     <string name="email_invalid">不是有效的電子郵件地址</string>
-    <string name="mail_menu_entry">寄給與會者…</string>
-    <string name="mail_chip">寄給與會者</string>
-    <string name="mail_sheet_title">寄給與會者</string>
-    <string name="mail_recipients">收件人</string>
-    <string name="mail_no_people">這場會議還沒有語者連結到名錄中的人：請先命名，或新增收件人。</string>
-    <string name="mail_one_off">僅此封郵件</string>
-    <string name="mail_unnamed">%s 尚未命名</string>
-    <string name="mail_plain_label">%s 不在名錄中</string>
-    <string name="mail_name_action">命名</string>
-    <string name="mail_link_action">連結</string>
-    <string name="mail_add_recipient">新增其他收件人</string>
-    <string name="mail_which_is_you">哪一位是你？</string>
-    <string name="mail_content">內容</string>
-    <string name="mail_preview">預覽</string>
-    <string name="mail_summary">摘要</string>
-    <string name="mail_minutes">紀要</string>
-    <string name="mail_only_decisions">只要決議與待辦</string>
-    <string name="mail_attach">附件</string>
-    <string name="mail_attach_none">無</string>
-    <string name="mail_attach_large">對許多郵件伺服器來說太大（上限 25 MB）</string>
-    <string name="mail_language">語言</string>
-    <string name="mail_language_meeting">（會議語言）</string>
-    <string name="mail_language_note">只改變郵件的固定文字，紀要內容不翻譯。</string>
-    <string name="mail_lang_hant">繁體中文</string>
-    <string name="mail_lang_hans">簡體中文</string>
-    <string name="mail_lang_en">English</string>
-    <string name="mail_last_shared">上次分享：%1$s・%2$s</string>
-    <string name="mail_open">在郵件 App 中開啟</string>
-    <string name="mail_open_n">在郵件 App 中開啟（%d）</string>
-    <string name="mail_share_other">分享到其他 App…</string>
-    <string name="mail_footnote">Prime Minutes 不會替你寄信：郵件 App 會開啟並填好收件人與內容，由你確認後送出。</string>
-    <string name="mail_me">我</string>
-    <string name="mail_no_address">沒有電子郵件地址</string>
-    <string name="mail_not_to_self">不寄給自己</string>
-    <string name="mail_saved_to">已存到 %s</string>
-    <string name="mail_will_save">會存到 %s，下次直接使用</string>
-    <string name="mail_add_address">新增</string>
-    <string name="mail_add_hint">姓名或電子郵件地址</string>
-    <string name="mail_add_typed">新增 %s</string>
-    <string name="mail_one_off_note">只用於這封郵件，不會存入名錄。</string>
-    <string name="mail_preview_to">收件人：%s</string>
-    <string name="mail_preview_close">關閉</string>
-    <string name="mail_no_app">沒有可開啟郵件的 App，已複製收件人地址。</string>
-    <string name="mail_addresses_copied">已複製地址：請貼到收件人欄</string>
     <string name="ask_meeting_title">問這場會議</string>
     <string name="ask_meeting_hint">針對這場會議提問…</string>
     <string name="ask_meeting_query">問這場會議：「%1$s」</string>
@@ -737,8 +670,6 @@
     <plurals name="sub_new_count">
         <item quantity="other">%d 集新</item>
     </plurals>
-    <string name="action_share_meeting">分享會議</string>
-    <string name="action_share_audio_only">僅分享音訊</string>
     <string name="share_preparing">正在準備會議…</string>
     <string name="share_dup_title">資料庫中已有這場會議</string>
     <string name="share_dup_message">「%1$s」已在你的資料庫中。</string>
@@ -759,10 +690,6 @@
     <string name="online_notice_title">匯入前請留意</string>
     <string name="online_notice_body">線上匯入僅供個人使用。你須自行確認有權下載並轉錄這些內容，並遵守發布者的使用條款。</string>
     <string name="online_notice_ok">我了解</string>
-    <string name="share_online_title">不附音訊分享？</string>
-    <string name="share_online_body">這場會議來自線上來源，音訊屬於發布者。預設只分享逐字稿和摘要。</string>
-    <string name="share_text_only">只分享文字</string>
-    <string name="share_with_audio">附上音訊</string>
     <string name="about_licenses">開放原始碼授權</string>
     <string name="about_licenses_desc">App 內含的元件及其授權</string>
     <!-- Library by source (filters, podcast rows, channel page) -->
@@ -777,4 +704,34 @@
     <string name="cd_open_channel">開啟節目頁</string>
     <string name="cd_channel_group">%1$s，場次庫有 %2$d 集</string>
     <string name="cd_filter_sources">依來源篩選</string>
+    <!-- Share sheet (spec v2) -->
+    <string name="share_title">分享</string>
+    <string name="share_what">內容</string>
+    <string name="share_where">傳送到</string>
+    <string name="share_what_session">整場會議（.pmin）</string>
+    <string name="share_what_session_desc">錄音、逐字稿、說話者、摘要、待辦和筆記，可在 Prime Minutes 開啟。</string>
+    <string name="share_what_pdf">摘要＋逐字稿（PDF）</string>
+    <string name="share_what_pdf_desc">摘要和待辦事項都連到它引用的逐字稿段落。</string>
+    <string name="share_what_audio">只有錄音（.m4a）</string>
+    <string name="share_what_audio_desc">只有錄音，沒有逐字稿。</string>
+    <string name="share_attach_audio">附上錄音（%1$s）</string>
+    <string name="share_hint_voices">含所有與會者的聲音。</string>
+    <string name="share_hint_copyright">這段音訊的版權屬於發布者，請確認你有權分享。</string>
+    <string name="share_where_nearby">附近（Quick Share）</string>
+    <string name="share_where_nearby_desc">傳到旁邊的手機或電腦</string>
+    <string name="share_where_mail">電子郵件</string>
+    <string name="share_where_mail_desc">開啟郵件 App，檔案已附上</string>
+    <string name="share_mail_too_big">超過 25 MB，很多郵件伺服器會拒收。可改用附近分享或雲端。</string>
+    <string name="share_mail_body">附件是 Prime Minutes 的會議「%1$s」。</string>
+    <string name="share_mail_none">沒有可以開啟的郵件 App。</string>
+    <string name="share_cloud_heading">存到雲端</string>
+    <string name="share_cloud_desc">透過系統對話框儲存，建議放在「%1$s」資料夾</string>
+    <string name="share_cloud_missing">安裝 %1$s App 後才能存到這裡</string>
+    <string name="share_cloud_saved">已存到 %1$s</string>
+    <string name="share_cloud_failed">無法存到 %1$s</string>
+    <string name="share_other_apps">其他 App…</string>
+    <string name="share_nearby_missing">這支手機沒有 Quick Share，請改選其他 App。</string>
+    <string name="share_pdf_back">↑ 摘要</string>
+    <string name="share_pdf_minutes">%1$d 分鐘</string>
+    <string name="share_pdf_speakers">與會者：%1$s</string>
 </resources>

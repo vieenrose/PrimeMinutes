@@ -95,15 +95,11 @@ fun SessionTopBar(
     /** An interrupted run left a checkpoint: continue it instead of starting over. */
     canResume: Boolean = false, onResume: () -> Unit = {},
     canExport: Boolean,
-    onOpenExport: () -> Unit,
     onSettings: () -> Unit,
-    /** "Email participants…" (docs/design/speaker-contacts.md §4.1), shown with the exports. */
-    onEmailParticipants: () -> Unit = {},
     /** "Ask this meeting" in the ⋮ menu; null when the in-meeting Ask is not available. */
     onAskMeeting: (() -> Unit)? = null,
-    /** "Share meeting" (the enriched file through the system sheet: Quick Share, AirDrop on iOS); null when
-     *  the open meeting is not a processed library entry. */
-    onShareMeeting: (() -> Unit)? = null,
+    /** "Share" (the one Share sheet: what, then where); null when the open meeting is not a library entry. */
+    onShare: (() -> Unit)? = null,
     /** Tap on the title: edit it (null → not editable, e.g. no title yet). */
     onTitleClick: (() -> Unit)? = null,
     /** Undo / Redo of transcript hand-edits; the pair shows once there is something to undo or redo. */
@@ -174,7 +170,7 @@ fun SessionTopBar(
                 OverflowMenu(
                     canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
                     canResume, onResume,
-                    canExport, onOpenExport, onSettings, onEmailParticipants, onAskMeeting, onShareMeeting,
+                    canExport, onSettings, onAskMeeting, onShare,
                 )
             },
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
@@ -225,11 +221,9 @@ private fun OverflowMenu(
     canReSummarize: Boolean, onReSummarize: () -> Unit,
     canResume: Boolean, onResume: () -> Unit,
     canExport: Boolean,
-    onOpenExport: () -> Unit,
     onSettings: () -> Unit,
-    onEmailParticipants: () -> Unit,
     onAskMeeting: (() -> Unit)?,
-    onShareMeeting: (() -> Unit)?,
+    onShare: (() -> Unit)?,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     var open by remember { mutableStateOf(false) }
@@ -253,19 +247,11 @@ private fun OverflowMenu(
                     modifier = Modifier.testTag("menu-ask-meeting"))
                 HorizontalDivider()
             }
-            // --- exports (disabled while running, like before) ---
-            // One entry, not eight: the formats and the save/share choice live in ExportSheet, which
-            // groups them by what you get. A dropdown this long also meant several slow full-page
-            // repaints on e-ink.
-            if (canExport) {
-                if (onShareMeeting != null) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Share, null, Modifier.size(18.dp)) },
-                    text = { Text(stringResource(R.string.action_share_meeting)) }, onClick = pick(onShareMeeting),
-                    modifier = Modifier.testTag("menu-share-meeting"))
-                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Email, null, Modifier.size(18.dp)) },
-                    text = { Text(stringResource(R.string.mail_menu_entry)) }, onClick = pick(onEmailParticipants),
-                    modifier = Modifier.testTag("menu-email-participants"))
-                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.IosShare, null, Modifier.size(18.dp)) },
-                    text = { Text(stringResource(R.string.export_menu_entry)) }, onClick = pick(onOpenExport))
+            // --- sharing (disabled while running): one entry, the Share sheet picks what and where ---
+            if (canExport && onShare != null) {
+                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Share, null, Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.share_title)) }, onClick = pick(onShare),
+                    modifier = Modifier.testTag("menu-share"))
                 HorizontalDivider()
             }
             DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Tune, null, Modifier.size(18.dp)) },

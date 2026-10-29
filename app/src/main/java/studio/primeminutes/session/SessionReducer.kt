@@ -121,7 +121,7 @@ object SessionReducer {
             sessionDirty = false, statusIsError = false,
             coverEnabled = true,
             showPodcastSheet = false, showConfigSheet = false,
-            showAddSourceSheet = false, showExportSheet = false,
+            showAddSourceSheet = false,
             lastSaveUri = null, coverBitmap = null, coverFromSession = false,
             summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false, summaryEdited = false, linesEdited = false,
             sessionGen = s.sessionGen + 1,

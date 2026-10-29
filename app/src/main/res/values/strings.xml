@@ -26,8 +26,8 @@
     <!-- MOSS-TD transcribes + diarizes in one pass, so its two re-run actions collapse into one. -->
     <string name="stop">Stop</string>
     <string name="stop_resumable">Stop (can be resumed)</string>
-    <string name="source_audio_file">Audio file</string>
-    <string name="source_audio_file_desc">Pick a file from your device</string>
+    <string name="source_audio_file">Import</string>
+    <string name="source_audio_file_desc">Audio, video or a .pmin meeting, from Google Drive, Dropbox, OneDrive or this phone</string>
     <string name="source_record">Record</string>
     <string name="source_record_desc">Capture &amp; transcribe live</string>
     <string name="source_podcast">Podcast</string>
@@ -162,8 +162,6 @@
     <string name="update_check_failed">Couldn\'t check for updates</string>
 
     <!-- Session as a self-describing .ogg + share -->
-    <string name="source_session">Open session (.ogg / .m4a)</string>
-    <string name="source_session_desc">Reload a saved .ogg or .m4a to keep editing the transcript</string>
     <string name="session_save_m4a">Save session (.m4a)</string>
     <string name="session_share_m4a">Share session (.m4a)</string>
     <string name="session_saved">Session saved</string>
@@ -178,29 +176,9 @@
     <string name="exporting">Exporting session…</string>
     <string name="exporting_hint">Continues in the background — you can keep using the app</string>
     <string name="export_interrupted">Export was interrupted — please try again.</string>
-    <string name="export_sheet_title">Export</string>
-    <string name="export_menu_entry">Export &amp; share…</string>
-    <string name="export_group_session">Prime Minutes session (.m4a)</string>
-    <string name="export_group_session_desc">Audio, transcript, speakers, summary and actions in one file. Reopens in Prime Minutes; plays anywhere.</string>
-    <string name="export_group_document">Document</string>
-    <string name="export_group_document_desc">Title, summary, action items and the timestamped transcript.</string>
-    <string name="export_group_subtitles">Subtitles</string>
-    <string name="export_group_subtitles_desc">Timed lines with speaker labels, for video and audio players.</string>
-    <string name="export_action_save">Save</string>
-    <string name="export_action_share">Share</string>
     <string name="export_heading_actions">Action items</string>
-    <string name="export_share_failed">Could not prepare the file to share</string>
-    <string name="export_copy_transcript">Copy transcript</string>
-    <string name="export_share_transcript">Share transcript…</string>
-    <string name="export_txt">Save as text (.txt)</string>
-    <string name="export_srt">Save subtitles (.srt)</string>
-    <string name="export_vtt">Save subtitles (.vtt)</string>
-    <string name="export_lrc">Save synced lyrics (.lrc)</string>
-    <string name="export_md">Save as Markdown (.md)</string>
-    <string name="export_pdf">Save as PDF (.pdf)</string>
     <string name="export_heading_summary">Summary</string>
     <string name="export_heading_transcript">Transcript</string>
-    <string name="transcript_copied">Transcript copied</string>
     <string name="status_importing">Importing shared audio…</string>
     <string name="import_failed">Couldn\'t import that file</string>
     <string name="recent_sessions">Recent</string>
@@ -269,7 +247,6 @@
     <string name="action_open">Open</string>
     <string name="action_rename">Rename</string>
     <string name="action_select">Select</string>
-    <string name="action_share_audio">Share audio</string>
     <string name="action_delete">Delete</string>
     <string name="delete_confirm">Delete “%s” permanently? The audio and its transcript are removed.</string>
 
@@ -626,50 +603,6 @@
     <string name="email_remove">Remove</string>
     <string name="email_add">Add e-mail address</string>
     <string name="email_invalid">Not an e-mail address</string>
-    <string name="mail_menu_entry">Email participants…</string>
-    <string name="mail_chip">Email participants</string>
-    <string name="mail_sheet_title">Email participants</string>
-    <string name="mail_recipients">Recipients</string>
-    <string name="mail_no_people">No speaker of this meeting is linked to a person yet: name them first, or add a recipient.</string>
-    <string name="mail_one_off">This mail only</string>
-    <string name="mail_unnamed">%s has no name</string>
-    <string name="mail_plain_label">%s is not in People</string>
-    <string name="mail_name_action">Name</string>
-    <string name="mail_link_action">Link</string>
-    <string name="mail_add_recipient">Add another recipient</string>
-    <string name="mail_which_is_you">Which one is you?</string>
-    <string name="mail_content">Content</string>
-    <string name="mail_preview">Preview</string>
-    <string name="mail_summary">Summary</string>
-    <string name="mail_minutes">Minutes</string>
-    <string name="mail_only_decisions">Decisions &amp; actions only</string>
-    <string name="mail_attach">Attach</string>
-    <string name="mail_attach_none">None</string>
-    <string name="mail_attach_large">Too large for many mail servers (25 MB)</string>
-    <string name="mail_language">Language</string>
-    <string name="mail_language_meeting">(meeting language)</string>
-    <string name="mail_language_note">Only the mail\'s frame text changes; the notes are not translated.</string>
-    <string name="mail_lang_hant">繁體中文</string>
-    <string name="mail_lang_hans">简体中文</string>
-    <string name="mail_lang_en">English</string>
-    <string name="mail_last_shared">Last shared %1$s · %2$s</string>
-    <string name="mail_open">Open in mail app</string>
-    <string name="mail_open_n">Open in mail app (%d)</string>
-    <string name="mail_share_other">Share to another app…</string>
-    <string name="mail_footnote">Prime Minutes never sends mail itself: your mail app opens with everything filled in, and you send it there.</string>
-    <string name="mail_me">Me</string>
-    <string name="mail_no_address">No e-mail address</string>
-    <string name="mail_not_to_self">not sent to yourself</string>
-    <string name="mail_saved_to">saved to %s</string>
-    <string name="mail_will_save">Saved to %s for next time</string>
-    <string name="mail_add_address">Add</string>
-    <string name="mail_add_hint">Name or e-mail address</string>
-    <string name="mail_add_typed">Add %s</string>
-    <string name="mail_one_off_note">Added for this mail only: not saved to People.</string>
-    <string name="mail_preview_to">To: %s</string>
-    <string name="mail_preview_close">Close</string>
-    <string name="mail_no_app">No app could open the mail. The addresses were copied.</string>
-    <string name="mail_addresses_copied">Addresses copied: paste them in To</string>
     <string name="ask_meeting_title">Ask this meeting</string>
     <string name="ask_meeting_hint">Ask a question about this meeting…</string>
     <string name="ask_meeting_query">Ask this meeting: “%1$s”</string>
@@ -752,8 +685,6 @@
         <item quantity="one">%d new</item>
         <item quantity="other">%d new</item>
     </plurals>
-    <string name="action_share_meeting">Share meeting</string>
-    <string name="action_share_audio_only">Share audio only</string>
     <string name="share_preparing">Preparing the meeting…</string>
     <string name="share_dup_title">Already in your library</string>
     <string name="share_dup_message">“%1$s” is already in your library.</string>
@@ -774,10 +705,6 @@
     <string name="online_notice_title">Before you import</string>
     <string name="online_notice_body">Online imports are for personal use only. You are responsible for having the right to download and transcribe the content, and for respecting the publisher\'s terms.</string>
     <string name="online_notice_ok">I understand</string>
-    <string name="share_online_title">Share without the audio?</string>
-    <string name="share_online_body">This meeting comes from an online source, and its audio belongs to the publisher. By default only the transcript and summary are shared.</string>
-    <string name="share_text_only">Text only</string>
-    <string name="share_with_audio">Include audio</string>
     <string name="about_licenses">Open-source licenses</string>
     <string name="about_licenses_desc">The components inside this app and their licenses</string>
     <!-- Library by source (filters, podcast rows, channel page) -->
@@ -792,4 +719,34 @@
     <string name="cd_open_channel">Open the channel page</string>
     <string name="cd_channel_group">%1$s, %2$d in library</string>
     <string name="cd_filter_sources">Filter by source</string>
+    <!-- Share sheet (spec v2) -->
+    <string name="share_title">Share</string>
+    <string name="share_what">What</string>
+    <string name="share_where">Where</string>
+    <string name="share_what_session">Whole meeting (.pmin)</string>
+    <string name="share_what_session_desc">Audio, transcript, speakers, summary, actions and notes. Opens in Prime Minutes.</string>
+    <string name="share_what_pdf">Summary + transcript (PDF)</string>
+    <string name="share_what_pdf_desc">Summary and action items linked to the transcript lines they cite.</string>
+    <string name="share_what_audio">Audio only (.m4a)</string>
+    <string name="share_what_audio_desc">The recording, without the transcript.</string>
+    <string name="share_attach_audio">Attach the recording (%1$s)</string>
+    <string name="share_hint_voices">Contains every participant\'s voice.</string>
+    <string name="share_hint_copyright">The audio belongs to its publisher: share it only if you may.</string>
+    <string name="share_where_nearby">Nearby (Quick Share)</string>
+    <string name="share_where_nearby_desc">To a phone or computer close by</string>
+    <string name="share_where_mail">E-mail</string>
+    <string name="share_where_mail_desc">Your mail app opens with the files attached</string>
+    <string name="share_mail_too_big">Over 25 MB: many mail servers refuse it. Try Nearby or the cloud.</string>
+    <string name="share_mail_body">Attached: the meeting “%1$s”, from Prime Minutes.</string>
+    <string name="share_mail_none">No mail app could open it.</string>
+    <string name="share_cloud_heading">Save to the cloud</string>
+    <string name="share_cloud_desc">Saved through the system dialog; keep them in “%1$s”</string>
+    <string name="share_cloud_missing">Install the %1$s app to save there</string>
+    <string name="share_cloud_saved">Saved to %1$s</string>
+    <string name="share_cloud_failed">Could not save to %1$s</string>
+    <string name="share_other_apps">Other apps…</string>
+    <string name="share_nearby_missing">Quick Share isn\'t available on this phone: pick an app instead.</string>
+    <string name="share_pdf_back">↑ Summary</string>
+    <string name="share_pdf_minutes">%1$d min</string>
+    <string name="share_pdf_speakers">Speakers: %1$s</string>
 </resources>

@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Subscriptions
@@ -44,7 +43,6 @@ fun AddSourceSheet(
     onPickFile: () -> Unit,
     onRecord: () -> Unit,
     onPodcast: () -> Unit,
-    onOpenSession: () -> Unit,
     onDismiss: () -> Unit,
     onShows: () -> Unit = {},
 ) {
@@ -67,7 +65,6 @@ fun AddSourceSheet(
             SourceRow(Icons.Filled.FolderOpen, stringResource(R.string.source_audio_file), stringResource(R.string.source_audio_file_desc)) { onDismiss(); onPickFile() }
             SourceRow(Icons.Filled.Podcasts, stringResource(R.string.source_podcast), stringResource(R.string.source_podcast_desc)) { onDismiss(); onPodcast() }
             SourceRow(Icons.Filled.Subscriptions, stringResource(R.string.sub_source), stringResource(R.string.sub_source_desc)) { onDismiss(); onShows() }
-            SourceRow(Icons.Filled.FolderZip, stringResource(R.string.source_session), stringResource(R.string.source_session_desc)) { onDismiss(); onOpenSession() }
         }
     }
 }

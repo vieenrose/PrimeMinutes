@@ -24,7 +24,7 @@ class PdfExportTest {
             )
         }
         val bos = ByteArrayOutputStream()
-        PdfExport.write(bos, utts, { "Speaker ${it + 1}" }, "My Meeting", "- a summary point\n- another", "Summary", "Transcript")
+        PdfExport.write(bos, PdfExport.Doc(utts, { "Speaker ${it + 1}" }, "My Meeting", listOf("29 Oct 2026 · 2 min"), "- a summary point\n- another", "Summary", "Transcript"))
         val bytes = bos.toByteArray()
 
         assertTrue("PDF should be sizeable, was ${bytes.size}", bytes.size > 1000)
@@ -42,11 +42,12 @@ class PdfExportTest {
             studio.primeminutes.core.reader.Note(2, 0, "19:00", null, "討論細節"),
         ), { if (it == "PROPOSAL") "提議" else null })
         val bos = ByteArrayOutputStream()
-        PdfExport.write(bos, utts, { "S${it + 1}" }, "會議", "涵蓋多個方面 [0:15]。另見 [5:00, 15:30]。", "摘要", "逐字稿", notes = notes)
+        PdfExport.write(bos, PdfExport.Doc(utts, { "S${it + 1}" }, "會議", emptyList(), "涵蓋多個方面 [0:15]。另見 [5:00, 15:30]。", "摘要", "逐字稿", notes = notes, backLabel = "↑ 摘要"))
         val s = String(bos.toByteArray(), Charsets.ISO_8859_1)
-        // 0:15, 5:00, 15:30 in the summary + 0:15, 19:00 in the notes = 5 links, each with a page destination.
-        assertTrue(Regex("""/Subtype /Link""").findAll(s).count() == 5)
-        assertTrue(Regex("""/Dest \[\d+ 0 R /XYZ null [\d.]+ null]""").findAll(s).count() == 5)
+        // Summary: 2 cited sentences + 3 times; notes: 2 items + 2 times; 4 cited turns → 4 back links.
+        val links = Regex("""/Subtype /Link""").findAll(s).count()
+        assertTrue("links: $links", links == 13)
+        assertTrue(Regex("""/Dest \[\d+ 0 R /XYZ null [\d.]+ null]""").findAll(s).count() == links)
         assertTrue(s.contains("/Annots ["))
         assertTrue(s.trimEnd().endsWith("%%EOF"))
     }

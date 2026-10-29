@@ -334,25 +334,6 @@ object SessionLibrary {
      */
     fun onlineSource(entry: Entry): String? = Provenance.read(entry.dir)?.kind?.takeIf { it in Provenance.ONLINE }
 
-    /**
-     * [entry]'s meeting as text alone at [dest] — title, summary, transcript — with no audio: how a
-     * meeting from an online source is shared by default (the audio belongs to its publisher).
-     * [label] names a speaker; [headings]: (summary, transcript).
-     */
-    suspend fun shareTextOnly(entry: Entry, dest: File, label: (Int, Map<Int, studio.primeminutes.data.SpeakerName>) -> String,
-                              headings: Pair<String, String>): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
-        if (!entry.sessionFile.isFile) return@withContext null
-        val c = Content.of(PrimeMinutesSession.peek(entry.sessionFile) ?: return@withContext null)
-        val lab: (Int) -> String = { label(it, c.speakerNames) }
-        val known = c.utterances.mapNotNull { it.speaker }.toSet().ifEmpty { null }
-        fun refs(t: String?) = t?.let { studio.primeminutes.core.reader.SpeakerRefs.resolve(it, lab, known) }
-        runCatching {
-            dest.writeText(studio.primeminutes.core.export.TranscriptExport.plainText(c.utterances, lab, refs(c.title ?: entry.title),
-                refs(c.summary), summaryHeading = headings.first, transcriptHeading = headings.second))
-            dest
-        }.getOrNull()
-    }
-
     /** [entry]'s audio alone at [dest]: its m4a without the embedded meeting (title kept), or the WAV. */
     suspend fun shareAudioOnly(entry: Entry, dest: File, title: String?): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
         val src = entry.audioFile

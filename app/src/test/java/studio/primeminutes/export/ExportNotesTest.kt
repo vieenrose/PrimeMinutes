@@ -80,10 +80,8 @@ class ExportNotesTest {
         ), { zhLabels[it] })!!
         assertEquals(listOf("寄出通知"), sec.groups.flatMap { g -> g.items.map { it.text } })
         assertEquals(null, ExportNotes.section("AI 筆記", listOf(Note(1, 0, "0:01", null, "42。")), { null }))
-        assertTrue(studio.primeminutes.core.share.MeetingMail.trivial("3"))
-        assertFalse(studio.primeminutes.core.share.MeetingMail.trivial("3 月"))
-        val mail = studio.primeminutes.core.share.MeetingMail.parseMinutes("【待辦】\n- 3 [3:34]\n- 寄出通知 [3:50]", listOf("待辦" to "ACTION"))
-        assertEquals(listOf("寄出通知"), mail.single().items.map { it.text })
+        assertTrue(studio.primeminutes.core.export.Cites.trivial("3"))
+        assertFalse(studio.primeminutes.core.export.Cites.trivial("3 月"))
     }
 
     @Test fun actionItemsAreFormattedLikeTheNotes() {
@@ -91,26 +89,6 @@ class ExportNotesTest {
         assertEquals("【行動項目】\n・林雅婷寄出座位表。${wj}[2:34]\n・請法務審閱合約", ExportNotes.plain(acts))
         assertEquals("## 行動項目\n\n- 林雅婷寄出座位表。${wj}[2:34](#t-15)\n- 請法務審閱合約", ExportNotes.markdown(acts, listOf(15.0)))
         assertEquals(null, ExportNotes.actions("行動項目", "-"))
-        val txt = TranscriptExport.plainText(utts, { "S${it + 1}" }, null, null, null, null, sec, actions = acts)
-        assertTrue(txt.startsWith("【行動項目】\n・林雅婷寄出座位表。${wj}[2:34]\n・請法務審閱合約\n\n【AI 筆記】"))
-    }
-
-    @Test fun plainTextExportGolden() {
-        val txt = TranscriptExport.plainText(utts, { "S${it + 1}" }, "標題", "多個方面 [0:15]。", null, null, sec, "摘要", "逐字稿")
-        assertTrue(txt.startsWith("標題\n\n【摘要】\n多個方面。${wj}[0:15]\n\n【AI 筆記】\n・討論"))
-        assertTrue(txt.endsWith("提議：\n・建議初期推出低價套餐。${wj}[1:16]\n\n【逐字稿】\n[00:15] S1: 大家好\n"))
-    }
-
-    @Test fun markdownExportGolden() {
-        val md = TranscriptExport.markdown(utts, { "S${it + 1}" }, "標題", "多個方面 [0:15]。", "摘要", "逐字稿", null, null, sec)
-        assertTrue(md.startsWith("# 標題\n\n## 摘要\n\n多個方面。${wj}[0:15](#t-15)\n\n## AI 筆記\n\n- 討論新平站開業細節。${wj}[0:15](#t-15)\n"))
-        assertTrue(md.endsWith("\n\n## 逐字稿\n\n- <a id=\"t-15\"></a>`00:15` **S1** 大家好\n"))
-        // Every link target exists; the cites still read as times.
-        val ids = Regex("""<a id="(t-\d+)"></a>""").findAll(md).map { it.groupValues[1] }.toSet()
-        val hrefs = Regex("""]\(#(t-\d+)\)""").findAll(md).map { it.groupValues[1] }.toList()
-        assertEquals(5, hrefs.size)
-        assertTrue(ids.containsAll(hrefs))
-        assertFalse(md.contains("]["))
     }
 
     @Test fun markdownMultiCiteIsOneLinkPerTimeToTheTurnAtOrBefore() {

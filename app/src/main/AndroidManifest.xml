@@ -45,11 +45,19 @@
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
         </intent>
-        <!-- The e-mail apps among the ACTION_SEND targets (Email participants: one mail with an attachment). -->
+        <!-- Share sheet: Quick Share among the ACTION_SEND targets. -->
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="*/*" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND_MULTIPLE" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <!-- Share sheet cloud destinations: enabled only when the provider app is installed. -->
+        <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.dropbox.android" />
+        <package android:name="com.microsoft.skydrive" />
     </queries>
 
     <application

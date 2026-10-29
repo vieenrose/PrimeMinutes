@@ -25,7 +25,7 @@ class AddSourceSheetTest {
     private val ctx get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     private class Spies {
-        var file = false; var record = false; var podcast = false; var session = false; var dismiss = false
+        var file = false; var record = false; var podcast = false; var dismiss = false
     }
 
     private fun host(s: Spies) {
@@ -33,16 +33,15 @@ class AddSourceSheetTest {
             AddSourceSheet(
                 onPickFile = { s.file = true }, onRecord = { s.record = true },
                 onPodcast = { s.podcast = true },
-                onOpenSession = { s.session = true }, onDismiss = { s.dismiss = true },
+                onDismiss = { s.dismiss = true },
             )
         }
     }
 
     // Recording is the Studio's big button now; the sheet only adds existing audio.
-    @Test fun rendersFileAndPodcastAndShowsAndSession() {
+    @Test fun rendersImportAndPodcastAndShows() {
         host(Spies())
-        listOf(R.string.source_audio_file, R.string.source_podcast,
-            R.string.sub_source, R.string.source_session).forEach {
+        listOf(R.string.source_audio_file, R.string.source_audio_file_desc, R.string.source_podcast, R.string.sub_source).forEach {
             compose.onNodeWithText(ctx.getString(it)).assertIsDisplayed()
         }
     }
@@ -59,10 +58,9 @@ class AddSourceSheetTest {
         compose.onAllNodesWithText("PeerTube", substring = true).assertCountEquals(0)
     }
 
-    @Test fun tappingOpenSessionFiresOpenSession() {
-        val s = Spies(); host(s)
-        compose.onNodeWithText(ctx.getString(R.string.source_session)).performClick()
-        assertTrue(s.session)
+    @Test fun noSeparateOpenSessionRow() {
+        host(Spies())
+        compose.onAllNodesWithText(".ogg", substring = true).assertCountEquals(0)
     }
 
     @Test fun tappingFileFiresPickFile() {

@@ -3,12 +3,8 @@
 <paths>
     <cache-path name="updates" path="updates/" />
     <cache-path name="shared" path="shared/" />
-    <!-- Share-audio copies (title-named), separate from the export flow's shared/ dir. -->
-    <cache-path name="share_audio" path="share_audio/" />
-    <!-- Export sheet "Share" of a document / subtitle format (it had no path here: the share failed). -->
-    <cache-path name="share_export" path="share_export/" />
-    <!-- "Email participants" attachments (PDF / TXT / .m4a), cleared on each mail. -->
-    <cache-path name="share_mail" path="share_mail/" />
-    <!-- "Share meeting": the enriched m4a (Quick Share, AirDrop-compatible), cleared on each share. -->
-    <cache-path name="share_meeting" path="share_meeting/" />
+    <!-- The Share sheet's files (.pmin / PDF / audio), cleared on each share. -->
+    <cache-path name="share_out" path="share_out/" />
+    <!-- The Share sheet's PDF, built when the sheet opens (its size is shown). -->
+    <cache-path name="share_pdf" path="share_pdf/" />
 </paths>

@@ -1,11 +1,10 @@
 package studio.primeminutes.core.export
 
 import studio.primeminutes.core.reader.Note
-import studio.primeminutes.core.share.MeetingMail
 
 /**
  * The summary prose and the AI notes (reader journal) as the document exports lay them out — the
- * email's minutes layout: cites at the clause end, glued with U+2060 (MeetingMail.clauseEndCites /
+ * email's minutes layout: cites at the clause end, glued with U+2060 (Cites.clauseEndCites /
  * itemCite, never duplicated here), notes grouped under their localized type label, no `#N` index,
  * untyped (`-`) notes first and unlabelled. Pure, shared by TXT / MD / PDF.
  */
@@ -39,7 +38,7 @@ object ExportNotes {
         ORDER.forEach { by[it] = ArrayList() }
         for (n in notes) {
             val text = refs(n.text.trim()).trimEnd('。').trim()
-            if (MeetingMail.trivial(text)) continue
+            if (Cites.trivial(text)) continue
             by.getOrPut(fullTag(n.tag)) { ArrayList() } += Item(text, n.ts.trim().ifEmpty { null })
         }
         val groups = by.filterValues { it.isNotEmpty() }.map { (tag, items) -> Group(tag?.let { label(it) ?: it }, items) }
@@ -56,13 +55,13 @@ object ExportNotes {
         val items = raw.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { l ->
             val m = ITEM.matchEntire(l)
             val text = refs((m?.groupValues?.get(1) ?: l).trim()).trimEnd('。').trim()
-            if (MeetingMail.trivial(text)) null else Item(text, m?.groupValues?.get(2)?.ifEmpty { null })
+            if (Cites.trivial(text)) null else Item(text, m?.groupValues?.get(2)?.ifEmpty { null })
         }
         return if (items.isEmpty()) null else Section(heading, listOf(Group(null, items)))
     }
 
     /** A note's text with its cite at the end, glued (`…條款。⁠[1:12]`). */
-    fun line(i: Item): String = i.text + MeetingMail.itemCite(i.text, i.ts)
+    fun line(i: Item): String = i.text + Cites.itemCite(i.text, i.ts)
 
     /** Summary prose: each paragraph with its cites moved to the clause end. */
     fun summary(text: String): String = paragraphs(text).joinToString("\n\n")
@@ -74,7 +73,7 @@ object ExportNotes {
      */
     fun paragraphs(text: String): List<String> =
         text.split(PARA).map { it.trim() }.filter { it.isNotEmpty() }.flatMap { p ->
-            split(p.lines().joinToString("\n") { MeetingMail.clauseEndCites(it.trim()) })
+            split(p.lines().joinToString("\n") { Cites.clauseEndCites(it.trim()) })
         }
 
     private val PARA = Regex("""\n\s*\n""")
