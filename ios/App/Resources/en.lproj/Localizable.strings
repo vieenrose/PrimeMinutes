@@ -695,3 +695,13 @@
 "confirm_resummarize_body" = "You edited the summary or the action items. Re-summarizing writes new ones in their place (Undo stays available right after).";
 "confirm_retranscribe_title" = "Discard your line edits?";
 "confirm_retranscribe_body" = "You corrected the text of some lines. Re-transcribing rewrites the whole transcript from the audio, and those corrections will be lost.";
+
+/* Sharing a meeting (AirDrop) */
+"action_share_meeting" = "Share meeting";
+"action_share_audio_only" = "Share audio only";
+"share_preparing" = "Preparing the meeting…";
+"share_dup_title" = "Already in your library";
+"share_dup_message" = "“%@” is already in your library.";
+"share_dup_open" = "Open existing";
+"share_dup_copy" = "Keep a copy";
+"share_too_new" = "This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.";

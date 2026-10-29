@@ -310,6 +310,7 @@ struct SessionMoreMenu: View {
     let onMail: () -> Void
     var mailCopied = false
     let onExport: () -> Void
+    var onShareMeeting: () -> Void = {}
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
     var body: some View {
@@ -317,6 +318,8 @@ struct SessionMoreMenu: View {
             Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
             if hasLines { Button { onMail() } label: { Label(L("mail_menu_entry"), systemImage: mailCopied ? "checkmark" : "envelope") }.disabled(busy) }
+            // The meeting as one file (AirDrop, Messages, Files…): first, it is what a colleague wants.
+            if hasAudio && hasLines { Button(L("action_share_meeting"), systemImage: "square.and.arrow.up") { onShareMeeting() }.disabled(busy).accessibilityIdentifier("shareMeeting") }
             Button(L("export_menu_entry")) { onExport() }.disabled(busy)
             if hasLines { ShareLink(item: shareText, subject: Text(title)) { Text(L("export_share_transcript")) }.disabled(busy) }
             if hasAudio {
@@ -380,6 +383,7 @@ struct SessionToolbar: ToolbarContent {
     let onMail: () -> Void
     var mailCopied = false
     let onExport: () -> Void
+    var onShareMeeting: () -> Void = {}
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
     var body: some ToolbarContent {
@@ -407,7 +411,7 @@ struct SessionToolbar: ToolbarContent {
                 hasLines: hasLines, hasAudio: hasAudio, noSpeech: noSpeech,
                 askMeetingReady: askMeetingReady, busy: busy, title: title,
                 shareText: shareText,
-                onRename: onRename, onAsk: onAsk, onMail: onMail, mailCopied: mailCopied, onExport: onExport,
+                onRename: onRename, onAsk: onAsk, onMail: onMail, mailCopied: mailCopied, onExport: onExport, onShareMeeting: onShareMeeting,
                 onRetranscribe: onRetranscribe, onResummarize: onResummarize)
         }
     }
@@ -615,8 +619,17 @@ struct SessionTextEditSheet: View {
 
 /// The session-export progress overlay.
 struct SessionExporting: View {
+    /// 0…1 while the audio encodes (nil: indeterminate); `onCancel` adds a Cancel button.
+    var progress: Float? = nil
+    var title: String = L("exporting")
+    var onCancel: (() -> Void)? = nil
     var body: some View {
-        VStack(spacing: 8) { ProgressView(); Vox.head(L("exporting")); Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
+        VStack(spacing: 8) {
+            if let progress { ProgressView(value: Double(progress)).frame(width: 180) } else { ProgressView() }
+            Vox.head(title)
+            if let onCancel { Button(L("cancel"), role: .cancel) { onCancel() }.buttonStyle(.bordered).accessibilityIdentifier("shareCancel") }
+            else { Vox.meta(L("exporting_hint")).multilineTextAlignment(.center) }
+        }
             .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Vox.radiusXL)).padding(40)
     }
 }

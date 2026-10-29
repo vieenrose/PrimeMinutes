@@ -111,26 +111,79 @@ import AVFoundation
         }
     }
 
-    func importAudio(_ url: URL) {
+    // MARK: received files (AirDrop, Files, Open in…; docs: SessionFileCore "sharing")
+    /// A received meeting already in the library (same session id): the user picks Open existing / Keep a copy.
+    struct Duplicate: Identifiable { let id = UUID(); let incoming: Session; let existing: Session }
+    @Published var duplicate: Duplicate?
+    /// A one-off message for an alert (a file from a newer app).
+    @Published var notice: String?
+    /// A meeting to show now (a restored one, or the existing one of a duplicate).
+    @Published var openRequest: Session?
+
+    /// A file handed to the app. A Prime Minutes meeting restores at once, models or not; plain audio (or a
+    /// meeting from a newer app, imported as audio after a notice) goes through `gate`, the model download consent.
+    func open(_ url: URL, gate: @escaping (@escaping () -> Void) -> Void) {
+        let man: SessionFile.Manifest? = {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            return SessionFile.read(url)
+        }()
+        if let man, SessionFile.supported(man) { importAudio(url); return }
+        if man != nil { notice = L("share_too_new"); StatusLog.add("import: newer manifest \(man?.primeminutes_version ?? 0), as audio") }
+        gate { self.importAudio(url, plain: true) }
+    }
+
+    /// AirDrop and Open in… hand over a copy in Documents/Inbox: ours is in the audio directory once copied.
+    nonisolated static func isInbox(_ url: URL) -> Bool {
+        let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox").standardizedFileURL.path
+        return url.standardizedFileURL.path.hasPrefix(inbox + "/")
+    }
+    /// Inbox copies left behind (an import declined at the download prompt, a kill): removed after an hour.
+    nonisolated static func sweepInbox(maxAge: TimeInterval = 3600) {
+        let fm = FileManager.default
+        let inbox = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox")
+        for f in (try? fm.contentsOfDirectory(at: inbox, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [] {
+            let m = (try? f.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+            if Date().timeIntervalSince(m) > maxAge { try? fm.removeItem(at: f) }
+        }
+    }
+
+    /// Duplicate answered: open the meeting already here (the received copy goes), or keep the received one too.
+    func resolveDuplicate(keepCopy: Bool) {
+        guard let d = duplicate else { return }
+        duplicate = nil
+        if keepCopy { var s = d.incoming; s.id = UUID(); library.update(s); openRequest = s; return }
+        if let a = d.incoming.audio { try? FileManager.default.removeItem(at: JobQueue.audioDir.appendingPathComponent(a)) }
+        openRequest = d.existing
+    }
+
+    func importAudio(_ url: URL, plain: Bool = false) {
         let j = Job(audio: UUID().uuidString + "." + (url.pathExtension.isEmpty ? "m4a" : url.pathExtension))
         let before = screen.status; screen.status = L("status_importing")   // Android: a long share (big file, cloud provider) shows progress
         Task {
             let ok = await Task.detached {
                 let scoped = url.startAccessingSecurityScopedResource()
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                return (try? FileManager.default.copyItem(at: url, to: JobQueue.url(j))) != nil
+                let ok = (try? FileManager.default.copyItem(at: url, to: JobQueue.url(j))) != nil
+                if ok, Self.isInbox(url) { try? FileManager.default.removeItem(at: url) }
+                return ok
             }.value
             if screen.status == L("status_importing") { screen.status = before }
             guard ok else { screen.status = L("import_failed"); return }
-            imported(url, j)
+            imported(url, j, plain: plain)
         }
     }
-    private func imported(_ url: URL, _ j: Job) {
-        if let man = SessionFile.read(JobQueue.url(j)) {   // a Prime Minutes session: restore it instead of re-transcribing
+    private func imported(_ url: URL, _ j: Job, plain: Bool) {
+        if !plain, let man0 = SessionFile.read(JobQueue.url(j)), SessionFile.supported(man0) {   // a Prime Minutes meeting: restore it, no model needed
+            // The receiver's script (span-gated OpenCC: text already in it is left alone).
+            let sc = AppLanguage.current.script, gen = OpenCC.generated(sc), tr = OpenCC.transcript(sc)
+            let man = SessionFile.converted(man0, generated: gen.convert, transcript: tr.convert)
             var s = SessionFile.session(man, audio: j.audio)
             if s.title.isEmpty { s.title = url.deletingPathExtension().lastPathComponent }
             if let t = AVURLAsset(url: JobQueue.url(j)).duration.seconds as Double?, t.isFinite, t > s.seconds { s.seconds = t }
-            library.update(s); return
+            StatusLog.add("import: meeting \(s.id) v\(man0.primeminutes_version ?? 1), \(s.lines.count) lines")
+            if man0.session_id != nil, let old = library.sessions.first(where: { $0.id == s.id }) { duplicate = Duplicate(incoming: s, existing: old); return }
+            library.update(s); openRequest = s; return
         }
         // When the meeting took place: the file's own creation date, never the import time (none: the time is left out).
         var j = j; j.captureStart = MediaDate.captureStart(JobQueue.url(j))?.timeIntervalSince1970 ?? -1

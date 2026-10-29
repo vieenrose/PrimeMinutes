@@ -30,3 +30,5 @@ VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/opencc-tests $D/golden
 swiftc -parse-as-library -O $D/../App/BackgroundDownload.swift $D/BackgroundDownloadTests.swift -o $O/bg-download-tests && $O/bg-download-tests
 swiftc -parse-as-library -O $D/../App/Subscriptions.swift $D/SubscriptionsTests.swift -o $O/subscriptions-tests && $O/subscriptions-tests
 swiftc -parse-as-library -O $D/../App/UserEdits.swift $D/UserEditsTests.swift -o $O/user-edits-tests && $O/user-edits-tests
+swiftc -parse-as-library -O $D/../App/SessionFileCore.swift $D/../App/OpenCC.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $D/SessionShareTests.swift -o $O/session-share-tests
+VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/session-share-tests $D/golden_share

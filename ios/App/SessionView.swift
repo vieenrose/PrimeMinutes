@@ -99,6 +99,8 @@ struct SessionView: View {
     @State private var undoSteps: [Step] = []
     @State private var redoSteps: [Step] = []
     @State private var exporting = false
+    @State private var exportProgress: Float?
+    @State private var shareTask: Task<Void, Never>?
     @State private var exportFile: URL?
     @State private var showExport = Dev.env["VOX_EXPORT"] != nil
     /// "Email participants" (docs/design/speaker-contacts.md §4). DEV: VOX_MAIL=1 (or preview) opens it.
@@ -320,12 +322,17 @@ struct SessionView: View {
             if let u = Export.file(s, f) { Haptics.success(); exportFile = u } else { alertText = L("export_share_failed") }
         }
     }
-    /// "Save session" picked: export the .primeminutes bundle, then share it (or alert on failure).
-    private func saveSessionExport() {
-        showExport = false; exporting = true
-        Task {
-            let u = await SessionFile.export(s); exporting = false
-            try? await Task.sleep(nanoseconds: 400_000_000)
+    /// "Save session" picked: the same file as Share meeting.
+    private func saveSessionExport() { showExport = false; shareMeeting(delay: true) }
+    /// "Share meeting": the enriched .m4a (AirDrop, Messages, Files…), with progress and Cancel while the audio encodes.
+    private func shareMeeting(delay: Bool = false) {
+        exporting = true; exportProgress = 0
+        shareTask = Task {
+            let u = await SessionFile.export(s) { p in Task { @MainActor in if exporting { exportProgress = p } } }
+            let cancelled = Task.isCancelled
+            exporting = false; exportProgress = nil; shareTask = nil
+            if cancelled { SessionFile.clearShareDir(); return }
+            if delay { try? await Task.sleep(nanoseconds: 400_000_000) }
             if let u { Haptics.success(); exportFile = u } else { alertText = L("session_share_failed") }
         }
     }
@@ -452,7 +459,7 @@ struct SessionView: View {
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
             onRename: { draft = s.title; renamingTitle = true },
             onAsk: { askMeeting = "" }, onMail: { mailOpen = true }, mailCopied: mailCopied,
-            onExport: { showExport = true },
+            onExport: { showExport = true }, onShareMeeting: { shareMeeting() },
             onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) })
     }
     /// The scroll page, out of the body chain so the solver sees one call.
@@ -515,7 +522,7 @@ struct SessionView: View {
             ExportSheet(s: s, onPick: { pickExport($0) }, onSession: { saveSessionExport() })
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
+        .sheet(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { if let f = exportFile, f.path.hasPrefix(SessionFile.shareDir.path) { try? FileManager.default.removeItem(at: f) }; exportFile = nil } })) { if let exportFile { ShareSheet(url: exportFile) } }
         // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and the player there.
         .sheet(isPresented: Binding(get: { askMeeting != nil }, set: { if !$0 { askMeeting = nil } })) {
             AskSheet(m: Model.shared, initial: askMeeting ?? "", open: { _, t in askCitation(t) }, meeting: s)
@@ -619,7 +626,7 @@ struct SessionView: View {
         .task { checkSummaryStale() }
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { sessionSaved($0) }
         .overlay {
-            if exporting { SessionExporting() }
+            if exporting { SessionExporting(progress: exportProgress, title: L("share_preparing"), onCancel: { shareTask?.cancel() }) }
         }
         .overlay(alignment: .bottom) {
             if undoable != nil {

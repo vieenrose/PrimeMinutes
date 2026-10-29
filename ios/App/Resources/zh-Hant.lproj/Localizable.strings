@@ -695,3 +695,13 @@
 "confirm_resummarize_body" = "你改過摘要或行動項目。重新摘要會寫出新的內容取代它們（完成後仍可立即復原）。";
 "confirm_retranscribe_title" = "要捨棄你修改的逐字稿嗎？";
 "confirm_retranscribe_body" = "你修正過部分段落的文字。重新轉錄會依錄音重寫整份逐字稿，這些修正將會遺失。";
+
+/* Sharing a meeting (AirDrop) */
+"action_share_meeting" = "分享會議";
+"action_share_audio_only" = "僅分享音訊";
+"share_preparing" = "正在準備會議…";
+"share_dup_title" = "資料庫中已有這場會議";
+"share_dup_message" = "「%@」已在你的資料庫中。";
+"share_dup_open" = "開啟現有的";
+"share_dup_copy" = "保留副本";
+"share_too_new" = "這場會議來自較新版本的 Prime Minutes。請更新 App 以還原；目前先以一般音訊匯入。";
