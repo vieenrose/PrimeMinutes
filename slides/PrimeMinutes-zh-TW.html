@@ -74,6 +74,17 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 .tile .tn span { font-size:.5em; color:var(--sub); font-weight:500; }
 .tile .td { font-size:.78em; color:var(--sub); line-height:1.45; }
 .demo ol { font-size:1.22em; line-height:1.9; margin-top:.4em; padding-left:1.4em; }
+.cols.duo { gap:40px; }
+.col.side { justify-content:center; }
+.notes { display:flex; gap:20px; margin-top:16px; }
+.notes .note { flex:1; background:var(--card); border:1px solid var(--line); border-left:5px solid var(--accent); border-radius:10px; padding:12px 18px; font-size:1.02em; line-height:1.45; }
+.notes .note b { color:var(--accent); }
+.shot img { cursor:zoom-in; }
+/* === CLICK-TO-ZOOM (Z / click; Esc or click closes) === */
+#zoom { position:fixed; inset:0; z-index:40; background:#0d1420f2; display:none; align-items:center; justify-content:center; cursor:zoom-out; }
+#zoom.on { display:flex; }
+#zoom img { max-width:96vw; max-height:96vh; object-fit:contain; border-radius:10px; background:#fff; box-shadow:0 10px 50px #0008; }
+@media print { #zoom, #hint, #timer, #bar, #ov { display:none !important; } }
 /* === PRESENTER CHROME (outside the stage) === */
 #bar { position:fixed; left:0; bottom:0; height:4px; background:var(--accent2); width:0; transition:width .18s; z-index:20; }
 #hint { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#0d1420cc; color:#cfe3f5; border:1px solid #29405a; border-radius:999px; padding:9px 22px; font-size:15px; z-index:25; transition:opacity 1s; }
@@ -110,7 +121,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.58 · Android v0.55.0 · iOS 0.55.0 build 21 · 版次 2026-10-29</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.59 · Android v0.55.0 · iOS 0.55.0 build 21 · 版次 2026-10-29</p>
 </section>
 
 <!-- 2 問題 -->
@@ -124,148 +135,121 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <p class="lede">Prime Minutes 的答案：錄音、逐字稿、筆記、摘要，全部在你的手機上完成，資料不出手機。</p>
 </section>
 
-<!-- 3 主視覺 -->
 <section class="slide">
   <div class="kicker">一頁看懂</div><h2>錄完，筆記就寫好了</h2>
   <div class="cols">
-    <div class="col" style="flex:1.15"><div class="shot"><img src="img/demo-studio.gif" alt="錄音室示範"></div>
-    <div class="cap">Galaxy Note10+ 實機：連錄兩場會議，背景整理筆記</div></div>
-    <div class="col"><ul class="big">
+    <div class="col" style="flex:1"><div class="shot"><img src="img/demo-studio.gif" alt=""></div><div class="cap">Galaxy Note10+ 實機：連錄兩場會議，背景整理筆記</div></div>
+    <div class="col side"><ul class="big">
       <li>錄音時<b>文字即時上螢幕</b>，同時標出是誰在說話。</li>
-      <li>錄到一半，App 已經在<b>讀內容、記重點</b>：決議、待辦、提議、還沒定案的事、提到的數字。</li>
+      <li>錄到一半，App 已經在<b>讀內容、記重點</b>：決議、待辦、還沒定案的事、提到的數字。</li>
       <li>按下停止，<b>摘要跟標題自動寫好</b>。</li>
       <li>之後可以搜尋、提問、匯出、寄給與會者。</li>
     </ul></div>
   </div>
 </section>
 
-<!-- 4 四大特色 -->
 <section class="slide">
-  <div class="kicker">特色總覽</div><h2>錄音 · AI 筆記 · 摘要 · 逐字稿</h2>
-  <div class="grid4">
-    <div class="col"><div class="shot"><img src="img/qs-capture.png"></div><div class="cap">錄音：邊錄邊出文字</div></div>
-    <div class="col"><div class="shot"><img src="img/05-agent.png"></div><div class="cap">AI 筆記：決議與待辦逐條列出</div></div>
-    <div class="col"><div class="shot"><img src="img/04-summary.png"></div><div class="cap">摘要：自動成段＋標題</div></div>
-    <div class="col"><div class="shot"><img src="img/03-transcript.png"></div><div class="cap">逐字稿：標註語者、可點播</div></div>
+  <div class="kicker">特色總覽 1/2</div><h2>錄音 · AI 筆記</h2>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/24b-capture-live-crop.png" alt=""></div><div class="cap">錄音：邊錄邊出文字，每行標出是誰</div></div>
+    <div class="col"><div class="shot"><img src="img/05-agent-crop.png" alt=""></div><div class="cap">AI 筆記：決議、待辦逐條列出，附時間</div></div>
   </div>
+  <div class="notes"><div class="note">講完話<b>約兩秒</b>，文字就上螢幕</div><div class="note">筆記<b>邊錄邊寫</b>，不用等會開完</div><div class="note">點時間就<b>播出當時的原話</b></div></div>
 </section>
 
-<!-- 5 即時逐字稿 -->
+<section class="slide">
+  <div class="kicker">特色總覽 2/2</div><h2>摘要 · 逐字稿</h2>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/04-summary-crop.png" alt=""></div><div class="cap">摘要：自動成段，附時間可以點</div></div>
+    <div class="col"><div class="shot"><img src="img/03-transcript-crop.png" alt=""></div><div class="cap">逐字稿：標出是誰講的，點一下就播</div></div>
+  </div>
+  <div class="notes"><div class="note">按下停止，<b>標題和摘要</b>自動寫好</div><div class="note">每個人<b>自己的顏色</b>，一眼看出誰講的</div><div class="note">逐字稿<b>長按就能改</b></div></div>
+</section>
+
 <section class="slide">
   <div class="kicker">錄音現場</div><h2>說話後約兩秒，文字上螢幕</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/24b-capture-live.png"></div><div class="cap">錄音中：逐字稿即時增長，每行標註語者</div></div>
-    <div class="col"><div class="shot"><img src="img/agent-live.gif"></div><div class="cap">AI 筆記卡片即時顯示閱讀進度</div></div>
-    <div class="col"><ul class="big">
-      <li>講完話<b>約兩秒</b>，文字就出現在螢幕上。</li>
-      <li>誰在說話會<b>晚一點自動補上</b>；等一下下，標得更準，停止後還會整場再校正一次。</li>
-      <li>「下一場」按鈕：連著錄好幾場，前一場的筆記在背景繼續整理，不用等。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/24b-capture-live-crop.png" alt=""></div><div class="cap">錄音中：逐字稿即時增長，每行標出是誰</div></div>
+    <div class="col"><div class="shot"><img src="img/agent-live.gif" alt=""></div><div class="cap">AI 筆記卡片即時顯示讀到哪裡</div></div>
   </div>
+  <div class="notes"><div class="note">誰在說話會<b>晚一點補上</b>，停止後整場再校正一次</div><div class="note">「下一場」：<b>連著錄好幾場</b>，前一場的筆記在背景繼續整理</div></div>
 </section>
 
-<!-- 6 摘要與播放器 -->
 <section class="slide">
   <div class="kicker">會後成果</div><h2>摘要、筆記，每個時間點可核對原話</h2>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/long-summary-android-zh-crop.png" alt=""></div><div class="cap">長會議：分段接著寫，不會只寫一半</div></div>
+    <div class="col"><div class="shot"><img src="img/transcript-player-zh-crop.png" alt=""></div><div class="cap">點文字播原話，拖進度列文字跟著走</div></div>
+  </div>
+  <div class="notes"><div class="note">筆記分五類：<b>決議、待辦、還沒定案、提議、重要數字</b></div><div class="note">點摘要任何一句，<b>直接播出原話</b></div><div class="note">很長的會也會<b>寫完整</b></div></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">誰說了什麼 1/2</div><h2>誰講的，一眼就知道</h2>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/people-voice-explain-zh-crop.png" alt=""></div><div class="cap">「辨識聲音」要你同意才開</div></div>
+    <div class="col"><div class="shot"><img src="img/people-person-zh-crop.png" alt=""></div><div class="cap">人就是手機的聯絡人，電子郵件也在那裡</div></div>
+  </div>
+  <div class="notes"><div class="note">App <b>建議</b>是誰，<b>你確認</b>才算數</div><div class="note">存的是<b>特徵數字</b>、不是錄音，可一鍵清除</div><div class="note">名字存進<b>聯絡人</b>，寫信直接拿來用</div></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">誰說了什麼 2/2</div><h2>標錯了，拖一下就好</h2>
   <div class="cols">
-    <div class="col"><ul class="big">
-      <li>筆記自動分成五類：<b>決議、待辦、還沒定案、提議、重要數字</b>，每一條都附時間。</li>
-      <li>錄音時邊錄邊寫；按下停止，標題跟摘要自動完成。</li>
-      <li>很長的會分段接著寫，不會只寫一半就停。</li>
-      <li>點摘要裡的任何一句，<b>直接播出當時的原話</b>，不怕被 AI 帶偏。</li>
+    <div class="col" style="flex:1"><div class="shot"><img src="img/boundary.gif" alt=""></div><div class="cap">分界編輯器：拖動「換人位置」</div></div>
+    <div class="col side"><ul class="big">
+      <li><b>長按那一句</b>就能改成別人。</li>
+      <li>換人的位置不對，用分界編輯器<b>拖一下</b>就好。</li>
+      <li>改錯了也不怕：<b>可以復原、重做</b>。</li>
+      <li>名字確認過一次，以後每場都自動認得。</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/long-summary-android-zh.png"></div><div class="cap">長會議：分段摘要，後段持續補齊</div></div>
-    <div class="col"><div class="shot"><img src="img/transcript-player-zh.png"></div><div class="cap">播放器與逐字稿雙向同步：點文字播原話，拖曳進度列文字跟著標示</div></div>
   </div>
 </section>
 
-<!-- 7 語者 -->
-<section class="slide">
-  <div class="kicker">誰說了什麼</div><h2>誰講的，一眼就知道</h2>
-  <div class="cols">
-    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>每個人有自己的顏色，逐字稿裡<b>一眼看出誰講了哪句</b>。</li>
-      <li>App 會<b>建議</b>這是誰，<b>由你確認</b>才算數；名字一旦確認，以後每場都自動認得。</li>
-      <li>認聲音的功能<b>要你同意才開</b>，存的只是一組特徵數字、不是錄音，隨時可以一鍵清除。</li>
-      <li>標錯了怎麼辦？<b>長按那一句</b>就能改人；換人的位置不對，用分界編輯器拖一下就好，都可以復原。</li>
-    </ul></div>
-    <div class="col" style="flex:2"><div style="display:flex;gap:10px;flex:1;min-height:0"><div class="shot"><img src="img/people-voice-explain-zh.png"></div><div class="shot"><img src="img/people-person-zh.png"></div></div><div class="cap">「辨識聲音」經你同意才開啟，會議自動<b>建議</b>名字、由你確認</div></div>
-    <div class="col"><div class="shot"><img src="img/boundary.gif"></div><div class="cap">分界編輯器：拖動「換人位置」修正，可以復原、重做</div></div>
-  </div>
-  <p class="lede">人就是手機的聯絡人：替語者取名會存進「聯絡人」，電子郵件也在那裡，寫信時直接拿來當收件者。</p>
-</section>
-<!-- 8 搜尋 -->
 <section class="slide">
   <div class="kicker">會議庫</div><h2>想找什麼，用說的也找得到</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/library-sources-zh.png"></div><div class="cap">首頁照來源分：會議、Podcast 一點就切換，Podcast 照節目排好</div></div>
-    <div class="col"><div class="shot"><img src="img/search.gif"></div><div class="cap">首頁搜尋：「誰提到預算」這樣問也找得到</div></div>
-    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li><b>不用記得原話怎麼講</b>：打意思、打關鍵字都找得到，全部會議一起找。</li>
-      <li>可以<b>只看某個人講的</b>，或按日期、標籤過濾。</li>
-      <li>搜尋框<b>不會亂改你的字</b>，人名、專有名詞照你打的找。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/library-sources-zh-crop.png" alt=""></div><div class="cap">首頁照來源分：會議、Podcast 一點就切換</div></div>
+    <div class="col"><div class="shot"><img src="img/search.gif" alt=""></div><div class="cap">「誰提到預算」這樣問也找得到</div></div>
   </div>
+  <div class="notes"><div class="note"><b>不用記得原話</b>：打意思也找得到</div><div class="note">可以<b>只看某個人講的</b>，或按日期、標籤過濾</div><div class="note">人名、專有名詞<b>照你打的找</b></div></div>
 </section>
 
-<!-- 9 Ask -->
 <section class="slide">
   <div class="kicker">向會議提問</div><h2>直接問會議，答案可以查證</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/meeting-ask-zh.png"></div><div class="cap">會議內提問：答案寫明是誰、何時講的</div></div>
-    <div class="col"><div class="shot"><img src="img/ask.gif"></div><div class="cap">跨會議提問：一次問遍所有會議</div></div>
-    <div class="col"><ul class="big">
-      <li>像「誰負責什麼、期限何時」這樣問，<b>幾秒鐘就有答案</b>。</li>
-      <li>每個答案都附<b>出處</b>：哪一場、幾分幾秒、誰講的，點一下就播原話。</li>
-      <li>找不到答案就<b>直說沒有</b>，不會硬編；可以用中文問，也可以用英文問。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/meeting-ask-zh-crop.png" alt=""></div><div class="cap">會議內提問：答案寫明是誰、何時講的</div></div>
+    <div class="col"><div class="shot"><img src="img/ask.gif" alt=""></div><div class="cap">跨會議提問：一次問遍所有會議</div></div>
   </div>
+  <div class="notes"><div class="note">「誰負責什麼、期限何時」，<b>幾秒就有答案</b></div><div class="note">每個答案附<b>出處</b>，點一下就播原話</div><div class="note">找不到就<b>直說沒有</b>，不會硬編</div></div>
 </section>
 
-<!-- 10 匯入 -->
 <section class="slide">
   <div class="kicker">不只錄音</div><h2>匯入檔案、雲端硬碟 · Podcast</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/import-cloud-zh.png"></div><div class="cap">首頁「＋」：從檔案或雲端匯入 / Podcast / 節目</div></div>
-    <div class="col"><div class="shot"><img src="img/channel-zh.png"></div><div class="cap">節目頁：還沒抓的新集數、已經在會議庫的，分開列好</div></div>
-    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>手機裡的音訊、影片直接匯入；放在 iCloud、Google Drive、Dropbox、OneDrive 的錄音，<b>從同一個入口就選得到</b>。</li>
-      <li>Podcast 搜尋節目、挑一集就好，也能訂閱；想要的話，可以讓它每天在 Wi‑Fi 下幫你看有沒有新集數。</li>
-      <li>線上內容僅供個人使用，請先確認你有權下載和轉錄。</li>
-      <li>匯入的內容跟自己錄的一樣：逐字稿、筆記、摘要、搜尋、提問<b>全部都有</b>。</li>
-      <li>下載可以<b>暫停再繼續</b>，網路斷了也不會白費。</li>
-      <li>同事傳來的會議檔，點一下就<b>整場打開</b>：逐字稿、筆記、摘要都在，不用重跑。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/import-cloud-zh-crop.png" alt=""></div><div class="cap">首頁「＋」：檔案、雲端、Podcast、節目</div></div>
+    <div class="col"><div class="shot"><img src="img/channel-zh-crop.png" alt=""></div><div class="cap">節目頁：新集數、已經在會議庫的，分開列好</div></div>
   </div>
+  <div class="notes"><div class="note">iCloud、Google Drive、Dropbox、OneDrive <b>同一個入口</b></div><div class="note">匯入的內容跟自己錄的一樣，<b>全部功能都有</b></div><div class="note">同事傳來的會議檔，<b>點一下整場打開</b></div></div>
+  <p class="cap" style="margin-top:8px">線上內容僅供個人使用，請先確認你有權下載和轉錄。</p>
 </section>
 
-<!-- 11 分享 -->
 <section class="slide">
   <div class="kicker">成果帶走</div><h2>一個「分享」，先選內容、再選送去哪</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/share-sheet-zh.png"></div><div class="cap">分享：整場會議、摘要＋逐字稿、只有錄音，大小先告訴你</div></div>
-    <div class="col"><div class="shot"><img src="img/share-pdf-zh.png"></div><div class="cap">PDF 或 Word：摘要、待辦在前，逐字稿在後，點時間就跳到原話</div></div>
-    <div class="col"><ul class="big" style="font-size:.9em;gap:.5em">
-      <li>要給主管看？選<b>摘要＋逐字稿</b>，PDF 或 Word 都行，錄音要不要附上自己決定。</li>
-      <li>要給同事接著用？傳<b>整場會議</b>，對方一點就打開，iPhone 和 Android 互傳都行。</li>
-      <li>送去哪：<b>AirDrop／Quick Share、電子郵件</b>，或 LINE 這類其他 App。</li>
-      <li>寄信是打開你自己的郵件 App，檔案已經附好，<b>App 不經手內容</b>。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/share-sheet-zh-crop.png" alt=""></div><div class="cap">先選內容：整場會議、摘要＋逐字稿、只有錄音</div></div>
+    <div class="col"><div class="shot"><img src="img/share-pdf-zh-crop.png" alt=""></div><div class="cap">PDF 或 Word：摘要、待辦在前，逐字稿在後</div></div>
   </div>
+  <div class="notes"><div class="note">給主管：<b>摘要＋逐字稿</b>，PDF 或 Word</div><div class="note">給同事：<b>整場會議</b>，iPhone、Android 互傳都行</div><div class="note">寄信用你自己的郵件 App，<b>App 不經手內容</b></div></div>
 </section>
 
-<!-- 12 合併/分割 -->
 <section class="slide">
   <div class="kicker">場次整理</div><h2>合併與分割，可復原</h2>
-  <div class="cols">
-    <div class="col"><div class="shot"><img src="img/35-merge-confirm.png"></div><div class="cap">合併多場：確認摘要與語者對照</div></div>
-    <div class="col"><div class="shot"><img src="img/36-merge-undo.png"></div><div class="cap">復原列：一鍵還原合併</div></div>
-    <div class="col"><ul class="big">
-      <li>一次會議錄成多場 → 合併成一場完整紀錄。</li>
-      <li>長錄音 → 在時間點分割成多個場次。</li>
-      <li>逐字稿可改文字、改派語者，長按即改。</li>
-    </ul></div>
+  <div class="cols duo">
+    <div class="col"><div class="shot"><img src="img/35-merge-confirm-crop.png" alt=""></div><div class="cap">合併：先確認語者怎麼對</div></div>
+    <div class="col"><div class="shot"><img src="img/36-merge-undo-crop.png" alt=""></div><div class="cap">一鍵復原合併</div></div>
   </div>
+  <div class="notes"><div class="note">一次會議錄成好幾場 → <b>合併成一場</b></div><div class="note">長錄音 → 在時間點<b>分割</b></div><div class="note">逐字稿改文字、改人，<b>長按就改</b></div></div>
 </section>
 
 <!-- 15 隱私 -->
@@ -280,44 +264,39 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
   <p class="lede">法律、醫療、專利、併購、內部評審——敏感的會也能放心錄。</p>
 </section>
 
-<!-- 16 設定 -->
 <section class="slide">
   <div class="kicker">調校空間</div><h2>設定：照你的習慣調</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/23b-settings-asr-latency.png"></div><div class="cap">文字要快還是要準，自己選</div></div>
-    <div class="col"><div class="shot"><img src="img/settings.png"></div><div class="cap">主題、字體大小、語言，都能調</div></div>
-    <div class="col"><ul class="big">
-      <li>文字要<b>快一點還是準一點</b>，四段自己選；一般開會用預設就好。</li>
-      <li>筆記要<b>快一點還是完整一點</b>，兩種模式自己換，換完可以整場重跑。</li>
+    <div class="col" style="flex:1.5"><div class="shot"><img src="img/settings-crop.png" alt=""></div><div class="cap">主題、字體大小、語言，都能調</div></div>
+    <div class="col side"><ul class="big">
+      <li>文字要<b>快一點還是準一點</b>，自己選；一般開會用預設就好。</li>
+      <li>筆記要<b>快一點還是完整一點</b>，換完可以整場重跑。</li>
       <li>下載可以設<b>只用 Wi‑Fi</b>；介面有繁體中文、简体中文跟英文。</li>
     </ul></div>
   </div>
 </section>
 
-<!-- 17 韌性 -->
 <section class="slide">
   <div class="kicker">可靠性</div><h2>中斷不是事故</h2>
   <div class="cols">
-    <div class="col"><div class="shot"><img src="img/25-recovery.png"></div><div class="cap">被中斷的匯入：重開 App 即詢問是否完成轉錄</div></div>
-    <div class="col"><ul class="big">
-      <li>電話打進來、App 被系統關掉都沒關係——重開會問你要不要<b>接著做完</b>，錄好的東西不會丟。</li>
-      <li>下載到一半斷掉，下次<b>從斷掉的地方繼續</b>就好。</li>
+    <div class="col" style="flex:1.5"><div class="shot"><img src="img/25-recovery-crop.png" alt=""></div><div class="cap">重開 App 會問你要不要把被中斷的錄音做完</div></div>
+    <div class="col side"><ul class="big">
+      <li>電話打進來、App 被系統關掉都沒關係，重開會問你要不要<b>接著做完</b>。</li>
+      <li>下載到一半斷掉，下次<b>從斷掉的地方繼續</b>。</li>
     </ul></div>
   </div>
 </section>
 
-<!-- 18 平台 -->
 <section class="slide">
   <div class="kicker">平台</div><h2>Android 與 iOS 同步推進</h2>
   <div class="cols">
-    <div class="col"><ul class="big">
+    <div class="col side" style="flex:1.2"><ul class="big">
       <li><b>Android</b>：GitHub Releases 直接安裝 APK，App 內每日檢查新版。</li>
-      <li><b>iPhone</b>：TestFlight 公開測試，需 iOS 17 以上。先裝 TestFlight App，再掃封面 QR code 加入。</li>
-      <li>兩邊功能一樣：搜尋、提問、播放、改逐字稿都會。</li>
-      <li>互通：場次檔拿到另一台手機（不管 Android 還是 iPhone）都能打開。</li>
+      <li><b>iPhone</b>：TestFlight 公開測試，需 iOS 17 以上；先裝 TestFlight，再掃封面 QR code。</li>
+      <li>兩邊功能一樣，場次檔互傳都打得開。</li>
       <li>去哪拿：github.com/vieenrose/PrimeMinutes</li>
     </ul></div>
-    <div class="col"><div class="shot"><img src="img/reprocess.png"></div><div class="cap">換模型後可整場重跑：筆記與摘要重新生成</div></div>
+    <div class="col"><div class="shot"><img src="img/reprocess-crop.png" alt=""></div><div class="cap">換模型後可整場重跑：筆記與摘要重新生成</div></div>
   </div>
 </section>
 
@@ -341,13 +320,14 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.55.0 · iOS 0.55.0 TestFlight build 21 · 簡報 v2.58</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.55.0 · iOS 0.55.0 TestFlight build 21 · 簡報 v2.59</p>
   <p style="margin-top:6px; color:#93a1af; font-size:.8em">小提醒：開會時把手機放桌子中央、靠近講話的人，分人分得最準；答案都附出處，重要的事點回原話確認一下。</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
 </div>
 <div id="bar"></div>
 <div id="ov"></div>
+<div id="zoom"><img alt=""></div>
 <script>
 /* === FIXED-STAGE SCALING: uniform fit of the 1920x1080 canvas === */
 const V=1920,H=1080,stage=document.getElementById('stage');
@@ -363,7 +343,16 @@ const go=n=>{i=Math.max(0,Math.min(slides.length-1,n));
   slides.forEach((s,k)=>s.classList.toggle('visible',k===i));
   const c=slides[i];c.querySelectorAll('.anim').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation='';});
   document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';location.hash=i+1;};
+/* === ZOOM === */
+const zoom=document.getElementById('zoom'),zimg=zoom.querySelector('img');
+const zOpen=src=>{zimg.src=src;zoom.classList.add('on');};
+const zClose=()=>zoom.classList.remove('on');
+stage.addEventListener('click',e=>{const im=e.target.closest('.shot img');if(!im||ov.classList.contains('on'))return;e.stopPropagation();zOpen(im.src);});
+addEventListener('click',e=>{if(zoom.classList.contains('on')){e.stopPropagation();zClose();}},true);
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+  if(zoom.classList.contains('on')&&(k==='escape'||k==='z')){zClose();return;}
+  if(k==='z'){const im=slides[i].querySelector('.shot img');if(im)zOpen(im.src);return;}
+  if(zoom.classList.contains('on'))zClose();
   if(k==='o'){toggleOv();return;}
   if(k==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();return;}
   if(k==='t'){toggleTimer();return;}
@@ -381,7 +370,7 @@ slides.forEach((s,n)=>{const f=document.createElement('div');f.className='foot';
   f.innerHTML='<span>Prime Minutes · 全程離線</span><span class="ft-t">'+(t?t.textContent.trim():'')+'</span><span>'+(n+1)+' / '+slides.length+'</span>';
   f.classList.add('anim');s.appendChild(f);});
 const hint=document.createElement('div');hint.id='hint';
-hint.textContent='← → 換頁 · O 總覽 · F 全螢幕 · T 計時 · H 說明';document.body.appendChild(hint);
+hint.textContent='← → 換頁 · O 總覽 · F 全螢幕 · T 計時 · Z 放大圖片 · H 說明';document.body.appendChild(hint);
 let ht=setTimeout(()=>hint.style.opacity=0,7000);
 const timer=document.createElement('div');timer.id='timer';document.body.appendChild(timer);
 let t0=null,tk=null;
