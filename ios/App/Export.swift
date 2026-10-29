@@ -408,7 +408,7 @@ extension ScreenScript {
         }
         var out = s
         out.title = v.title; out.summary = v.summary; out.lines = v.lines; out.notes = v.notes
-        out.speakerNames = v.speakerNames; out.actionsEdited = v.actionsEdited; out.legacyNotes = v.legacyNotes
+        out.speakerNames = ScreenScript.names(s.speakerNames, linked: Set((s.speakerPeople ?? [:]).keys), generated: { of(sc).gen($0) }); out.actionsEdited = v.actionsEdited; out.legacyNotes = v.legacyNotes
         return out
     }
     private static let viewLock = NSLock()
@@ -418,6 +418,8 @@ extension ScreenScript {
             && a.legacyNotes == b.legacyNotes && a.notes == b.notes && a.lines == b.lines
     }
     func view(_ s: Session) -> Session { Export.inScript(s, generated: { self.gen($0) }, transcript: { self.tr($0) }) }
+    /// A speaker's name as shown (linked contact names as stored).
+    static func name(_ s: Session, _ k: Int) -> String { s.speakerPeople?[String(k)] != nil ? s.name(k) : gen(s.name(k)) }
     /// A library title as shown.
     static func title(_ t: String) -> String { of(AppLanguage.current.script).gen(t) }
 }

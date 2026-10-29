@@ -486,7 +486,7 @@ struct AskSheet: View {
     static func named(_ x: AskEngine.Excerpt) -> String {
         let s = x.session, known = Set(s.lines.map(\.speaker))
         // Quoted text in the app's script (display only; the model read the stored text).
-        return ScreenScript.said(SpeakerRefs.resolve(x.text, label: { ScreenScript.gen(s.name($0)) }, known: known.isEmpty ? nil : known))
+        return SpeakerRefs.resolve(ScreenScript.said(x.text), label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
     /// `withTitle`: the meeting's title in the link; the in-meeting Ask shows the time alone.
@@ -502,7 +502,7 @@ struct AskSheet: View {
             let ns = cleaned as NSString, id = ns.substring(with: mt.range(at: 1)).uppercased()
             guard let s = xs.first(where: { $0.session.id.uuidString == id })?.session else { return nil }
             let known = Set(s.lines.map(\.speaker))
-            return SpeakerRefs.Labels(label: { ScreenScript.gen(s.name($0)) }, known: known.isEmpty ? nil : known)
+            return SpeakerRefs.Labels(label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)
         }
         var out = AttributedString()
         let ns = text as NSString

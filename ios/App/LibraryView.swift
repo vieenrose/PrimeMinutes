@@ -711,7 +711,7 @@ struct LibraryRow: View {
         let cc = ScreenScript.of(AppLanguage.current.script)   // in the app's script, like the meeting screen
         if p.kind == .chunk { return cc.tr(p.snippet) }
         let known = Set(s.lines.map(\.speaker))
-        return cc.gen(SpeakerRefs.resolve(p.snippet, label: { s.name($0) }, known: known.isEmpty ? nil : known))
+        return SpeakerRefs.resolve(cc.gen(p.snippet), label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)   // contact names as stored
     }
     private var passageList: some View {
         VStack(alignment: .leading, spacing: 4) {

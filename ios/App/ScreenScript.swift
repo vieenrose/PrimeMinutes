@@ -49,11 +49,10 @@ extension ScreenScript {
     static func gen(_ t: String) -> String { now.gen(t) }
     /// Transcript text (quoted excerpts, episode text) as shown.
     static func said(_ t: String) -> String { now.tr(t) }
-    /// A rename / note field opened on the shown `stored` text: what to save, or nil when nothing should change
-    /// (left as shown, blank, or equal to the stored text). Never a converted copy of the stored text.
-    static func renamed(_ draft: String, stored: String) -> String? {
-        let n = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !n.isEmpty, n != stored, typed(n, shown: gen(stored)) != nil else { return nil }
-        return n
+    /// Speaker names as shown: a name linked to a person (an OS contact) stays exactly as stored, like Android;
+    /// an unlinked label typed or generated for the meeting follows the script.
+    static func names(_ n: [String: String]?, linked: Set<String>, generated g: (String) -> String) -> [String: String]? {
+        guard let n else { return nil }
+        var out = n; for (k, v) in n where !linked.contains(k) { out[k] = g(v) }; return out
     }
 }
