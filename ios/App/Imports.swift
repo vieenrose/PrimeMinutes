@@ -158,7 +158,7 @@ import AVFoundation
     }
 
     func importAudio(_ url: URL, plain: Bool = false) {
-        let j = Job(audio: UUID().uuidString + "." + (url.pathExtension.isEmpty ? "m4a" : url.pathExtension))
+        let j = Job(audio: UUID().uuidString + "." + SessionFile.storedExtension(url.pathExtension))
         let before = screen.status; screen.status = L("status_importing")   // Android: a long share (big file, cloud provider) shows progress
         Task {
             let ok = await Task.detached {

@@ -124,7 +124,7 @@ struct LibraryView: View {
                    onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = $0 }, onShareMeeting: { shareMeeting(s) },
                    onRename: { draft = s.title; renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
     }
-    /// "Share meeting": the enriched .m4a, encoded with progress and Cancel, then the system share sheet.
+    /// "Share meeting": the enriched .primeminutes (MPEG-4), encoded with progress and Cancel, then the system share sheet.
     private func shareMeeting(_ s: Session) {
         shareProgress = 0
         shareTask = Task {

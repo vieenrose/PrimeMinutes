@@ -7,6 +7,14 @@ enum SessionFile {
     static let mean = "studio.primeminutes", field = "PRIMEMINUTES"
     // Files written before the rename to Prime Minutes carry the old tag; they are still read.
     static let LEGACY_MEAN = "studio.voxsum", LEGACY_FIELD = "VOXSUM"
+    /// A shared meeting travels as `<title>.primeminutes` (an MPEG-4 file, UTI tw.com.pesi.primeminutes.session,
+    /// owned by the app in Info.plist) so AirDrop / Files route it here, not to an audio player. Older .m4a still open.
+    static let shareExtension = "primeminutes"
+    /// The extension a handed-over file is stored under in the audio directory: AVFoundation needs .m4a for ours.
+    static func storedExtension(_ ext: String) -> String {
+        let e = ext.lowercased()
+        return e.isEmpty || e == shareExtension ? "m4a" : ext
+    }
     static let maxJSON = 16 << 20, maxBlob = 32 << 20
 
     // MARK: manifest

@@ -79,7 +79,7 @@ extension SessionFile {
         guard let blob = blob(man) else { return nil }
         let safe = String(s.title.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) ? Character($0) : "_" }.prefix(60))
         let name = safe.replacingOccurrences(of: "_{2,}", with: "_", options: .regularExpression)
-        let out = dir.appendingPathComponent((name.trimmingCharacters(in: CharacterSet(charactersIn: "_")).isEmpty ? "primeminutes_session" : name) + ".m4a")
+        let out = dir.appendingPathComponent((name.trimmingCharacters(in: CharacterSet(charactersIn: "_")).isEmpty ? "primeminutes_session" : name) + "." + shareExtension)
         try? FileManager.default.removeItem(at: out)
         return write(src: raw, dest: out, title: s.title, summary: s.summary, lrc: Export.text(s, .lrc), blob: blob) ? out : nil
     }
