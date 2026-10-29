@@ -45,10 +45,10 @@ object PrimeMinutesSession {
         M4A("m4a", "audio/mp4"),
     }
 
-    /** "Share meeting" sends `<title>.primeminutes` (the same MPEG-4 session inside), typed [SHARE_MIME]:
+    /** "Share meeting" sends `<title>.pmin` (the same MPEG-4 session inside), typed [SHARE_MIME]:
      *  an audio type made Files / Quick Share open it in the music player. Same extension + MIME as the
      *  iOS UTI (tw.com.pesi.primeminutes.session). Received .m4a sessions still restore (content sniffed). */
-    const val SHARE_EXT = "primeminutes"
+    const val SHARE_EXT = "pmin"
     const val SHARE_MIME = "application/vnd.primeminutes.session"
 
     /** A received file with no Prime Minutes manifest is only importable as audio when its type says

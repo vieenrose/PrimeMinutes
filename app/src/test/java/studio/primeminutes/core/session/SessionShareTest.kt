@@ -164,9 +164,9 @@ class SessionShareTest {
     }
 
     @Test fun shareFileIsPrimeMinutesTypedLikeIos() {
-        assertEquals("primeminutes", PrimeMinutesSession.SHARE_EXT)
+        assertEquals("pmin", PrimeMinutesSession.SHARE_EXT)
         assertEquals("application/vnd.primeminutes.session", PrimeMinutesSession.SHARE_MIME)
-        assertEquals("Weekly_sync.primeminutes", PrimeMinutesSession.suggestFileName("Weekly sync", PrimeMinutesSession.SHARE_EXT))
+        assertEquals("Weekly_sync.pmin", PrimeMinutesSession.suggestFileName("Weekly sync", PrimeMinutesSession.SHARE_EXT))
     }
 
     @Test fun onlyAudioTypedFilesFallBackToPlainImport() {

@@ -1184,7 +1184,7 @@ private fun TranscribeScreen(
                     receiveMeeting(local, man, fromOutside = u.scheme == "content")
                     return@collect
                 }
-                // Not a meeting and not typed as audio (octet-stream / .primeminutes without a manifest): refuse.
+                // Not a meeting and not typed as audio (octet-stream / .pmin without a manifest): refuse.
                 if (man == null && !PrimeMinutesSession.importableAsAudio(withContext(Dispatchers.IO) { runCatching { context.contentResolver.getType(u) }.getOrNull() })) {
                     local.delete(); vm.setStatus(context.getString(R.string.empty_status))
                     vm.notify(context.getString(R.string.share_not_meeting))
