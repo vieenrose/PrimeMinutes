@@ -779,6 +779,7 @@
     <string name="share_dup_open">Open existing</string>
     <string name="share_dup_copy">Keep a copy</string>
     <string name="share_too_new">This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.</string>
+    <string name="share_not_meeting">This file is not a Prime Minutes meeting.</string>
     <string name="share_received">Meeting received and added to your library</string>
     <string name="share_hint_original">The meeting is now in Prime Minutes. You can delete the original file from Downloads.</string>
     <string name="confirm_resummarize_title">Replace your edited summary?</string>

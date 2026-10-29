@@ -162,4 +162,18 @@ class SessionShareTest {
         assertEquals(m.toString(), SessionShare.decodeBlob(SessionShare.encodeBlob(m)).toString())
         assertNull(SessionShare.decodeBlob("not base64 !!"))
     }
+
+    @Test fun shareFileIsPrimeMinutesTypedLikeIos() {
+        assertEquals("primeminutes", PrimeMinutesSession.SHARE_EXT)
+        assertEquals("application/vnd.primeminutes.session", PrimeMinutesSession.SHARE_MIME)
+        assertEquals("Weekly_sync.primeminutes", PrimeMinutesSession.suggestFileName("Weekly sync", PrimeMinutesSession.SHARE_EXT))
+    }
+
+    @Test fun onlyAudioTypedFilesFallBackToPlainImport() {
+        assertTrue(PrimeMinutesSession.importableAsAudio("audio/mp4"))
+        assertTrue(PrimeMinutesSession.importableAsAudio("video/mp4"))
+        assertTrue(PrimeMinutesSession.importableAsAudio(null))
+        assertFalse(PrimeMinutesSession.importableAsAudio("application/octet-stream"))
+        assertFalse(PrimeMinutesSession.importableAsAudio(PrimeMinutesSession.SHARE_MIME))
+    }
 }

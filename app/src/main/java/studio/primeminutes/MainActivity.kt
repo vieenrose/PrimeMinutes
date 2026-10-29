@@ -1184,6 +1184,12 @@ private fun TranscribeScreen(
                     receiveMeeting(local, man, fromOutside = u.scheme == "content")
                     return@collect
                 }
+                // Not a meeting and not typed as audio (octet-stream / .primeminutes without a manifest): refuse.
+                if (man == null && !PrimeMinutesSession.importableAsAudio(withContext(Dispatchers.IO) { runCatching { context.contentResolver.getType(u) }.getOrNull() })) {
+                    local.delete(); vm.setStatus(context.getString(R.string.empty_status))
+                    vm.notify(context.getString(R.string.share_not_meeting))
+                    return@collect
+                }
                 // Written by a newer app: say so, then import it as plain audio.
                 if (man != null) vm.notify(context.getString(R.string.share_too_new))
                 ImportRecovery.markStarted(context, local, SessionViewModel.documentLabel(context, u))
@@ -1742,12 +1748,12 @@ private fun TranscribeScreen(
             try {
                 val f = withContext(Dispatchers.IO) {
                     dir.mkdirs(); dir.listFiles()?.forEach { it.delete() }
-                    SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, "m4a")), vm.now.config.summaryScript)
+                    SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(subject, PrimeMinutesSession.SHARE_EXT)), vm.now.config.summaryScript)
                 }
                 val shareUri = f?.let { runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it) }.getOrNull() }
                 if (shareUri == null) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
                 val send = Intent(Intent.ACTION_SEND).apply {
-                    type = PrimeMinutesSession.Format.M4A.mime
+                    type = PrimeMinutesSession.SHARE_MIME
                     putExtra(Intent.EXTRA_STREAM, shareUri)
                     putExtra(Intent.EXTRA_SUBJECT, subject)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

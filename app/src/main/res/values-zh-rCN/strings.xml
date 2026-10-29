@@ -764,6 +764,7 @@
     <string name="share_dup_open">打开现有的</string>
     <string name="share_dup_copy">保留副本</string>
     <string name="share_too_new">这场会议来自较新版本的 Prime Minutes。请更新 App 以还原；目前先以一般音频导入。</string>
+    <string name="share_not_meeting">这个文件不是 Prime Minutes 会议。</string>
     <string name="share_received">已收到会议并加入资料库</string>
     <string name="share_hint_original">会议已存入 Prime Minutes，可以删除“下载”中的原始文件。</string>
     <string name="confirm_resummarize_title">要替换你编辑过的摘要吗？</string>
