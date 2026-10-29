@@ -325,6 +325,9 @@ fun StudioScreen(
     val selected = remember { mutableStateMapOf<String, Unit>() }
     fun exitSelection() { selectionMode = false; selected.clear() }
     BackHandler(selectionMode) { exitSelection() }
+    // Back with a library search typed clears it first (as in a session); only a back with no
+    // query leaves the app. The keyboard, when up, takes the first back itself.
+    BackHandler(!selectionMode && query.isNotEmpty()) { query = "" }
 
     val context = LocalContext.current
     LaunchedEffect(typeQuery) {
