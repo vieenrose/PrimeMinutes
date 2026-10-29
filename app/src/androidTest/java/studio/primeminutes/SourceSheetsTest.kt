@@ -15,11 +15,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import studio.primeminutes.ui.PodcastPanel
-import studio.primeminutes.ui.YouTubeSheet
 
 /**
- * Tests the podcast + YouTube source UIs. Static state (render, button enablement, the URL-vs-search
- * label toggle) is asserted offline; one live-network smoke test per source confirms a real search
+ * Tests the podcast source UI. Static state (render, button enablement) is asserted offline; a live-network smoke test confirms a real search
  * completes (the busy indicator clears) rather than hanging. Requires network for the @* live tests.
  */
 @RunWith(AndroidJUnit4::class)
@@ -49,32 +47,5 @@ class SourceSheetsTest {
         compose.onNodeWithText(str(R.string.podcast_search)).performClick()
         searchCleared()   // the busy "searching" bar must clear within 30 s (not hang)
         compose.onNodeWithText(str(R.string.podcast_search)).assertIsEnabled()
-    }
-
-    // --- YouTubeSheet ------------------------------------------------------------------------
-
-    @Test fun youtubeRendersTitleAndField() {
-        compose.setContent { YouTubeSheet(onDismiss = {}) }
-        compose.onNodeWithText(str(R.string.source_youtube)).assertIsDisplayed()
-        compose.onNodeWithText(str(R.string.youtube_search_hint)).assertIsDisplayed()
-    }
-
-    @Test fun youtubeButtonLabelTogglesBetweenSearchAndGo() {
-        compose.setContent { YouTubeSheet(onDismiss = {}) }
-        compose.onNode(hasSetTextAction()).performTextInput("lofi beats")
-        compose.onNodeWithText(str(R.string.youtube_search)).assertIsDisplayed()   // keyword → Search
-    }
-
-    @Test fun youtubeButtonSaysGoForAUrl() {
-        compose.setContent { YouTubeSheet(onDismiss = {}) }
-        compose.onNode(hasSetTextAction()).performTextInput("https://youtu.be/dQw4w9WgXcQ")
-        compose.onNodeWithText(str(R.string.youtube_go)).assertIsDisplayed()       // URL → Go
-    }
-
-    @Test fun youtubeSearchCompletesOverNetwork() {
-        compose.setContent { YouTubeSheet(onDismiss = {}) }
-        compose.onNode(hasSetTextAction()).performTextInput("lofi")
-        compose.onNodeWithText(str(R.string.youtube_search)).performClick()
-        searchCleared()   // resolves to results or a clean error within 30 s — must not hang
     }
 }

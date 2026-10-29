@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Podcast/RSS audio enclosures (and some YouTube media URLs) are very frequently served over plain
+  Podcast/RSS audio enclosures are very frequently served over plain
   http:// (e.g. BBC's open.live.bbc.co.uk), which Android blocks by default from API 28+ — so
   cleartext stays permitted for arbitrary PUBLIC media hosts (their domains can't be enumerated).
 

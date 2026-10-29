@@ -114,7 +114,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         const val ACTION_EXPORT = "studio.primeminutes.EXPORT"
 
 
-        // Podcast/YouTube import download. Runs here (foreground, notification) rather than in the
+        // Podcast import download. Runs here (foreground, notification) rather than in the
         // importer sheet's coroutine scope, so dismissing the sheet can't cancel it. Request rides
         // [studio.primeminutes.online.ImportDownloads.pending]; state is published through its StateFlow.
         const val ACTION_IMPORT_DOWNLOAD = "studio.primeminutes.IMPORT_DOWNLOAD"
@@ -689,7 +689,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
     }.getOrDefault(true)
 
     /**
-     * The podcast / YouTube download loop: every library item with a pending (not failed) download, oldest
+     * The podcast download loop: every library item with a pending (not failed) download, oldest
      * first, one at a time, into the item's own directory. A lost network PAUSES the download (the .part
      * stays): it shows "paused" and continues once a network is back, on Resume, or when the app returns.
      * A permanent error is saved with the item (Failed · reason, Retry); deleting the item cancels it.
@@ -727,7 +727,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         val dl = studio.primeminutes.online.ImportDownloads
         val d = item.download ?: return
         var title = item.title
-        var stageRes = if (d.kind == SessionLibrary.PendingDownload.YOUTUBE || d.kind == SessionLibrary.PendingDownload.PEERTUBE) R.string.dl_resolving else R.string.dl_downloading
+        var stageRes = R.string.dl_downloading
         var lastPct = -1
         var lastP: Float? = null
         var bytes = 0L; var total = 0L
@@ -740,35 +740,17 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             while (true) {
                 try {
                     return@runCatching when (d.kind) {
-                        SessionLibrary.PendingDownload.YOUTUBE -> {
-                            stageRes = R.string.dl_resolving; publish()
-                            val audio = studio.primeminutes.online.YouTube.resolve(applicationContext, d.url)
-                            // The title as soon as it is known (a pasted link has none until now).
-                            if (title.isNullOrBlank()) {
-                                title = audio.title
-                                SessionLibrary.rename(applicationContext, item.dir, audio.title); dl.changed()
-                            }
-                            stageRes = R.string.dl_downloading; publish()
-                            studio.primeminutes.online.YouTube.downloadInto(audio, item.dir) { got, all -> progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } } }
-                        }
-                        SessionLibrary.PendingDownload.PEERTUBE -> {
-                            stageRes = R.string.dl_resolving; publish()
-                            val v = studio.primeminutes.online.PeerTube.resolve(applicationContext, d.url)
-                            if (title.isNullOrBlank() && v.title.isNotBlank()) {
-                                title = v.title
-                                SessionLibrary.rename(applicationContext, item.dir, v.title); dl.changed()
-                            }
-                            stageRes = R.string.dl_downloading; publish()
-                            studio.primeminutes.online.Podcast.downloadInto(v.fileUrl, item.dir) { got, all ->
-                                progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } }
-                            }
-                        }
+                        // Video-site imports were removed (0.55): a download still queued from before fails
+                        // for good, with the reason on its row; the item can be deleted. Nothing is fetched.
+                        SessionLibrary.PendingDownload.YOUTUBE, SessionLibrary.PendingDownload.PEERTUBE ->
+                            throw UnsupportedImport(getString(R.string.import_video_unsupported))
                         else -> studio.primeminutes.online.Podcast.downloadInto(d.url, item.dir) { got, all ->
                             progress(got, all) { b, t, p -> bytes = b; total = t; lastP = p; val pct = ((p ?: 0f) * 100).toInt(); if (pct != lastPct) { lastPct = pct; publish(); updateNotification("${title ?: getString(R.string.dl_downloading)} · $pct %") } }
                         }
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (e is UnsupportedImport) throw e
                     if (dl.noSpace(e)) {
                         // Disk full: not a network pause and not a failure. Wait for space (the .part stays), retry
                         // every minute or on Resume / app return.
@@ -804,7 +786,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         when {
             e is kotlinx.coroutines.CancellationException -> { dl.set(studio.primeminutes.online.ImportDownloads.State.Idle); throw e }
             e != null -> {
-                val why = e.message?.takeIf { it.isNotBlank() } ?: getString(R.string.youtube_fetch_failed)
+                val why = e.message?.takeIf { it.isNotBlank() } ?: getString(R.string.dl_fetch_failed)
                 Log.w("primeminutes-import", "import download failed: $why")
                 SessionLibrary.saveDownload(item, d.copy(error = why))
                 // The item says it (Failed · reason, Retry); the screen in front says it once too.
@@ -819,7 +801,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
                     }
                 }.getOrDefault(0L).toInt()
                 if (SessionLibrary.downloadDone(item, file, sec) != null) dl.markReady(item.id)
-                else SessionLibrary.saveDownload(item, d.copy(error = getString(R.string.youtube_fetch_failed)))
+                else SessionLibrary.saveDownload(item, d.copy(error = getString(R.string.dl_fetch_failed)))
             }
         }
         dl.set(studio.primeminutes.online.ImportDownloads.State.Idle)
@@ -1148,3 +1130,6 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         return b.build()
     }
 }
+
+/** A queued download of a kind this version no longer imports (YouTube, PeerTube): fails for good, never retried. */
+private class UnsupportedImport(message: String) : Exception(message)

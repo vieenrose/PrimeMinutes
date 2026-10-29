@@ -10,7 +10,7 @@
     <string name="empty_status">请选择音频文件以开始。</string>
     <string name="status_stopped">已停止</string>
     <string name="empty_headline">完全离线转录与摘要</string>
-    <string name="empty_subtitle">添加音频文件、录制会议，或粘贴 YouTube 链接以开始。</string>
+    <string name="empty_subtitle">添加音频文件、录制会议，或找一集 Podcast 开始。</string>
     <!-- Value pillars on the home screen -->
     <string name="pillar_private_title">隐私至上</string>
     <string name="pillar_private_desc">音频永不离开您的设备</string>
@@ -31,8 +31,6 @@
     <string name="source_record_desc">实时提取并转录</string>
     <string name="source_podcast">Podcast</string>
     <string name="source_podcast_desc">搜索并下载单集</string>
-    <string name="source_youtube">YouTube</string>
-    <string name="source_youtube_desc">以关键字搜索或粘贴视频链接</string>
 
     <!-- Settings -->
     <string name="settings_title">设置</string>
@@ -75,7 +73,6 @@
     <string name="model_kind_other">其他</string>
     <string name="settings_about">关于</string>
     <string name="about_license">录音与文字只留在这部手机</string>
-    <string name="about_components">授权组件</string>
 
     <!-- Model option card -->
 
@@ -84,21 +81,14 @@
     <string name="podcast_search_hint">搜索 Podcast</string>
     <string name="podcast_search">搜索</string>
 
-    <!-- YouTube -->
-    <string name="youtube_fetch_failed">无法获取此视频</string>
-    <string name="youtube_no_videos">找不到视频</string>
-    <string name="youtube_search_failed">搜索失败</string>
+    <string name="dl_fetch_failed">无法下载这个项目</string>
     <string name="podcast_failed">Podcast 请求失败</string>
     <string name="podcast_no_series">找不到 Podcast 节目。换个说法或用更短的词试试。</string>
     <string name="podcast_no_episodes">此节目没有可下载的单集。</string>
     <string name="settings_inference_failed">基准测试失败，保留先前结果</string>
-    <string name="youtube_search_hint">搜索视频或粘贴链接</string>
-    <string name="youtube_go">前往</string>
-    <string name="youtube_search">搜索</string>
 
     <!-- Download / fetch progress -->
     <string name="dl_searching">搜索中…</string>
-    <string name="dl_resolving">解析视频中…</string>
     <string name="dl_loading_episodes">加载单集中…</string>
     <string name="dl_downloading">下载中…</string>
 
@@ -391,26 +381,10 @@
     <string name="err_open_file">无法打开文件</string>
     <string name="err_no_decoder">此设备无法解码 %1$s 音频（没有对应的解码器）</string>
     <string name="err_decode_failed">此设备无法解码 %1$s 音频</string>
-    <string name="err_youtube_no_stream">此视频没有可用的音频流（可能受地区或登录限制）。</string>
-    <string name="err_youtube_live">直播无法转录，请选择普通视频。</string>
-    <string name="err_youtube_no_decodable">此设备无法解码该视频提供的任何音频格式（%1$s）。</string>
-    <string name="err_peertube_bad_link">不是 PeerTube 视频链接</string>
-    <string name="err_peertube_http">PeerTube 服务器返回错误 %1$d</string>
-    <string name="err_peertube_live">无法导入直播</string>
-    <string name="err_peertube_no_file">此视频没有可下载的文件</string>
     <string name="network_error">网络错误——请检查连接后再试一次。</string>
     <plurals name="podcast_episodes">
         <item quantity="other">%d 集</item>
     </plurals>
-    <string name="lic_nemo">nemo-x-asr-diarizer（流式语音识别与说话人分离）</string>
-    <string name="lic_crispasr">CrispASR（X-ASR 运行环境）</string>
-    <string name="lic_audiocpp">audio.cpp（Nemotron-3 说话人分离运行环境）</string>
-    <string name="lic_ggml">LiteRT · SentencePiece（AI 笔记）</string>
-    <string name="lic_xasr">X-ASR 中英模型</string>
-    <string name="lic_nemotron">Nemotron-3 说话人分离模型</string>
-    <string name="lic_opencc">OpenCC（繁体 / 简体）</string>
-    <string name="lic_newpipe">NewPipeExtractor（YouTube）</string>
-    <string name="lic_compose" translatable="false">Jetpack Compose</string>
     <string name="settings_experimental">实验功能</string>
     <string name="settings_show_actions">显示行动项目</string>
     <string name="settings_show_actions_hint">在摘要下方列出模型提取的行动项目。约五分之一可能与转写文本不符，点时间即可核对。</string>
@@ -770,4 +744,17 @@
     <string name="confirm_resummarize_body">你改过摘要或待办事项。重新摘要会写出新的内容替换它们（完成后仍可立即撤销）。</string>
     <string name="confirm_retranscribe_title">要舍弃你修改的转写文本吗？</string>
     <string name="confirm_retranscribe_body">你修正过部分段落的文字。重新转录会依录音重写整份转写文本，这些修正将会丢失。</string>
+    <!-- Online-import notice, unsupported video links, sharing an online-sourced meeting, licenses -->
+    <string name="import_video_unsupported">已不再支持导入 YouTube 和 PeerTube</string>
+    <string name="link_unsupported_title">不支持视频链接</string>
+    <string name="link_unsupported_body">Prime Minutes 已不再导入 YouTube 或 PeerTube 链接。若要转写你有权使用的视频，请先把它的音频保存为文件，再分享到这里或用本应用打开。</string>
+    <string name="online_notice_title">导入前请留意</string>
+    <string name="online_notice_body">在线导入仅供个人使用。你须自行确认有权下载并转写这些内容，并遵守发布者的使用条款。</string>
+    <string name="online_notice_ok">我了解</string>
+    <string name="share_online_title">不附音频分享？</string>
+    <string name="share_online_body">这场会议来自在线来源，音频属于发布者。默认只分享转写文本和摘要。</string>
+    <string name="share_text_only">只分享文字</string>
+    <string name="share_with_audio">附上音频</string>
+    <string name="about_licenses">开源许可</string>
+    <string name="about_licenses_desc">应用内含的组件及其许可</string>
 </resources>

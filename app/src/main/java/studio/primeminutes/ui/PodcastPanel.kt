@@ -211,3 +211,10 @@ private fun RowCard(onClick: (() -> Unit)?, content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier),
     ) { content() }
 }
+
+/** A network failure's own text ("Connection reset") is neither localized nor actionable. */
+internal fun Throwable.userMessage(context: android.content.Context): String? =
+    if (this is java.net.SocketException || this is java.net.SocketTimeoutException ||
+        this is java.net.UnknownHostException || this is javax.net.ssl.SSLException)
+        context.getString(R.string.network_error)
+    else message

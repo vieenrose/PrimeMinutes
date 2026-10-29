@@ -1,0 +1,42 @@
+Prime Minutes
+Copyright (C) the Prime Minutes authors
+Licensed under the GNU General Public License v3.0 or later (see LICENSE).
+
+This product includes third-party components, listed below with their
+licenses. The full license texts ship with each component's source (the
+git submodules under native/, the vendored code under app/src/main/cpp/)
+or are available at the URLs given. Settings > About > Open-source licenses
+shows the same list inside the app.
+
+Android app
+===========
+
+Speech, speakers and AI notes (native code)
+-------------------------------------------
+nemo-x-asr-diarizer      Apache-2.0   https://github.com/vieenrose/nemo-x-asr-diarizer.cpp
+                                       (vendored in app/src/main/cpp/nemo, Copyright 2026 ShugoAI LLC)
+audio.cpp                Apache-2.0   https://github.com/vieenrose/audio.cpp (Copyright 2026 ShugoAI LLC)
+CrispASR                 MIT          https://github.com/vieenrose/CrispASR
+                                       (its THIRD_PARTY_NOTICES.txt lists the code it bundles)
+ggml                     MIT          https://github.com/ggml-org/ggml (Copyright 2023-2026 The ggml authors)
+llamafile sgemm          MIT          https://github.com/Mozilla-Ocho/llamafile (Copyright 2024 Mozilla Foundation)
+nlohmann/json            MIT          https://github.com/nlohmann/json
+LiteRT (libLiteRt.so)    Apache-2.0   https://github.com/google-ai-edge/LiteRT
+LiteRT-LM fork           Apache-2.0   https://github.com/vieenrose/LiteRT-LM (branch mobile-fused-attention)
+SentencePiece            Apache-2.0   https://github.com/google/sentencepiece
+
+Models and data (downloaded on first use, or bundled)
+-----------------------------------------------------
+X-ASR zh-en speech model         Apache-2.0          https://huggingface.co/Luigi/primeminutes-nemo-litert
+Nemotron-3 Diarization model     OpenMDW-1.1         https://huggingface.co/Luigi/primeminutes-nemo-litert
+Gemma-4 E2B / E4B meeting models Apache-2.0          https://huggingface.co/Luigi/gemma-4-E4B-meeting-agent-zh-LiteRT
+EmbeddingGemma 2 270M            Gemma Terms of Use  https://ai.google.dev/gemma/terms
+CAM++ zh-en (3D-Speaker)         Apache-2.0          https://huggingface.co/Luigi/primeminutes-speaker-litert
+OpenCC dictionaries (bundled)    Apache-2.0          https://github.com/BYVoid/OpenCC
+
+Android libraries
+-----------------
+AndroidX Core, Lifecycle, Activity                 Apache-2.0
+Jetpack Compose, Material 3, Material Icons        Apache-2.0
+Kotlin standard library, kotlinx.coroutines        Apache-2.0
+desugar_jdk_libs                                   GPL-2.0 with Classpath Exception

@@ -321,6 +321,33 @@ object SessionLibrary {
         }
     }
 
+    /**
+     * The kind of online source [entry] was imported from ("podcast", or "youtube" / "peertube" on items
+     * from older versions), from its kept provenance (source.json); null for a recording, an imported
+     * file or a received meeting.
+     */
+    fun onlineSource(entry: Entry): String? =
+        runCatching { JSONObject(File(entry.dir, SOURCE).readText()).optString("kind").ifBlank { null } }.getOrNull()
+
+    /**
+     * [entry]'s meeting as text alone at [dest] — title, summary, transcript — with no audio: how a
+     * meeting from an online source is shared by default (the audio belongs to its publisher).
+     * [label] names a speaker; [headings]: (summary, transcript).
+     */
+    suspend fun shareTextOnly(entry: Entry, dest: File, label: (Int, Map<Int, studio.primeminutes.data.SpeakerName>) -> String,
+                              headings: Pair<String, String>): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (!entry.sessionFile.isFile) return@withContext null
+        val c = Content.of(PrimeMinutesSession.peek(entry.sessionFile) ?: return@withContext null)
+        val lab: (Int) -> String = { label(it, c.speakerNames) }
+        val known = c.utterances.mapNotNull { it.speaker }.toSet().ifEmpty { null }
+        fun refs(t: String?) = t?.let { studio.primeminutes.core.reader.SpeakerRefs.resolve(it, lab, known) }
+        runCatching {
+            dest.writeText(studio.primeminutes.core.export.TranscriptExport.plainText(c.utterances, lab, refs(c.title ?: entry.title),
+                refs(c.summary), summaryHeading = headings.first, transcriptHeading = headings.second))
+            dest
+        }.getOrNull()
+    }
+
     /** [entry]'s audio alone at [dest]: its m4a without the embedded meeting (title kept), or the WAV. */
     suspend fun shareAudioOnly(entry: Entry, dest: File, title: String?): File? = withContext(kotlinx.coroutines.Dispatchers.IO) {
         val src = entry.audioFile
@@ -661,13 +688,14 @@ object SessionLibrary {
             runCatching { JSONObject(File(d, SOURCE).readText()) }.getOrNull()?.let { Triple(d.name, it.optString("sourceUrl"), it.optString("guid").ifBlank { null }) }
         } ?: emptyList()
 
-    /** What an item still has to download. [kind]: "podcast" (direct audio URL), "youtube" or "peertube" (video page URL). */
+    /** What an item still has to download. [kind]: "podcast" (direct audio URL); "youtube" / "peertube" only on items from older versions. */
     data class PendingDownload(val kind: String, val url: String, val error: String? = null, val seriesId: String? = null, val guid: String? = null) {
         fun toJson(): JSONObject = JSONObject().put("kind", kind).put("url", url).apply {
             error?.let { put("error", it) }; seriesId?.let { put("seriesId", it) }; guid?.let { put("guid", it) }
         }
         companion object {
             const val PODCAST = "podcast"
+            /** No longer imported (removed in 0.55); kept so items queued or imported before still read. */
             const val YOUTUBE = "youtube"
             const val PEERTUBE = "peertube"
             fun fromJson(o: JSONObject) = PendingDownload(o.getString("kind"), o.getString("url"), o.optString("error").ifBlank { null },

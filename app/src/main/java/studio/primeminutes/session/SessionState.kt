@@ -149,7 +149,6 @@ data class SessionState(
     val showConfigSheet: Boolean = false,
     val showPodcastSheet: Boolean = false,
     val showAddSourceSheet: Boolean = false,
-    val showYouTubeSheet: Boolean = false,
     val showExportSheet: Boolean = false,
 )
 

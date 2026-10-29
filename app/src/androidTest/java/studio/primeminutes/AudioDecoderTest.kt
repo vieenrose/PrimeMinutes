@@ -11,7 +11,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import studio.primeminutes.core.audio.AudioDecoder
-import studio.primeminutes.online.YouTube
 import java.io.File
 
 /**
@@ -93,25 +92,6 @@ class AudioDecoderTest {
             inst.context.assets.open(name).use { i -> f.outputStream().use { o -> i.copyTo(o) } }
             assertDecodedDurationMatchesContainer(f, name)
             f.delete()
-        }
-    }
-
-    /**
-     * The real case from the bug report, end to end on the device: whatever [YouTube.resolve]
-     * picks must decode to the right duration. Skipped (not failed) when YouTube gates the player
-     * response — that is an upstream condition, not a regression here.
-     */
-    @Test(timeout = 180_000) fun youtubeAudioDecodesToTheRightDuration() = runBlocking {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext
-        val audio = runCatching { YouTube.resolve(InstrumentationRegistry.getInstrumentation().targetContext, "https://www.youtube.com/watch?v=jNQXAC9IVRw") }
-            .getOrElse { Log.i(TAG, "resolve unavailable: ${it.message?.take(120)}"); return@runBlocking }
-        val dir = File(app.cacheDir, "yt-decode-test").apply { mkdirs() }
-        val f = runCatching { YouTube.downloadInto(audio, dir) { _, _ -> } }
-            .getOrElse { Log.i(TAG, "download unavailable: ${it.message?.take(120)}"); dir.deleteRecursively(); return@runBlocking }
-        try {
-            assertDecodedDurationMatchesContainer(f, "youtube .${audio.ext}")
-        } finally {
-            dir.deleteRecursively()
         }
     }
 

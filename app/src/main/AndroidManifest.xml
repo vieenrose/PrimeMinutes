@@ -5,7 +5,7 @@
     <!-- INTERNET is used ONLY for first-run model download, (optional) podcast RSS, and the
          once/day GitHub release check. The transcription + summarization pipeline is fully offline
          once models are present. F-Droid: this combination earns no anti-feature on its own, but the
-         optional podcast/YouTube features are gated behind a build flag (see flavors / SPIKE.md). -->
+         optional podcast features are gated behind a build flag (see flavors / SPIKE.md). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- First-use model downloads: warn before using mobile data, "Wi-Fi only" waits for an unmetered network. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
