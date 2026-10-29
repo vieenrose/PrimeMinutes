@@ -56,7 +56,7 @@ class SessionShareTest {
         /** Writes the Android-made fixtures into [dir] (PM_SHARE_FIXTURES=dir). */
         fun regenerate(tone: File, dir: File) {
             write(tone, File(dir, "android_v1.m4a"), meetingV1())
-            write(tone, File(dir, "android_v2.m4a"), SessionShare.forShare(meetingV1(), SESSION_ID, SessionShare.parseIso(CREATED), "zh-Hant"))
+            write(tone, File(dir, "android_v2.m4a"), SessionShare.forShare(meetingV1(), SESSION_ID, SessionShare.parseIso(CREATED), "zh-Hant", true to false))
             write(tone, File(dir, "future_v3.m4a"), SessionShare.forShare(meetingV1(), SESSION_ID, null, null).put("primeminutes_version", 3).put("new_thing", JSONObject()))
         }
     }
@@ -78,6 +78,9 @@ class SessionShareTest {
         assertEquals(SESSION_ID, out.getString("session_id"))
         assertEquals(3, out.getJSONArray("utterances").getJSONObject(0).getJSONArray("token_times").length())
         assertTrue(out.getBoolean("title_user_set"))
+        assertNull(SessionShare.userEdited(out))
+        val ue = SessionShare.forShare(m.put("user_edited", JSONObject().put("summary", true).put("lines", true).put("x", 1)), SESSION_ID, null, null)
+        assertEquals(true to true, SessionShare.userEdited(ue)); assertFalse(ue.getJSONObject("user_edited").has("x"))
     }
 
     @Test fun isoRoundTrip() {
@@ -123,6 +126,7 @@ class SessionShareTest {
         assertEquals(SESSION_ID, SessionShare.sessionId(m))
         assertEquals(SessionShare.parseIso(CREATED), SessionShare.createdAtMs(m))
         assertFalse(m.toString().contains("person"))
+        assertEquals(true to false, SessionShare.userEdited(m))
         assertEquals(SessionShare.Gate.OK, SessionShare.gate(m))
     }
 
@@ -134,6 +138,7 @@ class SessionShareTest {
         assertEquals("zh-Hant", m.getString("script"))
         assertFalse(m.toString().contains("person"))
         assertTrue(m.getBoolean("title_user_set"))
+        assertEquals(true to false, SessionShare.userEdited(m))
         assertEquals(SessionShare.Gate.OK, SessionShare.gate(m))
     }
 

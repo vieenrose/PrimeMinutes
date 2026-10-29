@@ -189,7 +189,7 @@ object PrimeMinutesSession {
         // [coverEnabled] is kept for call-site compatibility and ignored.
         val coverJpeg: ByteArray? = null; val coverW = 0; val coverH = 0
         val m0 = manifest(utterances, speakerNames, summary, actionItems, title, notes, asrModelId, asrBackend, llmModelId, editRev)
-        val blob = encodeSession(share?.let { SessionShare.forShare(m0, it.sessionId, it.createdAtMs, it.script) } ?: m0)
+        val blob = encodeSession(share?.let { SessionShare.forShare(m0, it.sessionId, it.createdAtMs, it.script, it.userEdited) } ?: m0)
         val cleanTitle = title?.replace('\n', ' ')?.trim()?.ifBlank { null }
         val cleanSummary = summary?.trim()?.ifBlank { null }
         // Player-facing lyrics (©lyr / LYRICS) = LRC-style SYNCHRONIZED lyrics: an `[mm:ss.xx]` timestamp

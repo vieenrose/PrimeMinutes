@@ -315,7 +315,8 @@ object SessionLibrary {
                 context, dest.parentFile!!, Uri.fromFile(e.sessionFile), c.utterances, c.speakerNames, c.summary, c.actionItems,
                 c.title ?: e.title, c.notes, c.asrModelId, c.asrBackend, c.llmModelId, fileName = dest.name,
                 format = PrimeMinutesSession.Format.M4A,
-                share = studio.primeminutes.core.session.SessionShare.Meta(e.sessionId, meetingStart(e), script),
+                share = studio.primeminutes.core.session.SessionShare.Meta(e.sessionId, meetingStart(e), script,
+                    UserEdits.read(e.dir).let { it.summary to it.lines }),
             )?.takeIf { it.transcriptEmbedded }?.file
         }
     }
@@ -360,6 +361,8 @@ object SessionLibrary {
             sessionId = (if (keepId) share.sessionId(manifest) else null) ?: java.util.UUID.randomUUID().toString(),
         )
         writeMeta(entry)
+        // The sender's hand-edits stay protected here (re-summarize / re-transcribe ask first).
+        share.userEdited(manifest)?.let { (sum, lines) -> UserEdits.write(dir, UserEdits(sum, lines)) }
         RecentSessions.add(context, Uri.fromFile(dest).toString(), entry.title ?: defaultTitle(context, createdAt), createdAt)
         studio.primeminutes.core.embed.LibraryIndexer.request(context, entry.id)
         Log.i(TAG, "received meeting ${entry.sessionId} restored as ${entry.id} ($sec s)")

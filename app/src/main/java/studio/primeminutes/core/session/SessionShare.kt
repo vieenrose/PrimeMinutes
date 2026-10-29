@@ -24,6 +24,8 @@ import java.util.zip.GZIPOutputStream
  *  - `session_id`: the meeting's identity across devices (a UUID string) — a re-import of the same
  *    meeting is detected by it.
  *  - `created_at`: when the meeting took place, ISO-8601 UTC (`2026-10-29T08:15:00Z`).
+ *  - `user_edited`: `{summary, lines}` — what the user hand-edited, so a received meeting keeps its
+ *    re-run protection (re-summarize / re-transcribe ask first).
  *  - `script`: the sender's Han script setting (`zh-Hant` / `zh-Hans`); the receiver converts the
  *    text to its own setting anyway (span-gated OpenCC), so this is informative.
  *
@@ -41,7 +43,11 @@ object SessionShare {
     enum class Gate { OK, TOO_NEW }
 
     /** The identity a shared copy carries (see the class doc); null fields are left out. */
-    data class Meta(val sessionId: String?, val createdAtMs: Long?, val script: String?)
+    data class Meta(
+        val sessionId: String?, val createdAtMs: Long?, val script: String?,
+        /** What the user hand-edited ([studio.primeminutes.core.library.UserEdits]): summary, lines. */
+        val userEdited: Pair<Boolean, Boolean>? = null,
+    )
 
     /** Whether this app can restore [m]: a newer major (written by a newer app) is not guessed at. */
     fun gate(m: JSONObject): Gate = if (m.optInt("primeminutes_version", 1) > SCHEMA_MAJOR) Gate.TOO_NEW else Gate.OK
@@ -59,9 +65,10 @@ object SessionShare {
      * The manifest [m] as it may leave the device: allowlisted keys only, speaker names without their
      * person link, plus the v2 identity ([sessionId], [createdAtMs], [script]).
      */
-    fun forShare(m: JSONObject, sessionId: String?, createdAtMs: Long?, script: String?): JSONObject {
+    fun forShare(m: JSONObject, sessionId: String?, createdAtMs: Long?, script: String?, userEdited: Pair<Boolean, Boolean>? = null): JSONObject {
         val out = JSONObject()
         for (k in TOP) if (m.has(k) && !m.isNull(k)) out.put(k, m.get(k))
+        (userEdited ?: userEdited(m))?.let { (sum, lines) -> out.put("user_edited", JSONObject().put("summary", sum).put("lines", lines)) }
         out.put("primeminutes_version", SCHEMA_MAJOR)
         sessionId?.let { out.put("session_id", it) }
         createdAtMs?.takeIf { it > 0 }?.let { out.put("created_at", iso(it)) }
@@ -88,6 +95,10 @@ object SessionShare {
         out.put("utterances", arr)
         return out
     }
+
+    /** `user_edited` as (summary, lines), or null when absent. */
+    fun userEdited(m: JSONObject): Pair<Boolean, Boolean>? =
+        m.optJSONObject("user_edited")?.let { it.optBoolean("summary") to it.optBoolean("lines") }
 
     /** The sender's meeting id, or null (a v1 file, or one saved outside the library). */
     fun sessionId(m: JSONObject): String? = m.optString("session_id", "").trim().ifEmpty { null }
