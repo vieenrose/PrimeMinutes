@@ -9,6 +9,12 @@ object ShareKit {
     /** The three data modalities. */
     enum class What { SESSION, PDF, AUDIO }
 
+    /** The document format of the summary + transcript ("PDF | Word"; the last choice is remembered). */
+    enum class DocFormat(val ext: String, val mime: String) {
+        PDF("pdf", "application/pdf"),
+        WORD("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    }
+
     /** The three channels besides "other apps". */
     enum class Where { NEARBY, MAIL, CLOUD, OTHER }
 
@@ -43,11 +49,11 @@ object ShareKit {
     data class Item(val ext: String, val mime: String)
 
     /** The files a choice produces, in order. */
-    fun items(what: What, attachAudio: Boolean, audioExt: String): List<Item> {
+    fun items(what: What, attachAudio: Boolean, audioExt: String, format: DocFormat = DocFormat.PDF): List<Item> {
         val audio = Item(audioExt, if (audioExt == "wav") "audio/wav" else "audio/mp4")
         return when (what) {
             What.SESSION -> listOf(Item("pmin", "application/vnd.primeminutes.session"))
-            What.PDF -> listOf(Item("pdf", "application/pdf")) + if (attachAudio) listOf(audio) else emptyList()
+            What.PDF -> listOf(Item(format.ext, format.mime)) + if (attachAudio) listOf(audio) else emptyList()
             What.AUDIO -> listOf(audio)
         }
     }

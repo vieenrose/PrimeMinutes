@@ -1242,50 +1242,13 @@ private fun TranscribeScreen(
         studio.primeminutes.core.reader.SpeakerRefs.resolve(t, speakerLabel, s.utterances.mapNotNull { it.speaker }.toSet().ifEmpty { null },
             wrap = if (screen) ::unbreakable else ({ n -> n }))
     }
-    /**
-     * Everything below the summary that an export should carry: action items plus the v2 NOTES
-     * sections that have no other home (decisions, open questions, topics, and any unknown key a
-     * future model adds). Both export paths build their body here (they had drifted).
-     */
-    fun extrasOf(notes: studio.primeminutes.core.llm.MeetingNotes?, markdown: Boolean, refs: (String?) -> String?): String? {
-        val h: (String) -> String = { if (markdown) "## $it" else it }
-        val out = StringBuilder()
-        // "-" is the extractor's own "nothing found" marker, not content.
-        // Action items are an opt-in experiment: exported only when shown in the app.
-        // Action items: their own formatted section (exportActions), not raw text here.
-        notes?.let { n ->
-            fun section(heading: String, items: List<String>) {
-                if (items.isEmpty()) return
-                out.append(h(heading)).append("\n")
-                items.forEach { out.append("- ").append(it).append("\n") }
-                out.append("\n")
-            }
-            section(context.getString(R.string.notes_decisions), n.decisions)
-            section(context.getString(R.string.notes_open), n.open)
-            section(context.getString(R.string.notes_topics), n.topics)
-            n.extra.forEach { (k, v) -> section(k, v) }
-        }
-        return refs(out.toString().trim().ifEmpty { null })
-    }
-    fun exportExtras(markdown: Boolean): String? = extrasOf(s.meetingNotes, markdown) { refs(it) }
-
-    // Reader journal (the "AI notes" panel), grouped by type under the panel's own tag labels.
-    fun exportNotes(): studio.primeminutes.core.export.ExportNotes.Section? =
-        if (s.meetingNotes != null || agent.notes.isEmpty()) null
-        else studio.primeminutes.core.export.ExportNotes.section(context.getString(R.string.agent_title), agent.notes.toList(), { t ->
-            when (t) {
-                "DECISION" -> context.getString(R.string.agent_tag_decision)
-                "ACTION" -> context.getString(R.string.agent_tag_action)
-                "OPEN-ISSUE" -> context.getString(R.string.agent_tag_open)
-                "NUMBER" -> context.getString(R.string.agent_tag_number)
-                "PROPOSAL" -> context.getString(R.string.agent_tag_proposal)
-                else -> null
-            }
-        }) { refs(it) ?: it }
     // Action items are an opt-in experiment: exported only when shown in the app.
+    // Documents carry no AI notes (spec v2, addendum 2): without the extractor's list, the reader's
+    // ACTION notes are the action items.
     fun exportActions(): studio.primeminutes.core.export.ExportNotes.Section? =
-        if (!s.config.showActionItems) null
-        else studio.primeminutes.core.export.ExportNotes.actions(context.getString(R.string.export_heading_actions), s.actionItems) { refs(it) ?: it }
+        (if (s.config.showActionItems) studio.primeminutes.core.export.ExportNotes.actions(context.getString(R.string.export_heading_actions), s.actionItems) { refs(it) ?: it } else null)
+            ?: studio.primeminutes.core.export.ExportNotes.section(context.getString(R.string.export_heading_actions),
+                agent.notes.filter { studio.primeminutes.core.export.ExportNotes.fullTag(it.tag) == "ACTION" }.map { it.copy(tag = "-") }, { null }) { refs(it) ?: it }
     // Active utterance for the synced highlight: the line whose [start, end] holds the playhead.
     // In an inter-utterance gap (silence), switch to the next line at the gap's MIDPOINT so the
     // highlight anticipates upcoming speech instead of staying a line behind during the pause.
@@ -1601,6 +1564,8 @@ private fun TranscribeScreen(
     // --- Share (spec v2): one sheet — WHAT (session .pmin / PDF ± audio / audio), then WHERE. ---
     var shareFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var sharePdf by remember { mutableStateOf<File?>(null) }
+    var shareDocx by remember { mutableStateOf<File?>(null) }
+    val sharePrefs = remember { context.getSharedPreferences("share", android.content.Context.MODE_PRIVATE) }
     var sharePrep by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun shareTitle(e: SessionLibrary.Entry) = e.title?.takeIf { it.isNotBlank() } ?: SessionLibrary.defaultTitle(context, e.createdAt)
     /** The PDF's content: the open meeting as shown (live AI notes included), any other from its file. */
@@ -1616,17 +1581,19 @@ private fun TranscribeScreen(
         if (open) {
             utts = s.utterances; label = speakerLabel
             doc = studio.primeminutes.core.export.PdfExport.Doc(utts, label, refs(s.title) ?: shareTitle(e), emptyList(), refs(s.summary), sumH, txH,
-                exportActions(), exportExtras(markdown = false), exportNotes(), back, loc)
+                exportActions(), back, loc)
         } else {
             val c = withContext(Dispatchers.IO) { PrimeMinutesSession.peek(e.sessionFile)?.let { SessionLibrary.Content.of(it) } } ?: return null
             utts = c.utterances
             label = { sid -> c.speakerNames[sid]?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.speaker_n, sid + 1) }
             val known = utts.mapNotNull { it.speaker }.toSet().ifEmpty { null }
             val r: (String?) -> String? = { t -> t?.let { studio.primeminutes.core.reader.SpeakerRefs.resolve(it, label, known) } }
-            val acts = if (!s.config.showActionItems) null
-                else studio.primeminutes.core.export.ExportNotes.actions(context.getString(R.string.export_heading_actions), c.actionItems) { r(it) ?: it }
+            val actH = context.getString(R.string.export_heading_actions)
+            val acts = (if (s.config.showActionItems) studio.primeminutes.core.export.ExportNotes.actions(actH, c.actionItems) { r(it) ?: it } else null)
+                ?: c.notes?.let { studio.primeminutes.core.llm.MeetingNotes.parse(it) }?.actions?.takeIf { it.isNotEmpty() }
+                    ?.let { l -> studio.primeminutes.core.export.ExportNotes.actions(actH, l.joinToString("\n") { "- $it" }) { r(it) ?: it } }
             doc = studio.primeminutes.core.export.PdfExport.Doc(utts, label, r(c.title ?: e.title) ?: shareTitle(e), emptyList(), r(c.summary), sumH, txH,
-                acts, extrasOf(c.notes?.let { studio.primeminutes.core.llm.MeetingNotes.parse(it) }, false, r), null, back, loc)
+                acts, back, loc)
         }
         val start = SessionLibrary.meetingStart(e) ?: e.createdAt
         val date = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.LONG, java.text.DateFormat.SHORT, loc).format(java.util.Date(start))
@@ -1637,34 +1604,42 @@ private fun TranscribeScreen(
             listOfNotNull(speakers.takeIf { it.isNotEmpty() }?.let { context.getString(R.string.share_pdf_speakers, it.joinToString(", ")) })
         return doc.copy(meta = meta)
     }
-    suspend fun buildPdf(e: SessionLibrary.Entry): File? {
-        val d = pdfDocFor(e) ?: return null
+    /** The PDF and the .docx of [e], side by side in cache/share_pdf (built when the sheet opens: their sizes are shown). */
+    suspend fun buildDocs(e: SessionLibrary.Entry): Pair<File?, File?> {
+        val d = pdfDocFor(e) ?: return null to null
+        val zh = when (SummaryScript.scriptFor(vm.now.config.summaryScript, context)) {
+            ChineseScript.TRADITIONAL -> "zh-TW"; ChineseScript.SIMPLIFIED -> "zh-CN"; else -> null
+        }
         return withContext(Dispatchers.IO) {
-            runCatching {
-                val dir = File(context.cacheDir, "share_pdf").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
-                File(dir, PrimeMinutesSession.suggestFileName(shareTitle(e), "pdf")).also { f ->
-                    f.outputStream().use { studio.primeminutes.core.export.PdfExport.write(it, d) }
-                }
+            val dir = File(context.cacheDir, "share_pdf").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+            val pdf = runCatching {
+                File(dir, PrimeMinutesSession.suggestFileName(shareTitle(e), "pdf")).also { f -> f.outputStream().use { studio.primeminutes.core.export.PdfExport.write(it, d) } }
             }.onFailure { android.util.Log.w("PrimeMinutes", "share pdf failed", it) }.getOrNull()
+            val docx = runCatching {
+                File(dir, PrimeMinutesSession.suggestFileName(shareTitle(e), "docx")).also { f -> f.outputStream().use { studio.primeminutes.core.export.DocxExport.write(it, d, zh) } }
+            }.onFailure { android.util.Log.w("PrimeMinutes", "share docx failed", it) }.getOrNull()
+            pdf to docx
         }
     }
     fun openShare(e: SessionLibrary.Entry) {
         if (s.running && s.libraryDir?.name == e.id) { vm.notify(context.getString(R.string.session_share_failed)); return }
-        sharePdf = null; shareFor = e
-        if (e.sessionFile.isFile) scope.launch { val f = buildPdf(e); if (shareFor?.id == e.id) sharePdf = f }
+        sharePdf = null; shareDocx = null; shareFor = e
+        if (e.sessionFile.isFile) scope.launch { val (p, w) = buildDocs(e); if (shareFor?.id == e.id) { sharePdf = p; shareDocx = w } }
     }
     /** The files of a choice, written into cache/share_out (cleared each time). */
-    suspend fun prepareShare(e: SessionLibrary.Entry, what: studio.primeminutes.core.share.ShareKit.What, attach: Boolean): List<Pair<File, String>>? {
+    suspend fun prepareShare(e: SessionLibrary.Entry, what: studio.primeminutes.core.share.ShareKit.What, attach: Boolean,
+                             format: studio.primeminutes.core.share.ShareKit.DocFormat): List<Pair<File, String>>? {
         val dir = File(context.cacheDir, "share_out")
         val title = shareTitle(e)
         val audioExt = e.audioFile.extension.ifEmpty { "m4a" }
-        val items = studio.primeminutes.core.share.ShareKit.items(what, attach, audioExt)
+        val items = studio.primeminutes.core.share.ShareKit.items(what, attach, audioExt, format)
         withContext(Dispatchers.IO) { dir.mkdirs(); dir.listFiles()?.forEach { it.delete() } }
         val out = ArrayList<Pair<File, String>>()
         for (it in items) {
             val f: File? = when (it.ext) {
                 PrimeMinutesSession.SHARE_EXT -> SessionLibrary.shareMeeting(context, e, File(dir, PrimeMinutesSession.suggestFileName(title, it.ext)), vm.now.config.summaryScript)
-                "pdf" -> (sharePdf?.takeIf { f -> f.isFile } ?: buildPdf(e))
+                "pdf" -> (sharePdf?.takeIf { f -> f.isFile } ?: buildDocs(e).first)
+                "docx" -> (shareDocx?.takeIf { f -> f.isFile } ?: buildDocs(e).second)
                 else -> SessionLibrary.shareAudioOnly(e, File(dir, PrimeMinutesSession.suggestFileName(title, it.ext)), title)
             }
             out += (f ?: return null) to it.mime
@@ -1717,11 +1692,12 @@ private fun TranscribeScreen(
         }
     }
     fun doShare(e: SessionLibrary.Entry, what: studio.primeminutes.core.share.ShareKit.What, attach: Boolean,
+                format: studio.primeminutes.core.share.ShareKit.DocFormat,
                 where: studio.primeminutes.core.share.ShareKit.Where, cloud: studio.primeminutes.core.share.ShareKit.Cloud?) {
         val subject = shareTitle(e)
         sharePrep = scope.launch {
             try {
-                val files = prepareShare(e, what, attach)
+                val files = prepareShare(e, what, attach, format)
                 if (files.isNullOrEmpty()) { vm.notify(context.getString(R.string.session_share_failed)); return@launch }
                 shareFor = null
                 when (where) {
@@ -1792,8 +1768,12 @@ private fun TranscribeScreen(
             sessionBytes = e.sessionFile.takeIf { it.isFile }?.length() ?: 0L,
             audioBytes = e.audioFile.takeIf { it.isFile }?.length() ?: 0L,
             pdfBytes = sharePdf?.length(),
+            docxBytes = shareDocx?.length(),
+            format = runCatching { studio.primeminutes.core.share.ShareKit.DocFormat.valueOf(sharePrefs.getString("doc_format", "PDF")!!) }
+                .getOrDefault(studio.primeminutes.core.share.ShareKit.DocFormat.PDF),
+            onFormat = { sharePrefs.edit().putString("doc_format", it.name).apply() },
             clouds = clouds,
-            onGo = { what, attach, where, cloud -> doShare(e, what, attach, where, cloud) },
+            onGo = { what, attach, format, where, cloud -> doShare(e, what, attach, format, where, cloud) },
             onDismiss = { shareFor = null },
         )
     }

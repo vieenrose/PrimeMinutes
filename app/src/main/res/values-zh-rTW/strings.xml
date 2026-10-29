@@ -710,7 +710,7 @@
     <string name="share_where">傳送到</string>
     <string name="share_what_session">整場會議（.pmin）</string>
     <string name="share_what_session_desc">錄音、逐字稿、說話者、摘要、待辦和筆記，可在 Prime Minutes 開啟。</string>
-    <string name="share_what_pdf">摘要＋逐字稿（PDF）</string>
+    <string name="share_what_pdf">摘要＋逐字稿</string>
     <string name="share_what_pdf_desc">摘要和待辦事項都連到它引用的逐字稿段落。</string>
     <string name="share_what_audio">只有錄音（.m4a）</string>
     <string name="share_what_audio_desc">只有錄音，沒有逐字稿。</string>
@@ -734,4 +734,6 @@
     <string name="share_pdf_back">↑ 摘要</string>
     <string name="share_pdf_minutes">%1$d 分鐘</string>
     <string name="share_pdf_speakers">與會者：%1$s</string>
+    <string name="share_format_pdf">PDF</string>
+    <string name="share_format_word">Word</string>
 </resources>

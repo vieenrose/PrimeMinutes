@@ -30,6 +30,9 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -79,16 +82,23 @@ fun ShareSheet(
     audioBytes: Long,
     /** The PDF's size once built (null: being built). */
     pdfBytes: Long?,
+    /** The .docx's size once built (null: being built). */
+    docxBytes: Long?,
+    /** The remembered document format, and where a new choice is saved. */
+    format: ShareKit.DocFormat,
+    onFormat: (ShareKit.DocFormat) -> Unit,
     clouds: List<CloudTarget>,
-    onGo: (What, attachAudio: Boolean, Where, ShareKit.Cloud?) -> Unit,
+    onGo: (What, attachAudio: Boolean, ShareKit.DocFormat, Where, ShareKit.Cloud?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var what by remember { mutableStateOf(ShareKit.defaultWhat(online, hasSession)) }
+    var fmt by remember { mutableStateOf(format) }
+    val docBytes = if (fmt == ShareKit.DocFormat.PDF) pdfBytes else docxBytes
     var attach by remember { mutableStateOf(ShareKit.attachAudioByDefault(online, audioBytes)) }
-    val total = ShareKit.size(what, attach, sessionBytes, audioBytes, pdfBytes)
-    fun go(where: Where, cloud: ShareKit.Cloud? = null) { onGo(what, what == What.PDF && attach, where, cloud) }
+    val total = ShareKit.size(what, attach, sessionBytes, audioBytes, docBytes)
+    fun go(where: Where, cloud: ShareKit.Cloud? = null) { onGo(what, what == What.PDF && attach, fmt, where, cloud) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = pal.Slate800) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = Spacing.xxl).testTag("share-sheet")) {
@@ -104,8 +114,19 @@ fun ShareSheet(
                     hint = if (online) stringResource(R.string.share_hint_copyright) else stringResource(R.string.share_hint_voices),
                     tag = "share-what-session") { what = What.SESSION }
                 WhatRow(Icons.Filled.PictureAsPdf, stringResource(R.string.share_what_pdf), stringResource(R.string.share_what_pdf_desc),
-                    pdfBytes?.let { SizeFormat.bytes(it) } ?: "…", selected = what == What.PDF, enabled = hasSession, hint = null,
+                    docBytes?.let { SizeFormat.bytes(it) } ?: "…", selected = what == What.PDF, enabled = hasSession, hint = null,
                     tag = "share-what-pdf") { what = What.PDF }
+                if (what == What.PDF) SingleChoiceSegmentedButtonRow(Modifier.padding(start = 72.dp, end = Spacing.lg, bottom = Spacing.xs).testTag("share-format")) {
+                    ShareKit.DocFormat.entries.forEachIndexed { i, f ->
+                        SegmentedButton(
+                            selected = fmt == f,
+                            onClick = { fmt = f; onFormat(f) },
+                            shape = SegmentedButtonDefaults.itemShape(i, ShareKit.DocFormat.entries.size),
+                            colors = SegmentedButtonDefaults.colors(activeContainerColor = pal.Sky.copy(alpha = 0.18f), activeContentColor = pal.Slate200, inactiveContentColor = pal.Slate400),
+                            modifier = Modifier.testTag("share-format-${f.name.lowercase()}"),
+                        ) { Text(stringResource(if (f == ShareKit.DocFormat.PDF) R.string.share_format_pdf else R.string.share_format_word)) }
+                    }
+                }
                 if (what == What.PDF) Row(
                     Modifier.fillMaxWidth().padding(start = 72.dp, end = Spacing.lg).heightIn(min = 48.dp)
                         .clickable(role = Role.Switch) { attach = !attach },

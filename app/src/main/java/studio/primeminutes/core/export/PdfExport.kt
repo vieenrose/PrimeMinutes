@@ -20,8 +20,8 @@ import java.util.Locale
  * number in every footer.
  *
  * Layout: a title block (title, then the meta lines: date · duration, speakers), the summary, the
- * action items, the other notes, then the transcript as speaker turns (grey clock gutter, hanging
- * indent). Every cited sentence of the summary / action items / notes is an internal link to the
+ * action items (no AI notes: they stay in the .pmin), then the transcript as speaker turns (grey clock gutter, hanging
+ * indent). Every cited sentence of the summary / action items is an internal link to the
  * transcript turn its first `[m:ss]` points at (a multi-time cite: each time links to its own turn);
  * a cited turn carries a "↑ back" link to the first sentence that cites it. Links are annotations
  * added afterwards by [PdfLinker] (PdfDocument has no link API).
@@ -47,10 +47,6 @@ object PdfExport {
         val transcriptHeading: String,
         /** The action items, formatted like the notes (ExportNotes.actions). */
         val actions: ExportNotes.Section? = null,
-        /** Other notes sections as text (decisions, open questions, …): heading lines and `- item` lines. */
-        val extras: String? = null,
-        /** The AI notes, grouped by type (ExportNotes.section). */
-        val notes: ExportNotes.Section? = null,
         /** The back-link drawn on a cited transcript turn ("↑ Summary"). */
         val backLabel: String = "↑",
         /** The interface language: picks the Han glyph variants (zh-CN and zh-TW draw some characters differently). */
@@ -107,17 +103,6 @@ object PdfExport {
             pager.gap(12f)
         }
         d.actions?.let { section(it) }
-        // "-" is the extractor's own "nothing found" marker, not content.
-        d.extras?.trim()?.takeIf { it.isNotEmpty() && it != "-" }?.let { ex ->
-            val bullet = "•"
-            val indent = bodyPaint.measureText(bullet) + 8f
-            for (line in ex.lines().map { it.trim() }.filter { it.isNotEmpty() }) {
-                if (line.startsWith("- ")) { pager.para(line.removePrefix("- ").trim(), bodyPaint, linkPaint, indent, 0f, 0f, bullet, cites = true); pager.gap(4f) }
-                else { pager.gap(6f); heading(line) }
-            }
-            pager.gap(12f)
-        }
-        d.notes?.let { section(it) }
 
         // --- transcript: speaker turns, the clock in a grey left gutter, the body hanging under its text ---
         heading(d.transcriptHeading)

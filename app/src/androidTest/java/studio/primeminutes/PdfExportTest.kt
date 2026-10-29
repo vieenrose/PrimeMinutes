@@ -33,20 +33,16 @@ class PdfExportTest {
         assertTrue("ends with %%EOF", tail.contains("%%EOF"))
     }
 
-    @Test fun summaryAndNoteCitesLinkToTheirTranscriptTurns() {
+    @Test fun summaryCitesLinkToTheirTranscriptTurnsAndBack() {
         val utts = (0 until 120).map { i ->
             TranscriptEvent.Utterance(index = i, text = "第 $i 句，這是一段逐字稿內容，用來測試換頁。", startSec = i * 10.0, endSec = i * 10.0 + 9, speaker = i % 2)
         }
-        val notes = studio.primeminutes.core.export.ExportNotes.section("AI 筆記", listOf(
-            studio.primeminutes.core.reader.Note(1, 0, "0:15", "PROPOSAL", "建議推出套餐"),
-            studio.primeminutes.core.reader.Note(2, 0, "19:00", null, "討論細節"),
-        ), { if (it == "PROPOSAL") "提議" else null })
         val bos = ByteArrayOutputStream()
-        PdfExport.write(bos, PdfExport.Doc(utts, { "S${it + 1}" }, "會議", emptyList(), "涵蓋多個方面 [0:15]。另見 [5:00, 15:30]。", "摘要", "逐字稿", notes = notes, backLabel = "↑ 摘要"))
+        PdfExport.write(bos, PdfExport.Doc(utts, { "S${it + 1}" }, "會議", emptyList(), "涵蓋多個方面 [0:15]。另見 [5:00, 15:30]。", "摘要", "逐字稿", backLabel = "↑ 摘要"))
         val s = String(bos.toByteArray(), Charsets.ISO_8859_1)
-        // Summary: 2 cited sentences + 3 times; notes: 2 items + 2 times; 4 cited turns → 4 back links.
+        // No AI notes in documents. Summary: 2 cited sentences + 3 times; 3 cited turns → 3 back links.
         val links = Regex("""/Subtype /Link""").findAll(s).count()
-        assertTrue("links: $links", links == 13)
+        assertTrue("links: $links", links == 8)
         assertTrue(Regex("""/Dest \[\d+ 0 R /XYZ null [\d.]+ null]""").findAll(s).count() == links)
         assertTrue(s.contains("/Annots ["))
         assertTrue(s.trimEnd().endsWith("%%EOF"))

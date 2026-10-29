@@ -725,7 +725,7 @@
     <string name="share_where">Where</string>
     <string name="share_what_session">Whole meeting (.pmin)</string>
     <string name="share_what_session_desc">Audio, transcript, speakers, summary, actions and notes. Opens in Prime Minutes.</string>
-    <string name="share_what_pdf">Summary + transcript (PDF)</string>
+    <string name="share_what_pdf">Summary + transcript</string>
     <string name="share_what_pdf_desc">Summary and action items linked to the transcript lines they cite.</string>
     <string name="share_what_audio">Audio only (.m4a)</string>
     <string name="share_what_audio_desc">The recording, without the transcript.</string>
@@ -749,4 +749,6 @@
     <string name="share_pdf_back">↑ Summary</string>
     <string name="share_pdf_minutes">%1$d min</string>
     <string name="share_pdf_speakers">Speakers: %1$s</string>
+    <string name="share_format_pdf">PDF</string>
+    <string name="share_format_word">Word</string>
 </resources>

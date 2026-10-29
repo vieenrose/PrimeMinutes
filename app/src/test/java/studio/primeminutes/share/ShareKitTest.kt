@@ -32,6 +32,11 @@ class ShareKitTest {
         assertNull(ShareKit.size(What.PDF, false, 0, 1_000, null))
         assertEquals("*/*", ShareKit.mimeOf(ShareKit.items(What.PDF, true, "m4a")))
         assertEquals("application/pdf", ShareKit.mimeOf(ShareKit.items(What.PDF, false, "m4a")))
+        // One file → its exact type (so PDF-only apps such as Acrobat are offered); Word the same.
+        val word = ShareKit.items(What.PDF, false, "m4a", ShareKit.DocFormat.WORD)
+        assertEquals(listOf("docx"), word.map { it.ext })
+        assertEquals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ShareKit.mimeOf(word))
+        assertEquals(listOf("docx", "m4a"), ShareKit.items(What.PDF, true, "m4a", ShareKit.DocFormat.WORD).map { it.ext })
     }
 
     @Test fun citedSentenceStartsAfterThePreviousOne() {
