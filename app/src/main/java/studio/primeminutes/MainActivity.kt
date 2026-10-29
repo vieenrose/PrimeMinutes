@@ -2348,7 +2348,7 @@ private fun TranscribeScreen(
         val voice = studio.primeminutes.ui.rememberVoiceSuggestions(s.libraryDir, sid, s.speakerNames, s.utterances)
         studio.primeminutes.ui.SpeakerNameFlow(
             speaker = me, speakers = pickerSpeakers,
-            suggestions = voice.first, voiceNote = voice.second,
+            suggestions = voice.first, voiceNote = voice.second, voiceAction = voice.third,
             onPlaySample = if (s.audioUri != null) ({
                 studio.primeminutes.core.people.CleanSpeech.sampleStart(s.utterances, sid)?.let { t -> seekAndPlay((t * 1000).toInt()) }
             }) else null,

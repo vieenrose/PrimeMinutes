@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import studio.primeminutes.core.audio.AudioDecoder
+import studio.primeminutes.core.audio.AudioRangeReader
 import studio.primeminutes.core.audio.WavIo
 import studio.primeminutes.core.audio.WavSlicer
 import studio.primeminutes.core.library.SessionLibrary
@@ -83,6 +83,12 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
     /** Meetings whose vectors are being computed (the sheet says "Comparing voices…"). */
     private val _working = MutableStateFlow<Set<String>>(emptySet())
     val working = _working.asStateFlow()
+    /** Where each queued, running or failed meeting stands (the sheet's note); absent once its vectors are written. */
+    private val _status = MutableStateFlow<Map<String, VoiceLane.Status>>(emptyMap())
+    val status = _status.asStateFlow()
+    private fun setStatus(id: String, st: VoiceLane.Status?) { _status.value = if (st == null) _status.value - id else _status.value + (id to st) }
+    /** The meeting whose rename sheet is open: computed first, even while the app is busy. */
+    @Volatile private var front: String? = null
     /** A confirmed name whose voice does not match the person's other meetings: (meeting, speaker, person). */
     private val _outliers = MutableSharedFlow<Triple<String, Int, String>>(extraBufferCapacity = 4)
     val outliers = _outliers.asSharedFlow()
@@ -246,10 +252,23 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
 
     // --- the lane ------------------------------------------------------------------------------
 
-    fun request(context: Context, entryId: String) {
+    fun request(context: Context, entryId: String, front: Boolean = false) {
         if (!enabled()) return
+        if (front) this.front = entryId
+        if (!modelReady(context)) { setStatus(entryId, VoiceLane.Status.ModelMissing); return }
         synchronized(lock) { queue.remove(entryId); queue.addFirst(entryId) }
+        if (_status.value[entryId] != VoiceLane.Status.Computing) setStatus(entryId, VoiceLane.Status.Queued(VoiceLane.Wait.QUEUE))
         start(context.applicationContext)
+    }
+
+    /** "Retry" after a failure. */
+    fun retry(context: Context, entryId: String) { setStatus(entryId, null); request(context, entryId, front = true) }
+
+    /** "Download" when the model is missing: downloads it, then backfills. */
+    fun downloadModel(context: Context) {
+        scope.launch {
+            if (enable(context)) for ((id, st) in _status.value) if (st == VoiceLane.Status.ModelMissing) { setStatus(id, null); request(context, id) }
+        }
     }
 
     /** Every finished meeting whose sidecar is missing or stale (and the people's exemplars from links). */
@@ -281,16 +300,34 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
         var model: SpeakerEmbedder? = null
         try {
             while (true) {
-                val id = synchronized(lock) { queue.removeFirstOrNull() ?: run { worker = null; null } } ?: break
-                if (!enabled() || !modelReady(app)) { synchronized(lock) { queue.clear() }; continue }
+                if (!enabled()) { synchronized(lock) { queue.forEach { setStatus(it, null) }; queue.clear(); worker = null }; break }
+                if (!modelReady(app)) {
+                    // Never a silent stop: every meeting that waited says the model is missing (Download).
+                    synchronized(lock) { Log.w(TAG, "model missing, ${queue.size} meeting(s) waiting"); queue.forEach { setStatus(it, VoiceLane.Status.ModelMissing) }; queue.clear(); worker = null }
+                    break
+                }
+                val id = synchronized(lock) {
+                    // The meeting on screen first, wherever it is in the backlog.
+                    front?.let { f -> if (queue.remove(f)) queue.addFirst(f) }
+                    queue.firstOrNull() ?: run { worker = null; null }
+                } ?: break
+                val isFront = id == front
+                val w = VoiceLane.wait(isFront, busy(), batteryOk(app))
+                if (w != null) {
+                    if (_status.value[id] != VoiceLane.Status.Queued(w)) setStatus(id, VoiceLane.Status.Queued(w))
+                    delay(1000); continue
+                }
+                synchronized(lock) { queue.remove(id) }
                 val gen = generation
-                while (busy() || !batteryOk(app)) delay(1000)
-                val entry = SessionLibrary.byId(app, id) ?: continue
+                val entry = SessionLibrary.byId(app, id)
+                if (entry == null) { setStatus(id, if (isFront) VoiceLane.Status.Queued(VoiceLane.Wait.TRANSCRIPTION) else null); continue }
                 _working.value = _working.value + id
+                setStatus(id, VoiceLane.Status.Computing)
+                var result = Computed.FAILED
                 try {
                     runMutex.withLock {
                         val m = model ?: SpeakerEmbedder.load(File(ModelManager(app).speakerDir(card), card.graph), threads(), card).also { model = it }
-                        compute(app, entry, m, gen)
+                        result = compute(app, entry, m, gen)
                     }
                     if (gen == generation) syncMeeting(app, id)
                 } catch (e: Throwable) {
@@ -298,63 +335,75 @@ object VoiceStore : VoiceHooks.Impl, VoiceLinks.Impl {
                     Log.w(TAG, "voice of $id failed", e)
                 } finally {
                     _working.value = _working.value - id
+                    setStatus(id, if (result == Computed.FAILED) VoiceLane.Status.Failed else null)
+                    if (result == Computed.FAILED) _version.value++
+                    if (front == id) front = null
                 }
             }
         } finally { model?.close() }
     }
 
+    internal enum class Computed { WRITTEN, UNCHANGED, FAILED }
+
     private fun threads() = minOf(2, studio.primeminutes.core.hw.HwInfo.cores())
 
-    /** Computes the meeting's sidecar if it is missing or stale. Returns true when it was written. */
-    private suspend fun compute(app: Context, entry: SessionLibrary.Entry, m: SpeakerEmbedder, gen: Int): Boolean {
-        val s = PrimeMinutesSession.peek(entry.sessionFile) ?: return false
+    /**
+     * Computes the meeting's sidecar if it is missing or stale. Only the lines the vectors use are decoded (seeking into
+     * the recording, [AudioRangeReader]), so a long meeting costs about the same as a short one and an edit does not
+     * re-decode it all; the capture WAV, when still there, is read directly.
+     */
+    private suspend fun compute(app: Context, entry: SessionLibrary.Entry, m: SpeakerEmbedder, gen: Int): Computed {
+        val s = PrimeMinutesSession.peek(entry.sessionFile) ?: run { Log.w(TAG, "voice ${entry.id}: unreadable session file"); return Computed.FAILED }
         val turns = CleanSpeech.voiceTurns(s.utterances)
         val speakers = s.utterances.mapNotNull { it.speaker }.distinct().sorted()
         val spans = speakers.associateWith { CleanSpeech.ordered(turns, it) }
         val fp = VoiceFiles.fingerprint(spans)
         val cur = readMeeting(entry.dir)
-        if (cur != null && cur.fingerprint == fp) return false
+        if (cur != null && cur.fingerprint == fp) return Computed.UNCHANGED
         val t0 = System.nanoTime()
-        // The meeting's 16 kHz audio: its capture WAV when still there, else the session file decoded.
+        var decodeNs = 0L
+        val sr = WavIo.SAMPLE_RATE
         val wav = entry.wavFile.takeIf { WavIo.isCanonical16kMono(it) }
-        val tmp = if (wav == null) File(app.cacheDir, "voice_${entry.id}.wav") else null
+        val slicer = wav?.let { WavSlicer(it) }
+        val ranges = if (slicer == null) AudioRangeReader(app, Uri.fromFile(entry.sessionFile)) else null
         try {
-            if (tmp != null) AudioDecoder.decodeToWav16k(app, Uri.fromFile(entry.sessionFile), tmp, normalize = true) { _, _ -> }
-            val t1 = System.nanoTime()
+            fun read(a: Double, b: Double): FloatArray {
+                val td = System.nanoTime()
+                val x = slicer?.read((a * sr).toLong(), (b * sr).toLong()) ?: ranges!!.read(a, b)
+                decodeNs += System.nanoTime() - td
+                return x
+            }
             var speech = 0.0
             val out = ArrayList<VoiceFiles.SpeakerVoice>()
-            val sr = WavIo.SAMPLE_RATE
             val cap = (card.capSec * sr).toInt()
-            WavSlicer(wav ?: tmp!!).use { w ->
-                for ((sid, sp) in spans) {
-                    // Lines in selection order, each gated to its voiced frames, until capSec of voice.
-                    val pieces = ArrayList<FloatArray>()
-                    var have = 0
-                    for (s in sp) {
+            for ((sid, sp) in spans) {
+                // Lines in selection order, each gated to its voiced frames, until capSec of voice.
+                val pieces = ArrayList<FloatArray>()
+                var have = 0
+                for (s in sp) {
+                    if (have >= cap) break
+                    val line = read(s.start, s.end)
+                    for ((a, b) in VoiceGate.runs(line, sr)) {
                         if (have >= cap) break
-                        val line = w.read((s.start * sr).toLong(), (s.end * sr).toLong())
-                        for ((a, b) in VoiceGate.runs(line, sr)) {
-                            if (have >= cap) break
-                            val take = minOf(b - a, cap - have)
-                            pieces += line.copyOfRange(a, a + take); have += take
-                        }
+                        val take = minOf(b - a, cap - have)
+                        pieces += line.copyOfRange(a, a + take); have += take
                     }
-                    val sec = have.toDouble() / sr
-                    if (sec < card.minCleanSec) continue
-                    val pcm = FloatArray(have); var o = 0
-                    for (p in pieces) { p.copyInto(pcm, o); o += p.size }
-                    m.embed(pcm, IntArray(pieces.size) { pieces[it].size })?.let { out += VoiceFiles.SpeakerVoice(sid, sec.toFloat(), it) }
-                    speech += sec
                 }
+                val sec = have.toDouble() / sr
+                if (sec < card.minCleanSec) continue
+                val pcm = FloatArray(have); var o = 0
+                for (p in pieces) { p.copyInto(pcm, o); o += p.size }
+                m.embed(pcm, IntArray(pieces.size) { pieces[it].size })?.let { out += VoiceFiles.SpeakerVoice(sid, sec.toFloat(), it) }
+                speech += sec
             }
             val t2 = System.nanoTime()
-            if (!storeSidecar(entry.dir, VoiceFiles.MeetingVoices(card.id, fp, out), gen)) return false
-            lastCost = "voice ${entry.id}: ${out.size}/${speakers.size} speakers, %.0f s speech, decode %d ms, embed %d ms".format(
-                java.util.Locale.ROOT, speech, (t1 - t0) / 1_000_000, (t2 - t1) / 1_000_000)
+            if (!storeSidecar(entry.dir, VoiceFiles.MeetingVoices(card.id, fp, out), gen)) return Computed.UNCHANGED
+            lastCost = "voice ${entry.id}: ${out.size}/${speakers.size} speakers, %.0f s speech, decode %d ms, embed %d ms (total %d ms)".format(
+                java.util.Locale.ROOT, speech, decodeNs / 1_000_000, (t2 - t0 - decodeNs) / 1_000_000, (t2 - t0) / 1_000_000)
             Log.i(TAG, lastCost!!)
             _version.value++
-            return true
-        } finally { tmp?.delete() }
+            return Computed.WRITTEN
+        } finally { slicer?.close(); ranges?.close() }
     }
 
     /** Writes a meeting's sidecar computed under [gen]; nothing when recognition went off or its data was deleted since. */
