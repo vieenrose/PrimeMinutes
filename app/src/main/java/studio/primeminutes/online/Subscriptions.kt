@@ -311,6 +311,8 @@ object Subscriptions {
         val next = f(_all.value)
         file(ctx).writeTextAtomic(JSONObject().put("version", 1).put("subscriptions", JSONArray(next.map { it.toJson() })).toString())
         _all.value = next
+        // M4: the background check runs only while an active subscription exists.
+        runCatching { BackgroundCheck.sync(ctx, next) }
         next
     }
 

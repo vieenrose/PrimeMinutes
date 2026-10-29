@@ -751,4 +751,12 @@
     <string name="share_pdf_speakers">Speakers: %1$s</string>
     <string name="share_format_pdf">PDF</string>
     <string name="share_format_word">Word</string>
+    <string name="bg_check_title">Check for new episodes in the background</string>
+    <string name="bg_check_hint">Once a day on Wi‑Fi, reads the RSS of your subscribed shows (paused ones skipped) and notifies you of new episodes. Nothing is downloaded.</string>
+    <string name="bg_check_no_notif">Notifications are off for Prime Minutes: new episodes only show as a badge on the shows list.</string>
+    <string name="bg_check_channel">New episodes</string>
+    <plurals name="bg_check_found">
+        <item quantity="one">%d new episode</item>
+        <item quantity="other">%d new episodes</item>
+    </plurals>
 </resources>

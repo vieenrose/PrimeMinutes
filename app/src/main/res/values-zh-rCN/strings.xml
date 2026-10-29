@@ -736,4 +736,11 @@
     <string name="share_pdf_speakers">与会者：%1$s</string>
     <string name="share_format_pdf">PDF</string>
     <string name="share_format_word">Word</string>
+    <string name="bg_check_title">在后台检查新集数</string>
+    <string name="bg_check_hint">每天在 Wi‑Fi 下读取已订阅节目的 RSS（暂停的节目跳过），有新集时通知你。不会下载任何内容。</string>
+    <string name="bg_check_no_notif">Prime Minutes 的通知已关闭：新集只会在节目列表显示徽章。</string>
+    <string name="bg_check_channel">新集数</string>
+    <plurals name="bg_check_found">
+        <item quantity="other">新增 %d 集</item>
+    </plurals>
 </resources>
