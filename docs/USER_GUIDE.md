@@ -147,6 +147,8 @@ App 不登入任何帳號，也不直接上傳到雲端。
 
 首頁有兩種以上來源時，可用 **全部／會議／Podcast／收到的** 篩選；Podcast 依節目分組，點節目開啟節目頁（新集數、已在場次庫的單集、訂閱與檢查新集數）。
 
+<p><img src="guide/60-library-sources.png" width="200" alt="首頁的來源篩選：全部／會議／Podcast／收到的"> <img src="guide/59-library-podcasts.png" width="200" alt="Podcast 篩選：單集依節目分組"> <img src="guide/61-channel.png" width="200" alt="節目頁：上次檢查與背景檢查時間"></p>
+
 ## 3. 加入音訊
 
 <p><img src="guide/56-import-cloud.png" width="200" alt="加入音訊：從檔案或雲端匯入"> <img src="guide/07-podcast.png" width="200"> <img src="guide/41-podcast-item.png" width="200" alt="首頁：處理中與下載中的 Podcast 單集"> <img src="guide/42-podcast-paused.png" width="200" alt="下載已暫停的單集"></p>
@@ -165,13 +167,13 @@ App 不登入任何帳號，也不直接上傳到雲端。
 
 ### 3b. 在背景檢查新集數
 
-<p><img src="guide/57-bg-check.png" width="200" alt="設定：背景檢查新集數"></p>
+<p><img src="guide/57-bg-check.png" width="200" alt="設定：背景檢查新集數"> <img src="guide/61-channel.png" width="200" alt="節目頁：背景檢查時間"> <img src="guide/62-new-episodes-notification.png" width="200" alt="通知：1 集新集數"></p>
 
 設定 → 節目 → **背景檢查新集數**（預設關閉）：在 Wi‑Fi 下讀取已訂閱節目的 RSS，有新集數時通知你，不會下載音訊。檢查時間由 iOS 決定，不保證準時；從多工畫面滑掉 App 後就不會檢查。開啟後，節目頁顯示上次背景檢查的時間。關閉時 App 不在背景連線。
 
 | 節點 | 預期結果 | 驗證 |
 |---|---|---|
-| 背景檢查新集數 | 開啟後 iOS 適時執行；有新集時通知「新集數：N」；節目頁顯示「背景檢查：時間」 | ✅ 自動（BackgroundCheckTests）；實機通知 ⬜ |
+| 背景檢查新集數 | 開啟後 iOS 適時執行；有新集時通知「N 集新集數」；節目頁顯示「背景檢查：時間」 | ✅ 自動（BackgroundCheckTests）；✅ 模擬器（通知中心） |
 
 ## 4. 錄音室
 
