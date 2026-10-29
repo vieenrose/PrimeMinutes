@@ -37,10 +37,12 @@ internal class ImportPipeline(private val host: PipelineHost) {
     private val ctx: Context get() = host.context
 
     /** The foreground import in flight (work WAV, checkpoint, banked entry). */
-    val inFlight = InFlightImport { wav, sec -> SessionLibrary.promoteRecording(host.context, wav, sec, importStart) }
+    val inFlight = InFlightImport { wav, sec -> SessionLibrary.promoteRecording(host.context, wav, sec, importStart, importKind) }
 
     /** The import in flight's capture start ([SessionLibrary.Entry.captureStart]): its media creation date, else unknown. */
     @Volatile private var importStart: Long = SessionLibrary.UNKNOWN_START
+    /** A live capture left in audio/ (recovered) is a recording; anything else imported is a file. */
+    @Volatile private var importKind: String = studio.primeminutes.core.library.Provenance.FILE
 
     /**
      * Decode (MediaCodec) -> ASR (Phase 1) -> summarization (Phase 2). The ASR models are
@@ -105,6 +107,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
         val totalDurationSec = host.probeDurationSec(decodeUri)
         // When the meeting took place, for an import that becomes a new entry: the file's own creation date (a live
         // capture left in audio/ is named after its start), never the import time.
+        if (existing == null && intoEntry == null) importKind = if (ownWav) studio.primeminutes.core.library.Provenance.RECORDING else studio.primeminutes.core.library.Provenance.FILE
         if (existing == null && intoEntry == null) importStart = srcFile?.takeIf { ownWav }?.name
             ?.let { Regex("""^recording_(\d{12,})\.wav$""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
             ?: studio.primeminutes.core.audio.MediaDate.captureStartMs(ctx, decodeUri) ?: SessionLibrary.UNKNOWN_START

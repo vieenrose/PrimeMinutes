@@ -191,7 +191,8 @@ fun PodcastPanel(onStarted: () -> Unit, onOpenShow: (String) -> Unit = {}) {
                         GradientButton(stringResource(R.string.podcast_transcribe), enabled = !busy, onClick = {
                             error = null
                             // The item appears in the library at once and shows its own download.
-                            ImportDownloads.submit(context, e.title, studio.primeminutes.core.library.SessionLibrary.PendingDownload.PODCAST, e.audioUrl)
+                            ImportDownloads.submit(context, e.title, studio.primeminutes.core.library.SessionLibrary.PendingDownload.PODCAST, e.audioUrl,
+                                channel = studio.primeminutes.online.Podcast.channelOf(sel, e, subs.firstOrNull { it.id == subId }))
                             onStarted()
                         })
                     }

@@ -63,14 +63,24 @@ object ImportDownloads {
      * its page) was submitted: create its item, then start (or queue) its download. Null when the
      * item could not be created.
      */
-    fun submit(ctx: Context, title: String?, kind: String, url: String, durationSec: Int = 0, seriesId: String? = null, guid: String? = null, onCreated: (String) -> Unit = {}) {
+    fun submit(ctx: Context, title: String?, kind: String, url: String, durationSec: Int = 0, seriesId: String? = null, guid: String? = null,
+               channel: studio.primeminutes.core.library.Provenance? = null, onCreated: (String) -> Unit = {}) {
         val app = ctx.applicationContext
         io.launch {
-            val e = SessionLibrary.createDownloadEntry(app, title, SessionLibrary.PendingDownload(kind, url, seriesId = seriesId, guid = guid), durationSec) ?: return@launch
+            val e = SessionLibrary.createDownloadEntry(app, title, SessionLibrary.PendingDownload(kind, url, seriesId = seriesId ?: channel?.seriesId, guid = guid), durationSec, channel) ?: return@launch
             onCreated(e.id)
             changed()
             kickNow(app)
+            cacheArtwork(app, e.source)
         }
+    }
+
+    /** The item's channel artwork, fetched once (best-effort) so its row draws offline. */
+    fun cacheArtwork(ctx: Context, p: studio.primeminutes.core.library.Provenance?) {
+        val key = ArtworkCache.keyOf(p?.seriesId, p?.artworkUrl) ?: return
+        val app = ctx.applicationContext
+        if (ArtworkCache.cached(app, key) != null) return
+        io.launch { if (ArtworkCache.ensure(app, key, p?.artworkUrl) != null) changed() }
     }
 
     /** Retry a failed item: its error is cleared and it downloads again (from its partial file). */
