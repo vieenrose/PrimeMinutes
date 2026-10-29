@@ -46,6 +46,18 @@ object ThemeStore {
             .edit().putBoolean(KEY_HW, on).apply()
     }
 
+    private const val KEY_CAPTURE_METERS = "captureMeters"
+
+    /** Recording screen: keep the CPU / RAM / battery meters visible (⋯ menu). Off by default:
+     *  the meters then appear only when something needs attention. */
+    fun loadCaptureMeters(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CAPTURE_METERS, false)
+
+    fun saveCaptureMeters(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_CAPTURE_METERS, on).apply()
+    }
+
     private const val KEY_DYNAMIC = "dynamicColor"
 
     /** Wallpaper colours (Material You, API 31+) instead of the brand palette. Off by default; never

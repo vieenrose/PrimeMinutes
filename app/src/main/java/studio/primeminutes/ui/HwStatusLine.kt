@@ -20,6 +20,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.core.hw.hwSamples
@@ -67,6 +73,71 @@ private fun Gauge(label: String, pct: Int, alert: Boolean) {
         Box(Modifier.size(width = 16.dp, height = 2.dp).clip(RoundedCornerShape(1.dp))
             .background(pal.Slate400.copy(alpha = 0.2f))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(pct.coerceIn(0, 100) / 100f).background(fill))
+        }
+    }
+}
+
+/** What the recording screen warns about, worst first; null = all fine. */
+internal enum class CaptureWarn { HEAT, MEMORY, BATTERY, LOAD }
+
+internal fun captureWarn(s: studio.primeminutes.core.hw.HwSample): CaptureWarn? = when {
+    s.thermalSevere || (s.tempC ?: 0) >= 42 -> CaptureWarn.HEAT
+    s.lowMemory || s.ramPct > 90 -> CaptureWarn.MEMORY
+    s.batteryPct in 0..14 && !s.charging -> CaptureWarn.BATTERY
+    s.cpuPct > 90 -> CaptureWarn.LOAD
+    else -> null
+}
+
+/**
+ * The recording screen's meters: hidden while all is well, shown as a warning banner when the phone
+ * runs hot, short of memory, low on battery or maxed out (kept 30 s after recovery so it does not
+ * flicker), and always shown when [pinned] from the ⋯ menu.
+ */
+@Composable
+fun CaptureMeters(pinned: Boolean, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val pal = LocalPrimeMinutesPalette.current
+    val s = remember { hwSamples(ctx) }.collectAsState(initial = null).value
+    val warn = s?.let(::captureWarn)
+    var lastWarn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<CaptureWarn?>(null) }
+    var lastWarnAt by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    androidx.compose.runtime.LaunchedEffect(s) {
+        if (warn != null) { lastWarn = warn; lastWarnAt = android.os.SystemClock.elapsedRealtime() }
+    }
+    // Re-evaluated at each 2 s sample, so the 30 s hold expires on its own.
+    val recent = lastWarn != null && android.os.SystemClock.elapsedRealtime() - lastWarnAt < 30_000
+    if (s == null || (!pinned && !recent)) return
+    val shown = warn ?: lastWarn.takeIf { recent }
+    val bg = if (shown != null) PrimeMinutesPalette.Warning.copy(alpha = 0.12f) else pal.InsetSurface
+    val cd = stringResource(R.string.hw_status_cd, s.cpuPct, s.ramPct, s.batteryPct)
+    androidx.compose.foundation.layout.Column(
+        modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(bg)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+            .semantics(mergeDescendants = true) {
+                liveRegion = if (shown != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
+            },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        shown?.let {
+            Text(
+                stringResource(when (it) {
+                    CaptureWarn.HEAT -> R.string.capture_warn_heat
+                    CaptureWarn.MEMORY -> R.string.capture_warn_memory
+                    CaptureWarn.BATTERY -> R.string.capture_warn_battery
+                    CaptureWarn.LOAD -> R.string.capture_warn_load
+                }),
+                style = MaterialTheme.typography.labelMedium, color = pal.WarningText,
+            )
+        }
+        Row(
+            Modifier.clearAndSetSemantics { contentDescription = cd },
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Gauge("CPU", s.cpuPct, s.cpuPct > 90)
+            Gauge("RAM", s.ramPct, s.ramPct > 90 || s.lowMemory)
+            if (s.batteryPct >= 0) Gauge(if (s.charging) "BAT +" else "BAT", s.batteryPct,
+                (s.tempC ?: 0) >= 42 || (!s.charging && s.batteryPct < 15))
         }
     }
 }

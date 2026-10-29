@@ -234,6 +234,14 @@
     <string name="capture_next_talk">下一场</string>
     <string name="capture_stop">停止并保存</string>
     <string name="capture_live_waiting">聆听中…</string>
+    <string name="capture_listening_hint">正在聆听，说话后逐字稿会出现在这里</string>
+    <string name="capture_jump_latest">最新</string>
+    <string name="menu_show_meters">显示性能信息</string>
+    <string name="a11y_rec_pill">录音中，已录 %1$d 分 %2$d 秒</string>
+    <string name="capture_warn_heat">手机温度偏高：录音不受影响，逐字稿可能变慢</string>
+    <string name="capture_warn_memory">内存不足：逐字稿跟不上时，请关闭其他 App</string>
+    <string name="capture_warn_battery">电量偏低：请接上充电器，以免录音中断</string>
+    <string name="capture_warn_load">处理器满载：逐字稿可能延迟</string>
     <string name="studio_return_capture">录音中…（返回）</string>
     <string name="action_process_now">立即处理</string>
     <string name="action_open">打开</string>

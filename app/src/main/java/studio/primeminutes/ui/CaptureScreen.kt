@@ -33,7 +33,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -75,12 +76,37 @@ import studio.primeminutes.ui.theme.EinkPolicy
 import studio.primeminutes.ui.theme.Motion
 import studio.primeminutes.ui.theme.TypeRole
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.text.font.FontFeature
+import androidx.compose.ui.text.style.TextAlign
+
 /**
- * Full-screen capture — the studio's recording booth. Fixed layout with two GIANT buttons
- * (⏭ Next talk / ⏹ Stop & save) sized for a conference table and an e-ink screen: nothing
- * shifts position with state, unlike the old top-bar icon strip. A collapsible live-transcript
- * panel fills the space between the name field and the buttons, auto-following the newest line;
- * back leaves the recording running (Studio shows a live banner to return here).
+ * Full-screen capture — the recording booth. A top bar (back · recording pill · ⋯), a scrolling
+ * waveform, the live transcript filling everything from 0:00 (top-aligned: it grows down from the
+ * top edge), the agent's line pinned above the controls, and a round stop button with a quiet
+ * "next talk" beside it. The CPU / RAM / battery meters stay out of sight unless something needs
+ * attention (heat, memory, battery, load) or the user pins them from the ⋯ menu.
+ * Back leaves the recording running (Studio shows a live banner to return here).
  */
 @Composable
 fun CaptureScreen(
@@ -105,66 +131,100 @@ fun CaptureScreen(
         keepOnView.keepScreenOn = isRecording
         onDispose { keepOnView.keepScreenOn = false }
     }
-    val conf = LocalConfiguration.current
+    val ctx = LocalContext.current
+    var metersPinned by remember { mutableStateOf(studio.primeminutes.core.config.ThemeStore.loadCaptureMeters(ctx)) }
     val landscape = studio.primeminutes.ui.components.rememberIsLandscape()
     Column(
         Modifier
             .fillMaxSize()
             .background(pal.Slate900Grad)
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = Spacing.lg),
+            .navigationBarsPadding(),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
-            }
-            if (isRecording) {
-                RecDot()
-                Spacer(Modifier.width(Spacing.sm))
-            }
-            Text(
-                stringResource(if (isRecording) R.string.status_recording else R.string.capture_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isRecording) PrimeMinutesPalette.Red else pal.Slate200,
-                fontWeight = FontWeight.Bold,
-                // Weighted so the gauges are measured first and the title wraps (not ellipsizes)
-                // into the remaining width at large font scales.
-                modifier = Modifier.weight(1f),
-            )
-            // The engines' load, trailing on the header row (page gutter, same as iOS) rather than
-            // floating centered under the timer; only while the mic and the engines run.
-            if (isRecording) {
-                HwStatusLine(Modifier.padding(end = Spacing.xs))
+        CaptureTopBar(isRecording, recSeconds, metersPinned, onBack) {
+            metersPinned = !metersPinned
+            studio.primeminutes.core.config.ThemeStore.saveCaptureMeters(ctx, metersPinned)
+        }
+        Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
+            if (isRecording) CaptureMeters(metersPinned, Modifier.padding(bottom = Spacing.sm))
+            if (landscape) {
+                Row(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        WaveformStrip(micLevel, isRecording)
+                        Spacer(Modifier.weight(1f))
+                        agent?.let { AgentLine(it, utterances) }
+                        CaptureButtons(isRecording, onNextTalk, onStop)
+                    }
+                    Spacer(Modifier.width(Spacing.xl))
+                    Column(Modifier.weight(1.2f).fillMaxHeight()) {
+                        TranscriptPanel(utterances, stable, notice)
+                    }
+                }
+                Spacer(Modifier.height(Spacing.sm))
+            } else {
+                WaveformStrip(micLevel, isRecording)
+                Spacer(Modifier.height(Spacing.sm))
+                TranscriptPanel(utterances, stable, notice)
+                agent?.let { AgentLine(it, utterances) }
+                CaptureButtons(isRecording, onNextTalk, onStop)
+                Spacer(Modifier.height(Spacing.sm))
             }
         }
-        Spacer(Modifier.height(Spacing.sm))
-        if (landscape) {
-            // Two columns: timer/name/buttons left, live transcript right — stacking them
-            // vertically left the transcript panel with zero height on phone landscape.
-            Row(Modifier.weight(1f)) {
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-                    Spacer(Modifier.height(Spacing.md))
-                    Spacer(Modifier.weight(1f))
-                    CaptureButtons(isRecording, onNextTalk, onStop, buttonHeight = 72.dp)
-                }
-                Spacer(Modifier.width(Spacing.xxl))
-                Column(Modifier.weight(1.2f).fillMaxHeight()) {
-                    LivePanel(utterances, stable, agent, notice)
-                }
-            }
-            Spacer(Modifier.height(Spacing.md))
-        } else {
-            TimerRow(recSeconds, micLevel, Modifier.align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(Spacing.md))
-            // Live transcript: a first-class panel filling everything between the timer and
-            // the buttons — the full running transcript, auto-following the newest line.
-            LivePanel(utterances, stable, agent, notice)
-            Spacer(Modifier.height(Spacing.lg))
-            CaptureButtons(isRecording, onNextTalk, onStop, buttonHeight = 72.dp)
-            Spacer(Modifier.height(Spacing.lg))
+    }
+}
+
+@Composable
+private fun CaptureTopBar(
+    isRecording: Boolean,
+    recSeconds: Int,
+    metersPinned: Boolean,
+    onBack: () -> Unit,
+    onToggleMeters: () -> Unit,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Spacing.xs)) {
+        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+            Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
         }
+        RecordingPill(isRecording, recSeconds, Modifier.align(Alignment.Center))
+        Box(Modifier.align(Alignment.CenterEnd)) {
+            var open by remember { mutableStateOf(false) }
+            IconButton(onClick = { open = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate200)
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.menu_show_meters)) },
+                    trailingIcon = { if (metersPinned) Icon(Icons.Filled.Check, contentDescription = null) },
+                    onClick = { open = false; onToggleMeters() },
+                )
+            }
+        }
+    }
+}
+
+/** Centred pill: pulsing red dot + elapsed time (tabular, no shift per tick). */
+@Composable
+private fun RecordingPill(isRecording: Boolean, recSeconds: Int, modifier: Modifier = Modifier) {
+    val pal = LocalPrimeMinutesPalette.current
+    val cd = stringResource(R.string.a11y_rec_pill, recSeconds / 60, recSeconds % 60)
+    Row(
+        modifier.clip(CircleShape).background(pal.InsetSurface)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .clearAndSetSemantics { if (isRecording) contentDescription = cd },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isRecording) {
+            RecDot()
+            Spacer(Modifier.width(Spacing.sm))
+        }
+        Text(
+            if (isRecording) studio.primeminutes.fmtSec(recSeconds) else stringResource(R.string.capture_title),
+            style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Medium,
+            color = pal.Slate200,
+            maxLines = 1,
+        )
     }
 }
 
@@ -180,117 +240,190 @@ private fun RecDot() {
     Box(Modifier.size(10.dp).alpha(a).clip(CircleShape).background(PrimeMinutesPalette.Red))
 }
 
+private const val WAVE_BARS = 64
+
+/**
+ * Scrolling level strip: one bar per 50 ms from [micLevel], newest on the right. The samples live in
+ * a ring buffer and only a frame counter is state, so the Canvas redraws without recomposing the
+ * screen. E-ink gets the static 5-step meter instead (no 20 Hz repaint).
+ */
 @Composable
-private fun TimerRow(recSeconds: Int, micLevel: Float, modifier: Modifier = Modifier) {
+private fun WaveformStrip(micLevel: Float, active: Boolean) {
     val pal = LocalPrimeMinutesPalette.current
-    // Compact header: timer + mic bars on one line — still readable from across a table, but
-    // the vertical space goes to the live transcript instead of empty padding.
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
-        Text(
-            studio.primeminutes.fmtSec(recSeconds),
-            style = TypeRole.timer(),   // tabular: no layout shift per tick
-            color = pal.Slate200,
-        )
-        Spacer(Modifier.width(Spacing.xl))
-        // 2x: at 1x the bars are a speck beside 64sp digits — scale to visually balance them.
-        MicLevelBars(micLevel, pal.Sky, scale = 2f)
+    val mod = Modifier.fillMaxWidth().height(40.dp).semantics { invisibleToUser() }
+    if (!EinkPolicy.motionAllowed(pal)) {
+        Box(mod, contentAlignment = Alignment.Center) { MicLevelBars(micLevel, pal.Sky, scale = 2f) }
+        return
+    }
+    val level = androidx.compose.runtime.rememberUpdatedState(micLevel)
+    val ring = remember { FloatArray(WAVE_BARS) }
+    var head by remember { mutableStateOf(0) }   // total samples written; drives the redraw
+    LaunchedEffect(active) {
+        while (active) {
+            ring[head % WAVE_BARS] = level.value.coerceIn(0f, 1f)
+            head++
+            kotlinx.coroutines.delay(50)
+        }
+    }
+    val color = pal.Sky
+    Canvas(mod) {
+        val n = head
+        val slot = size.width / WAVE_BARS
+        val barW = slot * 0.55f
+        val minH = 4.dp.toPx()
+        for (k in 0 until WAVE_BARS) {
+            // k = 0 is the oldest visible bar (left edge).
+            val idx = n - WAVE_BARS + k
+            val v = if (idx < 0) 0f else ring[idx % WAVE_BARS]
+            val h = (minH + v * (size.height - minH)).coerceAtMost(size.height)
+            val alpha = if (k < WAVE_BARS * 35 / 100) 0.35f else 1f
+            drawRoundRect(
+                color.copy(alpha = alpha),
+                topLeft = Offset(k * slot + (slot - barW) / 2, (size.height - h) / 2),
+                size = Size(barW, h),
+                cornerRadius = CornerRadius(barW / 2),
+            )
+        }
     }
 }
 
-/** The transcript panel body — takes all remaining column height. Declared as a ColumnScope
- *  extension for the weight modifier. */
+/** The agent's status, pinned above the controls (the existing strip, moved under the transcript). */
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.LivePanel(
+private fun AgentLine(agent: AgentUiState, utterances: List<TranscriptEvent.Utterance>) {
+    // The live notes name speakers as the booth does (S2 → 語者 2 / 说话人 2 / Speaker 2).
+    val ctx = LocalContext.current
+    val known = utterances.mapNotNull { u -> u.speaker }.toSet().ifEmpty { null }
+    CompositionLocalProvider(LocalSpeakerRefs provides { t ->
+        studio.primeminutes.core.reader.SpeakerRefs.resolve(t, { id -> ctx.getString(R.string.speaker_n, id + 1) }, known)
+    }) {
+        val pal = LocalPrimeMinutesPalette.current
+        AgentStrip(agent, if (EinkPolicy.motionAllowed(pal)) Modifier.animateContentSize() else Modifier)
+    }
+}
+
+/** The live transcript, on a surface that fills all remaining height from 0:00. Lines start at the
+ *  TOP edge and grow downward; once the list overflows it follows the newest words unless the user
+ *  scrolled up (then a "Latest" chip brings them back). */
+@Composable
+private fun ColumnScope.TranscriptPanel(
     utterances: List<TranscriptEvent.Utterance>,
     stable: Int,
-    agent: AgentUiState?,
-    notice: String? = null,
+    notice: String?,
 ) {
     val pal = LocalPrimeMinutesPalette.current
-    // The summarizing agent works alongside ASR + diarization: its status stays pinned on top.
-    agent?.let {
-        // The live notes name speakers as the booth does (S2 → 語者 2 / 说话人 2 / Speaker 2).
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        val known = utterances.mapNotNull { u -> u.speaker }.toSet().ifEmpty { null }
-        CompositionLocalProvider(LocalSpeakerRefs provides { t ->
-            studio.primeminutes.core.reader.SpeakerRefs.resolve(t, { id -> ctx.getString(R.string.speaker_n, id + 1) }, known)
-        }) { AgentStrip(it) }
-    }
-    // A model still downloading (e.g. the 3 GB summary model on a first run, while the meeting is
-    // already being transcribed): say so on the booth, not only in the notification shade.
-    if (utterances.isNotEmpty()) notice?.takeIf { it.isNotBlank() }?.let {
-        // Polite live region: TalkBack users hear the download state change without hunting for it.
-        Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(vertical = Spacing.xs).semantics { liveRegion = LiveRegionMode.Polite })
-    }
-    if (utterances.isEmpty()) {
-        // Centered waiting state: a corner-anchored one-liner made the big empty panel
-        // look unfinished — center it with a quiet mic glyph so the space reads intentional.
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Filled.Mic, contentDescription = null,
-                    tint = pal.Sky.copy(alpha = 0.5f), modifier = Modifier.size(44.dp),
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(stringResource(R.string.capture_live_waiting), color = pal.Slate400, style = MaterialTheme.typography.titleMedium)
+    Surface(
+        color = pal.PanelSurface,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
+        modifier = Modifier.fillMaxWidth().weight(1f),
+    ) {
+        if (utterances.isEmpty()) {
+            Column(Modifier.fillMaxSize().padding(Spacing.lg), verticalArrangement = Arrangement.Top) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (EinkPolicy.motionAllowed(pal)) {
+                        CircularProgressIndicator(Modifier.size(14.dp), color = pal.Slate400, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(Spacing.sm))
+                    }
+                    Text(stringResource(R.string.capture_listening_hint), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium)
+                }
                 notice?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(6.dp))
                     Text(it, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
+        } else {
+            TranscriptList(utterances, stable, notice)
         }
-    } else {
-        val listState = rememberLazyListState()
-        // Follow the newest words. The last line grows in place (a line closes only on a speaker change
-        // or after ~10 s), so key on its length too. Instant jump, not animate: e-ink hates animated
-        // scrolls. The large offset pins the BOTTOM of a tall last line into view.
-        LaunchedEffect(utterances.size, utterances.lastOrNull()?.text?.length) {
-            listState.scrollToItem(utterances.lastIndex, scrollOffset = Int.MAX_VALUE / 2)
-        }
+    }
+}
+
+@Composable
+private fun TranscriptList(utterances: List<TranscriptEvent.Utterance>, stable: Int, notice: String?) {
+    val pal = LocalPrimeMinutesPalette.current
+    val listState = rememberLazyListState()
+    // Following unless the user scrolled away from the end.
+    var follow by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress to listState.canScrollForward }
+            .collect { (scrolling, more) -> if (scrolling) follow = !more else if (!more) follow = true }
+    }
+    // Follow the newest words. The last line grows in place, so key on its length too. Instant jump,
+    // not animate: e-ink hates animated scrolls. While everything fits, this is a no-op and the list
+    // stays top-aligned.
+    LaunchedEffect(utterances.size, utterances.lastOrNull()?.text?.length, follow) {
+        if (follow) listState.scrollToItem(utterances.lastIndex + 1, scrollOffset = Int.MAX_VALUE / 2)
+    }
+    Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f)
+            verticalArrangement = Arrangement.Top,
+            modifier = Modifier.fillMaxSize()
                 .then(if (pal.isEink) Modifier else Modifier.fadeTop(14.dp))
-                .padding(horizontal = Spacing.xs, vertical = Spacing.sm),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         ) {
-            items(utterances.size) { i ->
-                val u = utterances[i]
-                // Text is live; a speaker tag appears only once the line is settled (i < stable, i.e.
-                // the configured speaker delay has passed) — never a guess that may still flip. Tag
-                // only where the speaker changes.
-                val settled = i < stable
-                val showTag = settled && u.speaker != null &&
-                    (i == 0 || utterances[i - 1].speaker != u.speaker)
-                // Settled lines carry their speaker's colour rail (like the session transcript);
-                // the provisional tail has none yet, and its text is a shade lighter.
-                val rail = if (settled && u.speaker != null) Color(speakerColorOn(u.speaker, pal.isDark)) else pal.Hairline
-                Row(Modifier.padding(top = if (showTag && i > 0) 10.dp else 2.dp, bottom = 2.dp).height(IntrinsicSize.Min)) {
-                    Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(rail))
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        if (showTag) {
-                            val color = Color(speakerColorOn(u.speaker, pal.isDark))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    stringResource(R.string.speaker_n, u.speaker + 1),
-                                    color = color,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    studio.primeminutes.fmtSec(u.startSec.toInt()),
-                                    color = pal.Slate400, style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
-                        }
-                        Text(u.text, color = if (settled) pal.Slate200 else pal.Slate400, style = MaterialTheme.typography.bodyMedium)
-                    }
+            notice?.takeIf { it.isNotBlank() }?.let { n ->
+                item {
+                    Text(n, color = pal.Slate400, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(vertical = Spacing.xs).semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
+            items(utterances.size) { i -> UtteranceRow(utterances, i, stable, last = i == utterances.lastIndex) }
+            item { Spacer(Modifier.height(1.dp)) }
         }
+        if (!follow) {
+            Surface(
+                onClick = { follow = true },
+                shape = CircleShape, color = pal.Sky, contentColor = Color.White,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.sm),
+            ) {
+                Text(stringResource(R.string.capture_jump_latest), style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UtteranceRow(utterances: List<TranscriptEvent.Utterance>, i: Int, stable: Int, last: Boolean) {
+    val pal = LocalPrimeMinutesPalette.current
+    val u = utterances[i]
+    // Text is live; a speaker tag appears only once the line is settled (i < stable) — never a guess
+    // that may still flip. Tag only where the speaker changes.
+    val settled = i < stable
+    val showTag = settled && u.speaker != null && (i == 0 || utterances[i - 1].speaker != u.speaker)
+    Column(Modifier.fillMaxWidth().padding(top = if (showTag && i > 0) 12.dp else 2.dp, bottom = 2.dp)) {
+        if (showTag) {
+            val color = Color(speakerColorOn(u.speaker, pal.isDark))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
+                Text(
+                    stringResource(R.string.speaker_n, u.speaker + 1),
+                    color = color,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.15f))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    studio.primeminutes.fmtSec(u.startSec.toInt()),
+                    color = pal.Slate400,
+                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                )
+            }
+        }
+        val caret = last && !settled
+        val caretOn = if (caret && EinkPolicy.motionAllowed(pal)) {
+            val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "caret")
+            t.animateFloat(1f, 0f, androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(500, easing = { f -> if (f < 0.5f) 0f else 1f }),
+                androidx.compose.animation.core.RepeatMode.Reverse), label = "caret-a").value
+        } else 1f
+        val text = if (!caret) androidx.compose.ui.text.AnnotatedString(u.text) else
+            androidx.compose.ui.text.buildAnnotatedString {
+                append(u.text)
+                withStyle(androidx.compose.ui.text.SpanStyle(color = pal.Sky.copy(alpha = caretOn))) { append(" \u258F") }
+            }
+        Text(text, color = if (settled) pal.Slate200 else pal.Slate400, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -299,43 +432,49 @@ private fun CaptureButtons(
     isRecording: Boolean,
     onNextTalk: () -> Unit,
     onStop: () -> Unit,
-    buttonHeight: androidx.compose.ui.unit.Dp,
 ) {
     val pal = LocalPrimeMinutesPalette.current
-    // Both buttons end a capture, which was a silent event: felt parity with iOS (record switch
-    // `toggle`, saved-meeting `success`).
+    // Both buttons end a capture: felt parity with iOS (record switch `toggle`, saved meeting `success`).
     val haptics = LocalHapticFeedback.current
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-        // ⏭ Next talk — the batch-recording workhorse: auto-save this capture, defer its
-        // processing, and roll straight into the next session.
-        Button(
-            onClick = { haptics.toggleOn(); onNextTalk() },
-            enabled = isRecording,
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = pal.Sky),
-            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
-            // Minimal padding: on narrow phones the default 24dp sides forced CJK labels to wrap.
-            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_next_talk), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    Row(
+        Modifier.fillMaxWidth().padding(top = Spacing.sm),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // ⏭ Next talk — quiet: auto-save this capture, defer its processing, roll into the next one.
+        Box(Modifier.weight(1f).height(72.dp), contentAlignment = Alignment.Center) {
+            OutlinedButton(
+                onClick = { haptics.toggleOn(); onNextTalk() },
+                enabled = isRecording,
+                border = androidx.compose.foundation.BorderStroke(1.dp, pal.Hairline),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Icon(Icons.Filled.SkipNext, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.capture_next_talk), color = pal.Sky, maxLines = 2, textAlign = TextAlign.Center)
             }
         }
         // ⏹ Stop & save — always safe: the capture is in the library before processing starts.
-        Button(
-            onClick = { haptics.toggleOff(); onStop() },
-            enabled = isRecording,
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimeMinutesPalette.Red),
-            modifier = Modifier.weight(1f).heightIn(min = buttonHeight),
-            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.capture_stop), fontWeight = FontWeight.Bold, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        val stopCd = stringResource(R.string.capture_stop)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                onClick = { haptics.toggleOff(); onStop() },
+                enabled = isRecording,
+                shape = CircleShape,
+                color = PrimeMinutesPalette.Red,
+                shadowElevation = 3.dp,
+                modifier = Modifier.size(72.dp).semantics { contentDescription = stopCd },
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(Color.White))
+                }
             }
+            Spacer(Modifier.height(4.dp))
+            Text(stopCd, style = MaterialTheme.typography.labelMedium, color = pal.Slate200, maxLines = 2,
+                textAlign = TextAlign.Center, modifier = Modifier.clearAndSetSemantics {})
         }
+        // Right slot left empty for balance.
+        Spacer(Modifier.weight(1f))
     }
 }
 

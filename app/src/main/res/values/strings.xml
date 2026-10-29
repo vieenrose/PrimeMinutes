@@ -242,6 +242,14 @@
     <string name="capture_next_talk">Next talk</string>
     <string name="capture_stop">Stop &amp; save</string>
     <string name="capture_live_waiting">Listening…</string>
+    <string name="capture_listening_hint">Listening — the transcript will appear here once someone speaks</string>
+    <string name="capture_jump_latest">Latest</string>
+    <string name="menu_show_meters">Show performance info</string>
+    <string name="a11y_rec_pill">Recording, %1$d min %2$d s</string>
+    <string name="capture_warn_heat">The phone is running hot: recording continues, transcription may slow down</string>
+    <string name="capture_warn_memory">Memory is running low: close other apps if transcription falls behind</string>
+    <string name="capture_warn_battery">Battery is low: plug in the charger to keep recording</string>
+    <string name="capture_warn_load">The processor is at full load: transcription may lag behind</string>
     <string name="studio_return_capture">Recording… (return)</string>
     <string name="action_process_now">Process now</string>
     <string name="action_open">Open</string>

@@ -21,6 +21,10 @@ data class HwSample(
     val batteryPct: Int,
     val charging: Boolean,
     val tempC: Int?,
+    /** The system says memory is low (ActivityManager.MemoryInfo.lowMemory). */
+    val lowMemory: Boolean = false,
+    /** PowerManager thermal status is SEVERE or worse (API 29+; false below). */
+    val thermalSevere: Boolean = false,
 )
 
 /**
@@ -53,6 +57,10 @@ fun hwSamples(context: Context, periodMs: Long = 2000): Flow<HwSample> = flow {
             batteryPct = if (level >= 0 && scale > 0) level * 100 / scale else -1,
             charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL,
             tempC = if (temp == Int.MIN_VALUE) null else temp / 10,
+            lowMemory = mi.lowMemory,
+            thermalSevere = android.os.Build.VERSION.SDK_INT >= 29 &&
+                (app.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).currentThermalStatus >=
+                android.os.PowerManager.THERMAL_STATUS_SEVERE,
         ))
     }
 }.flowOn(Dispatchers.IO)
