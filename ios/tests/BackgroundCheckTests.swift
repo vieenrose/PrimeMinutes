@@ -17,7 +17,7 @@ import Foundation
         check(BackgroundCheckLogic.shouldSchedule(enabled: true, subs: []), false, "no subs: no schedule")
         check(BackgroundCheckLogic.shouldSchedule(enabled: true, subs: [b]), false, "only paused: no schedule")
         check(BackgroundCheckLogic.shouldSchedule(enabled: true, subs: [a, b]), true, "active sub: schedule")
-        check(BackgroundCheckLogic.interval, 6 * 3600, "about 6 h")
+        check(BackgroundCheckLogic.interval, 24 * 3600, "daily, like Android")
         check(BackgroundCheckLogic.budget < 30, true, "inside the refresh budget")
         check(BackgroundCheckLogic.toCheck([a, b]), [a.id], "paused skipped")
 

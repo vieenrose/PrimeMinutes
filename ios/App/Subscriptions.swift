@@ -324,7 +324,7 @@ enum FeedFetcher {
 /// schedule it, and which episodes a run newly found (one notification per channel). Host-tested.
 enum BackgroundCheckLogic {
     /// earliestBeginDate of the refresh request: iOS decides the real time, often much later.
-    static let interval: TimeInterval = 6 * 3600
+    static let interval: TimeInterval = 24 * 3600   // same daily cadence as Android
     /// The whole run (all subscriptions, one GET each, serialized) stays inside the ~30 s refresh budget.
     static let budget: TimeInterval = 25
 
