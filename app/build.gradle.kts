@@ -19,8 +19,8 @@ android {
         applicationId = "studio.primeminutes"
         minSdk = 26          // MediaCodec PCM-float output + reasonable native perf
         targetSdk = 35
-        versionCode = 203
-        versionName = "0.56.1"
+        versionCode = 204
+        versionName = "0.56.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
