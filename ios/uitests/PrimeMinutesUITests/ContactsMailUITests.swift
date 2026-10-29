@@ -266,3 +266,54 @@ final class ContactsMailUITests: XCTestCase {
         shot("consent-2-after-16s", tree: true)
     }
 }
+
+/// "This is me…" (People > Recognise voices) with real taps: the sheet must still be up seconds after the tap
+/// (it used to flash and close). Never records: the sheet is cancelled. If recognition was off it is turned on for
+/// the check and off again afterwards (switching off keeps no data, and nothing is enrolled).
+final class MeEnrolUITests: XCTestCase {
+    let app = XCUIApplication(bundleIdentifier: "tw.com.pesi.primeminutes")
+    var lang: String { ProcessInfo.processInfo.environment["PM_UILANG"] ?? "en" }
+    func shot(_ name: String) { let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
+    func first(_ labels: [String], _ timeout: TimeInterval = 10) -> XCUIElement? {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end {
+            for l in labels { let b = app.buttons[l]; if b.exists { return b }; let s = app.staticTexts[l]; if s.exists { return s } }
+            usleep(300_000)
+        }
+        return nil
+    }
+
+    func testMeSheetStays() {
+        app.terminate()
+        app.launchEnvironment = ["VOX_DEV": "1", "VOX_UILANG": lang]
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+        sleep(3)
+        guard let gear = first(["Settings", "設定", "设置"]) else { return XCTFail("settings button") }
+        gear.tap(); sleep(2)
+        let people = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'People' OR label BEGINSWITH '說話者名錄' OR label BEGINSWITH '说话人名录'")).firstMatch
+        for _ in 0..<6 where !people.isHittable { app.swipeUp(); sleep(1) }
+        people.tap(); sleep(2)
+        shot("01-people")
+        var turnedOn = false
+        let me = ["This is me…", "Record my voice again", "這是我…", "重新錄製我的聲音", "这是我…", "重新录制我的声音"]
+        if first(me, 3) == nil {
+            let sw = app.switches.firstMatch
+            XCTAssertTrue(sw.waitForExistence(timeout: 5)); sw.tap(); sleep(1)
+            first(["Turn on", "開啟", "开启"])?.tap(); turnedOn = true
+        }
+        guard let b = first(me, 60) else { return XCTFail("This is me button") }
+        b.tap()
+        usleep(300_000); shot("02-tap+0.3s")
+        sleep(1); shot("03-tap+1.3s")
+        sleep(4); shot("04-tap+5.3s")
+        let title = ["Teach the app your voice", "讓 App 認得你的聲音", "让 App 认得你的声音", "This is me…", "這是我…", "这是我…"]
+        let start = app.buttons["voice-me-start"].exists || app.buttons["Start"].exists || app.buttons["開始"].exists || app.buttons["开始"].exists
+        XCTAssertTrue(start, "the sheet is still up 5 s after the tap")
+        XCTAssertNotNil(first(title, 1), "sheet title visible")
+        sleep(5); shot("05-tap+10s")
+        (app.buttons["voice-me-cancel"].exists ? app.buttons["voice-me-cancel"] : first(["Cancel", "取消"], 2))?.tap()
+        sleep(1); shot("06-cancelled")
+        if turnedOn { app.switches.firstMatch.tap(); sleep(1) }
+    }
+}
