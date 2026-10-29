@@ -36,7 +36,7 @@
 - **搜尋與提問**：依語意搜尋整個會議庫；向會議提問，回答附出處。
 - **說話者名錄**：名字跨會議共用；「辨識聲音」可在之後的會議建議名字（選用）。
 - **編輯**：修改文字、改派或合併語者、修正換人位置，可復原。
-- **匯入與匯出**：匯入音訊檔、Podcast、PeerTube；匯出 PDF、Markdown、純文字、字幕，或寄給與會者。
+- **匯入與匯出**：匯入音訊檔、Podcast（單集或訂閱節目）；匯出 PDF、Markdown、純文字、字幕，或寄給與會者。
 
 | 錄音 | AI 筆記 | 摘要 | 逐字稿 |
 |:---:|:---:|:---:|:---:|
@@ -54,9 +54,15 @@
 ## 隱私
 
 - 音訊、逐字稿、筆記與聲音資料只存在你的手機上，所有模型都在手機 CPU 上執行。
-- 只有下載模型、Podcast 與 PeerTube 會連網。
+- 只有下載模型與 Podcast 會連網。
 - 「辨識聲音」預設關閉，聲音資料不會匯出或備份，可隨時刪除。為他人命名前請先徵得同意。
 - 寄給與會者只是開啟你的郵件 App，App 本身不寄信。
+
+## 使用責任
+
+- 你匯入、轉錄或分享的內容由你自己負責。Podcast 等線上內容僅供個人使用，請先確認你有權下載並轉錄，並遵守發布者的條款。
+- 來自線上來源的場次，「分享會議」預設只分享逐字稿與摘要，不附音訊。
+- 若你認為本專案的內容侵害你的權利，或要求移除，請到 [GitHub Issues](https://github.com/vieenrose/PrimeMinutes/issues) 聯絡我們。
 
 ## 需求與模型
 
@@ -105,3 +111,13 @@ App 以 [GPL-3.0-or-later](https://github.com/vieenrose/PrimeMinutes/blob/androi
 | 示範會議音訊（VibeVoice-1.5B 合成） | MIT | [docs/demo（android 分支）](https://github.com/vieenrose/PrimeMinutes/tree/android/docs/demo) |
 
 推論引擎：[LiteRT](https://github.com/google-ai-edge/LiteRT)（[自訂 LiteRT-LM](https://github.com/vieenrose/LiteRT-LM/tree/mobile-fused-attention)）。評測資料集（AISHELL-4、AMI）見 [Android 版 README](https://github.com/vieenrose/PrimeMinutes/blob/android/README.md#授權與致謝)。
+
+App 內含的第三方元件：
+
+| 元件 | 授權 |
+|---|---|
+| nemo-x-asr-diarizer | Apache-2.0 |
+| LiteRT、LiteRT-LM、SentencePiece | Apache-2.0 |
+| OpenCC 詞典 | Apache-2.0 |
+
+完整清單見 [NOTICE](NOTICE)，App 內在「設定 › 關於 › 開放原始碼授權」。

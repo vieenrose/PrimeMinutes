@@ -115,7 +115,6 @@
 "storage_delete_body" = "%@（%@）下次使用时会重新下载。";
 "settings_about" = "关于";
 "about_license" = "录音与文字只留在这台手机";
-"about_components" = "授权组件";
 "settings_reader_model" = "AI 笔记模型";
 "settings_inference" = "推理";
 "add_audio" = "添加音频";
@@ -191,13 +190,6 @@
 "agent_first_soon" = "第一次阅读不到 1 分钟后开始";
 "agent_first_pending" = "进度条满时开始第一次阅读";
 "agent_first_short" = "提早停止录音的话，会在停止后写笔记";
-"lic_nemo" = "nemo-x-asr-diarizer（流式语音识别与说话人分离）";
-"lic_crispasr" = "CrispASR（X-ASR 运行环境）";
-"lic_audiocpp" = "audio.cpp（Nemotron-3 说话人分离运行环境）";
-"lic_ggml" = "LiteRT · SentencePiece（AI 笔记）";
-"lic_xasr" = "X-ASR 中英模型";
-"lic_nemotron" = "Nemotron-3 说话人分离模型";
-"lic_opencc" = "OpenCC（繁体 / 简体）";
 "cd_status_new" = "新的";
 "cd_status_processing" = "处理中";
 "cd_status_done" = "已完成";
@@ -613,12 +605,6 @@
 "settings_asr_latency_balanced" = "平衡";
 "settings_asr_latency_accurate" = "最准确";
 "settings_asr_latency_hint" = "说话后文字出现所需的时间。延迟越长，文字越准确（实时显示与保存的转写文本均是）。选择新的延迟会在后台下载对应的语音模型（约 155 MB），下载完成前仍使用当前的模型。";
-"source_peertube" = "PeerTube";
-"source_peertube_desc" = "粘贴视频链接";
-"peertube_bad_link" = "不是 PeerTube 视频链接";
-"peertube_live" = "无法导入直播";
-"peertube_no_file" = "此视频没有可下载的文件";
-"peertube_add" = "添加";
 "transcript_empty" = "尚无转录文字——处理完成后会显示在这里。";
 "transcript_empty_title" = "还没有转写文本";
 "cd_volume" = "音量";
@@ -630,7 +616,6 @@
 "podcast_no_results" = "无结果";
 "podcast_no_results_hint" = "没有符合“%@”的播客，请检查拼写或换个关键词。";
 "podcast_too_large" = "文件太大，无法下载（超过 500 MB）。";
-"peertube_http" = "PeerTube 服务器无法提供这个视频（HTTP %d）。";
 
 /* People == Contacts */
 "contacts_denied" = "Prime Minutes 无法访问你的通讯录，因此不能添加人物：说话人只能取普通名称（没有电子邮件，也不会识别声音）。请到“设置”允许访问通讯录，才能为人物命名。";
@@ -695,3 +680,13 @@
 "confirm_resummarize_body" = "你改过摘要或待办事项。重新摘要会写出新的内容替换它们（完成后仍可立即撤销）。";
 "confirm_retranscribe_title" = "要舍弃你修改的逐字稿吗？";
 "confirm_retranscribe_body" = "你修正过部分段落的文字。重新转录会依录音重写整份逐字稿，这些修正将会丢失。";
+
+/* Online-import notice, unsupported video links, licenses */
+"import_video_unsupported" = "已不再支持导入 PeerTube";
+"link_unsupported_title" = "不支持视频链接";
+"link_unsupported_body" = "Prime Minutes 已不再导入 YouTube 或 PeerTube 链接。若要转写你有权使用的视频，请先把它的音频保存为文件，再分享到这里或用本应用打开。";
+"online_notice_title" = "导入前请留意";
+"online_notice_body" = "在线导入仅供个人使用。你须自行确认有权下载并转写这些内容，并遵守发布者的使用条款。";
+"online_notice_ok" = "我了解";
+"about_licenses" = "开源许可";
+"about_licenses_desc" = "应用内含的组件及其许可";

@@ -132,9 +132,7 @@ struct SettingsView: View {
                 Section(L("settings_about")) {
                     HStack { Text("Prime Minutes"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "").foregroundStyle(.secondary) }
                     Text(L("about_license"))
-                    DisclosureGroup(L("about_components")) {
-                        ForEach(["lic_nemo", "lic_crispasr", "lic_audiocpp", "lic_ggml", "lic_xasr", "lic_nemotron", "lic_opencc"], id: \.self) { Text(L($0)).font(.footnote) }
-                    }
+                    NavigationLink { LicensesView() } label: { VStack(alignment: .leading) { Text(L("about_licenses")); Vox.micro(L("about_licenses_desc")) } }
                 }
             }
             // DEV (guide shot 03b): VOX_SETSCROLL scrolls to the AI notes model picker.

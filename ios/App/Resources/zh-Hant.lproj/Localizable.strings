@@ -115,7 +115,6 @@
 "storage_delete_body" = "%@（%@）下次使用時會重新下載。";
 "settings_about" = "關於";
 "about_license" = "錄音與文字只留在這支手機";
-"about_components" = "授權元件";
 "settings_reader_model" = "AI 筆記模型";
 "settings_inference" = "推論";
 "add_audio" = "加入音訊";
@@ -191,13 +190,6 @@
 "agent_first_soon" = "第一次閱讀不到 1 分鐘後開始";
 "agent_first_pending" = "進度條滿時開始第一次閱讀";
 "agent_first_short" = "提早停止錄音的話，會在停止後寫筆記";
-"lic_nemo" = "nemo-x-asr-diarizer（串流語音辨識與語者分離）";
-"lic_crispasr" = "CrispASR（X-ASR 執行環境）";
-"lic_audiocpp" = "audio.cpp（Nemotron-3 語者分離執行環境）";
-"lic_ggml" = "LiteRT · SentencePiece（AI 筆記）";
-"lic_xasr" = "X-ASR 中英模型";
-"lic_nemotron" = "Nemotron-3 語者分離模型";
-"lic_opencc" = "OpenCC（繁體 / 簡體）";
 "cd_status_new" = "新的";
 "cd_status_processing" = "處理中";
 "cd_status_done" = "已完成";
@@ -613,12 +605,6 @@
 "settings_asr_latency_balanced" = "平衡";
 "settings_asr_latency_accurate" = "最準確";
 "settings_asr_latency_hint" = "說話後文字出現所需的時間。延遲越長，文字越準確（即時顯示與儲存的逐字稿皆是）。選擇新的延遲會在背景下載對應的語音模型（約 155 MB），下載完成前仍使用目前的模型。";
-"source_peertube" = "PeerTube";
-"source_peertube_desc" = "貼上影片連結";
-"peertube_bad_link" = "不是 PeerTube 影片連結";
-"peertube_live" = "無法匯入直播";
-"peertube_no_file" = "此影片沒有可下載的檔案";
-"peertube_add" = "加入";
 "transcript_empty" = "尚無轉錄文字——處理完成後會顯示在這裡。";
 "transcript_empty_title" = "還沒有逐字稿";
 "cd_volume" = "音量";
@@ -630,7 +616,6 @@
 "podcast_no_results" = "找不到結果";
 "podcast_no_results_hint" = "沒有符合「%@」的 Podcast，請檢查拼字或換個關鍵字。";
 "podcast_too_large" = "檔案太大，無法下載（超過 500 MB）。";
-"peertube_http" = "PeerTube 伺服器無法提供這部影片（HTTP %d）。";
 
 /* People == Contacts */
 "contacts_denied" = "Prime Minutes 無法存取你的聯絡人，因此不能新增人物：說話者只能取一般名稱（沒有電子郵件，也不會辨識聲音）。請到「設定」允許存取聯絡人，才能為人物命名。";
@@ -695,3 +680,13 @@
 "confirm_resummarize_body" = "你改過摘要或行動項目。重新摘要會寫出新的內容取代它們（完成後仍可立即復原）。";
 "confirm_retranscribe_title" = "要捨棄你修改的逐字稿嗎？";
 "confirm_retranscribe_body" = "你修正過部分段落的文字。重新轉錄會依錄音重寫整份逐字稿，這些修正將會遺失。";
+
+/* Online-import notice, unsupported video links, licenses */
+"import_video_unsupported" = "已不再支援匯入 PeerTube";
+"link_unsupported_title" = "不支援影片連結";
+"link_unsupported_body" = "Prime Minutes 已不再匯入 YouTube 或 PeerTube 連結。若要轉錄你有權使用的影片，請先把它的音訊存成檔案，再分享到這裡或用本 App 開啟。";
+"online_notice_title" = "匯入前請留意";
+"online_notice_body" = "線上匯入僅供個人使用。你須自行確認有權下載並轉錄這些內容，並遵守發布者的使用條款。";
+"online_notice_ok" = "我了解";
+"about_licenses" = "開放原始碼授權";
+"about_licenses_desc" = "App 內含的元件及其授權";
