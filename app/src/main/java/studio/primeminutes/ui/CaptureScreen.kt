@@ -97,8 +97,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.invisibleToUser
-import androidx.compose.ui.text.font.FontFeature
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 
 /**
  * Full-screen capture — the recording booth. A top bar (back · recording pill · ⋯), a scrolling
