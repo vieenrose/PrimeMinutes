@@ -442,9 +442,10 @@ struct SessionView: View {
         if mode == "apply" { merge(ids[0], ids[1]); try? await Task.sleep(nanoseconds: 5_000_000_000); if let u = speakerUndo { undoSpeakerEdit(u) } }
         else { merging = (ids[0], ids[1]) }
     }
-    /// The reading model changed under this summary (settings): offer a re-summarize.
+    /// The reading model changed under this summary (settings): offer a re-summarize. Not for a received meeting's
+    /// own summary: that is the sender's model, not a stale one (UserEdits.summaryStale).
     private func checkSummaryStale() {
-        if let r = s.reader, r != Prefs.readerId, !s.summary.isEmpty, s.audio != nil { summaryStale = true }
+        if UserEdits.summaryStale(reader: s.reader, current: Prefs.readerId, received: s.receivedReader, hasSummary: !s.summary.isEmpty, hasAudio: s.audio != nil) { summaryStale = true }
     }
     /// The rename alert's Done: the user's title (a blank one restores the automatic title).
     private func commitTitle() { let before = (s.title, s.titleUserSet); s.rename(draft); if (s.title, s.titleUserSet) != before { save(s) } }

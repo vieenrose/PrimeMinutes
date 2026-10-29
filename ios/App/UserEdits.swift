@@ -11,4 +11,11 @@ enum UserEdits {
     static func changed(_ draft: String, from old: String?) -> Bool {
         draft.trimmingCharacters(in: .whitespacesAndNewlines) != (old ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    /// Opening a meeting: offer "re-summarize" when the reading model in Settings is not the one that wrote the
+    /// summary. A meeting received as a shared file keeps the sender's model (`received`, set at restore): that
+    /// summary is the sender's, not a stale one of ours, so it never asks while the summary is still theirs.
+    static func summaryStale(reader: String?, current: String, received: String?, hasSummary: Bool, hasAudio: Bool) -> Bool {
+        guard let reader, hasSummary, hasAudio else { return false }
+        return reader != current && reader != received
+    }
 }

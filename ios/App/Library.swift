@@ -43,6 +43,9 @@ struct Session: Identifiable, Codable, Hashable {
     var summaryUserSet: Bool? = nil
     /// The user edited a line's text (UserEdits): a re-transcribe asks before dropping it. nil = never.
     var linesUserEdited: Bool? = nil
+    /// Restored from a shared file (.pmin, AirDrop, Files): the reader id the sender's summary came with. While the
+    /// summary is still that one, opening the meeting does not offer a re-summarize (UserEdits.summaryStale). nil = ours.
+    var receivedReader: String? = nil
     /// The user's rename: a blank draft gives the title back to the automatic one.
     mutating func rename(_ draft: String) {
         let r = TitleEdit.apply(draft, auto: lines.first.map { String($0.text.prefix(20)) } ?? L("meeting"))
