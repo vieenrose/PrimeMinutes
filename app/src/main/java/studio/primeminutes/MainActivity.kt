@@ -2219,7 +2219,9 @@ private fun TranscribeScreen(
         )
     }
     studio.primeminutes.ui.VoiceOutlierPrompt()
-    if (peopleOpen) {
+    // People, Ask and the channel page read in the Settings script (display only; nothing stored changes).
+    val screenScript = studio.primeminutes.ui.rememberScreenScript(s.config.summaryScript)
+    if (peopleOpen) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         studio.primeminutes.ui.PeopleScreen(
             onClose = { peopleOpen = false; peopleOpenId = null },
             initialPersonId = peopleOpenId,
@@ -2245,7 +2247,7 @@ private fun TranscribeScreen(
     LaunchedEffect(dlFailure) {
         dlFailure?.let { vm.notify(context.getString(R.string.dl_failed_reason, it)); studio.primeminutes.online.ImportDownloads.consumeFailure() }
     }
-    if (s.showPodcastSheet) {
+    if (s.showPodcastSheet) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         PodcastSheet(onDismiss = { vm.showPodcastSheet(false) }, onOpenShow = { subsOpenId = it; subsOpen = true })
     }
     boundarySeam?.let { seamIdx ->
@@ -2332,19 +2334,23 @@ private fun TranscribeScreen(
             LaunchedEffect(q) {
                 studio.primeminutes.ui.AppSnackbar.show(context, R.string.ask_no_model); askQuestion = null
             }
-        } else studio.primeminutes.ui.AskSheet(
-            question = q, entries = remember(s.recentsVersion) { SessionLibrary.list(context) },
-            onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
-            onDismiss = { askQuestion = null },
-        )
+        } else androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
+            studio.primeminutes.ui.AskSheet(
+                question = q, entries = remember(s.recentsVersion) { SessionLibrary.list(context) },
+                onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
+                onDismiss = { askQuestion = null },
+            )
+        }
     }
     // In-meeting Ask: this meeting's excerpts only; a citation moves the transcript and player there.
     val askScope = meetingEntry
-    if (askMeeting != null && askScope != null) studio.primeminutes.ui.AskSheet(
-        question = askMeeting ?: "", entries = listOf(askScope), scope = askScope,
-        onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; pendingSeekSec = t },
-        onDismiss = { askMeeting = null },
-    )
+    if (askMeeting != null && askScope != null) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
+        studio.primeminutes.ui.AskSheet(
+            question = askMeeting ?: "", entries = listOf(askScope), scope = askScope,
+            onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; pendingSeekSec = t },
+            onDismiss = { askMeeting = null },
+        )
+    }
     // DEV: `--es vox_ask_meeting "…"` opens the in-meeting Ask on the open meeting (device checks, screenshots).
     var devAskMeetingAsked by remember { mutableStateOf(false) }
     if (devExtras?.getString("vox_ask_meeting") != null && !devAskMeetingAsked) LaunchedEffect(s.utterances.size, askScope) {
@@ -2393,7 +2399,7 @@ private fun TranscribeScreen(
         text = { Text(stringResource(R.string.link_unsupported_body)) },
         confirmButton = { TextButton(onClick = { MainActivity.sharedVideoLink.value = false }) { Text(stringResource(R.string.online_notice_ok)) } },
     )
-    if (subsOpen) {
+    if (subsOpen) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         studio.primeminutes.ui.SubscriptionsScreen(
             onClose = { subsOpen = false; subsOpenId = null },
             initialId = subsOpenId,
