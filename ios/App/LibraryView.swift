@@ -143,7 +143,7 @@ struct LibraryView: View {
                    indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
                    onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = .of(s) },
-                   onRename: { draft = s.title; renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
+                   onRename: { draft = ScreenScript.title(s.title); renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
     }
     private func activate(_ s: Session) {
         Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
@@ -200,7 +200,10 @@ struct LibraryView: View {
     /// `renameTarget` outlives the alert's binding, which may already be cleared when Done runs.
     private func commitRename() {
         guard let id = renameTarget ?? renaming?.id, var s = m.library.sessions.first(where: { $0.id == id }) else { return }
-        renameTarget = nil; s.rename(draft); m.library.update(s)
+        renameTarget = nil
+        // Confirmed unchanged: the stored title stays (the field opened on the converted one).
+        guard ScreenScript.typed(draft, shown: ScreenScript.title(s.title)) != nil else { return }
+        s.rename(draft); m.library.update(s)
     }
     private func devOnAppear() { if Dev.env["VOX_OPEN_CHANNEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if let k = sections.first(where: { $0.channel != nil && $0.channel?.key != LibrarySources.otherKey })?.channel?.key { path.append(.channel(k)) } } }; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     /// The list with the source bookkeeping (split from `body`: one chain was too long to type-check).
@@ -250,7 +253,7 @@ struct LibraryView: View {
         }
         .sheet(item: $sharing) { t in MeetingShareSheet(target: t) { sharing = nil } }
         .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
-        .alert(L("delete_confirm", deleting?.title ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+        .alert(L("delete_confirm", deleting.map { ScreenScript.title($0.title) } ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
             Button(L("cancel"), role: .cancel) {}
         }
@@ -705,9 +708,10 @@ struct LibraryRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
     private func snippet(_ p: LibrarySearch.Passage) -> String {
-        if p.kind == .chunk { return p.snippet }
+        let cc = ScreenScript.of(AppLanguage.current.script)   // in the app's script, like the meeting screen
+        if p.kind == .chunk { return cc.tr(p.snippet) }
         let known = Set(s.lines.map(\.speaker))
-        return SpeakerRefs.resolve(p.snippet, label: { s.name($0) }, known: known.isEmpty ? nil : known)
+        return SpeakerRefs.resolve(cc.gen(p.snippet), label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)   // contact names as stored
     }
     private var passageList: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -737,7 +741,7 @@ struct LibraryRow: View {
                     .accessibilityLabel(status)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Vox.head(s.title.isEmpty ? L("recent_untitled") : s.title).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                Vox.head(s.title.isEmpty ? L("recent_untitled") : ScreenScript.title(s.title)).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
                 if let source { Vox.meta(episodeMeta(source, s)) }
                 else if s.isReceived { receivedText("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("received-label") }
                 else { Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))") }

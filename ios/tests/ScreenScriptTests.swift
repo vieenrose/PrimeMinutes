@@ -1,0 +1,56 @@
+import Foundation
+
+enum AppLanguage { case test; static let current = AppLanguage.test; var script: ChineseScript { .traditional } }   // OpenCC.swift's TextConv default
+// The meeting screens in the app's script: display-only conversion, memoized; unchanged edits keep the stored text;
+// either script's query finds the shown lines.
+@main struct ScreenScriptTests {
+    static func check(_ c: Bool, _ m: String) { if !c { print("FAIL: \(m)"); exit(1) } }
+    static func cc(_ s: ChineseScript) -> ScreenScript { ScreenScript(s, generated: OpenCC.generated(s).convert, transcript: OpenCC.transcript(s).convert) }
+
+    static func main() {
+        let hans = cc(.simplified), hant = cc(.traditional)
+        // zh-Hant meeting under 简体: converted; under 繁體: as stored.
+        check(hans.gen("週會紀錄") == "周会纪录", "title: \(hans.gen("週會紀錄"))")
+        check(hans.tr("我們開會討論這個問題。") == "我们开会讨论这个问题。", "line")
+        check(hans.gen("陳經理") == "陈经理", "speaker name")
+        check(hant.gen("週會紀錄") == "週會紀錄" && hant.tr("我們開會討論這個問題。") == "我們開會討論這個問題。", "繁體 keeps a Traditional meeting")
+        check(hans.tr("Let's ship it.") == "Let's ship it.", "English untouched")
+
+        // Memo: one conversion per text.
+        let m = ScreenScript.Memo(OpenCC.transcript(.simplified).convert)
+        _ = m("請發送資料給團隊。"); _ = m("請發送資料給團隊。"); _ = m("ascii only")
+        check(m.misses == 1, "memo misses \(m.misses)")
+
+        // Edits: the sheet opens on the shown (converted) text; Done unchanged saves nothing, a change saves what was typed.
+        let stored = "請發送資料給團隊。", shown = hans.tr(stored)
+        check(ScreenScript.typed(shown, shown: shown) == nil, "unchanged edit keeps the stored text")
+        check(ScreenScript.typed("请发送报告给团队。", shown: shown) == "请发送报告给团队。", "typed text saved as typed")
+        check(ScreenScript.typed("請發送報告", shown: shown) == "請發送報告", "a Traditional draft is not converted on save")
+
+        // Search: a 繁體 or 简体 query finds the shown lines.
+        let lines = ["我們開會討論這個問題。", "請發送資料給團隊。", "Let's ship it."].map { hans.tr($0) }
+        for q in ["資料", "资料"] { check(lines.filter { $0.localizedCaseInsensitiveContains(hans.query(q)) }.count == 1, "query \(q)") }
+        for q in ["資料", "资料"] { check(["請發送資料給團隊。"].map { hant.tr($0) }.filter { $0.localizedCaseInsensitiveContains(hant.query(q)) }.count == 1, "繁體 query \(q)") }
+        check(lines.filter { $0.localizedCaseInsensitiveContains(hans.query("SHIP")) }.count == 1, "case-insensitive Latin")
+
+        // Long transcript: first pass converts, a redraw is lookups only.
+        let src = ["我們開會討論這個問題，請發送資料給團隊。", "後續會議時間還沒確定，週五之前回覆。", "這個專案的預算需要重新評估。"]
+        let long = (0..<3000).map { "\(src[$0 % 3])第\($0)句" }
+        let big = cc(.simplified)
+        var t0 = Date(); let first = long.map { big.tr($0) }; let cold = Date().timeIntervalSince(t0)
+        t0 = Date(); let again = long.map { big.tr($0) }; let warm = Date().timeIntervalSince(t0)
+        check(first == again && first[0].hasPrefix("我们开会"), "stable")
+        print(String(format: "3000 lines: cold %.0f ms, cached %.1f ms", cold * 1000, warm * 1000))
+        check(warm < 0.05, "cached pass too slow: \(warm)")
+        // v2 (People, Ask, channels) through the static helpers: the test's interface script is Traditional.
+        check(ScreenScript.gen("陈经理") == "陳經理" && ScreenScript.said("请发送资料给团队。") == "請發送資料給團隊。", "static helpers")
+        // Speaker names: one linked to a person (an OS contact) stays exactly as stored; an unlinked label follows the script.
+        let shownNames = ScreenScript.names(["0": "陈经理", "1": "语者 2"], linked: ["0"], generated: { ScreenScript.gen($0) })
+        check(shownNames == ["0": "陈经理", "1": "語者 2"], "contact name kept, label converted: \(shownNames ?? [:])")
+        check(ScreenScript.names(nil, linked: [], generated: { $0 }) == nil, "no names")
+        // An Ask answer with a cite tag: the tag (UUID, seconds) survives the conversion.
+        let tag = "[[0C9E7A1B-2D3F-4A5B-8C6D-7E8F9A0B1C2D@95]]"
+        check(ScreenScript.gen("会议决定\(tag)。") == "會議決定\(tag)。", "answer cite tag kept")
+        print("screen-script: OK")
+    }
+}

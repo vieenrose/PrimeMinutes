@@ -359,7 +359,7 @@ private struct PersonPage: View {
                             openMeeting(s, s.lines.first { spk.contains($0.speaker) }?.start ?? 0)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(s.title).lineLimit(2).foregroundStyle(Color.primary)
+                                Text(ScreenScript.gen(s.title)).lineLimit(2).foregroundStyle(Color.primary)   // the meeting's title; person names stay as stored (OS contacts)
                                 Text(s.date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(AppLanguage.current.locale))).font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain)

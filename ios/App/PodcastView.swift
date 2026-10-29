@@ -22,7 +22,7 @@ struct PodcastView: View {
                 if current == nil {
                     ForEach(series) { s in
                         Button { open(s) } label: {
-                            VStack(alignment: .leading) { Text(s.title).font(.headline); Text(s.artist).font(.caption).foregroundStyle(.secondary) }
+                            VStack(alignment: .leading) { Text(ScreenScript.gen(s.title)).font(.headline); Text(ScreenScript.gen(s.artist)).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
                 } else if let cur = current {
@@ -36,7 +36,7 @@ struct PodcastView: View {
                     ForEach(episodes) { e in
                         Button { pick(e, .init(title: cur.title, artist: cur.artist, artworkUrl: cur.artworkUrl, feedUrl: cur.feedUrl), SubscriptionLogic.idOf(cur.feedUrl)); dismiss() } label: {
                             VStack(alignment: .leading) {
-                                Text(e.title)
+                                Text(ScreenScript.gen(e.title))
                                 Text(L("podcast_transcribe")).font(.caption2.weight(.semibold)).foregroundStyle(.blue)
                                 Text([e.duration, FeedParser.parseDate(e.published) > 0 ? Date(timeIntervalSince1970: TimeInterval(FeedParser.parseDate(e.published))).formatted(.dateTime.month().day()) : String(e.published.prefix(16))].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                             }
@@ -56,7 +56,7 @@ struct PodcastView: View {
                     }
                 }
             }
-            .navigationTitle(current?.title ?? L("podcast"))
+            .navigationTitle(current.map { ScreenScript.gen($0.title) } ?? L("podcast"))
             .searchable(text: $query, prompt: L("podcast_search"))
             .onSubmit(of: .search) { search() }
             .toolbar {

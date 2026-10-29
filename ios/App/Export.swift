@@ -167,7 +167,8 @@ enum Export {
     /// then the transcript (the AI notes stay in the .pmin) as speaker turns (grey clock gutter, hanging indent). Every cite is a link to
     /// the turn it cites; every turn is a destination with a "↑" back to the first cite of it (else to the summary).
     /// A4, CJK in PingFang (embedded subsets), a running title and page numbers.
-    static func pdf(_ s0: Session) -> Data {
+    static func pdf(_ s1: Session) -> Data {
+        let s0 = inScript(s1)
         var s = s0
         s.title = refs(s0.title, s0); s.summary = refs(s0.summary, s0)
         let acts = s0.actionItems.map { refs($0, s0) }
@@ -338,6 +339,11 @@ enum Export {
     /// The Word document's model: the same content and order as the PDF (title block, summary, action items,
     /// transcript turns).
     static func docModel(_ s0: Session) -> ShareDocx.Doc {
+        let d = rawDocModel(s0)
+        guard let c = scriptConverters() else { return d }
+        return ExportScript.doc(d, generated: c.gen.convert, transcript: c.tr.convert)
+    }
+    private static func rawDocModel(_ s0: Session) -> ShareDocx.Doc {
         var s = s0
         s.title = refs(s0.title, s0); s.summary = refs(s0.summary, s0)
         let zh = AppLanguage.current.resolved != .en
@@ -356,6 +362,26 @@ enum Export {
             turns: turns(s.lines).map { ShareDocx.Turn(clock: gutterClock($0.u.start, pad), speaker: s.name($0.u.speaker), text: $0.text, sec: Int(max(0, $0.u.start)), cont: $0.cont) },
             backLabel: L("share_pdf_back"), zh: zh, simplified: AppLanguage.current.script == .simplified)
     }
+    /// The converters of the script generation uses (AppLanguage.script; an English interface keeps it, as on Android).
+    private static func scriptConverters() -> (gen: OpenCC, tr: OpenCC)? {
+        let sc = AppLanguage.current.script
+        return (OpenCC.generated(sc), OpenCC.transcript(sc))
+    }
+    /// The meeting as the PDF shows it: Chinese text in the interface's script (the stored session is not changed).
+    static func inScript(_ s0: Session) -> Session {
+        guard let c = scriptConverters() else { return s0 }
+        return inScript(s0, generated: c.gen.convert, transcript: c.tr.convert)
+    }
+    /// The same with given converters (the screens pass ScreenScript's memoized ones).
+    static func inScript(_ s0: Session, generated g: (String) -> String, transcript t: (String) -> String) -> Session {
+        var s = s0
+        s.title = g(s.title); s.summary = g(s.summary)
+        s.lines = s.lines.map { var u = $0; u.text = t(u.text); return u }
+        s.notes = s.notes.map { var n = $0; n.text = g(n.text); return n }
+        s.speakerNames = ExportScript.names(s.speakerNames, generated: g)
+        s.actionsEdited = s.actionsEdited.map(g); s.legacyNotes = s.legacyNotes.map(g)
+        return s
+    }
     static func docxFile(_ s: Session, base: String, dir: URL) -> URL? {
         let url = dir.appendingPathComponent(base + ".docx")
         do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); try ShareDocx.data(docModel(s)).write(to: url, options: .atomic); return url } catch { return nil }
@@ -367,4 +393,33 @@ enum Export {
         do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); try pdf(s).write(to: url, options: .atomic); return url } catch { return nil }
     }
 
+}
+
+extension ScreenScript {
+    /// The meeting as the screens show it, in the current script (memoized converters; nothing is saved).
+    /// Cached per session and script: a redraw with the same text reuses the last view (arrays are shared, not copied).
+    static func shown(_ s: Session) -> Session {
+        let sc = AppLanguage.current.script, k = s.id.uuidString + sc.rawValue
+        viewLock.lock(); let hit = views[k]; viewLock.unlock()
+        let v: Session
+        if let hit, sameText(hit.raw, s) { v = hit.view } else {
+            v = of(sc).view(s)
+            viewLock.lock(); if views.count > 64 { views.removeAll() }; views[k] = (s, v); viewLock.unlock()
+        }
+        var out = s
+        out.title = v.title; out.summary = v.summary; out.lines = v.lines; out.notes = v.notes
+        out.speakerNames = ScreenScript.names(s.speakerNames, linked: Set((s.speakerPeople ?? [:]).keys), generated: { of(sc).gen($0) }); out.actionsEdited = v.actionsEdited; out.legacyNotes = v.legacyNotes
+        return out
+    }
+    private static let viewLock = NSLock()
+    nonisolated(unsafe) private static var views: [String: (raw: Session, view: Session)] = [:]   // guarded by viewLock
+    private static func sameText(_ a: Session, _ b: Session) -> Bool {
+        a.title == b.title && a.summary == b.summary && a.speakerNames == b.speakerNames && a.actionsEdited == b.actionsEdited
+            && a.legacyNotes == b.legacyNotes && a.notes == b.notes && a.lines == b.lines
+    }
+    func view(_ s: Session) -> Session { Export.inScript(s, generated: { self.gen($0) }, transcript: { self.tr($0) }) }
+    /// A speaker's name as shown (linked contact names as stored).
+    static func name(_ s: Session, _ k: Int) -> String { s.speakerPeople?[String(k)] != nil ? s.name(k) : gen(s.name(k)) }
+    /// A library title as shown.
+    static func title(_ t: String) -> String { of(AppLanguage.current.script).gen(t) }
 }

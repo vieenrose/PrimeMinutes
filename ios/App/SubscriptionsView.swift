@@ -267,8 +267,8 @@ private struct ShowRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.title).font(.headline)
-                if !s.artist.isEmpty { Text(s.artist).font(.subheadline).foregroundStyle(.secondary) }
+                Text(ScreenScript.gen(s.title)).font(.headline)
+                if !s.artist.isEmpty { Text(ScreenScript.gen(s.artist)).font(.subheadline).foregroundStyle(.secondary) }
                 Group {
                     if checking { Text(L("sub_checking")) }
                     else if s.paused { Text(L("sub_paused")) }
@@ -301,8 +301,8 @@ struct PasteFeedView: View {
                 if let error { Text(error).foregroundStyle(.red) }
                 if let p = preview {
                     VStack(alignment: .leading) {
-                        Text(p.feed.title).font(.headline)
-                        Text([p.feed.artist, L("sub_episodes_n", p.feed.episodes.count)].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                        Text(ScreenScript.gen(p.feed.title)).font(.headline)
+                        Text([ScreenScript.gen(p.feed.artist), L("sub_episodes_n", p.feed.episodes.count)].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }

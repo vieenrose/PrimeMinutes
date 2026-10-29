@@ -362,7 +362,7 @@ struct AskSheet: View {
                         if !history.isEmpty { Text(L("ask_meeting_earlier")).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
                         ForEach(history + ask.turns) { t in
                             if !history.isEmpty, t.id == ask.turns.first?.id { Divider() }
-                            Text(t.question).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
+                            Text(ScreenScript.gen(t.question)).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
                             VStack(alignment: .leading, spacing: 8) {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
                                     if !t.done { phaseRow }
@@ -379,7 +379,7 @@ struct AskSheet: View {
                                         Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                                Text(meeting != nil ? Self.named(x) : x.session.title + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
+                                                Text(meeting != nil ? Self.named(x) : ScreenScript.gen(x.session.title) + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                             }
                                         }.buttonStyle(.plain)
                                     }
@@ -418,7 +418,7 @@ struct AskSheet: View {
             .toolbar {
                 ToolbarItem(placement: .principal) { VStack {
                     Text(L(meeting != nil ? "ask_meeting_title" : "ask_title")).font(.headline)
-                    Text(meeting.map { $0.title + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    Text(meeting.map { ScreenScript.gen($0.title) + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 } }
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
                 // In-meeting: a new conversation also forgets this meeting's earlier questions.
@@ -485,13 +485,15 @@ struct AskSheet: View {
     /// An excerpt as listed under the sources: its S-numbers (a note passage) named as its meeting names them (display only).
     static func named(_ x: AskEngine.Excerpt) -> String {
         let s = x.session, known = Set(s.lines.map(\.speaker))
-        return SpeakerRefs.resolve(x.text, label: { s.name($0) }, known: known.isEmpty ? nil : known)
+        // Quoted text in the app's script (display only; the model read the stored text).
+        return SpeakerRefs.resolve(ScreenScript.said(x.text), label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)
     }
     /// `[[id@sec]]` → "title · m:ss" links (voxask://id/sec), checked against the excerpts.
     /// `withTitle`: the meeting's title in the link; the in-meeting Ask shows the time alone.
     static func linked(_ text: String, _ xs: [AskEngine.Excerpt], withTitle: Bool = true) -> AttributedString {
         // A tag still being written (streaming) or cut by the token cap is hidden, not shown raw.
-        let cleaned = text.replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
+        // A saved answer may be in the other script (asked before a language switch): shown in the app's script.
+        let cleaned = ScreenScript.gen(text).replacingOccurrences(of: #"\[\[[^\]\n]*$"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\[\[[^@\]\n]*\]\]"#, with: "", options: .regularExpression)   // `[[no excerpt]]`
             .replacingOccurrences(of: #"(?m)^[ \t]*[*-][ \t]+"#, with: "• ", options: .regularExpression)   // Markdown bullets, shown as text
         let rx = try! NSRegularExpression(pattern: #"\[\[([0-9A-Fa-f-]{36})@(\d+)\]\]"#)
@@ -500,7 +502,7 @@ struct AskSheet: View {
             let ns = cleaned as NSString, id = ns.substring(with: mt.range(at: 1)).uppercased()
             guard let s = xs.first(where: { $0.session.id.uuidString == id })?.session else { return nil }
             let known = Set(s.lines.map(\.speaker))
-            return SpeakerRefs.Labels(label: { s.name($0) }, known: known.isEmpty ? nil : known)
+            return SpeakerRefs.Labels(label: { ScreenScript.name(s, $0) }, known: known.isEmpty ? nil : known)
         }
         var out = AttributedString()
         let ns = text as NSString
@@ -512,7 +514,7 @@ struct AskSheet: View {
             // of that meeting (a made-up second), else dropped.
             let same = xs.filter { $0.session.id.uuidString == id }
             if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
-                var a = AttributedString(withTitle ? x.session.title + " · " + ReaderProtocol.formatTs(x.sec) : "[" + ReaderProtocol.formatTs(x.sec) + "]")
+                var a = AttributedString(withTitle ? ScreenScript.gen(x.session.title) + " · " + ReaderProtocol.formatTs(x.sec) : "[" + ReaderProtocol.formatTs(x.sec) + "]")
                 a[Attr.Link.self] = URL(string: "voxask://\(id)/\(x.sec)"); a[Attr.Foreground.self] = .accentColor   // Attr: Sendable-safe keys
                 out += a
             }
