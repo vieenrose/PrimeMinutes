@@ -212,7 +212,12 @@ struct ChannelPage: View {
     private var statusLine: String {
         var parts = [L("channel_in_library", inLibrary.count)]
         if let s = sub { parts.append(s.paused ? L("sub_paused") : lastCheckedText(s, time: true)) }
-        return parts.joined(separator: " · ")
+        var line = parts.joined(separator: " · ")
+        // M4: when the background check is on, its last run (the per-show time above covers manual checks too).
+        if sub.map({ !$0.paused }) == true, BackgroundCheck.enabled {
+            line += "\n" + (BackgroundCheck.lastRun.map { L("sub_bg_last_run", $0.formatted(date: .abbreviated, time: .shortened)) } ?? L("sub_bg_never_run"))
+        }
+        return line
     }
     private var header: some View {
         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(alignment: .top, spacing: 14))) {

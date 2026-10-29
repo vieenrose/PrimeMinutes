@@ -22,6 +22,7 @@ struct SettingsView: View {
     @AppStorage("textSize") private var textSize = 0
     @AppStorage("showActions") private var showActions = false
     @AppStorage("askOn") private var askEnabled = true
+    @AppStorage(BackgroundCheck.enabledKey) private var bgCheck = false
     @ObservedObject private var indexer = LibraryIndexer.shared
     @Environment(\.dismiss) private var dismiss
     /// Opens a meeting at a time (the People screen's meeting rows).
@@ -114,6 +115,11 @@ struct SettingsView: View {
                         else { Button(L("settings_index_old") + " (\(stale))") { indexer.catchUp(m.library.sessions) } }
                     }
                 } header: { Text(L("model_kind_embed")) } footer: { Text(L("settings_search_hint")) }
+                // M4: podcast subscriptions checked in the background (asks for notifications here, in front).
+                Section {
+                    Toggle(L("settings_sub_bg_check"), isOn: $bgCheck).accessibilityIdentifier("settings-sub-bg-check")
+                        .onChange(of: bgCheck) { if bgCheck { Notifier.requestPermission() }; BackgroundWork.scheduleRefresh() }
+                } header: { Text(L("sub_source")) } footer: { Text(L("settings_sub_bg_check_hint")) }
                 Section {
                     Toggle(L("settings_ask"), isOn: $askEnabled)
                 } header: { Text(L("ask_title")) } footer: { Text(L("settings_ask_hint")) }

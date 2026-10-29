@@ -14,6 +14,7 @@ enum BackgroundWork {
         #if VOX_DEV
         Task { @MainActor in DevProbes.start() }
         #endif
+        registerRefresh()
         BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
             // Handed to the main actor below and not touched here after that (BGTask is not Sendable).
             nonisolated(unsafe) let task = task
@@ -28,6 +29,33 @@ enum BackgroundWork {
                 task.setTaskCompleted(success: true)
             }
         }
+    }
+    /// M4: podcast subscriptions checked while the app is not open (BGAppRefreshTask; iOS picks the time, never
+    /// guaranteed, and not after the user swiped the app away). Registered at launch with the queue task.
+    static let refreshId = "tw.com.pesi.primeminutes.subcheck"
+    static func registerRefresh() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshId, using: nil) { task in
+            nonisolated(unsafe) let task = task
+            StatusLog.add("trace sub refresh task started")
+            let work = Task { @MainActor in await BackgroundCheck.run() }
+            // Out of time: stop between two feeds (the one in flight is cancelled; nothing half-written).
+            task.expirationHandler = { StatusLog.add("trace sub refresh task expired"); work.cancel() }
+            Task { @MainActor in
+                _ = await work.value
+                scheduleRefresh()   // the next one, before saying done
+                task.setTaskCompleted(success: !work.isCancelled)
+            }
+        }
+    }
+    /// Asks for the next refresh (about 6 h out) while the setting is on and a subscription is not paused; else
+    /// withdraws any pending one. Called on each run, when the app goes to the background, and on changes.
+    @MainActor static func scheduleRefresh() {
+        guard BackgroundCheckLogic.shouldSchedule(enabled: BackgroundCheck.enabled, subs: SubscriptionStore.shared.subs) else {
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: refreshId); return
+        }
+        let r = BGAppRefreshTaskRequest(identifier: refreshId)
+        r.earliestBeginDate = Date().addingTimeInterval(BackgroundCheckLogic.interval)
+        do { try BGTaskScheduler.shared.submit(r) } catch { StatusLog.add("trace sub refresh schedule failed: \(error)") }
     }
     /// iOS 26: a user-started queue run keeps going when the user leaves the app, with the system's progress UI
     /// (BGContinuedProcessingTask). One task per drain, submitted while the app is in front; it reports the current

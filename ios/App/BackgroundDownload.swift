@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UserNotifications
+#endif
 
 /// What to do with a model file's `.part` before asking the network (pure, host-tested).
 enum PartPlan: Equatable {
@@ -146,9 +149,17 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
 }
 
 /// Receives the relaunch iOS does for background-session events (the app may have been killed meanwhile).
-final class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ app: UIApplication, didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self   // before launch ends: a tap that launched the app is delivered
         BackgroundDownloader.shared.reconnect(); return true
+    }
+    /// In front: still show the banner (the meeting-ready and new-episode notifications).
+    func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNotification) async -> UNNotificationPresentationOptions { [.banner, .list, .sound] }
+    /// A new-episodes notification opens its channel page.
+    func userNotificationCenter(_ c: UNUserNotificationCenter, didReceive r: UNNotificationResponse) async {
+        guard let id = r.notification.request.content.userInfo[BackgroundCheck.channelKey] as? String else { return }
+        await MainActor.run { StatusLog.add("trace sub notification tapped \(id)"); NotificationRoute.shared.channel = id }
     }
     func application(_ app: UIApplication, handleEventsForBackgroundURLSession id: String, completionHandler: @escaping () -> Void) {
         guard id == BackgroundDownloader.identifier else { completionHandler(); return }

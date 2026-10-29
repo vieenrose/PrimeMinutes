@@ -713,3 +713,8 @@
 "channel_in_library" = "资料库中 %d 集";
 "channel_in_library_header" = "已在资料库";
 "channel_new_in_feed" = "节目新集数";
+"settings_sub_bg_check" = "后台检查新集数";
+"settings_sub_bg_check_hint" = "在 Wi‑Fi 下读取已订阅节目的 RSS，有新集数时通知你，不会下载音频。iOS 会在适当时机检查，不保证准时；从多任务界面划掉 App 后就不会检查。";
+"sub_bg_notif_body" = "%d 集新集数";
+"sub_bg_last_run" = "后台检查：%@";
+"sub_bg_never_run" = "后台检查：尚未运行";

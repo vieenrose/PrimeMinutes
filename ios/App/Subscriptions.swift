@@ -319,3 +319,39 @@ enum FeedFetcher {
         } catch { return .failed(.RETRY_LATER) }
     }
 }
+
+/// M4 background check (docs/design/podcast-series.md, M4 stage 1): pure rules for the BGAppRefreshTask — when to
+/// schedule it, and which episodes a run newly found (one notification per channel). Host-tested.
+enum BackgroundCheckLogic {
+    /// earliestBeginDate of the refresh request: iOS decides the real time, often much later.
+    static let interval: TimeInterval = 6 * 3600
+    /// The whole run (all subscriptions, one GET each, serialized) stays inside the ~30 s refresh budget.
+    static let budget: TimeInterval = 25
+
+    /// A refresh is worth asking for only with the setting on and at least one subscription not paused.
+    static func shouldSchedule(enabled: Bool, subs: [Subscription]) -> Bool { enabled && subs.contains { !$0.paused } }
+
+    /// The subscriptions a run checks, in order: paused ones are skipped (a background run is never an explicit action).
+    static func toCheck(_ subs: [Subscription]) -> [String] { subs.filter { !$0.paused }.map(\.id) }
+
+    struct Found: Equatable { var id: String; var title: String; var episodes: [String] }
+
+    /// Episodes new after the run and not already new before it (so an episode is announced once, even if the
+    /// user does not open the app between runs). `after` is keyed by the id before the run (a 301 rekeys it).
+    static func found(before: [Subscription], after: [String: Subscription]) -> [Found] {
+        before.compactMap { b in
+            guard !b.paused, let a = after[b.id] else { return nil }
+            let was = Set(b.newEpisodes.map(\.guid))
+            let eps = a.newEpisodes.filter { !was.contains($0.guid) }
+            return eps.isEmpty ? nil : Found(id: a.id, title: a.title, episodes: eps.map(\.title))
+        }
+    }
+
+    /// DEV / test: forgets the newest episode, as if the feed had just published it (cleared validators force a 200).
+    static func rollBack(_ s: Subscription) -> Subscription {
+        guard let top = s.episodes.first else { return s }
+        var x = s
+        x.episodes.removeFirst(); x.seenGuids.removeAll { $0 == top.guid }; x.etag = nil; x.lastModified = nil
+        return x
+    }
+}

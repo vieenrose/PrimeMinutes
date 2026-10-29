@@ -34,3 +34,4 @@ swiftc -parse-as-library -O $D/../App/SessionFileCore.swift $D/../App/OpenCC.swi
 VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/session-share-tests $D/golden_share
 swiftc -parse-as-library -O $D/../App/VideoLinks.swift $D/VideoLinksTests.swift -o $O/video-links-tests && $O/video-links-tests
 swiftc -parse-as-library -O $D/../App/LibrarySources.swift $D/LibrarySourcesTests.swift -o $O/library-sources-tests && $O/library-sources-tests
+swiftc -parse-as-library -O $D/../App/Subscriptions.swift $D/BackgroundCheckTests.swift -o $O/bg-check-tests && $O/bg-check-tests
