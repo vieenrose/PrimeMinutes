@@ -168,7 +168,7 @@ private fun PeopleContent(
                         }
                     }
                 }
-                item { voiceHeader() }
+                item(key = "voice") { voiceHeader() }   // keyed: the cards above come and go (async), and an index key reset its dialogs
                 if (doc.people.isEmpty()) item {
                     Text(stringResource(R.string.people_none), color = pal.Slate400, modifier = Modifier.padding(vertical = Spacing.xxl))
                 }

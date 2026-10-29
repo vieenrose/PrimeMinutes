@@ -1,5 +1,9 @@
 package studio.primeminutes.ui
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.DialogProperties
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.material.icons.outlined.Delete
 import android.Manifest
 import android.annotation.SuppressLint
@@ -190,48 +194,78 @@ fun VoiceSettingsCard() {
     if (enrol) MeEnrolDialog(onDone = { enrol = false })
 }
 
-/** "This is me": ~20 s of the owner reading aloud, kept only as a voice vector (the audio is not stored). */
+/** The line under the explanation of "This is me" for each phase (0 ready, 1 recording, 2 computing, 3 done,
+ *  -1 failed, -2 microphone refused, -3 voice model missing). */
+internal fun meEnrolMessage(phase: Int): Int = when (phase) {
+    0 -> R.string.voice_me_next
+    1 -> R.string.voice_me_recording
+    2 -> R.string.voice_me_computing
+    3 -> R.string.voice_me_done
+    -2 -> R.string.voice_me_permission
+    -3 -> R.string.voice_me_need_model
+    else -> R.string.voice_me_failed
+}
+
+/** "This is me": ~20 s of the owner reading aloud, kept only as a voice vector (the audio is not stored).
+ *  Says what it is for before anything is recorded, asks for the microphone itself, offers the voice model
+ *  download when it is missing, and closes only on Cancel / Done (not on an outside tap while it works). */
 @SuppressLint("MissingPermission")
 @Composable
 private fun MeEnrolDialog(onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var phase by remember { mutableStateOf(0) }       // 0 ready, 1 recording, 2 computing, 3 done, -1 failed
+    val download by VoiceStore.download.collectAsState()
     var progress by remember { mutableStateOf(0f) }
     val meName = stringResource(R.string.voice_me_name)
-    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    fun micGranted() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    var phase by rememberSaveable {
+        mutableStateOf(if (!studio.primeminutes.core.models.ModelManager(context).speakerReady(VoiceStore.card)) -3 else 0)
+    }
+    fun record() {
+        phase = 1
+        scope.launch {
+            val pcm = withContext(Dispatchers.IO) { recordSeconds(ME_SECONDS) { progress = it } }
+            phase = 2
+            val me = pcm?.let { withContext(Dispatchers.IO) { runCatching { VoiceStore.enrolMe(context, it, meName) }.getOrNull() } }
+            phase = if (me != null) 3 else -1
+        }
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) record() else phase = -2 }
+    val busy = phase == 1 || phase == 2 || download != null
     AlertDialog(
-        onDismissRequest = { if (phase != 1 && phase != 2) onDone() },
-        title = { Text(stringResource(R.string.voice_me)) },
+        onDismissRequest = { if (!busy) onDone() },
+        properties = DialogProperties(dismissOnClickOutside = false),
+        title = { Text(stringResource(R.string.voice_me_title), modifier = Modifier.testTag("voice-me-title")) },
         text = {
-            Column {
-                Text(stringResource(when (phase) {
-                    0 -> if (granted) R.string.voice_me_text else R.string.voice_me_permission
-                    1 -> R.string.voice_me_recording
-                    2 -> R.string.voice_me_computing
-                    3 -> R.string.voice_me_done
-                    else -> R.string.voice_me_failed
-                }))
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.voice_me_text))
+                Spacer(Modifier.height(Spacing.sm))
+                Text(stringResource(meEnrolMessage(phase)), fontWeight = if (phase == 0) null else FontWeight.Bold,
+                    color = if (phase == -1 || phase == -2) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified,
+                    modifier = Modifier.testTag("voice-me-status"))
                 if (phase == 1) { Spacer(Modifier.height(Spacing.sm)); LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth()) }
-                if (phase == 0 && granted) { Spacer(Modifier.height(Spacing.sm)); Text(stringResource(R.string.voice_me_script), style = MaterialTheme.typography.bodySmall) }
+                if (phase == -3) download?.let { Spacer(Modifier.height(Spacing.sm)); LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                if (phase == 0 || phase == 1) { Spacer(Modifier.height(Spacing.sm)); Text(stringResource(R.string.voice_me_script), style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
             when (phase) {
-                0 -> if (granted) TextButton(modifier = Modifier.testTag("voice-me-start"), onClick = {
-                    phase = 1
-                    scope.launch {
-                        val pcm = withContext(Dispatchers.IO) { recordSeconds(ME_SECONDS) { progress = it } }
-                        phase = 2
-                        val me = pcm?.let { withContext(Dispatchers.IO) { runCatching { VoiceStore.enrolMe(context, it, meName) }.getOrNull() } }
-                        phase = if (me != null) 3 else -1
-                    }
-                }) { Text(stringResource(R.string.voice_me_start)) } else TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
-                1, 2 -> {}
-                else -> TextButton(onClick = onDone) { Text(stringResource(R.string.people_save)) }
+                0, -1 -> TextButton(modifier = Modifier.testTag("voice-me-start"), onClick = {
+                    if (micGranted()) record() else ask.launch(Manifest.permission.RECORD_AUDIO)
+                }) { Text(stringResource(R.string.voice_me_start)) }
+                -2 -> TextButton(onClick = {
+                    phase = 0
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", context.packageName, null)))
+                }) { Text(stringResource(R.string.voice_me_open_settings)) }
+                -3 -> TextButton(enabled = download == null, onClick = {
+                    scope.launch { if (VoiceStore.enable(context)) phase = 0 }
+                }) { Text(stringResource(R.string.voice_me_get_model)) }
+                3 -> TextButton(modifier = Modifier.testTag("voice-me-done"), onClick = onDone) { Text(stringResource(R.string.voice_me_close)) }
+                else -> {}
             }
         },
-        dismissButton = { if (phase == 0) TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) } },
+        dismissButton = { if (phase <= 0 && !busy) TextButton(modifier = Modifier.testTag("voice-me-cancel"), onClick = onDone) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
