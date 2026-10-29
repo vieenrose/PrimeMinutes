@@ -35,6 +35,8 @@ extension SessionFile {
         // v2: the sender's meeting id (a re-import is recognized by it) and when the meeting took place.
         if let id = m.session_id.flatMap(UUID.init(uuidString:)) { s.id = id }
         if let d = parseIso(m.created_at) { s.date = d; s.captureStart = d.timeIntervalSince1970 }
+        if m.user_edited?.summary == true { s.summaryUserSet = true }
+        if m.user_edited?.lines == true { s.linesUserEdited = true }
         s.titleUserSet = m.title_user_set == true ? true : nil
         if s.notes.isEmpty, let t = m.notes, MeetingNotes.parse(t) != nil { s.legacyNotes = t }   // Android: v2 NOTES first, else the journal
         s.reader = m.llm_model   // Android sessionModels: the summary stays attributed to the model that wrote it
@@ -72,7 +74,8 @@ extension SessionFile {
         poll.cancel()
         guard ex.status == .completed, !Task.isCancelled else { return nil }
         progress(1)
-        let man = forShare(manifest(s), sessionId: s.id.uuidString, createdAt: s.meetingStart, script: AppLanguage.current.script.rawValue)
+        let man = forShare(manifest(s), sessionId: s.id.uuidString, createdAt: s.meetingStart, script: AppLanguage.current.script.rawValue,
+                           userEdited: .init(summary: s.summaryUserSet == true, lines: s.linesUserEdited == true))
         guard let blob = blob(man) else { return nil }
         let safe = String(s.title.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) ? Character($0) : "_" }.prefix(60))
         let name = safe.replacingOccurrences(of: "_{2,}", with: "_", options: .regularExpression)

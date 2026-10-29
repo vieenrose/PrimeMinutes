@@ -21,6 +21,10 @@ enum SessionFile {
         var title_user_set: Bool?   // the user typed the title: a re-import keeps it from later runs (TitleEdit)
         // v2 (SessionShare): the meeting's identity across devices, when it took place (ISO-8601 UTC), the sender's script.
         var session_id: String?, created_at: String?, script: String?
+        /// What the user hand-edited (Android UserEdits, iOS summaryUserSet / linesUserEdited): a received meeting keeps
+        /// its re-run protection.
+        struct UE: Codable, Equatable { var summary: Bool?; var lines: Bool? }
+        var user_edited: UE?
     }
 
     // MARK: gzip (Apple's COMPRESSION_ZLIB is raw deflate)
@@ -196,8 +200,9 @@ enum SessionFile {
 
     /// The manifest as it leaves the device. The Codable struct IS the allowlist (an unknown field cannot be
     /// encoded); people links are dropped, speaker names stay as plain labels.
-    static func forShare(_ m: Manifest, sessionId: String?, createdAt: Date?, script: String?) -> Manifest {
+    static func forShare(_ m: Manifest, sessionId: String?, createdAt: Date?, script: String?, userEdited: Manifest.UE? = nil) -> Manifest {
         var o = m
+        if let userEdited { o.user_edited = userEdited }
         o.primeminutes_version = schemaMajor
         o.speaker_names = m.speaker_names.map { $0.mapValues { var n = $0; n.person = nil; return n } }
         o.session_id = sessionId; o.created_at = createdAt.map(iso); o.script = script

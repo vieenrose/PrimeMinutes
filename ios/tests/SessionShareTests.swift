@@ -24,7 +24,7 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
         var fails = 0, n = 0
         func ok(_ c: Bool, _ what: String) { n += 1; if !c { fails += 1; print("FAIL \(what)") } }
         if ProcessInfo.processInfo.environment["VOX_SHARE_REGEN"] != nil {
-            let v2 = SessionFile.forShare(meetingV1(), sessionId: sid, createdAt: SessionFile.parseIso(created), script: "zh-Hant")
+            let v2 = SessionFile.forShare(meetingV1(), sessionId: sid, createdAt: SessionFile.parseIso(created), script: "zh-Hant", userEdited: .init(summary: true, lines: false))
             ok(SessionFile.write(src: f("tone.m4a"), dest: f("ios_v2.m4a"), title: v2.title!, summary: v2.summary!, lrc: "[00:00.00]x", blob: SessionFile.blob(v2)!), "write ios_v2")
             ok(SessionFile.write(src: f("tone.m4a"), dest: f("voxsum_v1.m4a"), title: "預算會議", summary: "", lrc: "", blob: SessionFile.blob(meetingV1())!, tag: (SessionFile.LEGACY_MEAN, SessionFile.LEGACY_FIELD)), "write voxsum_v1")
         }
@@ -44,6 +44,7 @@ enum AppLanguage { case test; static let current = AppLanguage.test; var script:
                 ok(SessionFile.parseIso(m?.created_at) == SessionFile.parseIso(created), "\(name) created_at")
                 ok(m?.speaker_names?.values.allSatisfy { $0.person == nil } == true, "\(name) no person")
                 ok(m?.title_user_set == true, "\(name) title_user_set")
+                ok(m?.user_edited == .init(summary: true, lines: false), "\(name) user_edited")
                 // privacy: the raw JSON never names a person
                 if let m, let j = try? JSONEncoder().encode(m) { ok(!String(decoding: j, as: UTF8.self).contains("person"), "\(name) json person") }
             } else { ok(m?.session_id == nil, "\(name) no id") }
