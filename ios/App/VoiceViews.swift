@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 // Voice recognition's screens (Phase 2, Android VoiceSuggestions.kt): the suggestions of the rename sheet, the
 // "Recognise voices" card of the People screen, "This is me", a person's voice row and the outlier prompt.
@@ -49,6 +50,21 @@ struct VoiceSettingsCard: View {
                     Text(L(on ? "voice_on_desc" : "voice_off_desc")).font(.footnote).foregroundStyle(.secondary)
                 }
             }.disabled(voice.download != nil)
+            // The alerts and the "This is me" sheet hang on this one row, NOT on the Section: SwiftUI copies a
+            // Section's modifiers onto each of its rows, so every row presented the same sheet and the extra
+            // presenters tore it down a moment after it opened (the sheet flashed and closed).
+            .alert(L("voice_explain_title"), isPresented: $explain) {
+                Button(L("voice_enable")) { failed = false; Task { failed = !(await voice.enable()) } }
+                Button(L("cancel"), role: .cancel) {}
+            } message: { Text(L("voice_explain_text", Int(VoiceStore.card.totalBytes / 1_000_000))) }
+            .alert(L("voice_delete_all"), isPresented: $deleteAsk) {
+                Button(L("people_delete"), role: .destructive) { voice.deleteAll() }
+                Button(L("cancel"), role: .cancel) {}
+            } message: { Text(L("voice_delete_all_text")) }
+            .sheet(isPresented: $enrol) { MeEnrolSheet { enrol = false }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
+            .task {   // DEV: VOX_VOICEME opens "This is me" (with VOX_MICFILE standing in for the mic)
+                if Dev.env["VOX_VOICEME"] != nil, people.doc.voice { try? await Task.sleep(nanoseconds: 800_000_000); enrol = true }
+            }
             if let d = voice.download {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L("voice_downloading")).font(.footnote).foregroundStyle(.secondary)
@@ -64,18 +80,6 @@ struct VoiceSettingsCard: View {
                 Button(L("voice_delete_all"), role: .destructive) { deleteAsk = true }
             }
         }
-        .alert(L("voice_explain_title"), isPresented: $explain) {
-            Button(L("voice_enable")) { failed = false; Task { failed = !(await voice.enable()) } }
-            Button(L("cancel"), role: .cancel) {}
-        } message: { Text(L("voice_explain_text", Int(VoiceStore.card.totalBytes / 1_000_000))) }
-        .alert(L("voice_delete_all"), isPresented: $deleteAsk) {
-            Button(L("people_delete"), role: .destructive) { voice.deleteAll() }
-            Button(L("cancel"), role: .cancel) {}
-        } message: { Text(L("voice_delete_all_text")) }
-        .sheet(isPresented: $enrol) { MeEnrolSheet { enrol = false }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
-        .task {   // DEV: VOX_VOICEME opens "This is me" (with VOX_MICFILE standing in for the mic)
-            if Dev.env["VOX_VOICEME"] != nil, people.doc.voice { try? await Task.sleep(nanoseconds: 800_000_000); enrol = true }
-        }
     }
 }
 
@@ -83,38 +87,73 @@ struct VoiceSettingsCard: View {
 private struct MeEnrolSheet: View {
     let onDone: () -> Void
     static let seconds = 20
-    /// 0 ready, 1 recording, 2 computing, 3 done, -1 failed, -2 no microphone permission.
+    @ObservedObject private var voice = VoiceStore.shared
+    /// 0 ready, 1 recording, 2 computing, 3 done, -1 failed, -2 no microphone permission, -3 voice model missing.
     @State private var phase = 0
     @State private var progress = 0.0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L("voice_me")).font(.headline)
-            Text(L(phase == 0 ? "voice_me_text" : phase == 1 ? "voice_me_recording" : phase == 2 ? "voice_me_computing" : phase == 3 ? "voice_me_done"
-                   : phase == -2 ? "voice_me_permission" : "voice_me_failed"))
-            if phase == 1 { ProgressView(value: progress) }
-            if phase == 2 { ProgressView() }
-            if phase == 0 || phase == 1 {
-                Text(L("voice_me_script")).font(.callout).padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                // What this is for, before anything is recorded: a title, two lines, then what the next tap does.
+                Text(L("voice_me_title")).font(.title3.bold()).accessibilityAddTraits(.isHeader)
+                Text(L("voice_me_text")).foregroundStyle(.secondary)
+                Text(L(Self.messageKey(phase))).fontWeight(phase == 0 ? .regular : .semibold)
+                    .foregroundStyle(phase == -1 || phase == -2 ? Color.red : Color.primary)
+                    .accessibilityIdentifier("voice-me-status")
+                if phase == -3, let d = voice.download { ProgressView(value: d) }
+                if phase == 1 { ProgressView(value: progress) }
+                if phase == 2 { ProgressView() }
+                if phase == 0 || phase == 1 {
+                    Text(L("voice_me_script")).font(.callout).padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                }
+                HStack {
+                    if phase <= 0 { Button(L("cancel"), action: onDone).accessibilityIdentifier("voice-me-cancel") }
+                    Spacer()
+                    switch phase {
+                    case 0, -1: Button(L("voice_me_start")) { start() }.bold().buttonStyle(.borderedProminent).accessibilityIdentifier("voice-me-start")
+                    case -2: Button(L("voice_me_open_settings")) { OSContacts.openSettings() }.bold().buttonStyle(.borderedProminent)
+                    case -3: Button(L("voice_me_get_model")) { getModel() }.bold().buttonStyle(.borderedProminent).disabled(voice.download != nil)
+                    case 3: Button(L("done"), action: onDone).bold().buttonStyle(.borderedProminent).accessibilityIdentifier("voice-me-done")
+                    default: EmptyView()
+                    }
+                }.padding(.top, 4)
             }
-            Spacer(minLength: 0)
-            HStack {
-                if phase == 0 { Button(L("cancel"), action: onDone) }
-                Spacer()
-                if phase == 0 { Button(L("voice_me_start")) { start() }.bold() }
-                if phase == 3 || phase < 0 { Button(L("people_save"), action: onDone).bold() }
-            }
+            .padding(20)
         }
-        .padding(20)
-        .interactiveDismissDisabled(phase == 1 || phase == 2)
+        // Only an explicit button closes it while something runs; a swipe is fine before and after.
+        .interactiveDismissDisabled(phase == 1 || phase == 2 || voice.download != nil)
+        .onAppear { if !VoiceStore.modelReady() { phase = -3 } else if Self.micDenied { phase = -2 } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if phase == -2 && !Self.micDenied { phase = 0 }   // back from Settings with the microphone allowed
+        }
         .task {   // DEV: VOX_VOICEME=auto starts the recording
             if Dev.env["VOX_VOICEME"] == "auto" { try? await Task.sleep(nanoseconds: 1_500_000_000); start() }
         }
     }
 
+    /// The line under the explanation for each phase (unit-tested: every phase has its own text).
+    static func messageKey(_ phase: Int) -> String {
+        switch phase {
+        case 0: return "voice_me_next"
+        case 1: return "voice_me_recording"
+        case 2: return "voice_me_computing"
+        case 3: return "voice_me_done"
+        case -2: return "voice_me_permission"
+        case -3: return "voice_me_need_model"
+        default: return "voice_me_failed"
+        }
+    }
+
+    private static var micDenied: Bool { Dev.env["VOX_MICFILE"] == nil && AVAudioApplication.shared.recordPermission == .denied }
+
+    private func getModel() {
+        Task { phase = await voice.enable() ? 0 : -3 }
+    }
+
     private func start() {
-        guard phase == 0 else { return }
+        guard phase == 0 || phase == -1 else { return }
         Task {
             guard await Recorder.requestPermission() else { phase = -2; return }
             phase = 1
