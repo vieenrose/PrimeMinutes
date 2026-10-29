@@ -84,6 +84,32 @@
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
             </intent-filter>
+            <!-- A shared meeting (.pmin, see PrimeMinutesSession.SHARE_EXT): ours by MIME, and by name
+                 when Files / Quick Share only know it as octet-stream (non-meetings are refused, not imported). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.primeminutes.session" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.pmin" />
+                <data android:pathPattern=".*\\..*\\.pmin" />
+                <data android:pathPattern=".*\\..*\\..*\\.pmin" />
+            </intent-filter>
+            <!-- Files on Android 11+ hand content://…/document/123 with octet-stream: no name to match. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
             <!-- "Open with Prime Minutes" from a file manager / browser download. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
