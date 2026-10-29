@@ -175,5 +175,15 @@ class SessionShareTest {
         assertTrue(PrimeMinutesSession.importableAsAudio(null))
         assertFalse(PrimeMinutesSession.importableAsAudio("application/octet-stream"))
         assertFalse(PrimeMinutesSession.importableAsAudio(PrimeMinutesSession.SHARE_MIME))
+        // Through the catch-all VIEW filter: unknown types are audio only by name.
+        assertTrue(PrimeMinutesSession.importableReceived("audio/mpeg", "a.bin", true))
+        assertTrue(PrimeMinutesSession.importableReceived(null, "talk.M4A", true))
+        assertTrue(PrimeMinutesSession.importableReceived("application/octet-stream", "talk.mp3", true))
+        assertFalse(PrimeMinutesSession.importableReceived("text/plain", "notes.txt", true))
+        assertFalse(PrimeMinutesSession.importableReceived("image/jpeg", "a.jpg", true))
+        assertFalse(PrimeMinutesSession.importableReceived(null, "notes.txt", true))
+        assertFalse(PrimeMinutesSession.importableReceived(null, "1000000876", true))
+        assertFalse(PrimeMinutesSession.importableReceived("application/octet-stream", "m.pmin", true))
+        assertTrue(PrimeMinutesSession.importableReceived(null, null, false))
     }
 }

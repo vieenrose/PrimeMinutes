@@ -102,6 +102,15 @@
                 <data android:pathPattern=".*\\..*\\.pmin" />
                 <data android:pathPattern=".*\\..*\\..*\\.pmin" />
             </intent-filter>
+            <!-- Samsung My Files does not know .pmin: it sends VIEW content://media/external/file/123 with
+                 an EMPTY type, which only a */* filter matches. Catch-all on purpose; anything that is
+                 neither a meeting nor audio/video is refused in MainActivity (share_not_meeting). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
             <!-- Files on Android 11+ hand content://…/document/123 with octet-stream: no name to match. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
