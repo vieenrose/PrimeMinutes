@@ -63,6 +63,7 @@ import studio.primeminutes.core.people.PeopleStore
 import studio.primeminutes.core.people.Person
 import studio.primeminutes.core.people.VoiceFiles
 import studio.primeminutes.core.people.VoiceMath
+import studio.primeminutes.core.people.VoiceLane
 import studio.primeminutes.core.people.VoiceStore
 import studio.primeminutes.core.people.VoiceSuggestion
 import studio.primeminutes.data.SpeakerName
@@ -79,21 +80,21 @@ import java.io.File
 @Composable
 fun rememberVoiceSuggestions(
     entryDir: File?, speaker: Int, names: Map<Int, SpeakerName>, utterances: List<TranscriptEvent.Utterance>,
-): Pair<List<VoiceSuggestion>, String?> {
+): Triple<List<VoiceSuggestion>, String?, VoiceNoteAction?> {
     val context = LocalContext.current
     val doc by PeopleStore.doc.collectAsState()
     val version by VoiceStore.version.collectAsState()
-    val working by VoiceStore.working.collectAsState()
-    if (!doc.voice || entryDir == null) return emptyList<VoiceSuggestion>() to null
+    val status by VoiceStore.status.collectAsState()
+    if (!doc.voice || entryDir == null) return Triple(emptyList(), null, null)
     val id = entryDir.name
     val card = VoiceStore.card
-    val r by produceState<Pair<List<VoiceSuggestion>, Int>>(emptyList<VoiceSuggestion>() to 0, entryDir, speaker, names, version) {
+    val r by produceState<Pair<List<VoiceSuggestion>, Int>?>(null, entryDir, speaker, names, version) {
         value = withContext(Dispatchers.IO) {
             val turns = CleanSpeech.voiceTurns(utterances)
             val clean = CleanSpeech.spans(turns, speaker, card.capSec).sumOf { it.sec }
             val mv = VoiceStore.readMeeting(entryDir)
             val spans = utterances.mapNotNull { it.speaker }.distinct().associateWith { CleanSpeech.ordered(turns, it) }
-            if (mv == null || mv.fingerprint != VoiceFiles.fingerprint(spans)) VoiceStore.request(context, id)
+            if (mv == null || mv.fingerprint != VoiceFiles.fingerprint(spans)) VoiceStore.request(context, id, front = true)
             when {
                 clean < card.minCleanSec -> emptyList<VoiceSuggestion>() to 1
                 mv == null -> emptyList<VoiceSuggestion>() to 2
@@ -108,14 +109,30 @@ fun rememberVoiceSuggestions(
             }
         }
     }
-    val note = when {
-        r.second == 1 -> stringResource(R.string.voice_note_short)
-        r.second == 2 || id in working -> stringResource(R.string.voice_note_working)
-        r.second == 3 -> stringResource(R.string.voice_note_none_yet)
-        r.first.isEmpty() -> stringResource(R.string.voice_note_no_match)
+    val ranked = r ?: return Triple(emptyList(), null, null)
+    val lane = VoiceLane.note(ranked.second, ranked.first.isEmpty(), status[id])
+    val note = lane?.let { stringResource(noteRes(it)) }
+    val action = when (lane) {
+        VoiceLane.Note.FAILED -> VoiceNoteAction(stringResource(R.string.voice_retry)) { VoiceStore.retry(context, id) }
+        VoiceLane.Note.MODEL_MISSING -> VoiceNoteAction(stringResource(R.string.voice_download)) { VoiceStore.downloadModel(context) }
         else -> null
     }
-    return r.first to note
+    return Triple(ranked.first, note, action)
+}
+
+/** The button under the voice note of the rename sheet (Retry, Download). */
+class VoiceNoteAction(val label: String, val run: () -> Unit)
+
+internal fun noteRes(n: VoiceLane.Note): Int = when (n) {
+    VoiceLane.Note.SHORT -> R.string.voice_note_short
+    VoiceLane.Note.NONE_YET -> R.string.voice_note_none_yet
+    VoiceLane.Note.NO_MATCH -> R.string.voice_note_no_match
+    VoiceLane.Note.COMPUTING -> R.string.voice_note_working
+    VoiceLane.Note.WAIT_TRANSCRIPTION -> R.string.voice_note_wait_run
+    VoiceLane.Note.WAIT_BATTERY -> R.string.voice_note_wait_battery
+    VoiceLane.Note.WAIT_QUEUE -> R.string.voice_note_wait_queue
+    VoiceLane.Note.FAILED -> R.string.voice_note_failed
+    VoiceLane.Note.MODEL_MISSING -> R.string.voice_note_model_missing
 }
 
 /** The "Recognise voices" switch, its explanation and the "Me" enrolment, at the top of the People screen. */

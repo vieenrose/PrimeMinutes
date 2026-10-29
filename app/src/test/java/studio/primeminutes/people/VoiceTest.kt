@@ -10,6 +10,10 @@ import studio.primeminutes.core.people.CleanSpeech
 import studio.primeminutes.core.people.SpeakerCard
 import studio.primeminutes.core.people.VoiceFiles
 import studio.primeminutes.core.people.VoiceFiles.Exemplar
+import studio.primeminutes.core.people.VoiceLane
+import studio.primeminutes.core.people.VoiceLane.Note as N
+import studio.primeminutes.core.people.VoiceLane.Status as S
+import studio.primeminutes.core.people.VoiceLane.Wait as W
 import studio.primeminutes.core.people.VoiceMath
 
 /** Voice recognition's pure parts (docs/design/speaker-tags.md §2.6, §4); iOS runs the same cases (VoiceTests.swift). */
@@ -132,5 +136,25 @@ class VoiceTest {
         val t = CleanSpeech.voiceTurns(utts)
         assertEquals(listOf(0, -9, 1, 0), t.map { it.speaker })
         assertEquals(listOf(0.1, 70.1), CleanSpeech.ordered(t, 0).map { Math.round(it.start * 10) / 10.0 }.sorted())
+    }
+
+    @Test fun theLaneNeverSaysComparingWhenNothingRuns() {
+        assertEquals("no vectors, not running: waiting, not comparing", N.WAIT_QUEUE, VoiceLane.note(2, true, null))
+        assertEquals(N.WAIT_TRANSCRIPTION, VoiceLane.note(2, true, S.Queued(W.TRANSCRIPTION)))
+        assertEquals(N.WAIT_BATTERY, VoiceLane.note(2, true, S.Queued(W.BATTERY)))
+        assertEquals(N.COMPUTING, VoiceLane.note(2, true, S.Computing))
+        assertEquals(N.FAILED, VoiceLane.note(2, true, S.Failed))
+        assertEquals(N.MODEL_MISSING, VoiceLane.note(0, true, S.ModelMissing))
+        assertEquals(N.MODEL_MISSING, VoiceLane.note(2, true, S.ModelMissing))
+        assertEquals(N.SHORT, VoiceLane.note(1, true, null))
+        assertEquals(N.NONE_YET, VoiceLane.note(3, true, null))
+        assertEquals(N.NO_MATCH, VoiceLane.note(0, true, null))
+        assertNull(VoiceLane.note(0, false, null))
+        assertNull("a stale sidecar recomputing keeps its suggestions", VoiceLane.note(0, false, S.Computing))
+        assertNull("a failed recompute keeps the old suggestions", VoiceLane.note(0, false, S.Failed))
+        assertNull("the meeting on screen goes even while busy", VoiceLane.wait(front = true, busy = true, batteryOk = false))
+        assertEquals(W.TRANSCRIPTION, VoiceLane.wait(front = false, busy = true, batteryOk = true))
+        assertEquals(W.BATTERY, VoiceLane.wait(front = false, busy = false, batteryOk = false))
+        assertNull(VoiceLane.wait(front = false, busy = false, batteryOk = true))
     }
 }

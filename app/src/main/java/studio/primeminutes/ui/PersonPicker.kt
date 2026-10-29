@@ -110,6 +110,8 @@ fun PersonPickerSheet(
     suggestions: List<VoiceSuggestion> = emptyList(),
     /** Under the voice section: why there is none ("Not enough speech to compare voices"), or null. */
     voiceNote: String? = null,
+    /** A button under [voiceNote] (Retry, Download), or null. */
+    voiceAction: VoiceNoteAction? = null,
     onPlaySample: (() -> Unit)? = null,
     allowClear: Boolean = current?.person != null || (current != null && current.label != defaultLabel(current.id)),
     /** Plain labels instead of people when Contacts is not granted (the rename sheet; false: pick people only). */
@@ -214,6 +216,9 @@ fun PersonPickerSheet(
                         PersonRow(p.name, hint(p) ?: meetingsText(usage[p.id]?.meetings ?: 0), dots = s.level, onClick = { onPick(PersonPick.Existing(p)) })
                     }
                     if (suggested.isEmpty() && voiceNote != null) item { Text(voiceNote, color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp)) }
+                    if (suggested.isEmpty() && voiceNote != null && voiceAction != null) item {
+                        TextButton(onClick = voiceAction.run, modifier = Modifier.testTag("voice-note-action")) { Text(voiceAction.label) }
+                    }
                 }
                 if (sec.inMeeting.isNotEmpty()) {
                     item { SectionLabel(stringResource(R.string.people_section_here)) }
@@ -320,6 +325,8 @@ fun SpeakerNameFlow(
     onDismiss: () -> Unit,
     suggestions: List<VoiceSuggestion> = emptyList(),
     voiceNote: String? = null,
+    /** A button under [voiceNote] (Retry, Download), or null. */
+    voiceAction: VoiceNoteAction? = null,
     onPlaySample: (() -> Unit)? = null,
     /** The speaker is a person already: open their page. */
     onOpenPerson: ((Person) -> Unit)? = null,
@@ -339,7 +346,7 @@ fun SpeakerNameFlow(
     if (mergeAsk == null && newAsk == null && emailFor == null) PersonPickerSheet(
         title = stringResource(R.string.people_who_is, speaker.label),
         current = speaker, speakers = speakers,
-        suggestions = suggestions, voiceNote = voiceNote, onPlaySample = onPlaySample,
+        suggestions = suggestions, voiceNote = voiceNote, voiceAction = voiceAction, onPlaySample = onPlaySample,
         onDismiss = onDismiss,
         onOpenPerson = onOpenPerson,
         onAddEmail = { p -> emailFor = p },
