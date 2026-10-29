@@ -1,8 +1,7 @@
 import XCTest
 
 /// Share v2 device checks with real taps on the installed DEV app: the sheet (what / where, sizes, hints), the mail
-/// composer with the files attached (cancelled, draft deleted: never sent), the iCloud Drive save (the DEV app removes
-/// the saved file again, VOX_SHARE_CLEANUP) and the PDF in Quick Look (a citation tapped jumps to the transcript).
+/// composer with the files attached (cancelled, draft deleted: never sent) and the PDF in Quick Look (a citation tapped jumps to the transcript).
 /// Demo meeting PM_MEETING (default D0AB1E00-…-C3, the "move" demo with its audio) must be in the library.
 final class ShareUITests: XCTestCase {
     let app = XCUIApplication(bundleIdentifier: "tw.com.pesi.primeminutes")
@@ -70,37 +69,6 @@ final class ShareUITests: XCTestCase {
             sleep(2)
         } else { XCTFail("no composer Cancel (mail not set up? the share sheet then opens)") }
         shot("mail-end")
-    }
-
-    /// iCloud Drive: the document picker in export mode; into PM_FOLDER (created under iCloud Drive when missing),
-    /// then Save/Move. The DEV app removes the saved file again (VOX_SHARE_CLEANUP) and logs it.
-    func testICloud() {
-        launch(["VOX_SHARE_CLEANUP": "1"])
-        guard openSheet() else { return }
-        app.buttons["share-what-pdf"].tap(); sleep(3)
-        app.buttons["share-to-icloud"].tap(); sleep(5); shot("ic-1-picker")
-        // Browse → iCloud Drive (the picker is in the phone's language).
-        let back = app.buttons["BackButton"].firstMatch
-        if app.buttons["DOCPicker.actionButton"].exists, back.exists, back.isHittable { back.tap(); sleep(2) }
-        let ic = app.cells.matching(NSPredicate(format: "label BEGINSWITH 'iCloud'")).firstMatch
-        if ic.waitForExistence(timeout: 4) { ic.tap(); sleep(3) } else if let b = first(["iCloud Drive", "iCloud 雲碟", "iCloud 云盘"], 3) { b.tap(); sleep(3) }
-        shot("ic-2-icloud")
-        let folder = env["PM_FOLDER"] ?? "PM-share-test"
-        var cell = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", folder)).firstMatch
-        if !cell.exists {
-            app.buttons["TopOverflowBarButtonItem"].tap(); sleep(2); shot("ic-3-menu")
-            let nf = app.buttons.matching(NSPredicate(format: "label IN %@", ["Nouveau dossier", "New Folder", "新增檔案夾", "新增資料夾", "新建文件夹"])).firstMatch
-            guard nf.waitForExistence(timeout: 4) else { XCTFail("no New Folder"); return }
-            nf.tap(); sleep(2)
-            app.typeText(folder + "\n"); sleep(3)
-            cell = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", folder)).firstMatch
-        }
-        shot("ic-4-folder")
-        if cell.exists, cell.isHittable { cell.tap(); sleep(3) }
-        shot("ic-5-in-folder")
-        let save = app.buttons["DOCPicker.actionButton"]
-        guard save.waitForExistence(timeout: 4) else { XCTFail("no Save in the picker"); return }
-        save.tap(); sleep(6); shot("ic-6-saved")
     }
 
     /// The PDF in Quick Look: tap the first citation link in the summary; the view must move to another page.

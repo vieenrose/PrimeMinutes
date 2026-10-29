@@ -663,10 +663,7 @@
 "share_nearby_desc" = "A nearby iPhone, iPad or Mac";
 "share_mail" = "E-mail";
 "share_mail_desc" = "A new mail with the files attached";
-"share_mail_big" = "%@: may be too large for e-mail. AirDrop or a cloud drive is safer.";
-"share_icloud_desc" = "Save to a folder such as “Prime Minutes”";
-"share_cloud" = "Save to a cloud drive";
-"share_cloud_desc" = "%@: choose it under Browse once its app is installed";
+"share_mail_big" = "%@: may be too large for e-mail. AirDrop is safer.";
 "share_other" = "Other apps…";
 "share_other_desc" = "LINE, Messages, Notes…";
 "share_mail_body" = "Attached: “%@”, from Prime Minutes.";

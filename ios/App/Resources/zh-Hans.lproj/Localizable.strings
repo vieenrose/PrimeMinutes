@@ -663,10 +663,7 @@
 "share_nearby_desc" = "附近的 iPhone、iPad 或 Mac";
 "share_mail" = "电子邮件";
 "share_mail_desc" = "打开新邮件，文件以附件附上";
-"share_mail_big" = "%@：可能超过邮件大小上限，建议改用 AirDrop 或云盘。";
-"share_icloud_desc" = "存到文件夹，例如“Prime Minutes”";
-"share_cloud" = "存到云盘";
-"share_cloud_desc" = "%@：安装其 App 后，在“浏览”中选择";
+"share_mail_big" = "%@：可能超过邮件大小上限，建议改用 AirDrop。";
 "share_other" = "其他 App…";
 "share_other_desc" = "LINE、信息、备忘录…";
 "share_mail_body" = "附件为“%@”，由 Prime Minutes 生成。";

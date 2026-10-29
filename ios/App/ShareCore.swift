@@ -7,19 +7,14 @@ enum ShareWhat: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// WHERE the files go. `cloud` = the document picker in export mode, which lists iCloud Drive and every installed
-/// File Provider (Google Drive, Dropbox, OneDrive…); `icloud` opens the same picker for iCloud Drive.
-enum ShareWhere: String, CaseIterable { case nearby, mail, icloud, cloud, other }
+/// WHERE the files go: AirDrop (nearby), e-mail with the files attached, or the system share sheet (other apps).
+enum ShareWhere: String, CaseIterable { case nearby, mail, other }
 
 enum ShareCore {
     /// Above this the audio switch of the PDF option starts off (the size is shown either way).
     static let largeAudio: Int64 = 25_000_000
     /// Mail servers commonly refuse messages over ~20–25 MB: above this the mail row warns.
     static let mailLimit: Int64 = 20_000_000
-    /// The cloud apps whose File Provider extension shows in the document picker once installed. iOS gives no reliable
-    /// way to tell which ones are installed (no URL-scheme query for them without LSApplicationQueriesSchemes, and
-    /// the providers' presence is the picker's business), so they share one row that opens the picker.
-    static let cloudProviders = ["Google Drive", "Dropbox", "OneDrive"]
 
     /// What the meeting can give: the session needs audio and a transcript, the PDF a transcript, the audio a file.
     static func available(hasLines: Bool, hasAudio: Bool) -> [ShareWhat] {

@@ -15,7 +15,7 @@ struct ShareTarget: Identifiable {
 
 /// Share v2: the one "Share" entry of a meeting (session ⋯, the library row). Pick WHAT (the whole session as
 /// .pmin, the summary + transcript PDF ± the recording, the recording alone), then WHERE (AirDrop, e-mail with the
-/// files attached, iCloud Drive / the other cloud drives through the document picker, any other app).
+/// files attached, any other app).
 struct MeetingShareSheet: View {
     let target: ShareTarget
     var onDone: () -> Void = {}
@@ -83,8 +83,6 @@ struct MeetingShareSheet: View {
                     whereRow(.nearby, "airplayaudio", L("share_nearby"), L("share_nearby_desc"))
                     let total = what.map(bytes) ?? 0
                     whereRow(.mail, "envelope", L("share_mail"), total > ShareCore.mailLimit ? L("share_mail_big", size(total)) : L("share_mail_desc"), warn: total > ShareCore.mailLimit)
-                    whereRow(.icloud, "icloud", "iCloud Drive", L("share_icloud_desc"))
-                    whereRow(.cloud, "externaldrive.badge.icloud", L("share_cloud"), L("share_cloud_desc", ShareCore.cloudProviders.joined(separator: " · ")))
                     whereRow(.other, "ellipsis.circle", L("share_other"), L("share_other_desc"))
                 }
             }
@@ -199,8 +197,8 @@ struct MeetingShareSheet: View {
     }
 }
 
-/// The UIKit side of the destinations: activity sheet (AirDrop only / any app), the mail composer, the document
-/// picker in export mode. Presented over the topmost controller (the share sheet itself).
+/// The UIKit side of the destinations: activity sheet (AirDrop only / any app), the mail composer. Presented over
+/// the topmost controller (the share sheet itself).
 @MainActor enum SharePresenter {
     private static var retained: NSObject?
 
@@ -221,26 +219,6 @@ struct MeetingShareSheet: View {
             if let t = Double(Dev.env["VOX_MAIL_CLOSE"] ?? "") {   // DEV: closes the composer unsent (device checks: never send)
                 DispatchQueue.main.asyncAfter(deadline: .now() + t) { c.dismiss(animated: true); retained = nil; StatusLog.add("share: DEV composer closed unsent") }
             }
-        case .icloud, .cloud:
-            let p = UIDocumentPickerViewController(forExporting: files, asCopy: true)
-            if let last = UserDefaults.standard.url(forKey: lastFolderKey) { p.directoryURL = last }
-            let d = PickerDelegate { urls in
-                if let first = urls.first { UserDefaults.standard.set(first.deletingLastPathComponent(), forKey: lastFolderKey) }
-                StatusLog.add("share: saved \(urls.count) file(s) to \(urls.first?.deletingLastPathComponent().lastPathComponent ?? "-"): \(urls.map(\.lastPathComponent).joined(separator: ", "))")
-                if Dev.env["VOX_SHARE_CLEANUP"] != nil { devRemove(urls) }
-                done(!urls.isEmpty)
-            }
-            retained = d; p.delegate = d
-            top.present(p, animated: true)
-        }
-    }
-    /// DEV (device checks): the files just saved are removed again, logged with whether each still exists.
-    private static func devRemove(_ urls: [URL]) {
-        for u in urls {
-            let scoped = u.startAccessingSecurityScopedResource(); defer { if scoped { u.stopAccessingSecurityScopedResource() } }
-            var err: NSError?
-            NSFileCoordinator().coordinate(writingItemAt: u, options: .forDeleting, error: &err) { try? FileManager.default.removeItem(at: $0) }
-            StatusLog.add("share: DEV removed \(u.lastPathComponent), exists=\(FileManager.default.fileExists(atPath: u.path)) \(err?.localizedDescription ?? "")")
         }
     }
     /// DEV: Quick Look on the PDF (the link checks tap a citation there).
@@ -255,8 +233,6 @@ struct MeetingShareSheet: View {
         nonisolated func numberOfPreviewItems(in c: QLPreviewController) -> Int { 1 }
         nonisolated func previewController(_ c: QLPreviewController, previewItemAt i: Int) -> QLPreviewItem { url as NSURL }
     }
-    /// The folder the last cloud save went to: the picker opens there next time (the user's "Prime Minutes" folder).
-    static let lastFolderKey = "share_last_folder"
 
     private static func activity(_ files: [URL], airDropOnly: Bool, _ top: UIViewController, _ done: @escaping @MainActor (Bool) -> Void) {
         let v = UIActivityViewController(activityItems: files, applicationActivities: nil)
@@ -281,16 +257,6 @@ struct MeetingShareSheet: View {
         init(_ done: @escaping @MainActor (MFMailComposeResult) -> Void) { self.done = done }
         nonisolated func mailComposeController(_ c: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
             MainActor.assumeIsolated { c.dismiss(animated: true); done(result); SharePresenter.retained = nil }
-        }
-    }
-    final class PickerDelegate: NSObject, UIDocumentPickerDelegate {
-        let done: @MainActor ([URL]) -> Void
-        init(_ done: @escaping @MainActor ([URL]) -> Void) { self.done = done }
-        nonisolated func documentPicker(_ c: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            MainActor.assumeIsolated { done(urls); SharePresenter.retained = nil }
-        }
-        nonisolated func documentPickerWasCancelled(_ c: UIDocumentPickerViewController) {
-            MainActor.assumeIsolated { done([]); SharePresenter.retained = nil }
         }
     }
 }

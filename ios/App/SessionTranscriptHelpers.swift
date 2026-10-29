@@ -313,7 +313,7 @@ struct SessionMoreMenu: View {
         Menu {
             Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
-            // Share v2: the one entry (the whole session, the PDF, the audio; AirDrop, mail, cloud drives, other apps).
+            // Share v2: the one entry (the whole session, the PDF, the audio; AirDrop, mail, other apps).
             if hasAudio || hasLines { Button(L("share_title"), systemImage: "square.and.arrow.up") { onShare() }.disabled(busy).accessibilityIdentifier("shareMeeting") }
             if hasAudio {
                 Button(L("re_transcribe")) { onRetranscribe() }.disabled(busy)
