@@ -56,6 +56,22 @@ object PrimeMinutesSession {
     fun importableAsAudio(mime: String?): Boolean =
         mime == null || mime.startsWith("audio/") || mime.startsWith("video/")
 
+    /** Extensions taken as audio/video when the sender gave no useful type (null / octet-stream). */
+    private val AV_EXTENSIONS = setOf(
+        "m4a", "mp3", "wav", "aac", "ogg", "oga", "opus", "flac", "amr", "3gp", "3gpp", "wma", "aif", "aiff",
+        "caf", "mp4", "m4v", "mov", "mkv", "webm", "avi", "ts",
+    )
+
+    /** [importableAsAudio] for a received `content:` Uri, which may come through the catch-all VIEW
+     *  filter (any file a file manager opens with us): no type, or octet-stream, is audio only when
+     *  the display name says so — a .txt / .pdf / .pmin without a manifest is refused. */
+    fun importableReceived(mime: String?, displayName: String?, isContent: Boolean): Boolean {
+        if (mime != null && mime != "application/octet-stream") return importableAsAudio(mime)
+        val ext = displayName?.substringAfterLast('.', "")?.lowercase().orEmpty()
+        if (ext in AV_EXTENSIONS) return true
+        return mime == null && !isContent
+    }
+
     private const val VERSION = SessionShare.SCHEMA_MAJOR
     private const val FIELD = "PRIMEMINUTES"
     // base64 ceiling before decode. Generous on purpose: a long meeting's transcript can exceed a

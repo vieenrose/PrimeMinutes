@@ -1204,7 +1204,11 @@ private fun TranscribeScreen(
                     return@collect
                 }
                 // Not a meeting and not typed as audio (octet-stream / .pmin without a manifest): refuse.
-                if (man == null && !PrimeMinutesSession.importableAsAudio(withContext(Dispatchers.IO) { runCatching { context.contentResolver.getType(u) }.getOrNull() })) {
+                if (man == null && !withContext(Dispatchers.IO) {
+                        PrimeMinutesSession.importableReceived(
+                            runCatching { context.contentResolver.getType(u) }.getOrNull(),
+                            SessionViewModel.documentLabel(context, u), u.scheme == "content")
+                    }) {
                     local.delete(); vm.setStatus(context.getString(R.string.empty_status))
                     vm.notify(context.getString(R.string.share_not_meeting))
                     return@collect
