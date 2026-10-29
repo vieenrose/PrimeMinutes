@@ -39,14 +39,13 @@ struct VoiceSuggested<Content: View>: View {
 }
 
 /// The button under the voice note of the rename sheet (Retry, Download).
-struct VoiceNoteAction { let label: String; let run: () -> Void }
+struct VoiceNoteAction: Sendable { let label: String; let run: @MainActor @Sendable () -> Void }
 private struct VoiceNoteActionKey: EnvironmentKey { static let defaultValue: VoiceNoteAction? = nil }
 extension EnvironmentValues {
     var voiceNoteAction: VoiceNoteAction? {
         get { self[VoiceNoteActionKey.self] }
         set { self[VoiceNoteActionKey.self] = newValue }
     }
-}
 }
 
 /// The "Recognise voices" switch, its explanation and the "Me" enrolment, at the top of the People screen.
