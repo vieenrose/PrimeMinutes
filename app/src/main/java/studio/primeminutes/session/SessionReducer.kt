@@ -42,6 +42,8 @@ data class OpenedSession(
     /** Where Save writes: the opened file itself when we hold WRITE on it. */
     val saveUri: Uri?,
     val cover: android.graphics.Bitmap?,
+    /** What the user hand-edited in it ([studio.primeminutes.core.library.UserEdits]). */
+    val edits: studio.primeminutes.core.library.UserEdits = studio.primeminutes.core.library.UserEdits(),
 )
 
 /**
@@ -121,7 +123,7 @@ object SessionReducer {
             showPodcastSheet = false, showConfigSheet = false,
             showAddSourceSheet = false, showYouTubeSheet = false, showExportSheet = false,
             lastSaveUri = null, coverBitmap = null, coverFromSession = false,
-            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
+            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false, summaryEdited = false, linesEdited = false,
             sessionGen = s.sessionGen + 1,
             editUndo = emptyList(), editRedo = emptyList(),
             watchingQueue = false, pendingNextTalk = false, pendingAutoProcess = false, downloadEntryId = null,
@@ -200,7 +202,7 @@ object SessionReducer {
             s = s.copy(running = false, status = str(R.string.status_stopped))
             // A stopped re-summarize keeps the summary it was replacing (it is still on disk).
             s.resummaryUndo?.takeIf { s.summary == null }?.let { u ->
-                s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited)
+                s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited, summaryEdited = u.summaryEdited)
                 emit(SessionEffect.AgentReset(whole = null))
                 u.journal?.let { emit(SessionEffect.AgentRestore(it)) }
             }
@@ -225,7 +227,7 @@ object SessionReducer {
         // The booth's timer and buttons are dead now.
         if (s.screen == Screen.Capture) s = s.copy(screen = Screen.Studio)
         s.resummaryUndo?.takeIf { s.summary == null }?.let { u ->
-            s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited)
+            s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited, summaryEdited = u.summaryEdited)
             emit(SessionEffect.AgentReset(whole = null))
             u.journal?.let { emit(SessionEffect.AgentRestore(it)) }
         }
@@ -268,7 +270,7 @@ object SessionReducer {
             title = s.queueTitle, summary = s.queueSummary, actionItems = null, meetingNotes = null,
             searchActive = false, searchQuery = "",
             coverEnabled = true, coverBitmap = null, coverFromSession = false, lastSaveUri = null,
-            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
+            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false, summaryEdited = false, linesEdited = false,
             sessionDirty = false,
             sessionGen = s.sessionGen + 1,   // stale events from any prior session run are dropped
             // NOT a recording run: a view that merely WATCHES a drain must not offer ⏭ next talk.
@@ -294,7 +296,7 @@ object SessionReducer {
             title = entry.title, summary = null, actionItems = null, meetingNotes = null,
             searchActive = false, searchQuery = "",
             coverEnabled = true, coverBitmap = null, coverFromSession = false, lastSaveUri = null,
-            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false,
+            summaryStale = false, transcriptStale = false, transcriptDirty = false, titleEdited = false, summaryEdited = false, linesEdited = false,
             sessionDirty = false, sessionGen = s.sessionGen + 1,
             libraryDir = entry.dir, recordingRun = false, audioUri = null,
             transcriptReady = false, running = false, progress = 0f, status = "",
@@ -316,6 +318,7 @@ object SessionReducer {
             utterances = loaded.utterances, speakerNames = loaded.speakerNames,
             editingIndex = -1, editingSpeakerId = null,
             summaryStale = false, transcriptStale = false, transcriptDirty = false,
+            summaryEdited = o.edits.summary, linesEdited = o.edits.lines,
             sessionGen = s.sessionGen + 1,
             title = title, summary = loaded.summary, actionItems = loaded.actionItems, meetingNotes = notes,
             // A saved title is intentional: a sticky edit re-summarize won't overwrite (but not the
@@ -405,8 +408,8 @@ object SessionReducer {
         emit(SessionEffect.AgentReset(whole = true))
         s = s.copy(
             sessionModels = s.sessionModels?.copy(first = s.config.llmModelId),
-            resummaryUndo = ResummaryUndo(s.summary, s.meetingNotes, s.title, s.titleEdited, journal),
-            summary = null,
+            resummaryUndo = ResummaryUndo(s.summary, s.meetingNotes, s.title, s.titleEdited, journal, s.summaryEdited),
+            summary = null, summaryEdited = false,
             // Stale decisions/open/topics would otherwise stay beside a summary they don't describe.
             meetingNotes = null,
         )
@@ -418,6 +421,13 @@ object SessionReducer {
         ))
     }
 
+    /** Whether [kind] would replace content the user typed: an edited summary / action items for a
+     *  re-summarize, edited line text for a re-transcribe (speaker names and boundaries are carried). */
+    fun needsRerunConfirm(s: SessionState, kind: RerunAsk): Boolean = when (kind) {
+        RerunAsk.RESUMMARIZE, RerunAsk.REGENERATE_STALE -> s.summaryEdited
+        RerunAsk.RETRANSCRIBE -> s.linesEdited
+    }
+
     /** One re-summarize regenerates what a transcript edit or a settings change made stale. */
     fun regenerateStaleChildren(state: SessionState, env: SessionEnv, journal: String?): Next = tx(state, env) {
         if (s.running) return@tx
@@ -427,7 +437,7 @@ object SessionReducer {
     /** The Undo of a finished re-summarize: only on the same session and while idle. */
     fun undoResummary(state: SessionState, env: SessionEnv, u: ResummaryUndo, gen: Int): Next = tx(state, env) {
         if (s.sessionGen != gen || s.running) return@tx
-        s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited, sessionDirty = true)
+        s = s.copy(summary = u.summary, meetingNotes = u.notes, title = u.title, titleEdited = u.titleEdited, summaryEdited = u.summaryEdited, sessionDirty = true)
         emit(SessionEffect.AgentReset(whole = null))
         u.journal?.let { emit(SessionEffect.AgentRestore(it)) }
     }
@@ -446,7 +456,7 @@ object SessionReducer {
         // Transcript changed → its summary AND action-items children are now stale.
         val dirtyChildren = !s.summary.isNullOrBlank() || s.actionItems != null
         return recordEdit(s, utts, s.speakerNames).copy(
-            utterances = utts, editingIndex = -1, editSeq = s.editSeq + 1, sessionDirty = true,
+            utterances = utts, editingIndex = -1, editSeq = s.editSeq + 1, sessionDirty = true, linesEdited = true,
             transcriptDirty = s.transcriptDirty || dirtyChildren,
         )
     }
@@ -568,10 +578,12 @@ object SessionReducer {
         s.copy(title = title, editingTitle = false, titleEdited = true, editSeq = s.editSeq + 1, sessionDirty = true)
 
     fun saveSummary(s: SessionState, summary: String) =
-        s.copy(summary = summary, editingSummary = false, editSeq = s.editSeq + 1, sessionDirty = true)
+        if (summary == s.summary) s.copy(editingSummary = false)
+        else s.copy(summary = summary, editingSummary = false, editSeq = s.editSeq + 1, sessionDirty = true, summaryEdited = true)
 
     fun saveActions(s: SessionState, actions: String) =
-        s.copy(actionItems = actions, editingActions = false, editSeq = s.editSeq + 1, sessionDirty = true)
+        if (actions == s.actionItems) s.copy(editingActions = false)
+        else s.copy(actionItems = actions, editingActions = false, editSeq = s.editSeq + 1, sessionDirty = true, summaryEdited = true)
 
     /** An in-place Chinese-script re-render finished (still current: same session, no edit since). */
     fun scriptConverted(

@@ -468,4 +468,61 @@ class SessionReducerTest {
         val back = SessionReducer.undoEdit(SessionReducer.undoEdit(SessionReducer.linkSpeaker(merged, 0, null, "Mark")))
         assertEquals(listOf(0, 1), back.utterances.map { it.speaker }); assertTrue(back.speakerNames.isEmpty())
     }
+
+    // --- Hand-edits vs re-runs ---
+
+    @Test fun editingTheSummaryOrActionsMarksItAndReSummarizeAsks() {
+        val s = s0.copy(utterances = listOf(utt(0)), summary = "ai", actionItems = "- a", transcriptReady = true)
+        assertFalse(SessionReducer.needsRerunConfirm(s, RerunAsk.RESUMMARIZE))
+        assertFalse(SessionReducer.saveSummary(s, "ai").summaryEdited)   // unchanged text is no edit
+        val e = SessionReducer.saveSummary(s, "mine")
+        assertTrue(e.summaryEdited)
+        assertTrue(SessionReducer.needsRerunConfirm(e, RerunAsk.RESUMMARIZE))
+        assertTrue(SessionReducer.needsRerunConfirm(e, RerunAsk.REGENERATE_STALE))
+        assertFalse(SessionReducer.needsRerunConfirm(e, RerunAsk.RETRANSCRIBE))
+        assertTrue(SessionReducer.saveActions(s, "- b").summaryEdited)
+    }
+
+    @Test fun aConfirmedReSummarizeClearsTheMarkAndItsUndoRestoresIt() {
+        val e = SessionReducer.saveSummary(s0.copy(utterances = listOf(utt(0)), summary = "ai"), "mine")
+        val r = SessionReducer.reSummarize(e, env, journal = null).state
+        assertFalse(r.summaryEdited); assertNull(r.summary)
+        val u = r.resummaryUndo!!
+        assertTrue(u.summaryEdited)
+        val back = SessionReducer.undoResummary(r.copy(running = false, summary = "new"), env, u, r.sessionGen).state
+        assertEquals("mine", back.summary); assertTrue(back.summaryEdited)
+        // A stopped re-summarize puts the edited summary back, mark included.
+        val stopped = SessionReducer.stop(r, env).state
+        assertEquals("mine", stopped.summary); assertTrue(stopped.summaryEdited)
+    }
+
+    @Test fun editingALineMarksItAndReTranscribeAsks() {
+        val s = s0.copy(utterances = listOf(utt(0), utt(1)))
+        assertFalse(SessionReducer.needsRerunConfirm(s, RerunAsk.RETRANSCRIBE))
+        val e = SessionReducer.saveLineText(s, 1, "fixed")
+        assertTrue(e.linesEdited)
+        assertTrue(SessionReducer.needsRerunConfirm(e, RerunAsk.RETRANSCRIBE))
+        assertFalse(SessionReducer.needsRerunConfirm(e, RerunAsk.RESUMMARIZE))
+        // A new run starts clean.
+        assertFalse(SessionReducer.launchAudio(e, env, entryUri("20261014-175615")).state.linesEdited)
+    }
+
+    @Test fun anEditedLineKeepsItsTextAcrossSpeakerMergesAndMoves() {
+        val s = s0.copy(utterances = listOf(utt(0, speaker = 0), utt(1, speaker = 1), utt(2, speaker = 1)))
+        val e = SessionReducer.saveLineText(s, 1, "my fix")
+        val merged = SessionReducer.mergeSpeaker(e, env, from = 1, into = 0).state
+        assertEquals("my fix", merged.utterances[1].text); assertEquals(0, merged.utterances[1].speaker)
+        assertTrue(merged.linesEdited)
+        val moved = SessionReducer.reassignLine(e, env, 1, 0).state
+        assertEquals("my fix", moved.utterances[1].text)
+    }
+
+    @Test fun openingASessionRestoresItsEditMarks() {
+        val loaded = studio.primeminutes.core.session.PrimeMinutesSession.Loaded(File("/s.m4a"), listOf(utt(0)), emptyMap(), "x", "t", null, null, null, null, true)
+        val o = OpenedSession(Uri.parse("file:///s.m4a"), loaded, null, null, null, studio.primeminutes.core.library.UserEdits(summary = true, lines = true))
+        val n = SessionReducer.sessionOpened(s0, env, o).state
+        assertTrue(n.summaryEdited); assertTrue(n.linesEdited)
+        val plain = SessionReducer.sessionOpened(n, env, o.copy(edits = studio.primeminutes.core.library.UserEdits())).state
+        assertFalse(plain.summaryEdited); assertFalse(plain.linesEdited)
+    }
 }

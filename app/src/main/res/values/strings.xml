@@ -775,4 +775,8 @@
     <string name="share_too_new">This meeting comes from a newer version of Prime Minutes. Update the app to restore it; it was imported as plain audio for now.</string>
     <string name="share_received">Meeting received and added to your library</string>
     <string name="share_hint_original">The meeting is now in Prime Minutes. You can delete the original file from Downloads.</string>
+    <string name="confirm_resummarize_title">Replace your edited summary?</string>
+    <string name="confirm_resummarize_body">You edited the summary or the action items. Re-summarizing writes new ones in their place (Undo stays available right after).</string>
+    <string name="confirm_retranscribe_title">Discard your line edits?</string>
+    <string name="confirm_retranscribe_body">You corrected the text of some lines. Re-transcribing rewrites the whole transcript from the audio, and those corrections will be lost.</string>
 </resources>

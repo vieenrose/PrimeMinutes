@@ -235,6 +235,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         val before = _state.value
         _state.value = next.state
         syncSpeakerLinks(before, next.state)
+        syncUserEdits(before, next.state)
         next.effects.forEach(::run)
         autoPersist()
     }
@@ -243,7 +244,16 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         val before = _state.value
         _state.value = f(before)
         syncSpeakerLinks(before, _state.value)
+        syncUserEdits(before, _state.value)
         autoPersist()
+    }
+
+    /** The hand-edit flags of a library meeting follow it on disk (a fresh session resets them in memory only). */
+    private fun syncUserEdits(before: SessionState, after: SessionState) {
+        val dir = after.libraryDir ?: return
+        if (before.libraryDir != dir || (before.summaryEdited == after.summaryEdited && before.linesEdited == after.linesEdited)) return
+        val e = studio.primeminutes.core.library.UserEdits(after.summaryEdited, after.linesEdited)
+        viewModelScope.launch(Dispatchers.IO) { studio.primeminutes.core.library.UserEdits.write(dir, e) }
     }
 
     private var autoPersistJob: kotlinx.coroutines.Job? = null
@@ -458,7 +468,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
                 }
                 // Bounded decode of the EMBEDDED cover: an opened session is an untrusted file.
                 val cover = loaded.coverJpeg?.let { decodeBoundedBitmap(it, 1024) }
-                apply(SessionReducer.sessionOpened(now, env, OpenedSession(uri, loaded, metaTitle, saveUri, cover)))
+                val edits = withContext(Dispatchers.IO) { studio.primeminutes.core.library.UserEdits.read(SessionLibrary.entryDirOf(ctx, uri)) }
+                apply(SessionReducer.sessionOpened(now, env, OpenedSession(uri, loaded, metaTitle, saveUri, cover, edits)))
                 RecentSessions.add(ctx, uri.toString(), loaded.title ?: "", System.currentTimeMillis()); bumpRecents()
             } finally {
                 // Clear only if still the current open — a newer one owns the flag otherwise.
@@ -486,6 +497,24 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         }
     }
 
+    /** A re-run from the menu or a snackbar: asks first when it would replace the user's own edits. */
+    fun askRerun(kind: RerunAsk) {
+        if (SessionReducer.needsRerunConfirm(now, kind)) update { it.copy(confirmRerun = kind) } else runRerun(kind)
+    }
+
+    /** The confirm dialog's answer. */
+    fun answerRerun(go: Boolean) {
+        val k = now.confirmRerun ?: return
+        update { it.copy(confirmRerun = null) }
+        if (go) runRerun(k)
+    }
+
+    private fun runRerun(kind: RerunAsk) = when (kind) {
+        RerunAsk.RESUMMARIZE -> reSummarizeFromMenu()
+        RerunAsk.REGENERATE_STALE -> regenerateStaleChildren()
+        RerunAsk.RETRANSCRIBE -> reTranscribe()
+    }
+
     /** Re-transcribe IN PLACE: a library session re-runs its own entry's recording. */
     fun reTranscribe() {
         // The title is kept (pinned like a user's), except the "No speech detected" a silent run gave
@@ -496,6 +525,8 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
         viewModelScope.launch {
             // A manual re-run starts over: a stale checkpoint must not be picked up as progress.
             dir?.let { d -> withContext(Dispatchers.IO) { SessionLibrary.byId(ctx, d.name)?.let(SessionLibrary::clearProgress) } }
+            // The confirmed re-run replaces the hand-edited lines: the entry no longer holds any.
+            dir?.let { d -> withContext(Dispatchers.IO) { studio.primeminutes.core.library.UserEdits.write(d, studio.primeminutes.core.library.UserEdits.read(d).copy(lines = false)) } }
             // Its audio was opened from a cache copy, which the pipeline would save as a NEW entry
             // (a duplicate row) — so give the entry back its recording.wav and run on that.
             val target = dir?.let { d ->

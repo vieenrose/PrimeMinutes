@@ -11,10 +11,14 @@ import studio.primeminutes.data.SpeakerName
 /** Studio navigation: list-first stack — Studio (home) → Capture / Session, back returns home. */
 enum class Screen { Studio, Capture, Session }
 
+/** A re-run that would replace hand-edited content, waiting for the user's yes. */
+enum class RerunAsk { RESUMMARIZE, REGENERATE_STALE, RETRANSCRIBE }
+
 /** The summary, notes and title a re-summarize cleared, with the AI notes journal. */
 data class ResummaryUndo(
     val summary: String?, val notes: MeetingNotes?, val title: String?,
     val titleEdited: Boolean, val journal: String?,
+    val summaryEdited: Boolean = false,
 )
 
 /** The transcript and speaker names of the open session, as one undo step holds them. */
@@ -70,6 +74,12 @@ data class SessionState(
     val transcriptDirty: Boolean = false,
     /** The user renamed the title → don't regenerate it on re-summarize (script convert only). */
     val titleEdited: Boolean = false,
+    /** The user hand-edited the summary or the action items → re-summarize asks before replacing them. */
+    val summaryEdited: Boolean = false,
+    /** The user hand-edited a line's text → re-transcribe asks before dropping it. */
+    val linesEdited: Boolean = false,
+    /** A re-run asked to overwrite hand-edits: the confirm dialog is up. */
+    val confirmRerun: RerunAsk? = null,
     /** Bumps on every new session; tags every event the service emits for the run it started, so a
      *  superseded run's late events are dropped. */
     val sessionGen: Int = 0,

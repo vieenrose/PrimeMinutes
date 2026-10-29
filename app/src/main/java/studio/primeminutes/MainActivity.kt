@@ -1973,11 +1973,11 @@ private fun TranscribeScreen(
                 // the audio source, NOT a completed transcript (a stopped first transcription must be
                 // retryable).
                 canReTranscribe = !s.running && s.audioUri != null,
-                onReTranscribe = { vm.reTranscribe() },
+                onReTranscribe = { vm.askRerun(studio.primeminutes.session.RerunAsk.RETRANSCRIBE) },
                 // Nothing was said: no AI notes to write (the reader never runs on a silent meeting).
                 canReSummarize = s.transcriptReady && !s.running &&
                     remember(s.utterances) { studio.primeminutes.core.library.SpeechCheck.hasSpeech(s.utterances.map { it.text }) },
-                onReSummarize = { vm.reSummarizeFromMenu() },
+                onReSummarize = { vm.askRerun(studio.primeminutes.session.RerunAsk.RESUMMARIZE) },
                 canResume = !s.running && resumableEntry != null,
                 onResume = { resumableEntry?.let { vm.resumeEntry(it) } },
                 onSearch = {
@@ -2203,7 +2203,7 @@ private fun TranscribeScreen(
                 duration = SnackbarDuration.Long,
             )
             vm.clearTranscriptDirty()
-            if (res == SnackbarResult.ActionPerformed) vm.regenerateStaleChildren()
+            if (res == SnackbarResult.ActionPerformed) vm.askRerun(studio.primeminutes.session.RerunAsk.REGENERATE_STALE)
         }
     }
     // A session saved in the other script (or by an older build) reads in the chosen one as soon as
@@ -2233,8 +2233,20 @@ private fun TranscribeScreen(
                 actionLabel = context.getString(R.string.re_summarize),
                 duration = SnackbarDuration.Long,
             )
-            if (res == SnackbarResult.ActionPerformed) vm.regenerateStaleChildren()   // re-titles + re-extracts too
+            if (res == SnackbarResult.ActionPerformed) vm.askRerun(studio.primeminutes.session.RerunAsk.REGENERATE_STALE)   // re-titles + re-extracts too
         }
+    }
+    // A re-run would replace what the user typed: ask first (the summary's Undo snackbar still follows).
+    s.confirmRerun?.let { k ->
+        val retx = k == studio.primeminutes.session.RerunAsk.RETRANSCRIBE
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.answerRerun(false) },
+            title = { Text(stringResource(if (retx) R.string.confirm_retranscribe_title else R.string.confirm_resummarize_title)) },
+            text = { Text(stringResource(if (retx) R.string.confirm_retranscribe_body else R.string.confirm_resummarize_body)) },
+            confirmButton = { TextButton(onClick = { vm.answerRerun(true) }, modifier = Modifier.testTag("rerun-confirm")) {
+                Text(stringResource(if (retx) R.string.re_transcribe else R.string.re_summarize)) } },
+            dismissButton = { TextButton(onClick = { vm.answerRerun(false) }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
     if (s.showConfigSheet) {
         ConfigSheet(
