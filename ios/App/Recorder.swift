@@ -122,3 +122,24 @@ extension AVAudioConverter {
         return st
     }
 }
+
+/// Mic level history for the recording screen's waveform: one RMS bar per 50 ms of 16 kHz audio, written from the
+/// mic thread, read by the view at 20 Hz. Fixed ring; `bars()` returns oldest → newest.
+final class LevelMeter: @unchecked Sendable {
+    static let capacity = 96
+    private let lock = NSLock()
+    private var ring = [Float](repeating: 0, count: LevelMeter.capacity)
+    private var head = 0
+    private var acc: Float = 0
+    private var n = 0
+    func reset() { lock.withLock { ring = [Float](repeating: 0, count: Self.capacity); head = 0; acc = 0; n = 0 } }
+    func add(_ c: [Float]) {
+        lock.withLock {
+            for x in c {
+                acc += x * x; n += 1
+                if n == 800 { ring[head] = min(1, sqrt(acc / 800) * 4); head = (head + 1) % Self.capacity; acc = 0; n = 0 }
+            }
+        }
+    }
+    func bars() -> [Float] { lock.withLock { Array(ring[head...] + ring[..<head]) } }
+}
