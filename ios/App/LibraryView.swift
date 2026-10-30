@@ -441,7 +441,7 @@ struct LiveJobView: View {
                             Button { renamingSpeaker = l.speaker } label: {
                                 Text(m.screen.name(max(0, l.speaker))).font(.subheadline.bold()).foregroundStyle(c)
                             }.buttonStyle(.borderless)
-                            Vox.micro(Export.mmss(l.start))
+                            Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                         Text(l.text)
                     }
