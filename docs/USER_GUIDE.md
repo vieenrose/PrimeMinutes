@@ -196,18 +196,18 @@ App 不登入任何帳號，也不直接上傳到雲端。
 | 節點 | 如何到達 | 預期結果 | 驗證 |
 |---|---|---|---|
 | 匯入 | ＋ → 匯入 | 系統檔案選擇器，可選音訊、影片或 `.pmin` 會議，也可從 Google Drive、Dropbox、OneDrive 選檔（第 4b 節）；音訊與影片轉錄並摘要（長時間的靜音會快速略過），`.pmin` 直接還原 | ✅ 手動、✅ 自動（AddSourceSheetTest） |
-| Podcast → 搜尋 → 節目 → 轉錄 | ＋ → Podcast | 列出單集與長度；選取後首頁立刻出現這一集（標題即單集名稱），標示下載進度，下載完成後自動轉錄（正在處理其他項目時排在其後） | ✅ 手動、✅ 自動（SourceSheetsTest，搜尋） |
+| Podcast → 搜尋 → 節目 → 轉錄 | ＋ → Podcast | 列出單集與長度；選取後這一集立刻收進首頁該節目的頻道（標題即單集名稱），點進頻道可看到它標示「下載中」，下載完成後自動轉錄（正在處理其他項目時排在其後） | ✅ 手動、✅ 自動（SourceSheetsTest，搜尋） |
 
 <img src="guide/27-podcast-episodes.png" width="270" alt="Podcast 單集">
 | YouTube／PeerTube 連結 | 其他 App 把 YouTube 或 PeerTube 連結傳給 Prime Minutes（Prime Minutes 不在文字的分享選單中，一般不會發生） | 不再匯入：顯示「不支援影片連結」說明。舊版排入但尚未下載的影片會標示「已不再支援匯入 YouTube 與 PeerTube」，可刪除；已轉錄的場次不受影響 | ✅ 手動（Note 10+） |
 | 第一次線上匯入 | 第一次按 ＋ → Podcast 或 節目 | 先顯示「匯入前請留意」：僅供個人使用、須自行確認有權下載與轉錄、遵守發布者條款；按「我了解」後不再出現 | ✅ 手動（Note 10+） |
 | 收到的會議（.pmin） | 在 Quick Share、檔案管理（例如 Samsung「我的檔案」）或其他 App 點 `.pmin` 檔 | 開啟 Prime Minutes 並還原整場會議，列在「收到的」，提示「會議已存入 Prime Minutes，可以刪除「下載」中的原始檔案。」；資料庫已有同一場時詢問「開啟現有的」或「保留副本」 | ✅ 手動（Galaxy A53） |
 | 從其他 App 分享 | 其他 App → 分享 → Prime Minutes | 閒置時直接轉錄；處理中時詢問「匯入這個檔案？」（匯入會中斷處理） | ✅ 手動 |
-| Podcast 下載中斷線 | 下載單集音訊時網路中斷 | 不當成失敗：該列與場次畫面顯示「下載已暫停 · 會自動繼續」；網路恢復、回到 App 或按「立即繼續」後從中斷處接續，下載完成後照常轉錄 | ✅ 手動（Note 10+，Podcast：下載中切斷 Wi‑Fi 與行動數據 → 暫停、已下載部分保留 → 恢復後接續） |
+| Podcast 下載中斷線 | 下載單集音訊時網路中斷 | 不當成失敗：該列與場次畫面顯示「下載已暫停 · 會自動繼續」；網路恢復、回到 App 或按「繼續」後從中斷處接續，下載完成後照常轉錄 | ✅ 手動（Note 10+，Podcast：下載中切斷 Wi‑Fi 與行動數據 → 暫停、已下載部分保留 → 恢復後接續） |
 | Podcast 下載失敗 | 來源無法下載（例如已下架） | 該列標示「下載失敗：原因」（紅色），保留在首頁；點開後可「重試」或「刪除」 | ✅ 自動（DownloadItemTest），實機未確認 |
 | 下載中 App 被關閉 | 下載途中強制關閉或重新開機後開啟 App | 該列仍在首頁，從已下載的部分接續下載 | ✅ 手動（Note 10+：強制停止後重開，從中斷處接續） |
 
-<img src="guide/26-import-confirm.png" width="270" alt="匯入確認"> <img src="guide/41-import-paused.png" width="270" alt="下載中的 Podcast 單集：首頁的一列"> <img src="guide/42-item-download.png" width="270" alt="下載中的場次畫面">
+<img src="guide/26-import-confirm.png" width="270" alt="匯入確認"> <img src="guide/41-import-paused.png" width="270" alt="下載中的 Podcast 單集：頻道頁的一列"> <img src="guide/42-item-download.png" width="270" alt="下載中的場次畫面">
 
 ### 4b. 從雲端匯入
 
@@ -215,7 +215,7 @@ App 不登入任何帳號，也不直接上傳到雲端。
 
 ### 4a. Podcast 訂閱（節目）
 
-<img src="guide/43-subs-list.png" width="270" alt="節目清單"> <img src="guide/44-subs-show.png" width="270" alt="節目頁"> <img src="guide/50-podcast-filter.png" width="270" alt="首頁的 Podcast 篩選：單集依節目分組">
+<img src="guide/43-subs-list.png" width="270" alt="節目清單"> <img src="guide/44-subs-show.png" width="270" alt="節目頁"> <img src="guide/50-podcast-filter.png" width="270" alt="首頁的 Podcast 篩選：依頻道分組">
 
 **訂閱＝儲存節目連結，不付費。** 新集數在你按「檢查新集數」／「全部檢查」，或打開超過 24 小時沒檢查的節目頁時去抓（一次一個 RSS 請求）。開啟 **設定 → 在背景檢查新集數** 後，App 每天在 Wi‑Fi 下讀一次已訂閱節目的 RSS（暫停的節目略過），有新集時發通知；背景只讀節目清單，不下載任何單集。這個開關預設關閉；關閉時 App 完全不在背景連線。取得的單集走與上面「Podcast → 轉錄」完全相同的下載與轉錄流程。
 
