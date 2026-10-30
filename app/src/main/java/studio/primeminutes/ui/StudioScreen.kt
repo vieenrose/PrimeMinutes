@@ -714,20 +714,6 @@ fun StudioScreen(
                 }
             }
 
-            // The queue as one slim bar (count, current step, progress); tap: the full queue. The screen's
-            // own run over something not in the library (a fresh import) shows here too and returns to it.
-            val queueCount = queuedIds.size + (if (processingId != null && processingId !in queuedIds) 1 else 0)
-            val ownRun = foregroundRun && !isRecording && entries.none { it.id == foregroundId }
-            if (queueCount > 0 || ownRun) {
-                QueueBar(
-                    title = if (queueCount > 0) stringResource(R.string.queue_title) + " · " + stringResource(R.string.queue_bar_count, queueCount)
-                        else stringResource(R.string.studio_processing_banner, foregroundLabel.ifBlank { stringResource(R.string.status_processing) }),
-                    step = if (queueCount > 0) processingLabel else "",
-                    fraction = if (queueCount > 0) processingFraction else foregroundFraction,
-                    active = processingId != null || ownRun,
-                    onClick = { if (queueCount > 0) queueOpen = true else onResumeSession() },
-                )
-            }
         }
 
         if (shown.isEmpty() && !isRecording) {
@@ -814,7 +800,8 @@ fun StudioScreen(
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
                 // Hairline-separated rows (no cards); the bottom pad clears the record FAB.
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 120.dp),
+                // The record button and the queue strip are docked below the list: nothing covers its last row.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = Spacing.lg),
             ) {
                 if (searching && hitsElsewhere > 0) item(key = "elsewhere", contentType = "elsewhere") {
                     Text(
@@ -896,13 +883,30 @@ fun StudioScreen(
             }
         }
 
-    }
-        // Redesign: the record button is a red round FAB on a fade (it also returns to a running capture).
+        // The queue, docked like the recording screen's minimized notes strip: it takes its own space between
+        // the list and the record button (never over a row); tap: the full queue. The screen's own run over
+        // something not in the library (a fresh import) shows here too and returns to it.
+        val queueCount = queuedIds.size + (if (processingId != null && processingId !in queuedIds) 1 else 0)
+        val ownRun = foregroundRun && !isRecording && entries.none { it.id == foregroundId }
+        if (!selectionMode && (queueCount > 0 || ownRun)) {
+            val running = processingId != null || ownRun
+            val frac = if (processingId != null) processingFraction else foregroundFraction
+            val name = when {
+                processingId != null -> entries.firstOrNull { it.id == processingId }?.let { it.title ?: SessionLibrary.defaultTitle(it.createdAt, uiLocale) } ?: processingLabel
+                else -> foregroundLabel.ifBlank { stringResource(R.string.status_processing) }
+            }
+            QueueStrip(
+                text = if (running) stringResource(R.string.queue_running, name, (frac * 100).toInt()) else stringResource(R.string.queue_paused, queueCount),
+                running = running, fraction = frac,
+                onResume = if (!running) onProcessAll else null,
+                onClick = { if (queueCount > 0) queueOpen = true else onResumeSession() },
+            )
+        }
+
+        // Redesign: the record button is a red round FAB (it also returns to a running capture), docked under the list.
         if (!selectionMode) {
             Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(pal.Slate900.copy(alpha = 0f), pal.Slate900, pal.Slate900)))
-                    .padding(top = Spacing.xl, bottom = Spacing.sm),
+                Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.sm),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (pendingCount > 0) {
@@ -943,6 +947,7 @@ fun StudioScreen(
                 )
             }
         }
+    }
     }
 
     // --- The full queue: what is processing, what waits, and what can be done about each ---
@@ -1443,31 +1448,21 @@ internal fun StatusPill(text: String, color: Color) {
     )
 }
 
-/** The queue as one grouped block: dot · title · chevron, a thin progress line, the current step. */
+/** The queue as a docked strip (the recording screen's minimized notes strip): hairline, dot, one line, ›. */
 @Composable
-private fun QueueBar(title: String, step: String, fraction: Float, active: Boolean, onClick: () -> Unit) {
+private fun QueueStrip(text: String, running: Boolean, fraction: Float, onResume: (() -> Unit)?, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(
-        Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm)
-            .clip(MaterialTheme.shapes.large).background(pal.Fill)
-            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.queue_open), onClick = onClick)
-            .testTag("queue-bar")
-            .padding(horizontal = Spacing.md, vertical = Spacing.md),
+    studio.primeminutes.ui.components.DockedStrip(
+        onClick = onClick, onClickLabel = stringResource(R.string.queue_open),
+        leading = { Box(Modifier.size(8.dp).clip(CircleShape).background(if (running) PrimeMinutesPalette.Success else pal.Slate400)) },
+        modifier = Modifier.padding(horizontal = Gutter).testTag("queue-bar"),
+        trailing = if (onResume != null) ({
+            TextButton(onClick = onResume, modifier = Modifier.testTag("queue-resume")) { Text(stringResource(R.string.action_resume), color = pal.Sky, fontWeight = FontWeight.SemiBold) }
+        }) else null,
+        progress = if (running) fraction else null,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (active) PrimeMinutesPalette.Success else pal.Slate400))
-            Spacer(Modifier.width(Spacing.sm))
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
-        }
-        if (active) {
-            val bar = Modifier.fillMaxWidth().padding(top = Spacing.sm).height(3.dp).clip(RoundedCornerShape(2.dp))
-            if (fraction > 0f || pal.isEink) LinearProgressIndicator(progress = { fraction }, color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
-            else LinearProgressIndicator(color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
-        }
-        if (step.isNotBlank()) Text(step, style = TypeRole.meta(), color = pal.Slate400, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = Spacing.xs))
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
