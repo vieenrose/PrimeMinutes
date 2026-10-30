@@ -1056,14 +1056,3 @@ struct LibraryAskSuggestion: View {
         Button(action: action) { Label(query.isEmpty ? L("ask_entry_cd") : L("ask_this", query), systemImage: "bubble.left.and.text.bubble.right").foregroundStyle(Vox.accent) }
     }
 }
-
-/// Ask in the nav bar: a question about all the meetings (the search text, if any, becomes the question).
-struct LibraryAskToolbar: ToolbarContent {
-    let action: () -> Void
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button(action: action) { Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").labelStyle(.titleAndIcon) }
-                .accessibilityLabel(L("ask_entry_cd"))
-        }
-    }
-}

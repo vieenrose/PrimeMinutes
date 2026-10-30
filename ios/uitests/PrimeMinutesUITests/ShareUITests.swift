@@ -43,7 +43,7 @@ final class ShareUITests: XCTestCase {
         more.tap(); sleep(1)
         guard let share = first(["分享", "Share"]) else { shot("no-share-entry"); XCTFail("no Share entry"); return false }
         share.tap(); sleep(3)
-        return app.buttons["share-to-mail"].waitForExistence(timeout: 8)
+        return app.buttons["share-to-other"].waitForExistence(timeout: 8)
     }
 
     func testSheet() {
@@ -62,7 +62,8 @@ final class ShareUITests: XCTestCase {
         launch()
         guard openSheet() else { return }
         app.buttons["share-what-\(env["PM_WHAT"] ?? "pdf")"].tap(); sleep(2)
-        app.buttons["share-to-mail"].tap(); sleep(8); shot("mail-composer")
+        app.buttons["share-to-other"].tap()   // redesign: one Share… → system sheet (Mail inside it)
+        if let mail = first(["Mail", "郵件", "邮件"], 20, in: app) { mail.tap() }; sleep(8); shot("mail-composer")
         if let c = first(["Cancel", "取消"], 6) {
             c.tap(); sleep(2); shot("mail-cancel")
             if let del = first(["Delete Draft", "刪除草稿", "删除草稿"], 4) { del.tap() }

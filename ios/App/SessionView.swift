@@ -35,7 +35,7 @@ import AVFoundation
     @Published var volume: Float = 1 { didSet { p?.volume = muted ? 0 : volume } }
     @Published var muted = false { didSet { p?.volume = muted ? 0 : volume } }
     /// Playback speed (the compact bar's 1× button cycles 1 → 1.25 → 1.5 → 2 → 0.75).
-    @Published var rate: Float = 1 { didSet { p?.rate = rate } }
+    @Published var rate: Float = Float(Dev.env["VOX_RATE"] ?? "") ?? 1 { didSet { p?.rate = rate } }
     func cycleRate() { let r: [Float] = [1, 1.25, 1.5, 2, 0.75]; rate = r[((r.firstIndex(of: rate) ?? 0) + 1) % r.count] }
     func seek(_ t: Double) { p?.currentTime = max(0, min(t, duration)); time = p?.currentTime ?? 0; engaged = true }
     /// A tap on a line or the end of a slider drag: the cursor moves there and playback starts from it.
@@ -133,6 +133,9 @@ struct SessionView: View {
 
     @State private var tab = 0
     @State private var deletingMeeting = false
+    @State private var agentOpen = false
+    /// The saved reading as the Agent panel draws it (done, its notes).
+    private var savedAgent: AgentUi { let a = AgentUi(); a.state = .done; a.notes = v.notes; a.notesSoFar = v.notes.count; a.guardCounts = v.readerGuard; return a }
     @Environment(\.dismiss) private var dismissMeeting
     @State private var searching = false
     @State private var match = 0
@@ -244,7 +247,7 @@ struct SessionView: View {
             onEditSummary: { draft = v.summary; editingSummary = true },
             onCopyActions: { if let a = v.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
             onEditActions: { if let a = v.actionItems { draft = a; editingActions = true } },
-            onToggleProcess: { withAnimation { tab = 2 } },   // redesign: 看過程 opens the 筆記 segment
+            onToggleProcess: { agentOpen = true },   // redesign: 看過程 opens the Agent panel
             notesSection: { AnyView(notesSection($0, $1)) }
         )
     }
@@ -576,6 +579,9 @@ struct SessionView: View {
             Button(L(confirmRerun == true ? "re_transcribe" : "re_summarize"), role: .destructive) { if let t = confirmRerun { confirmRerun = nil; rerun(s, t) } }
             Button(L("cancel"), role: .cancel) { confirmRerun = nil }
         } message: { Text(L(confirmRerun == true ? "confirm_retranscribe_body" : "confirm_resummarize_body")) }
+        .sheet(isPresented: $agentOpen) {
+            NavigationStack { ScrollView { AgentPanel(agent: savedAgent) { sec in if player.available { player.seekPlay(Double(sec)) } }.padding() } }.presentationDetents([.medium, .large])
+        }
         .alert(L("delete_confirm", v.title), isPresented: $deletingMeeting) {
             Button(L("delete"), role: .destructive) { player.stop(); Model.shared.library.remove(s); Haptics.destructive(); dismissMeeting() }
             Button(L("cancel"), role: .cancel) {}
@@ -908,7 +914,7 @@ struct SpeakerStats: View {
 struct Collapsible<C: View>: View {
     let lines: Int
     @ViewBuilder let content: () -> C
-    @State private var expanded = false
+    @State private var expanded = Dev.env["VOX_PLAYER_EXPAND"] != nil   // DEV: shot of the expanded bar
     @State private var full: CGFloat = 0
     @State private var folded: CGFloat = 0
     var body: some View {

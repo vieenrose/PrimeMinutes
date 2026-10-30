@@ -124,20 +124,6 @@ struct MeetingShareSheet: View {
     private func hint(_ icon: String, _ text: String, _ color: Color) -> some View {
         Label(text, systemImage: icon).font(.footnote).foregroundStyle(color).accessibilityIdentifier("share-hint")
     }
-    private func whereRow(_ w: ShareWhere, _ icon: String, _ title: String, _ desc: String, warn: Bool = false) -> some View {
-        Button { go(w) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.title3).foregroundStyle(Color.accentColor).frame(width: 28).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.body).foregroundStyle(.primary)
-                    Text(desc).font(.footnote).foregroundStyle(warn ? Vox.warning.color : .secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
-            }.contentShape(Rectangle())
-        }.buttonStyle(.plain).disabled(what == nil || progress != nil).accessibilityIdentifier("share-to-\(w.rawValue)")
-    }
-
     /// Defaults (ShareCore), then the PDF rendered once so its real size shows (and it is ready to go).
     private func setUp() async {
         SessionFile.clearShareDir()
