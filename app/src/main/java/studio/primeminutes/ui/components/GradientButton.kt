@@ -22,9 +22,8 @@ import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
 
 /**
- * The brand primary CTA — a sky→indigo gradient pill with dark ink, matching the web app's
- * accent button. Gradient lives on the (transparent-container) button's own background so it
- * fills the whole shape; disabled state falls back to a flat slate.
+ * The primary CTA: a solid accent pill (the redesign retired the gradient). Disabled — e.g. while
+ * a download is busy — it turns neutral (the fill colour, ink2 text), never a dimmed accent.
  */
 @Composable
 fun GradientButton(
@@ -39,18 +38,18 @@ fun GradientButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = MaterialTheme.shapes.medium,
+        shape = androidx.compose.foundation.shape.CircleShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
             disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
         modifier = modifier.background(
-            brush = if (!enabled) SolidColor(pal.Slate700) else if (pal.isDark) SolidColor(pal.Sky) else pal.BrandGradient,
-            shape = MaterialTheme.shapes.medium,
+            brush = SolidColor(if (!enabled) pal.Fill else pal.Sky),
+            shape = androidx.compose.foundation.shape.CircleShape,
         ),
     ) {
-        val fg = if (enabled) pal.Slate900 else pal.Slate400
+        val fg = if (enabled) pal.OnSky else pal.Slate400
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))

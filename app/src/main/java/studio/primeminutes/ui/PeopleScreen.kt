@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -147,14 +148,13 @@ private fun PeopleContent(
             IconButton(onClick = { if (open != null) openId = null else onClose() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_people_back), tint = pal.Slate200)
             }
-            Text(open?.name ?: stringResource(R.string.people_title), style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
+            Text(open?.name ?: stringResource(R.string.people_title), style = studio.primeminutes.ui.theme.TypeRole.meetingTitle(), color = pal.Slate200, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
         }
         if (open == null) {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("people-list")) {
                 if (!access.granted) item { ContactsBlockedCard(access) }
                 if (cardCount > 0) item {
-                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.PanelSurface, MaterialTheme.shapes.medium).padding(Spacing.md).testTag("contacts-card")) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.sm).background(pal.Fill, MaterialTheme.shapes.large).padding(Spacing.md).testTag("contacts-card")) {
                         Text(pluralStringResource(R.plurals.contacts_card_title, cardCount, cardCount), color = pal.Slate200, style = MaterialTheme.typography.titleSmall)
                         Text(stringResource(R.string.contacts_card_text), color = pal.Slate400, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                         Row(Modifier.align(Alignment.End)) {
@@ -182,9 +182,13 @@ private fun PeopleContent(
                     }.joinToString(" · ")
                     Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { openId = p.id }.heightIn(min = 56.dp).padding(vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Person, contentDescription = null, tint = pal.Slate400, modifier = Modifier.size(22.dp))
+                        // Redesign: a speaker-tinted avatar (initial on a 12 % tint); the name is always said beside it.
+                        val tint = androidx.compose.ui.graphics.Color(studio.primeminutes.data.speakerColorOn(Math.floorMod(p.id.hashCode(), 6), pal.isDark))
+                        Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                            Text(p.name.trim().take(1).uppercase(), color = tint, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
                         Column(Modifier.weight(1f).padding(start = Spacing.md)) {
-                            Text(p.name, color = pal.Slate200, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Text(p.name, color = pal.Slate200, style = studio.primeminutes.ui.theme.TypeRole.rowTitle())
                             Text(sub, color = pal.Slate400, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }

@@ -72,8 +72,10 @@ fun speakerColor(speaker: Int?): Long {
  */
 /** Light/e-ink colours for the first eight speakers: deep, saturated and hue-distinct on white
  *  (darkening the dark-theme pastels uniformly made orange/yellow and teal/sky collapse into twins). */
+// Redesign speaker tints (same lightness and chroma; text ≥ 4.5:1 on their 12 % tint): blue, orange,
+// green, violet, amber, magenta, then teal and red.
 private val SPEAKER_LIGHT8 = longArrayOf(
-    0xFFD32F2F, 0xFF1565C0, 0xFFE65100, 0xFF6A1B9A, 0xFF2E7D32, 0xFFC2185B, 0xFF00838F, 0xFF8D6E00,
+    0xFF2F6FDE, 0xFFD9622B, 0xFF2E9156, 0xFF8A5CD0, 0xFFB7791F, 0xFFB03A8A, 0xFF00838F, 0xFFC0392B,
 )
 
 fun speakerColorOn(speaker: Int?, darkTheme: Boolean): Long {

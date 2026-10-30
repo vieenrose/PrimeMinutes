@@ -747,4 +747,43 @@
     <plurals name="bg_check_found">
         <item quantity="other">新增 %d 集</item>
     </plurals>
+    <!-- Redesign 2026-10 -->
+    <string name="dl_part_speech">语音识别＋讲者</string>
+    <string name="dl_part_reader">会议读者（AI 笔记）</string>
+    <string name="dl_part_done">完成</string>
+    <string name="settings_general">一般</string>
+    <string name="settings_ai_group">AI 模型</string>
+    <string name="agent_status_summary_done">AI 摘要已完成</string>
+    <string name="cd_edit_summary">编辑摘要</string>
+    <string name="library_title">会议</string>
+    <string name="tab_notes">笔记 %1$d</string>
+    <string name="tab_notes_plain">笔记</string>
+    <string name="agent_see_process">看过程</string>
+    <string name="agent_status_done">AI 笔记已完成 · %1$d 则</string>
+    <string name="agent_status_reading">AI 阅读中…</string>
+    <string name="jump_now_playing">当前播放</string>
+    <string name="share_go">分享…</string>
+    <string name="share_format">格式</string>
+    <string name="share_content">内容</string>
+    <string name="queue_title">处理队列</string>
+    <string name="queue_bar_count">%1$d 项</string>
+    <string name="queue_open">打开处理队列</string>
+    <string name="pill_queued">排队中</string>
+    <string name="pill_processing">处理 %1$d%%</string>
+    <string name="pill_working">处理中</string>
+    <string name="pill_downloading">下载 %1$d%%</string>
+    <string name="pill_new">未处理</string>
+    <string name="pill_ready">可处理</string>
+    <string name="pill_failed">失败</string>
+    <string name="pill_no_speech">无语音</string>
+    <string name="speakers_count">%1$d 位</string>
+    <string name="action_more">更多动作</string>
+    <string name="notes_empty">尚无笔记</string>
+    <string name="cd_play_from">从 %1$s 播放</string>
+    <string name="player_more">更多播放控制</string>
+    <string name="player_speed">播放速度 %1$s</string>
+    <string name="player_position">%1$s / %2$s</string>
+    <string name="record_fab">录音</string>
+    <string name="notes_check">核对</string>
+    <string name="menu_select">选取</string>
 </resources>

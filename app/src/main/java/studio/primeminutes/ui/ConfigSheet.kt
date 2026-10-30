@@ -69,11 +69,17 @@ fun ConfigSheet(
         readyLlm = res
     }
 
-    androidx.activity.compose.BackHandler(onBack = onDismiss)
+    // A detail page goes back to the list (top bar and system Back); the list keeps its own scroll.
+    val page = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    val listScroll = rememberScrollState()
+    val pageScroll = rememberScrollState()
+    androidx.compose.runtime.LaunchedEffect(page.value) { if (page.value != null) pageScroll.scrollTo(0) }
+    val back = { if (page.value != null) page.value = null else onDismiss() }
+    androidx.activity.compose.BackHandler(onBack = back)
     val barScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(barScroll.nestedScrollConnection).testTag("settings-screen"),
-        containerColor = pal.Slate800,   // the cards (InsetSurface) were drawn for this surface
+        containerColor = pal.Slate900,   // redesign: grouped blocks (raised) sit on the page ground
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -81,12 +87,12 @@ fun ConfigSheet(
                         modifier = Modifier.semantics { heading() })
                 },
                 navigationIcon = {
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = back) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = pal.Slate800, scrolledContainerColor = pal.Slate800,
+                    containerColor = pal.Slate900, scrolledContainerColor = pal.Slate900,
                     titleContentColor = pal.Slate200, navigationIconContentColor = pal.Slate200,
                 ),
                 scrollBehavior = barScroll,
@@ -98,11 +104,11 @@ fun ConfigSheet(
                 .fillMaxSize()
                 .padding(inner)
                 .consumeWindowInsets(inner)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(if (page.value == null) listScroll else pageScroll)
                 .padding(horizontal = Spacing.lg)
                 .padding(bottom = Spacing.xxl),
         ) {
-            SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound, onOpenPeople)
+            SettingsContent(config, readyLlm, enabled, onChange, onUpdateFound, onOpenPeople, page)
         }
     }
 }

@@ -660,7 +660,7 @@ private fun statusLine(s: AgentEvent.State): String = when (s.state) {
 }
 
 @Composable
-private fun tagLabel(tag: String): String = when (fullTag(tag)) {
+internal fun tagLabel(tag: String): String = when (fullTag(tag)) {
     "DECISION" -> stringResource(R.string.agent_tag_decision)
     "ACTION" -> stringResource(R.string.agent_tag_action)
     "OPEN-ISSUE" -> stringResource(R.string.agent_tag_open)
@@ -728,7 +728,7 @@ private fun ReplyLineRow(l: ReplyLine, typing: Boolean) {
 }
 
 /** A tag, completed from its prefix while it is still being written ("ACT" → ACTION). */
-private fun fullTag(tag: String): String {
+internal fun fullTag(tag: String): String {
     val t = tag.uppercase()
     return listOf("DECISION", "ACTION", "OPEN-ISSUE", "NUMBER", "PROPOSAL").firstOrNull { it.startsWith(t) } ?: t
 }

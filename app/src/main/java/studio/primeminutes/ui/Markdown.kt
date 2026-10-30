@@ -81,8 +81,8 @@ private fun AnnotatedString.Builder.appendWithAnchors(
         val gap = text.substring(last, m.range.first)
         if (prevAnchor >= 0 && gap.isBlank()) {
             // "[0:44] [4:09]": with the space trimmed the two labels read as one ("0:444:09").
-            withStyle(SpanStyle(color = anchorColor, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)) { append(", ") }
-        } else appendInline(gap.trimEnd(' '))
+            append('\u202F')
+        } else { appendInline(gap.trimEnd(' ')); append('\u202F') }
         prevAnchor = m.range.first
         append('\u2060') // word joiner: the mark never wraps to the next line alone
         val g = m.groupValues
@@ -97,15 +97,16 @@ private fun AnnotatedString.Builder.appendWithAnchors(
                     // A superscript, like a footnote mark: the prose keeps its line rhythm, and the grey
                     // stays clear of the speaker colours (语者 2's blue next to blue timestamps read as
                     // one thing).
+                    // Redesign: a citation pill — 12 % tint behind SemiBold accent digits, slightly raised.
                     style = SpanStyle(
-                        color = anchorColor, fontWeight = FontWeight.Medium,
-                        fontSize = 0.7.em, baselineShift = BaselineShift.Superscript,
+                        color = anchorColor, fontWeight = FontWeight.SemiBold, background = anchorColor.copy(alpha = 0.12f),
+                        fontSize = 0.68.em, baselineShift = BaselineShift(0.25f),
                     ),
-                    pressedStyle = SpanStyle(color = anchorColor, textDecoration = TextDecoration.Underline,
-                        fontSize = 0.7.em, baselineShift = BaselineShift.Superscript),
+                    pressedStyle = SpanStyle(color = anchorColor, background = anchorColor.copy(alpha = 0.28f),
+                        fontSize = 0.68.em, baselineShift = BaselineShift(0.25f)),
                 ),
             ) { onSeek(secs * 1000) },
-        ) { append(label) }
+        ) { append('\u2009'); append(label); append('\u2009') }
         last = m.range.last + 1
     }
     appendInline(text.substring(last))

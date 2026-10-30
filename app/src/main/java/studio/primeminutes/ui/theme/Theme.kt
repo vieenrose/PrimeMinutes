@@ -73,6 +73,14 @@ data class PrimeMinutesColors(
     /** Error ink per theme: pure red reads on dark grounds but washes out on white, so the
      *  light and e-ink themes deepen it. */
     val ErrorText: Color,
+    /** Hints, group headers, placeholder ink (the third ink step of the redesign). */
+    val Ink3: Color = Slate400,
+    /** Neutral fill: fields, the segmented control, chips that are off. */
+    val Fill: Color = InsetSurface,
+    /** Solid record / live red (ONLY for record, stop and live). */
+    val Record: Color = Color(0xFFE5484D),
+    /** Tint behind a warning tag ("核對") — text is [WarningText]. */
+    val WarningTint: Color = Color(0xFFFBF1DF),
 )
 
 /**
@@ -99,28 +107,33 @@ object PrimeMinutesPalette {
  *  The old sky→indigo gradient is retired; "brand" fills are now the solid accent. */
 val DarkColors = PrimeMinutesColors(
     isDark = true,
+    // Redesign P2 (cool slate, blue accent): the recording screen's calm ground, hairlines not slabs.
     Sky = Color(0xFF7DA2FF),
-    Indigo = Color(0xFF9DB8FF),
-    Slate900 = Color(0xFF0E1420),
-    Slate800 = Color(0xFF1D2740),   // cards: a visible step above the ground (1.25:1 was 1.16:1)
-    Slate700 = Color(0xFF36435F),   // inactive tracks, disabled fills — 2.0:1 on the ground (was 1.5:1)
-    Slate600 = Color(0xFF55658A),   // borders — 3.0:1 (was 2.0:1)
-    Slate400 = Color(0xFF93A0B8),
-    Slate200 = Color(0xFFE9EDF6),
+    Indigo = Color(0xFF7DA2FF),
+    Slate900 = Color(0xFF12161C),   // bg
+    Slate800 = Color(0xFF1A2029),   // raised (sheets, menus, grouped blocks)
+    Slate700 = Color(0xFF2A313B),   // inactive tracks, disabled fills
+    Slate600 = Color(0xFF4A5462),   // borders
+    Slate400 = Color(0xFFA3ADBA),   // ink2 (meta)
+    Slate200 = Color(0xFFE8ECF1),   // ink
     OnBrand = Color.White,
     OnBrandMuted = Color.White.copy(alpha = 0.70f),
     OnBrandFaint = Color.White.copy(alpha = 0.35f),
-    BrandGradient = Brush.linearGradient(listOf(Color(0xFF23304B), Color(0xFF23304B))),
-    Slate900Grad = Brush.verticalGradient(listOf(Color(0xFF0E1420), Color(0xFF0E1420))),
-    PanelSurface = Color(0xFF1D2740),
-    InsetSurface = Color(0xFF0E1420).copy(alpha = 0.55f),
-    Hairline = Color(0xFF93A0B8).copy(alpha = 0.30f),
-    ActiveTint = Color(0xFF7DA2FF).copy(alpha = 0.16f),
+    BrandGradient = Brush.linearGradient(listOf(Color(0xFF7DA2FF), Color(0xFF7DA2FF))),
+    Slate900Grad = Brush.verticalGradient(listOf(Color(0xFF12161C), Color(0xFF12161C))),
+    PanelSurface = Color(0xFF1A2029),
+    InsetSurface = Color(0xFF222934),
+    Hairline = Color(0xFF2A313B),
+    ActiveTint = Color(0xFF7DA2FF).copy(alpha = 0.14f),
     ActiveBar = Color(0xFF7DA2FF),
-    WarningText = Color(0xFFE08A0B),
-    AccentWash = Color(0xFF7DA2FF).copy(alpha = 0.16f),
+    WarningText = Color(0xFFE0A84A),
+    AccentWash = Color(0xFF1E2A44),
     AccentMuted = Color(0xFF9DB8FF),
     ErrorText = Color(0xFFFF7A7A),
+    Ink3 = Color(0xFF6F7A88),
+    Fill = Color(0xFF222934),
+    Record = Color(0xFFFF6B6F),
+    WarningTint = Color(0xFF3A2E17),
 )
 
 /**
@@ -130,28 +143,34 @@ val DarkColors = PrimeMinutesColors(
  */
 val LightColors = PrimeMinutesColors(
     isDark = false,
-    Sky = Color(0xFF2F6BFF),        // the ONE accent — actions and identity
-    Indigo = Color(0xFF1E4FD6),     // deepened accent for primary-role fills
-    Slate900 = Color(0xFFF2F4F1),   // soft warm-grey ground
-    Slate800 = Color(0xFFFFFFFF),   // card surface
-    Slate700 = Color(0xFFDFE4DD),   // inactive tracks / disabled fills
-    Slate600 = Color(0xFF9AA7B8),   // borders / secondary lines
-    Slate400 = Color(0xFF5A6982),   // muted text
-    Slate200 = Color(0xFF17263F),   // primary text = deep navy ink
+    // Redesign P2 (cool slate, blue accent): ink #16202E on #F8FAFC (16:1), accent #2F5BD3 (6.3:1 on white).
+    Sky = Color(0xFF2F5BD3),        // the ONE action colour
+    Indigo = Color(0xFF2F5BD3),
+    Slate900 = Color(0xFFF8FAFC),   // bg
+    Slate800 = Color(0xFFFFFFFF),   // raised (sheets, grouped blocks)
+    Slate700 = Color(0xFFE3E7EC),   // inactive tracks / disabled fills
+    Slate600 = Color(0xFFB8C0CB),   // borders
+    Slate400 = Color(0xFF5B6573),   // ink2 (meta) — 6:1
+    Slate200 = Color(0xFF16202E),   // ink
     OnBrand = Color.White,
     OnBrandMuted = Color.White.copy(alpha = 0.80f),
     OnBrandFaint = Color.White.copy(alpha = 0.45f),
-    BrandGradient = Brush.linearGradient(listOf(Color(0xFF2F6BFF), Color(0xFF2F6BFF))),
-    Slate900Grad = Brush.verticalGradient(listOf(Color(0xFFF2F4F1), Color(0xFFF2F4F1))),
+    BrandGradient = Brush.linearGradient(listOf(Color(0xFF2F5BD3), Color(0xFF2F5BD3))),
+    Slate900Grad = Brush.verticalGradient(listOf(Color(0xFFF8FAFC), Color(0xFFF8FAFC))),
     PanelSurface = Color(0xFFFFFFFF),
-    InsetSurface = Color(0xFFECEFEA),
-    Hairline = Color(0xFF17263F).copy(alpha = 0.10f),
-    ActiveTint = Color(0xFF2F6BFF).copy(alpha = 0.12f),
-    ActiveBar = Color(0xFF2F6BFF),
-    WarningText = Color(0xFF9A5B00),
-    AccentWash = Color(0xFF2F6BFF).copy(alpha = 0.12f),
-    AccentMuted = Color(0xFF1E4FD6),
+    InsetSurface = Color(0xFFEEF1F5),
+    Hairline = Color(0xFFE3E7EC),
+    ActiveTint = Color(0xFF2F5BD3).copy(alpha = 0.10f),
+    ActiveBar = Color(0xFF2F5BD3),
+    WarningText = Color(0xFF8A5A12),
+    AccentWash = Color(0xFFE6ECFA),
+    AccentMuted = Color(0xFF2F5BD3),
     ErrorText = Color(0xFFB3261E),
+    Ink3 = Color(0xFF8A94A3),
+    Fill = Color(0xFFEEF1F5),
+    Record = Color(0xFFE5484D),
+    WarningTint = Color(0xFFFBF1DF),
+    OnSky = Color.White,
 )
 
 /**
@@ -188,6 +207,9 @@ val EinkColors = PrimeMinutesColors(
     AccentWash = Color(0xFF0B5CAD).copy(alpha = 0.12f),
     AccentMuted = Color(0xFF3730A3),
     ErrorText = Color(0xFF8B0000),
+    Fill = Color(0xFFF2F2F2),
+    Record = Color(0xFFB00020),
+    WarningTint = Color(0xFFFFFFFF),
 )
 
 /** Ambient palette. Defaults to dark so previews / stray reads outside [PrimeMinutesTheme] still resolve. */
@@ -350,17 +372,25 @@ object Spacing {
  * these as plain dp and construct shapes at the call site via `MaterialTheme.shapes.*`.
  */
 object Radius {
-    val Chip = 8.dp
+    /** Speaker / note-type tag. */
+    val Tag = 6.dp
+    val Chip = 6.dp
     val Card = 10.dp
     val Dialog = 12.dp
-    val Sheet = 16.dp
+    /** Grouped block: the queue bar, a settings group. */
+    val Group = 14.dp
+    val Sheet = 14.dp
+    /** Bottom sheet top corners. */
+    val BottomSheet = 24.dp
 }
 
 private val PrimeMinutesShapes = Shapes(
     extraSmall = RoundedCornerShape(Radius.Chip),
     small = RoundedCornerShape(Radius.Card),
     medium = RoundedCornerShape(Radius.Dialog),
-    large = RoundedCornerShape(Radius.Sheet),
+    large = RoundedCornerShape(Radius.Group),
+    // M3 bottom sheets and dialogs read extraLarge: 24 dp per the redesign.
+    extraLarge = RoundedCornerShape(Radius.BottomSheet),
 )
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -434,6 +464,42 @@ fun PrimeMinutesTheme(themeMode: ThemeMode = ThemeMode.AUTO, fontScale: Float = 
  * | `sectionTitle`  | `titleMedium`  | section headers over grouped content          |
  */
 object TypeRole {
+    /** Large title (library 「會議」): 30/700. */
+    @androidx.compose.runtime.Composable
+    fun largeTitle(): androidx.compose.ui.text.TextStyle = scaledFixed(30f, 36f, androidx.compose.ui.text.font.FontWeight.Bold)
+
+    /** Meeting title: 21/700. */
+    @androidx.compose.runtime.Composable
+    fun meetingTitle(): androidx.compose.ui.text.TextStyle = scaledFixed(21f, 28f, androidx.compose.ui.text.font.FontWeight.Bold)
+
+    /** Row title: 15.5/600 (max 2 lines at the call site). */
+    @androidx.compose.runtime.Composable
+    fun rowTitle(): androidx.compose.ui.text.TextStyle = scaledFixed(15.5f, 22f, androidx.compose.ui.text.font.FontWeight.SemiBold)
+
+    /** Reading body: 15.5/400, line height 1.8. */
+    @androidx.compose.runtime.Composable
+    fun readingBody(): androidx.compose.ui.text.TextStyle = scaledFixed(15.5f, 27.9f, androidx.compose.ui.text.font.FontWeight.Normal)
+
+    /** Meta line: 12.5/400. */
+    @androidx.compose.runtime.Composable
+    fun meta(): androidx.compose.ui.text.TextStyle = scaledFixed(12.5f, 17f, androidx.compose.ui.text.font.FontWeight.Normal)
+
+    /** Group header (date groups, settings groups): 12.5/600, tracking .6. */
+    @androidx.compose.runtime.Composable
+    fun groupHeader(): androidx.compose.ui.text.TextStyle = scaledFixed(12.5f, 17f, androidx.compose.ui.text.font.FontWeight.SemiBold)
+        .copy(letterSpacing = androidx.compose.ui.unit.TextUnit(0.6f, androidx.compose.ui.unit.TextUnitType.Sp))
+
+    /** Sizes follow the in-app text scale: it is folded into bodyLarge (16 sp at 1×). */
+    @androidx.compose.runtime.Composable
+    private fun scaledFixed(size: Float, line: Float, w: androidx.compose.ui.text.font.FontWeight): androidx.compose.ui.text.TextStyle {
+        val k = androidx.compose.material3.MaterialTheme.typography.bodyLarge.fontSize.value / 16f
+        return androidx.compose.material3.MaterialTheme.typography.bodyLarge.copy(
+            fontSize = androidx.compose.ui.unit.TextUnit(size * k, androidx.compose.ui.unit.TextUnitType.Sp),
+            lineHeight = androidx.compose.ui.unit.TextUnit(line * k, androidx.compose.ui.unit.TextUnitType.Sp),
+            fontWeight = w,
+        )
+    }
+
     /** Capture timer — tabular monospace digits sized to the display slot. */
     @androidx.compose.runtime.Composable
     fun timer(): androidx.compose.ui.text.TextStyle =

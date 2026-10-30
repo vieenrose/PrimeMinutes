@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,9 @@ import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -107,6 +111,13 @@ fun SessionTopBar(
     onUndo: () -> Unit = {}, onRedo: () -> Unit = {},
     /** Collapses the bar as the session content scrolls (null: pinned). */
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    /** Redesign ⋯ entries (null: not offered). Copy and edit of the summary moved here from its card. */
+    onRename: (() -> Unit)? = null,
+    onCopySummary: (() -> Unit)? = null,
+    onEditSummary: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
+    /** Redesign: the title lives in the content header, the bar keeps back · search · share · ⋯. */
+    showTitle: Boolean = true,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // statusBarsPadding: as a Scaffold topBar this composable owns its own inset — without it the
@@ -130,7 +141,7 @@ fun SessionTopBar(
                             modifier = Modifier.padding(end = Spacing.sm).size(26.dp).clip(RoundedCornerShape(7.dp)),
                         )
                     }
-                    Text(
+                    if (showTitle) Text(
                         title ?: stringResource(R.string.app_name),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
@@ -164,13 +175,19 @@ fun SessionTopBar(
                 }
                 if (transcriptAvailable) {
                     IconButton(onClick = onSearch) {
-                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_transcript), tint = pal.Slate400)
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_transcript), tint = pal.Slate200)
+                    }
+                }
+                if (canExport && onShare != null) {
+                    IconButton(onClick = onShare, modifier = Modifier.testTag("bar-share")) {
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share_title), tint = pal.Slate200)
                     }
                 }
                 OverflowMenu(
                     canReTranscribe, onReTranscribe, canReSummarize, onReSummarize,
                     canResume, onResume,
                     canExport, onSettings, onAskMeeting, onShare,
+                    onRename, onCopySummary, onEditSummary, onDelete,
                 )
             },
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
@@ -224,15 +241,27 @@ private fun OverflowMenu(
     onSettings: () -> Unit,
     onAskMeeting: (() -> Unit)?,
     onShare: (() -> Unit)?,
+    onRename: (() -> Unit)? = null,
+    onCopySummary: (() -> Unit)? = null,
+    onEditSummary: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     var open by remember { mutableStateOf(false) }
     fun pick(action: () -> Unit): () -> Unit = { open = false; action() }
     Box {
         IconButton(onClick = { open = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate400)
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate200)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // --- this meeting's text ---
+            if (onRename != null) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Title, null, Modifier.size(18.dp)) },
+                text = { Text(stringResource(R.string.action_rename)) }, onClick = pick(onRename))
+            if (onCopySummary != null) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp)) },
+                text = { Text(stringResource(R.string.cd_copy_summary)) }, onClick = pick(onCopySummary))
+            if (onEditSummary != null) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Edit, null, Modifier.size(18.dp)) },
+                text = { Text(stringResource(R.string.cd_edit_summary)) }, onClick = pick(onEditSummary))
+            if (onRename != null || onCopySummary != null || onEditSummary != null) HorizontalDivider()
             // --- re-run ---
             if (canResume) DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp)) },
                 text = { Text(stringResource(R.string.action_resume)) }, onClick = pick(onResume))
@@ -256,6 +285,11 @@ private fun OverflowMenu(
             }
             DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Tune, null, Modifier.size(18.dp)) },
                 text = { Text(stringResource(R.string.cd_settings)) }, onClick = pick(onSettings))
+            if (onDelete != null) {
+                HorizontalDivider()
+                DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = pal.Record) },
+                    text = { Text(stringResource(R.string.action_delete), color = pal.Record) }, onClick = pick(onDelete))
+            }
         }
     }
 }
@@ -283,6 +317,36 @@ fun SessionTabs(selected: Int, onSelect: (Int) -> Unit) {
                 unselectedContentColor = pal.Slate400,
                 text = { Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) },
             )
+        }
+    }
+}
+
+
+/**
+ * Redesign: the meeting's segmented control 摘要 / 筆記 n / 逐字稿 — a fill track with a raised
+ * selected segment. Each segment is a [Role.Tab] with its selected state (TalkBack: "tab, selected").
+ */
+@Composable
+fun SessionSegmented(selected: Int, labels: List<String>, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(pal.Fill).padding(3.dp).selectableGroup()
+            .testTag("session-segmented"),
+    ) {
+        labels.forEachIndexed { i, label ->
+            val on = i == selected
+            Box(
+                Modifier.weight(1f).heightIn(min = 40.dp).clip(RoundedCornerShape(9.dp))
+                    .background(if (on) (if (pal.isDark) pal.Slate700 else pal.Slate800) else Color.Transparent)
+                    .then(if (on && !pal.isDark) Modifier.border(1.dp, pal.Hairline, RoundedCornerShape(9.dp)) else Modifier)
+                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(i) })
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.sm),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (on) pal.Slate200 else pal.Slate400)
+            }
         }
     }
 }
