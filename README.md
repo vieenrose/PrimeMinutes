@@ -16,8 +16,8 @@
   <a href="https://vieenrose.github.io/PrimeMinutes/slides/PrimeMinutes-zh-TW.html"><img alt="簡報" src="https://img.shields.io/badge/簡報-線上預覽-0A7A52"></a>
 </p>
 
-<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="連續錄兩場會議"><br>
-<sub>連續錄兩場會議，停下來就自動完成筆記、摘要和標題（部分片段加速）</sub></p>
+<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="功能導覽"><br>
+<sub>iPhone 實機導覽：場次庫與合集 → 點摘要裡的時間看原話（跟著播放）→ 筆記 → 逐字稿 → 只問這個合集，回答附出處 → 處理佇列（<a href="docs/screenshots/demo-studio.mp4">MP4</a>）</sub></p>
 
 ## 下載安裝
 

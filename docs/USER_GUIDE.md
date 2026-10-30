@@ -41,13 +41,13 @@ flowchart TD
 
 ---
 
-<p align="center"><img src="screenshots/demo-studio.gif" width="260"></p>
+<p align="center"><img src="screenshots/demo-studio.gif" width="260" alt="導覽：合集、摘要引用、筆記、逐字稿、合集提問、處理佇列"></p>
 
 ## 1. 首頁（場次庫）
 
 <p><img src="guide/01-library.png" width="200"> <img src="guide/04-select.png" width="200"> <img src="guide/19-dark.png" width="200"></p>
 
-<p><img src="guide/73-queue-paused.png" width="200" alt="佇列列：已暫停 · 1 與繼續處理"> <img src="guide/74-collection-suggestion.png" width="200" alt="合集建議：有 3 場會議標題為「產品週會」"></p>
+<p><img src="guide/73-queue-paused.png" width="200" alt="佇列列：已暫停 · 1 與繼續處理"> <img src="guide/75-queue-sheet.png" width="200" alt="處理佇列：繼續處理或立即處理每一項"> <img src="guide/74-collection-suggestion.png" width="200" alt="合集建議：有 3 場會議標題為「產品週會」"></p>
 
 所有錄音與匯入的場次依日期（今天、昨天、日期）分組。上方可搜尋會議、主題或「誰說過…」，並以晶片篩選；右側的 **提問** 向會議提問（第 1a 節）。沒有場次時顯示說明（隱私、離線、不靠雲端）。沒有偵測到說話的錄音以麥克風斜線圖示與「未偵測到語音」標示，不寫 AI 筆記，也不列在「已完成」。底部的 **錄音** 開始一場新會議。
 

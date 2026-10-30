@@ -1164,7 +1164,14 @@ struct LibraryFooter: View {
         .accessibilityLabel(line + ", " + subtitle)
         .accessibilityAction(named: Text(paused ? L("action_resume") : L("source_process_all", p.run.count))) { if canRun { m.runner.processAll() } }
         .accessibilityIdentifier("queue-strip")
+        .onAppear { devOpenSheet() }
         .sheet(isPresented: $sheet) { QueueSheet(m: m) { id in sheet = false; path.append(.job(id)) }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
+    }
+    /// DEV: VOX_QUEUE_SHEET=1 opens the queue sheet once the strip shows (guide shot with VOX_FAKE_PARKED).
+    private func devOpenSheet() {
+        #if VOX_DEV
+        if Dev.env["VOX_QUEUE_SHEET"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { sheet = true } }
+        #endif
     }
     var body: some View {
         VStack(spacing: 0) {
