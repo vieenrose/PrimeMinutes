@@ -378,7 +378,10 @@ class MainActivity : ComponentActivity() {
                 reclaimAudioTemps(applicationContext)
             }.start()
         }
-        handleIncoming(intent)
+        // Only a fresh launch carries a new share/open: a recreation (a config change the manifest
+        // doesn't absorb, e.g. a navigation-bar or wallpaper-colour overlay) replays the SAME launch
+        // intent, which re-offered an already imported file. New ones arrive via onNewIntent.
+        if (savedInstanceState == null) handleIncoming(intent)
         Thread { studio.primeminutes.online.BackgroundCheck.sync(applicationContext, force = true) }.start()
         setContent {
             var themeMode by remember { mutableStateOf(ThemeStore.load(this)) }
@@ -624,6 +627,8 @@ private fun TranscribeScreen(
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // The People screen (the directory of named speakers), over whatever screen opened it.
     var peopleOpen by remember { mutableStateOf(false) }
+    // People opened from Settings: closing it goes back to Settings (one back = one screen).
+    var peopleFromSettings by remember { mutableStateOf(false) }
     var subsOpen by remember { mutableStateOf(false) }
     var subsOpenId by remember { mutableStateOf<String?>(null) }
     var peopleOpenId by remember { mutableStateOf<String?>(null) }
@@ -2233,7 +2238,7 @@ private fun TranscribeScreen(
             onDismiss = { vm.showConfigSheet(false) },
             // Manual "Check for updates" found a newer release → surface the banner, close settings.
             onUpdateFound = { info -> updateInfo = info; updateDismissed = false; vm.showConfigSheet(false) },
-            onOpenPeople = { vm.showConfigSheet(false); peopleOpen = true },
+            onOpenPeople = { vm.showConfigSheet(false); peopleFromSettings = true; peopleOpen = true },
         )
     }
     studio.primeminutes.ui.VoiceOutlierPrompt()
@@ -2241,9 +2246,12 @@ private fun TranscribeScreen(
     val screenScript = studio.primeminutes.ui.rememberScreenScript(s.config.summaryScript)
     if (peopleOpen) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         studio.primeminutes.ui.PeopleScreen(
-            onClose = { peopleOpen = false; peopleOpenId = null },
+            onClose = {
+                peopleOpen = false; peopleOpenId = null
+                if (peopleFromSettings) { peopleFromSettings = false; vm.showConfigSheet(true) }
+            },
             initialPersonId = peopleOpenId,
-            onOpenMeeting = { e, t -> peopleOpen = false; peopleOpenId = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
+            onOpenMeeting = { e, t -> peopleOpen = false; peopleOpenId = null; peopleFromSettings = false; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
             voiceHeader = { studio.primeminutes.ui.VoiceSettingsCard() },
             voiceOfPerson = { p -> studio.primeminutes.ui.PersonVoiceRow(p) },
         )
@@ -2340,7 +2348,7 @@ private fun TranscribeScreen(
                     }
                 }))
             },
-            onOpenPerson = { p -> vm.cancelSpeakerEdit(); peopleOpenId = p.id; peopleOpen = true },
+            onOpenPerson = { p -> vm.cancelSpeakerEdit(); peopleOpenId = p.id; peopleFromSettings = false; peopleOpen = true },
             onClear = { vm.clearSpeakerName(sid) },
             onLabel = { n -> vm.labelSpeaker(sid, n) },
             onMerge = { into -> vm.cancelSpeakerEdit(); vm.mergeSpeaker(sid, into) },
