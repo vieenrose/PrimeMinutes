@@ -54,7 +54,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -368,9 +368,15 @@ internal fun CitePreviewPanel(
                 }
             }
             androidx.compose.material3.HorizontalDivider(color = pal.Hairline)
-            Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(bottom = Spacing.sm)) {
-                for (i in window) {
-                    val u = utterances.getOrNull(i) ?: continue
+            // The highlighted turn is kept in view: long turns push it below the fold of a 30 % panel.
+            val list = androidx.compose.foundation.lazy.rememberLazyListState()
+            androidx.compose.runtime.LaunchedEffect(window, highlighted) {
+                if (highlighted in window) runCatching { list.animateScrollToItem(highlighted - window.first) }
+            }
+            androidx.compose.foundation.lazy.LazyColumn(state = list, modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Spacing.sm)) {
+                items(window.toList(), key = { it }) { i ->
+                    val u = utterances.getOrNull(i) ?: return@items
                     val active = i == highlighted
                     Column(
                         Modifier.fillMaxWidth()

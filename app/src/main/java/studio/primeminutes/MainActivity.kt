@@ -882,6 +882,7 @@ private fun TranscribeScreen(
     var citeTarget by remember { mutableIntStateOf(-1) }
     var citeWindow by remember { mutableStateOf(IntRange.EMPTY) }
     var citeGen by remember { mutableIntStateOf(0) }
+    var citeSec by remember { mutableIntStateOf(0) }
     fun closeCite() { citeTarget = -1; citeWindow = IntRange.EMPTY }
     // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
     var searchModelReady by remember { mutableStateOf(EmbedHost.ready(context)) }
@@ -1489,6 +1490,7 @@ private fun TranscribeScreen(
         val target = studio.primeminutes.core.cite.CiteWindow.target(ms / 1000, s.utterances.map { it.startSec })
         if (target != null) {
             citeTarget = target
+            citeSec = ms / 1000
             citeWindow = studio.primeminutes.core.cite.CiteWindow.around(target, s.utterances.size)
             citeGen++
         }
@@ -1503,10 +1505,11 @@ private fun TranscribeScreen(
     // A few seconds after the cited passage has played out, the preview steps aside (the player plays on).
     val citePlayedOut by remember { derivedStateOf {
         val u = s.utterances.getOrNull(citeTarget)
-        u != null && isPlaying && positionMs / 1000.0 > u.endSec
+        // The passage: the cited turn, and at least 15 s from the cite (a short turn would close it at once).
+        u != null && isPlaying && positionMs / 1000.0 > maxOf(u.endSec, citeSec + 15.0)
     } }
     LaunchedEffect(citePlayedOut, citeGen) {
-        if (citePlayedOut) { delay(4_000); closeCite() }
+        if (citePlayedOut) { delay(5_000); closeCite() }
     }
     // 「看完整逐字稿 →」: the transcript tab, at the cited line (playback is left as it is).
     fun openCiteInTranscript() {
