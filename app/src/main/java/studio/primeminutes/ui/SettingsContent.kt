@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.text.style.TextOverflow
+import studio.primeminutes.ui.theme.LocalFontScaleController
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -118,8 +122,52 @@ fun SettingsContent(
         // The first-use model download in progress, with Cancel: Settings covers the library while it runs.
         val prefetch by studio.primeminutes.core.models.ModelPrefetch.status.collectAsState()
         prefetch?.let { st -> studio.primeminutes.ui.components.ModelDownloadCard(st, onCancel = { studio.primeminutes.core.models.ModelPrefetch.cancel() }) }
+        // Redesign: the top level is one-line rows in grouped hairline blocks; a row opens its detail page.
+        var page by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        androidx.activity.compose.BackHandler(page != null) { page = null }
+        if (page == null) {
+            val theme = LocalThemeController.current.mode
+            val lang = LocalLanguageController.current.code
+            val fontScale = LocalFontScaleController.current.scale
+            val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
+            RowGroup(stringResource(R.string.settings_general)) {
+                NavRow(stringResource(R.string.settings_language), when (lang) {
+                    AppLanguage.EN -> "English"; AppLanguage.ZH_TW -> "繁體中文"; AppLanguage.ZH_CN -> "简体中文"
+                    else -> stringResource(R.string.lang_auto) }, "settings-row-language") { page = "language" }
+                NavRow(stringResource(R.string.settings_appearance), stringResource(when (theme) {
+                    ThemeMode.LIGHT -> R.string.theme_light; ThemeMode.DARK -> R.string.theme_dark
+                    ThemeMode.EINK -> R.string.theme_eink; else -> R.string.theme_auto }) + " · ${(fontScale * 100).roundToInt()}%",
+                    "settings-row-appearance") { page = "appearance" }
+                if (onOpenPeople != null) NavRow(stringResource(R.string.people_title), "${people.people.size}", "settings-people", enabled, onOpenPeople)
+            }
+            RowGroup(stringResource(R.string.settings_ai_group)) {
+                NavRow(stringResource(R.string.settings_reader_model), LlmRegistry.byId(config.llmModelId).displayName, "settings-row-reader") { page = "reader" }
+                NavRow(stringResource(R.string.settings_storage), "", "settings-row-storage") { page = "storage" }
+                NavRow(stringResource(R.string.settings_inference), "", "settings-row-inference") { page = "inference" }
+            }
+            RowGroup(stringResource(R.string.settings_recording)) {
+                NavRow(stringResource(R.string.settings_speaker_delay), stringResource(R.string.settings_seconds, config.speakerDelaySec), "settings-row-recording") { page = "recording" }
+                SwitchRow(stringResource(R.string.settings_ask), config.askEnabled, enabled) { onChange(config.copy(askEnabled = it)) }
+                SwitchRow(stringResource(R.string.settings_show_actions), config.showActionItems, enabled) { onChange(config.copy(showActionItems = it)) }
+                var bgOn by remember { mutableStateOf(studio.primeminutes.online.BackgroundCheck.enabled(ctx)) }
+                SwitchRow(stringResource(R.string.bg_check_title), bgOn, enabled) { bgOn = it; studio.primeminutes.online.BackgroundCheck.setEnabled(ctx, it) }
+                var hwOn by remember { mutableStateOf(studio.primeminutes.core.config.ThemeStore.loadHwMonitor(ctx)) }
+                SwitchRow(stringResource(R.string.settings_hw_monitor), hwOn, enabled) { hwOn = it; studio.primeminutes.core.config.ThemeStore.saveHwMonitor(ctx, it) }
+            }
+            RowGroup(stringResource(R.string.settings_about)) {
+                NavRow(stringResource(R.string.settings_background), "", "settings-row-background") { page = "background" }
+                NavRow(stringResource(R.string.settings_about), BuildConfig.VERSION_NAME, "settings-row-about") { page = "about" }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .clickable(role = Role.Button) { page = null }.testTag("settings-subpage-back")) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Sky,
+                    modifier = Modifier.graphicsLayer { rotationZ = 180f })
+                Text(stringResource(R.string.settings_title), color = pal.Sky, style = MaterialTheme.typography.labelLarge)
+            }
+        }
         // Everyday choices first (look, language, the notes model), tuning and housekeeping after.
-        Section(stringResource(R.string.settings_appearance)) {
+        if (page == "appearance") Section(stringResource(R.string.settings_appearance)) {
         AppearanceSelector(enabled)
         FontScaleSlider(enabled)
         var hwOn by remember { mutableStateOf(studio.primeminutes.core.config.ThemeStore.loadHwMonitor(ctx)) }
@@ -133,7 +181,7 @@ fun SettingsContent(
         )
         }
 
-        Section(stringResource(R.string.settings_language)) {
+        if (page == "language") Section(stringResource(R.string.settings_language)) {
         val lang = LocalLanguageController.current
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(
@@ -168,7 +216,7 @@ fun SettingsContent(
         }
 
         // The people directory (names shared by all meetings; voice recognition lives there too).
-        if (onOpenPeople != null) Section(stringResource(R.string.people_title)) {
+        if (page == "people" && onOpenPeople != null) Section(stringResource(R.string.people_title)) {
             val people by studio.primeminutes.core.people.PeopleStore.doc.collectAsState()
             androidx.compose.material3.ListItem(
                 headlineContent = { Text(stringResource(R.string.people_settings_open, people.people.size)) },
@@ -181,11 +229,11 @@ fun SettingsContent(
             )
         }
 
-        Section(stringResource(R.string.settings_reader_model)) {
+        if (page == "reader") Section(stringResource(R.string.settings_reader_model)) {
         ReaderModelSelector(config.llmModelId, enabled) { onChange(config.copy(llmModelId = it)) }
         }
 
-        Section(stringResource(R.string.settings_recording)) {
+        if (page == "recording") Section(stringResource(R.string.settings_recording)) {
         SliderRow(
             stringResource(R.string.settings_speaker_delay),
             config.speakerDelaySec.toFloat(),
@@ -204,12 +252,12 @@ fun SettingsContent(
         }
         }
 
-        Section(stringResource(R.string.settings_inference)) {
+        if (page == "inference") Section(stringResource(R.string.settings_inference)) {
             InferencePanel(enabled)
             if (BuildConfig.DEBUG) AiBenchmark(enabled)   // its 60 s clip ships in debug builds only
         }
 
-        Section(stringResource(R.string.settings_experimental)) {
+        if (page == "recording") Section(stringResource(R.string.settings_experimental)) {
         SwitchRow(stringResource(R.string.settings_show_actions), config.showActionItems, enabled) {
             onChange(config.copy(showActionItems = it))
         }
@@ -220,7 +268,7 @@ fun SettingsContent(
         )
         }
 
-        Section(stringResource(R.string.sub_source)) {
+        if (page == "recording") Section(stringResource(R.string.sub_source)) {
         var bgOn by remember { mutableStateOf(studio.primeminutes.online.BackgroundCheck.enabled(ctx)) }
         SwitchRow(stringResource(R.string.bg_check_title), bgOn, enabled) {
             bgOn = it; studio.primeminutes.online.BackgroundCheck.setEnabled(ctx, it)
@@ -232,7 +280,7 @@ fun SettingsContent(
         )
         }
 
-        Section(stringResource(R.string.ask_title)) {
+        if (page == "recording") Section(stringResource(R.string.ask_title)) {
         SwitchRow(stringResource(R.string.settings_ask), config.askEnabled, enabled) {
             onChange(config.copy(askEnabled = it))
         }
@@ -243,15 +291,15 @@ fun SettingsContent(
         )
         }
 
-        Section(stringResource(R.string.settings_storage)) {
+        if (page == "storage") Section(stringResource(R.string.settings_storage)) {
         StoragePanel(enabled, summaryReady = LlmRegistry.byId(config.llmModelId).id in readyLlm, llmId = config.llmModelId)
         }
 
-        Section(stringResource(R.string.settings_background)) {
+        if (page == "background") Section(stringResource(R.string.settings_background)) {
             BackgroundReliabilityPanel(enabled)
         }
 
-        Section(stringResource(R.string.settings_about)) {
+        if (page == "about") Section(stringResource(R.string.settings_about)) {
             AboutContent(onUpdateFound)
         }
     }
@@ -872,4 +920,36 @@ private fun InferencePanel(enabled: Boolean) {
         style = MaterialTheme.typography.labelSmall,
         color = pal.Slate400,
     )
+}
+
+
+/** Redesign: a group header over a raised hairline block of one-line rows. */
+@Composable
+private fun RowGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = studio.primeminutes.ui.theme.TypeRole.groupHeader(), color = pal.Ink3,
+            modifier = Modifier.padding(start = Spacing.xs, bottom = 6.dp).semantics { heading() })
+        Column(
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(pal.Slate800)
+                .border(1.dp, pal.Hairline, MaterialTheme.shapes.large).padding(horizontal = Spacing.lg),
+            content = content,
+        )
+    }
+}
+
+/** One settings row: label, its current value, a chevron; opens its detail page. */
+@Composable
+private fun NavRow(label: String, value: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag(tag),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, modifier = Modifier.weight(1f))
+        if (value.isNotEmpty()) Text(value, style = MaterialTheme.typography.bodyMedium, color = pal.Slate400, maxLines = 1,
+            modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 180.dp), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Ink3)
+    }
 }

@@ -748,6 +748,8 @@
         <item quantity="other">新增 %d 集</item>
     </plurals>
     <!-- Redesign 2026-10 -->
+    <string name="settings_general">一般</string>
+    <string name="settings_ai_group">AI 模型</string>
     <string name="agent_status_summary_done">AI 摘要已完成</string>
     <string name="cd_edit_summary">编辑摘要</string>
     <string name="library_title">会议</string>
