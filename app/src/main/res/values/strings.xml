@@ -801,5 +801,8 @@
     <string name="player_position">%1$s of %2$s</string>
     <string name="record_fab">Record</string>
     <string name="notes_check">Check</string>
+    <string name="cite_preview_label">Cited transcript preview</string>
+    <string name="cite_preview_full">View full transcript →</string>
+    <string name="cite_preview_close">Close preview</string>
     <string name="menu_select">Select</string>
 </resources>

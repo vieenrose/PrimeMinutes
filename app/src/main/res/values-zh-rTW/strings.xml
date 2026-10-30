@@ -785,5 +785,8 @@
     <string name="player_position">%1$s / %2$s</string>
     <string name="record_fab">錄音</string>
     <string name="notes_check">核對</string>
+    <string name="cite_preview_label">引用逐字稿預覽</string>
+    <string name="cite_preview_full">看完整逐字稿 →</string>
+    <string name="cite_preview_close">關閉預覽</string>
     <string name="menu_select">選取</string>
 </resources>

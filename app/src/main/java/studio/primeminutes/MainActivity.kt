@@ -878,6 +878,11 @@ private fun TranscribeScreen(
     var readerReady by remember { mutableStateOf(false) }
     // A library search passage was tapped: scroll to that time once the session is loaded.
     var pendingSeekSec by remember { mutableStateOf<Double?>(null) }
+    // The citation preview: the cited turn (-1 = closed), the turns shown, a bump per citation tapped.
+    var citeTarget by remember { mutableIntStateOf(-1) }
+    var citeWindow by remember { mutableStateOf(IntRange.EMPTY) }
+    var citeGen by remember { mutableIntStateOf(0) }
+    fun closeCite() { citeTarget = -1; citeWindow = IntRange.EMPTY }
     // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
     var searchModelReady by remember { mutableStateOf(EmbedHost.ready(context)) }
     // Ask's models (the AI notes model, and the search model its excerpts come from): re-checked when
@@ -1478,7 +1483,45 @@ private fun TranscribeScreen(
 
     // Title / summary / speaker-stats overview — the Summary tab in portrait, the left pane in
     // landscape. onSeek only when there IS audio to seek.
-    val anchorSeek: ((Int) -> Unit)? = if (s.audioUri != null) ({ ms -> seekAndPlay(ms) }) else null
+    // A citation (summary pill, 核對, in-meeting Ask) plays from there AND opens the preview of the
+    // turns around it above the player; with no audio, the preview alone.
+    fun openCite(ms: Int) {
+        val target = studio.primeminutes.core.cite.CiteWindow.target(ms / 1000, s.utterances.map { it.startSec })
+        if (target != null) {
+            citeTarget = target
+            citeWindow = studio.primeminutes.core.cite.CiteWindow.around(target, s.utterances.size)
+            citeGen++
+        }
+        if (s.audioUri != null) { lastUserScrollNanos = 0L; seekAndPlay(ms) }
+    }
+    // Another meeting, or a transcript rewritten under it: the preview's indices mean nothing any more.
+    LaunchedEffect(s.sessionGen, s.utterances.size) { closeCite() }
+    // While playing, the highlight follows playback inside the panel (the window moves on once it leaves).
+    LaunchedEffect(activeIndex, isPlaying) {
+        if (citeTarget >= 0 && isPlaying) citeWindow = studio.primeminutes.core.cite.CiteWindow.follow(citeWindow, activeIndex, s.utterances.size)
+    }
+    // A few seconds after the cited passage has played out, the preview steps aside (the player plays on).
+    val citePlayedOut by remember { derivedStateOf {
+        val u = s.utterances.getOrNull(citeTarget)
+        u != null && isPlaying && positionMs / 1000.0 > u.endSec
+    } }
+    LaunchedEffect(citePlayedOut, citeGen) {
+        if (citePlayedOut) { delay(4_000); closeCite() }
+    }
+    // 「看完整逐字稿 →」: the transcript tab, at the cited line (playback is left as it is).
+    fun openCiteInTranscript() {
+        val idx = citeTarget.takeIf { it >= 0 } ?: return
+        closeCite()
+        sessTab = 2
+        scope.launch {
+            kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > headerCount + idx }
+            }
+            lastUserScrollNanos = System.nanoTime()
+            runCatching { listState.scrollToItem(headerCount + idx, scrollOffset = -120) }
+        }
+    }
+    val anchorSeek: ((Int) -> Unit)? = if (s.audioUri != null || s.utterances.isNotEmpty()) ({ ms -> openCite(ms) }) else null
     // The download item this screen shows (re-read as its download state changes on disk).
     val dlChangesNow by studio.primeminutes.online.ImportDownloads.changes.collectAsState()
     val dlStateNow by studio.primeminutes.online.ImportDownloads.state.collectAsState()
@@ -2081,6 +2124,7 @@ private fun TranscribeScreen(
                         Modifier
                             .weight(0.40f)
                             .fillMaxHeight()
+                            .citeDismissOnTap(citeTarget >= 0) { closeCite() }
                             .verticalScroll(rememberScrollState()),
                     ) {
                         overviewCards()
@@ -2161,10 +2205,10 @@ private fun TranscribeScreen(
                 )
                 when (sessTab) {
                     0 -> Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        Modifier.weight(1f).fillMaxWidth().citeDismissOnTap(citeTarget >= 0) { closeCite() }.verticalScroll(rememberScrollState()),
                     ) { summaryCards(); Spacer(Modifier.height(Spacing.sm)) }
                     1 -> Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        Modifier.weight(1f).fillMaxWidth().citeDismissOnTap(citeTarget >= 0) { closeCite() }.verticalScroll(rememberScrollState()),
                     ) {
                         CompositionLocalProvider(
                             studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t },
@@ -2227,6 +2271,19 @@ private fun TranscribeScreen(
                         }
                     }
                 }
+            }
+            // The citation preview, docked between the content and the player (never over it).
+            if (citeTarget >= 0 && !isEmptyState && citeWindow.first in utterances.indices) {
+                val winPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+                CitePreviewPanel(
+                    utterances = utterances, window = citeWindow,
+                    highlighted = if (s.audioUri != null && activeIndex in citeWindow) activeIndex else citeTarget,
+                    speakerLabel = speakerLabel,
+                    maxHeight = with(LocalDensity.current) { (winPx * 0.3f).toDp() },
+                    onSeek = { sec -> if (s.audioUri != null) seekAndPlay((sec * 1000).toInt()) },
+                    onOpenTranscript = { openCiteInTranscript() },
+                    onClose = { closeCite() },
+                )
             }
         }
     }
@@ -2436,7 +2493,7 @@ private fun TranscribeScreen(
     if (askMeeting != null && askScope != null) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         studio.primeminutes.ui.AskSheet(
             question = askMeeting ?: "", entries = listOf(askScope), scope = askScope,
-            onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; pendingSeekSec = t },
+            onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; openCite((t * 1000).toInt()) },
             onDismiss = { askMeeting = null },
         )
     }

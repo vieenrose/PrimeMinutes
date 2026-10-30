@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MyLocation
@@ -35,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +48,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -312,3 +322,94 @@ internal fun NowPlayingJump(onClick: () -> Unit, modifier: Modifier = Modifier) 
         }
     }
 }
+
+/**
+ * The citation preview: the few transcript turns around a cited moment, docked just above the player
+ * (never over it). The cited turn — then the playing one — is highlighted as in the transcript; ✕ or a
+ * downward swipe closes it, 「看完整逐字稿 →」 opens the transcript at the cited line.
+ */
+@Composable
+internal fun CitePreviewPanel(
+    utterances: List<studio.primeminutes.core.events.TranscriptEvent.Utterance>,
+    window: IntRange, highlighted: Int,
+    speakerLabel: (Int) -> String,
+    maxHeight: androidx.compose.ui.unit.Dp,
+    onSeek: (Double) -> Unit, onOpenTranscript: () -> Unit, onClose: () -> Unit,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    val label = stringResource(R.string.cite_preview_label)
+    var dragged by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val swipePx = with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.toPx() }
+    Surface(
+        color = pal.PanelSurface, shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, pal.Hairline),
+        shadowElevation = if (pal.isEink) 0.dp else 2.dp,
+        modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight).testTag("cite-preview")
+            .semantics { contentDescription = label; paneTitle = label }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (dragged > swipePx) onClose(); dragged = 0f },
+                    onDragCancel = { dragged = 0f },
+                ) { _, dy -> dragged += dy }
+            },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.cite_preview_full), style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold, color = pal.Sky,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button, onClick = onOpenTranscript)
+                        .heightIn(min = 40.dp).padding(horizontal = 4.dp, vertical = 10.dp).testTag("cite-preview-full"),
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onClose, modifier = Modifier.testTag("cite-preview-close")) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cite_preview_close), tint = pal.Slate400)
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(color = pal.Hairline)
+            Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(bottom = Spacing.sm)) {
+                for (i in window) {
+                    val u = utterances.getOrNull(i) ?: continue
+                    val active = i == highlighted
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(if (active) pal.Slate200.copy(alpha = if (pal.isEink) 0.12f else 0.07f) else Color.Transparent)
+                            .then(if (active) Modifier.semantics { selected = true } else Modifier)
+                            .clickable { onSeek(u.startSec) }
+                            .padding(vertical = 4.dp, horizontal = Spacing.md),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            u.speaker?.let { sid -> TranscriptSpeakerChip(speakerLabel(sid), sid); Spacer(Modifier.width(6.dp)) }
+                            val timeStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
+                            if (active) Text("▶ ${fmt(u.startSec)}", style = timeStyle, fontWeight = FontWeight.Bold, color = pal.Slate200)
+                            else Text(fmt(u.startSec), style = timeStyle, color = pal.Slate400)
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Text(u.text, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200,
+                            maxLines = if (active) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A tap anywhere in this content closes the citation preview (when [enabled]). Seen on the way down,
+ * before the children: a citation tapped there closes the old preview, then opens its own. Scrolls
+ * (a consumed move) do not count as taps.
+ */
+internal fun Modifier.citeDismissOnTap(enabled: Boolean, onDismiss: () -> Unit): Modifier =
+    if (!enabled) this else pointerInput(Unit) {
+        awaitEachGesture {
+            val pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial
+            val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+            val slop = viewConfiguration.touchSlop
+            while (true) {
+                val change = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: break
+                if ((change.position - down.position).getDistance() > slop) break   // a scroll, not a tap
+                if (!change.pressed) { onDismiss(); break }
+            }
+        }
+    }
