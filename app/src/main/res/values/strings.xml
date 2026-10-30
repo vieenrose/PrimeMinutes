@@ -782,7 +782,7 @@
     <string name="share_format">Format</string>
     <string name="share_content">Include</string>
     <string name="queue_title">Processing queue</string>
-    <string name="queue_bar_count">%1$d in queue</string>
+    <string name="queue_bar_count">%1$d items</string>
     <string name="queue_open">Open the processing queue</string>
     <string name="pill_queued">Queued</string>
     <string name="pill_processing">Processing %1$d%%</string>

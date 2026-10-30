@@ -766,7 +766,7 @@
     <string name="share_format">格式</string>
     <string name="share_content">內容</string>
     <string name="queue_title">處理佇列</string>
-    <string name="queue_bar_count">佇列 %1$d 項</string>
+    <string name="queue_bar_count">%1$d 項</string>
     <string name="queue_open">開啟處理佇列</string>
     <string name="pill_queued">排隊中</string>
     <string name="pill_processing">處理 %1$d%%</string>
