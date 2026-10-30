@@ -764,6 +764,9 @@
         <item quantity="other">%d new episodes</item>
     </plurals>
     <!-- Redesign 2026-10 -->
+    <string name="dl_part_speech">Speech recognition + speakers</string>
+    <string name="dl_part_reader">AI notes reader</string>
+    <string name="dl_part_done">Done</string>
     <string name="settings_general">General</string>
     <string name="settings_ai_group">AI models</string>
     <string name="agent_status_summary_done">AI summary done</string>

@@ -748,6 +748,9 @@
         <item quantity="other">新增 %d 集</item>
     </plurals>
     <!-- Redesign 2026-10 -->
+    <string name="dl_part_speech">語音辨識＋講者</string>
+    <string name="dl_part_reader">會議讀者（AI 筆記）</string>
+    <string name="dl_part_done">完成</string>
     <string name="settings_general">一般</string>
     <string name="settings_ai_group">AI 模型</string>
     <string name="agent_status_summary_done">AI 摘要已完成</string>

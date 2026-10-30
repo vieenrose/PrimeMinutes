@@ -29,7 +29,9 @@ object ModelPrefetch {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
     /** A running prefetch: the fraction done and the bytes it fetches in all. */
-    data class Status(val fraction: Float, val totalBytes: Long, val paused: Boolean = false) {
+    /** One model of the download (speech = ASR + diarization, or the AI notes reader) and how far it is. */
+    data class Part(val kind: String, val bytes: Long, val fraction: Float)
+    data class Status(val fraction: Float, val totalBytes: Long, val paused: Boolean = false, val parts: List<Part> = emptyList()) {
         val doneBytes: Long get() = (totalBytes * fraction.coerceIn(0f, 1f).toDouble()).toLong()
     }
     private val _status = MutableStateFlow<Status?>(null)
@@ -38,7 +40,13 @@ object ModelPrefetch {
     private val _progress = MutableStateFlow<Float?>(null)
     /** Fraction of the prefetch done while it runs, else null. */
     val progress: StateFlow<Float?> = _progress
-    private fun report(f: Float?, total: Long, paused: Boolean = false) { _progress.value = f; _status.value = f?.let { Status(it, total, paused) } }
+    /** Per-model fractions of the running prefetch (kind → bytes, fraction), in download order. */
+    private val parts = java.util.LinkedHashMap<String, Part>()
+    private fun part(kind: String, f: Float) { synchronized(parts) { parts[kind]?.let { parts[kind] = it.copy(fraction = f.coerceIn(0f, 1f)) } } }
+    private fun report(f: Float?, total: Long, paused: Boolean = false) {
+        _progress.value = f
+        _status.value = f?.let { Status(it, total, paused, synchronized(parts) { parts.values.toList() }) }
+    }
     /** Wakes a paused prefetch: network back, the app back in front, or the Resume button. */
     private val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     /** Resume button (and app/network events): a paused prefetch tries again now. */
@@ -106,6 +114,11 @@ object ModelPrefetch {
             val mm = ModelManager(app)
             if (p.speechBytes > 0) agg.begin("asr", p.speechBytes)
             if (p.readerBytes > 0) agg.begin("llm", p.readerBytes)
+            synchronized(parts) {
+                parts.clear()
+                if (p.speechBytes > 0) parts["asr"] = Part("asr", p.speechBytes, 0f)
+                if (p.readerBytes > 0) parts["llm"] = Part("llm", p.readerBytes, 0f)
+            }
             var last = 0f
             var attempt = 0
             var asrDone = p.speechBytes <= 0
@@ -116,12 +129,12 @@ object ModelPrefetch {
                 while (true) {
                     try {
                         if (!asrDone) {
-                            mm.ensureAsrModels(ConfigStore.load(app).asrLatencyMs) { f -> last = agg.update("asr", f).first; report(last, p.total) }
-                            agg.end("asr"); asrDone = true
+                            mm.ensureAsrModels(ConfigStore.load(app).asrLatencyMs) { f -> part("asr", f); last = agg.update("asr", f).first; report(last, p.total) }
+                            agg.end("asr"); asrDone = true; part("asr", 1f)
                         }
                         if (p.readerBytes > 0) {
                             val llm = LlmRegistry.byId(ConfigStore.load(app).llmModelId)
-                            mm.ensureLlmModel(llm) { f -> last = agg.update("llm", f).first; report(last, p.total) }
+                            mm.ensureLlmModel(llm) { f -> part("llm", f); last = agg.update("llm", f).first; report(last, p.total) }
                             agg.end("llm")
                         }
                         Log.i(TAG, "prefetch done")
