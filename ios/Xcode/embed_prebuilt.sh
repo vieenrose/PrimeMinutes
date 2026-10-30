@@ -9,7 +9,7 @@ case "$PLATFORM_NAME" in
   *) SDK=iphonesimulator; ARCH=${NATIVE_ARCH_ACTUAL:-x86_64} ;;
 esac
 [ "${SKIP_NATIVE_BUILD:-0}" = 1 ] || bash "$ROOT/ios/native/build_app.sh" "$SDK" "$ARCH"
-SRC="$HOME/work/vox/build-ios/$SDK-$ARCH/PrimeMinutes.app"
+SRC="${PREBUILT_APP:-$ROOT/build-ios/$SDK-$ARCH/PrimeMinutes.app}"   # where build_app.sh writes
 [ -d "$SRC" ] || { echo "error: $SRC missing (run build_app.sh)"; exit 1; }
 DST="$TARGET_BUILD_DIR/$WRAPPER_NAME"
 cp -f "$SRC/PrimeMinutes" "$DST/PrimeMinutes"
