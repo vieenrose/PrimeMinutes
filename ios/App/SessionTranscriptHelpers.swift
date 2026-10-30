@@ -106,15 +106,15 @@ struct SessionTranscriptLines: View {
             // A Button, not a tap gesture: press highlight, the VoiceOver button trait (play from this line),
             // Full Keyboard Access. The speaker name inside stays its own (borderless) button.
             Button { onSeekPlay(l.start) } label: { VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Circle().fill(tint(l.speaker)).frame(width: 8, height: 8)
-                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).font(.caption.bold()) }.buttonStyle(.borderless).disabled(busy)
-                    Text(Export.mmss(l.start)).font(.caption2).foregroundStyle(.secondary)
+                // Redesign: the live capture's layout — the name in its tint, the time, then the text on the page (no card).
+                HStack(spacing: 6) {
+                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).font(.subheadline.bold()).foregroundStyle(tint(l.speaker)) }.buttonStyle(.borderless).disabled(busy)
+                    Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(Vox.ink3)
                 }
-                Text(marked(l.text, query))
+                Text(marked(l.text, query)).foregroundStyle(Vox.ink).lineSpacing(4)
             }
-            .id(l.id).padding(Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
-            .background(l.id == currentId ? Color.accentColor.opacity(0.18) : (matchId != nil && matchId == l.id ? Vox.highlight.opacity(0.22) : Vox.card), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
+            .id(l.id).padding(.vertical, 8).padding(.horizontal, Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
+            .background(l.id == currentId ? Vox.accent.opacity(0.12) : (matchId != nil && matchId == l.id ? Vox.highlight.opacity(0.22) : Color.clear), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
             .contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .contextMenu { if !busy { lineMenu(l) } }
@@ -309,8 +309,17 @@ struct SessionMoreMenu: View {
     let onShare: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
+    var hasSummary = false
+    var onCopySummary: () -> Void = {}
+    var onEditSummary: () -> Void = {}
+    var onDelete: (() -> Void)? = nil
     var body: some View {
         Menu {
+            // Redesign: the summary's Copy / Edit moved here from its card.
+            if hasSummary {
+                Button(L("cd_copy_summary"), systemImage: "doc.on.doc") { onCopySummary() }
+                Button(L("summary_edit"), systemImage: "square.and.pencil") { onEditSummary() }.disabled(busy)
+            }
             Button(L("rename"), systemImage: "pencil") { onRename() }.disabled(busy).accessibilityIdentifier("renameTitle")
             if askMeetingReady { Button { onAsk() } label: { Label(L("ask_meeting_title"), systemImage: "sparkles") } }
             // Share v2: the one entry (the whole session, the PDF, the audio; AirDrop, mail, other apps).
@@ -319,6 +328,7 @@ struct SessionMoreMenu: View {
                 Button(L("re_transcribe")) { onRetranscribe() }.disabled(busy)
                 if !noSpeech { Button(L("re_summarize")) { onResummarize() }.disabled(busy) }   // nothing to summarize (Android canReSummarize)
             }
+            if let onDelete { Divider(); Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }.disabled(busy) }
         } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("cd_more_options")) }
     }
 }
@@ -375,6 +385,10 @@ struct SessionToolbar: ToolbarContent {
     let onShare: () -> Void
     let onRetranscribe: () -> Void
     let onResummarize: () -> Void
+    var hasSummary = false
+    var onCopySummary: () -> Void = {}
+    var onEditSummary: () -> Void = {}
+    var onDelete: (() -> Void)? = nil
     var body: some ToolbarContent {
         // Tap the title to rename the meeting (the ⋯ menu's Rename does the same).
         ToolbarItem(placement: .principal) {
@@ -400,7 +414,8 @@ struct SessionToolbar: ToolbarContent {
                 hasLines: hasLines, hasAudio: hasAudio, noSpeech: noSpeech,
                 askMeetingReady: askMeetingReady, busy: busy, title: title,
                 onRename: onRename, onAsk: onAsk, onShare: onShare,
-                onRetranscribe: onRetranscribe, onResummarize: onResummarize)
+                onRetranscribe: onRetranscribe, onResummarize: onResummarize,
+                hasSummary: hasSummary, onCopySummary: onCopySummary, onEditSummary: onEditSummary, onDelete: onDelete)
         }
     }
 }
@@ -411,9 +426,10 @@ struct SessionTabPage: View {
     @Binding var tab: Int
     let summary: AnyView
     let transcript: AnyView
+    var notes: AnyView = AnyView(EmptyView())
     var body: some View {
         VStack(spacing: 12) {
-            if tab == 0 { summary } else { transcript }
+            switch tab { case 0: summary; case 2: notes; default: transcript }
         }.padding(.top, 4)
     }
 }
@@ -424,20 +440,46 @@ struct SessionStickyHeader: View {
     let speakers: [Int]
     let tint: (Int) -> Color
     let name: (Int) -> String
+    /// Notes in the 筆記 segment (0: the segment is not offered).
+    var notes = 0
+    /// The meta line: date · length, then the speakers as tinted chips.
+    var meta = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SessionTabPicker(tab: $tab)
-            if tab == 1 { SessionSpeakerStrip(speakers: speakers, tint: tint, name: name).padding(.horizontal, Vox.gutter) }
+            SessionMetaLine(meta: meta, speakers: speakers, tint: tint, name: name)
+            SessionTabPicker(tab: $tab, notes: notes)
         }
     }
 }
 
-/// The summary/transcript segmented picker.
+/// The meeting's meta line (redesign): date · length, then each speaker as a tinted chip with its name.
+struct SessionMetaLine: View {
+    let meta: String
+    let speakers: [Int]
+    let tint: (Int) -> Color
+    let name: (Int) -> String
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if !meta.isEmpty { Text(meta).font(Vox.fontMeta).foregroundStyle(Vox.ink2).padding(.trailing, 2) }
+                ForEach(speakers, id: \.self) { k in VoxSpeakerChip(name: name(k), color: tint(k)) }
+            }.padding(.horizontal, Vox.gutter)
+        }
+    }
+}
+
+/// The 摘要 / 筆記 n / 逐字稿 segmented picker (tags: 0 summary, 2 notes, 1 transcript — 1 stays the transcript for
+/// the deep links that open it).
 struct SessionTabPicker: View {
     @Binding var tab: Int
+    var notes = 0
     var body: some View {
-        Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }
-            .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
+        Picker(L("cd_meeting_view"), selection: $tab) {
+            Text(L("tab_summary")).tag(0)
+            if notes > 0 { Text(L("tab_notes_n", notes)).tag(2) }
+            Text(L("tab_transcript")).tag(1)
+        }
+        .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)
     }
 }
 
@@ -554,7 +596,8 @@ struct SessionInsets: ViewModifier {
             // So do the Summary/Transcript tabs and the speaker strip (a pinned header, as in native iOS apps).
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 8) { SessionRunStatusTop(id: sessionId, busy: busy); header }
-                    .padding(.vertical, 8).frame(maxWidth: .infinity).background(Vox.page)
+                    .padding(.vertical, 8).frame(maxWidth: .infinity).background(Vox.bg)
+                    .overlay(alignment: .bottom) { Vox.hairline.frame(height: 1) }
             }
             .modifier(SessionFollow(scroll: follow))
     }
@@ -624,9 +667,10 @@ struct SessionScrollPage: View {
     let playerAvailable: Bool
     let playerBar: AnyView
     let header: AnyView
+    var notes: AnyView = AnyView(EmptyView())
     var body: some View {
         ScrollView {
-            SessionTabPage(tab: $tab, summary: summary, transcript: transcript)
+            SessionTabPage(tab: $tab, summary: summary, transcript: transcript, notes: notes)
         }
         .scrollDismissesKeyboard(.interactively)   // the transcript search keyboard: dragging the transcript drops it
         .modifier(UserScrollWatch { scrolled() })   // on the scroll view only: a drag on the player bar's slider is not a scroll

@@ -36,43 +36,75 @@ enum Vox {
         }
     }
 
-    /// A failed / destructive / recording state.
-    static let danger = Tint(.red,
+    /// A failed / destructive / recording state. Red is reserved for record / live and destruction (P2 palette).
+    static let danger = Tint(Vox.dyn(0xE5484D, 0xFF6B6F),
         hcLight: Color(red: 0xA8 / 255, green: 0x00 / 255, blue: 0x00 / 255),
         hcDark: Color(red: 0xFF / 255, green: 0x70 / 255, blue: 0x70 / 255))
-    /// An in-flight state: downloading, indexing, listening.
-    static let info = Tint(.blue,
-        hcLight: Color(red: 0x00 / 255, green: 0x4E / 255, blue: 0xCC / 255),
-        hcDark: Color(red: 0x66 / 255, green: 0xA3 / 255, blue: 0xFF / 255))
+    /// An in-flight state: downloading, indexing, listening (the accent: one action colour).
+    static let info = Tint(Vox.accent,
+        hcLight: Color(red: 0x1E / 255, green: 0x3F / 255, blue: 0xA8 / 255),
+        hcDark: Color(red: 0x9D / 255, green: 0xBA / 255, blue: 0xFF / 255))
     /// A waiting state: queued, paused, "verify this".
-    static let warning = Tint(.orange,
+    static let warning = Tint(Vox.dyn(0xB7791F, 0xE0A94F),
         hcLight: Color(red: 0x7A / 255, green: 0x3A / 255, blue: 0x00 / 255),
         hcDark: Color(red: 0xFF / 255, green: 0xB3 / 255, blue: 0x40 / 255))
     /// A finished / healthy state.
-    static let success = Tint(.green,
+    static let success = Tint(Vox.dyn(0x2E9156, 0x5CC28E),
         hcLight: Color(red: 0x0A / 255, green: 0x6B / 255, blue: 0x00 / 255),
         hcDark: Color(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255))
     /// A search hit in the transcript (the yellow wash behind the matched line).
     /// No text is ever set in it, so it keeps the single system hue in both modes.
     static let highlight = Color.yellow
 
+    // MARK: - P2 cool-slate palette (unified redesign, light / dark)
+
+    /// A light / dark pair resolved by the trait collection (the code form of an asset-catalog colour set).
+    static func dyn(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(UIColor { t in t.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
+    }
+    /// Screen background (lists, meeting, capture).
+    static let bg = dyn(0xF8FAFC, 0x10151C)
+    /// Raised surface: sheets, grouped blocks, the queue bar.
+    static let raised = dyn(0xFFFFFF, 0x19202A)
+    /// Fill: fields, segmented control, chips off.
+    static let fill = dyn(0xEEF1F5, 0x1F2733)
+    /// Text: ink (body), ink2 (meta), ink3 (hints, group headers).
+    static let ink = dyn(0x16202E, 0xE8EDF3)
+    static let ink2 = dyn(0x5A6573, 0xA3ADBA)
+    static let ink3 = dyn(0x8A94A1, 0x75808F)
+    /// 1 px separators between rows (lists are not wrapped in cards).
+    static let hairline = dyn(0xE3E7EC, 0x263040)
+    /// The only action colour (the brand blue, desaturated) and its 12 % wash.
+    static let accent = dyn(0x2F5BD3, 0x7DA2FF)
+    static let accentTint = dyn(0xE8EEFB, 0x1C2A47)
+    /// Record / live only.
+    static let record = dyn(0xE5484D, 0xFF6B6F)
+    static let recordTint = dyn(0xFDECEC, 0x3A1F22)
+
     // MARK: - Surfaces
 
     /// Brand navy (the app icon's field): fallback only, while the icon asset is missing.
     /// A fixed RGB, deliberately NOT dark-mode adapting — it is the logo color itself.
     static let brand = Color(red: 0x20 / 255, green: 0x37 / 255, blue: 0x60 / 255)
-    /// Grouped-screen background (`Color(.systemGroupedBackground)`).
-    static let page = Color(.systemGroupedBackground)
-    /// Card background (`Color(.secondarySystemGroupedBackground)`).
-    static let card = Color(.secondarySystemGroupedBackground)
+    /// Grouped-screen background: the P2 page colour.
+    static let page = bg
+    /// Card / grouped-block background: the raised surface.
+    static let card = raised
 
     // MARK: - Entity tints
 
     /// Speaker identity colors, in slot order (slot = speaker % count): the live capture,
     /// the library rows, the session transcript and the talk-time bar share them, so a
-    /// speaker keeps its color from recording to playback. System hues, never raw RGB:
-    /// they adapt to dark mode.
-    static let speaker: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .red, .indigo]
+    /// speaker keeps its color from recording to playback. Same lightness and chroma; a
+    /// lighter step in dark mode. A chip is a 12 % wash with the solid colour as text.
+    static let speaker: [Color] = [dyn(0x2F6FDE, 0x6E9CF0), dyn(0xD9622B, 0xF08A5A), dyn(0x2E9156, 0x5CC28E), dyn(0x8A5CD0, 0xB08CF0),
+                                   dyn(0xB7791F, 0xE0A94F), dyn(0xB03A8A, 0xE070BC), dyn(0x1F8A8A, 0x55C2C2), dyn(0x4F5BD5, 0x8C95F0)]
+    /// Note-type tints: decision green, action blue, proposal violet, open amber, number magenta.
+    static let noteDecision = dyn(0x2E9156, 0x5CC28E)
+    static let noteAction = dyn(0x2F6FDE, 0x6E9CF0)
+    static let noteProposal = dyn(0x8A5CD0, 0xB08CF0)
+    static let noteOpen = dyn(0xB7791F, 0xE0A94F)
+    static let noteNumber = dyn(0xB03A8A, 0xE070BC)
 
     // MARK: - Corner radius scale
 
@@ -86,6 +118,16 @@ enum Vox {
     static let radiusLG: CGFloat = 14
     /// A button rounding: record/stop/next-talk buttons, export overlays.
     static let radiusXL: CGFloat = 16
+    /// Speaker / note-type tag rounding.
+    static let radiusTag: CGFloat = 6
+    /// Primary button rounding (iOS: 14 pt, not a pill).
+    static let radiusButton: CGFloat = 14
+    /// Search field / text field rounding.
+    static let radiusField: CGFloat = 12
+    /// Grouped block: queue bar, settings group.
+    static let radiusGroup: CGFloat = 14
+    /// The record FAB's side.
+    static let fab: CGFloat = 72
 
     // MARK: - Spacing scale (gutter rhythm: 16 pt page gutter, 12/10 pt card inset)
 
@@ -118,6 +160,60 @@ enum Vox {
     static func micro(_ s: String) -> Text { Text(s).font(.caption).foregroundStyle(.secondary) }
     /// Transcript lines and summary prose: the reading size, full contrast.
     static func transcript(_ s: String) -> Text { Text(s) }
+    /// Redesign type scale (Dynamic Type: each role scales from its text style).
+    /// Large title 30/700, meeting title 21/700, row title 15.5/600, meta 12.5, group header 12.5/600 tracked .6.
+    static let fontLargeTitle = Font.system(.largeTitle, weight: .bold)
+    static let fontMeetingTitle = Font.system(.title2, weight: .bold)
+    static let fontRowTitle = Font.system(.subheadline, weight: .semibold).leading(.tight)
+    static let fontBody = Font.system(.body)
+    static let fontMeta = Font.system(.footnote)
+    static let fontGroup = Font.system(.footnote, weight: .semibold)
+    static let fontPill = Font.system(.caption2, weight: .semibold)
+    /// A row title in the redesign: 2 lines, ink.
+    static func rowTitle(_ s: String) -> some View { Text(s).font(fontRowTitle).foregroundStyle(Vox.ink) }
+    /// A grouped-list header: ink3, tracked.
+    static func group(_ s: String) -> some View { Text(s).font(fontGroup).tracking(0.6).foregroundStyle(Vox.ink3).textCase(nil) }
+}
+
+extension UIColor {
+    /// 0xRRGGBB.
+    convenience init(rgb: UInt32) {
+        self.init(red: CGFloat((rgb >> 16) & 0xFF) / 255, green: CGFloat((rgb >> 8) & 0xFF) / 255, blue: CGFloat(rgb & 0xFF) / 255, alpha: 1)
+    }
+}
+
+/// A status pill: text on its 12 % tint, 22 pt high (never colour-only: it always carries text).
+struct VoxPill: View {
+    let text: String
+    var color: Color = Vox.accent
+    var spinning = false
+    var body: some View {
+        HStack(spacing: 4) {
+            if spinning { ProgressView().controlSize(.mini).tint(color) }
+            Text(text).font(Vox.fontPill).foregroundStyle(color).lineLimit(1)
+        }
+        .padding(.horizontal, 8).frame(minHeight: 22).background(color.opacity(0.12), in: Capsule())
+    }
+}
+
+/// A speaker chip: 12 % tint fill, solid text, 6 pt rounding; the name always shows (never colour-only).
+struct VoxSpeakerChip: View {
+    let name: String
+    let color: Color
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6).accessibilityHidden(true)
+            Text(name).font(Vox.fontPill).foregroundStyle(color).lineLimit(1)
+        }
+        .padding(.horizontal, 7).padding(.vertical, 3).background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: Vox.radiusTag, style: .continuous))
+    }
+}
+
+extension View {
+    /// The P2 page: hidden list/scroll background over `Vox.bg`.
+    func voxPage() -> some View { scrollContentBackground(.hidden).background(Vox.bg) }
+    /// A hairline-separated plain list row on the page colour.
+    func voxHairlineRow() -> some View { listRowBackground(Vox.bg).listRowSeparatorTint(Vox.hairline) }
 }
 
 // MARK: - Card backgrounds (one shape vocabulary for all cards and rows)

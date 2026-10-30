@@ -697,3 +697,26 @@
 "capture_warn_heat" = "The phone is hot: transcription may fall behind";
 "capture_warn_memory" = "Memory is low: close other apps";
 "capture_warn_storage" = "Storage is almost full (under 500 MB)";
+
+/* Unified redesign (2026-10-30) */
+"meetings_title" = "Meetings";
+"speakers_n" = "%d speakers";
+"status_failed" = "Failed";
+"download_paused_short" = "Paused";
+"pill_download_pct" = "Download %d%%";
+"queue_bar_title" = "Processing queue · %d";
+"search_or_ask_hint" = "Search or ask";
+"ask_this" = "Ask: %@";
+"summary_edit" = "Edit summary";
+"cd_meeting_view" = "Meeting view";
+"tab_notes_n" = "Notes %d";
+"ai_status_read" = "AI read the whole meeting · %d notes";
+"see_process" = "See process";
+"notes_other" = "Other";
+"notes_none" = "No notes for this meeting.";
+"cd_play_from" = "Play from %@";
+"now_playing_jump" = "Now playing";
+"share_go" = "Share…";
+"cd_speed" = "Playback speed";
+"cd_player_more" = "More player controls";
+"cd_player_less" = "Fewer player controls";

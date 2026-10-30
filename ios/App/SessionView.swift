@@ -16,7 +16,7 @@ import AVFoundation
     /// (Re)opens the file: a job's audio can appear after its view opened (a download landing). False when unreadable.
     @discardableResult func load(_ file: String?) -> Bool {
         guard p == nil, let file, let pl = try? AVAudioPlayer(contentsOf: JobQueue.audioDir.appendingPathComponent(file)) else { return p != nil }
-        pl.prepareToPlay(); p = pl; duration = pl.duration; objectWillChange.send(); return true
+        pl.enableRate = true; pl.rate = rate; pl.prepareToPlay(); p = pl; duration = pl.duration; objectWillChange.send(); return true
     }
     func toggle() {
         guard let p else { return }
@@ -34,6 +34,9 @@ import AVFoundation
     /// Android volume popup: mute toggle + level, applied to this player only.
     @Published var volume: Float = 1 { didSet { p?.volume = muted ? 0 : volume } }
     @Published var muted = false { didSet { p?.volume = muted ? 0 : volume } }
+    /// Playback speed (the compact bar's 1× button cycles 1 → 1.25 → 1.5 → 2 → 0.75).
+    @Published var rate: Float = Float(Dev.env["VOX_RATE"] ?? "") ?? 1 { didSet { p?.rate = rate } }
+    func cycleRate() { let r: [Float] = [1, 1.25, 1.5, 2, 0.75]; rate = r[((r.firstIndex(of: rate) ?? 0) + 1) % r.count] }
     func seek(_ t: Double) { p?.currentTime = max(0, min(t, duration)); time = p?.currentTime ?? 0; engaged = true }
     /// A tap on a line or the end of a slider drag: the cursor moves there and playback starts from it.
     func seekPlay(_ t: Double) { seek(t); if !playing { toggle() } }
@@ -129,6 +132,11 @@ struct SessionView: View {
     }
 
     @State private var tab = 0
+    @State private var deletingMeeting = false
+    @State private var agentOpen = false
+    /// The saved reading as the Agent panel draws it (done, its notes).
+    private var savedAgent: AgentUi { let a = AgentUi(); a.state = .done; a.notes = v.notes; a.notesSoFar = v.notes.count; a.guardCounts = v.readerGuard; return a }
+    @Environment(\.dismiss) private var dismissMeeting
     @State private var searching = false
     @State private var match = 0
     @FocusState private var searchFocus: Bool
@@ -223,7 +231,7 @@ struct SessionView: View {
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         SessionCard(c)
     }
-    private var playerBar: some View { PlayerBar(player: player) }
+    private var playerBar: some View { PlayerBar(player: player, lanes: v.lines.map { ($0.start, $0.end, tint($0.speaker)) }) }
     private var summaryTab: some View {
         SessionSummaryTab(
             session: v,
@@ -239,7 +247,7 @@ struct SessionView: View {
             onEditSummary: { draft = v.summary; editingSummary = true },
             onCopyActions: { if let a = v.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
             onEditActions: { if let a = v.actionItems { draft = a; editingActions = true } },
-            onToggleProcess: { withAnimation { showProcess.toggle() } },
+            onToggleProcess: { agentOpen = true },   // redesign: 看過程 opens the Agent panel
             notesSection: { AnyView(notesSection($0, $1)) }
         )
     }
@@ -295,6 +303,17 @@ struct SessionView: View {
         }.padding(.horizontal, Vox.gutter)
     }
 
+    /// 目前播放 (redesign): while playing on the transcript, after a manual scroll, a floating jump back to the line.
+    @ViewBuilder private func nowPlayingJump(_ proxy: ScrollViewProxy) -> some View {
+        if tab == 1, player.playing, let c = current, Date().timeIntervalSince(userScrolledAt) < 4 {
+            Button { userScrolledAt = .distantPast; withAnimation { proxy.scrollTo(c, anchor: .center) } } label: {
+                Label(L("now_playing_jump"), systemImage: "waveform").font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.small)
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            .padding(.bottom, 76)
+        }
+    }
     /// onAppear work, out of the body chain so the solver sees one call, not three closures.
     private func appear(_ proxy: ScrollViewProxy) {
         if searching, semantic, !query.isEmpty { semSearch() }
@@ -414,18 +433,24 @@ struct SessionView: View {
             onUndo: { undoEdit() }, onRedo: { redoEdit() }, onSearch: { openSearch() },
             onRename: { draft = v.title; renamingTitle = true },
             onAsk: { askMeeting = "" }, onShare: { sharing = .of(s) },
-            onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) })
+            onRetranscribe: { askRerun(true) }, onResummarize: { askRerun(false) },
+            hasSummary: !v.summary.isEmpty,
+            onCopySummary: { UIPasteboard.general.string = refs(v.summary, screen: false); Haptics.success(); announce(L("summary_copied")) },
+            onEditSummary: { draft = v.summary; editingSummary = true },
+            onDelete: { deletingMeeting = true })
     }
     /// The scroll page, out of the body chain so the solver sees one call.
     private func scrollPage(_ proxy: ScrollViewProxy) -> some View {
         SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab), transcript: AnyView(transcriptTab),
             appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
             follow: followScroll(proxy), sessionId: s.id, busy: busy,
-            playerAvailable: player.available, playerBar: AnyView(playerBar), header: AnyView(stickyHeader))
+            playerAvailable: player.available, playerBar: AnyView(playerBar), header: AnyView(stickyHeader),
+            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: { player.seekPlay($0) })))
     }
     /// The pinned tabs + speaker strip (SessionInsets' top inset).
     private var stickyHeader: some View {
-        SessionStickyHeader(tab: $tab, speakers: Array(Set(s.lines.map(\.speaker))).sorted(), tint: { tint($0) }, name: { [v] in v.name($0) })
+        SessionStickyHeader(tab: $tab, speakers: Array(Set(s.lines.map(\.speaker))).sorted(), tint: { tint($0) }, name: { [v] in v.name($0) },
+            notes: v.notes.count, meta: ((v.meetingStart ?? v.date).formatted(date: .abbreviated, time: .shortened)) + " · " + Export.mmss(v.seconds))
     }
     /// Whether the line-edit Done button is enabled (non-blank draft).
     private var lineEditDoneEnabled: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -471,6 +496,7 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             scrollPage(proxy)
+                .overlay(alignment: .bottom) { nowPlayingJump(proxy) }
         }
         .environment(\.speakerRefs, { [v] t in SpeakerRefs.resolve(t, label: { v.name($0) }, known: Set(v.lines.map(\.speaker)), wrap: SpeakerRefs.unbreakable) })
         .navigationTitle(refs(v.title, screen: false)).navigationBarTitleDisplayMode(.inline)
@@ -553,6 +579,13 @@ struct SessionView: View {
             Button(L(confirmRerun == true ? "re_transcribe" : "re_summarize"), role: .destructive) { if let t = confirmRerun { confirmRerun = nil; rerun(s, t) } }
             Button(L("cancel"), role: .cancel) { confirmRerun = nil }
         } message: { Text(L(confirmRerun == true ? "confirm_retranscribe_body" : "confirm_resummarize_body")) }
+        .sheet(isPresented: $agentOpen) {
+            NavigationStack { ScrollView { AgentPanel(agent: savedAgent) { sec in if player.available { player.seekPlay(Double(sec)) } }.padding() } }.presentationDetents([.medium, .large])
+        }
+        .alert(L("delete_confirm", v.title), isPresented: $deletingMeeting) {
+            Button(L("delete"), role: .destructive) { player.stop(); Model.shared.library.remove(s); Haptics.destructive(); dismissMeeting() }
+            Button(L("cancel"), role: .cancel) {}
+        }
         .alert(alertText ?? "", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
             Button(L("ok"), role: .cancel) {}
         }
@@ -881,7 +914,7 @@ struct SpeakerStats: View {
 struct Collapsible<C: View>: View {
     let lines: Int
     @ViewBuilder let content: () -> C
-    @State private var expanded = false
+    @State private var expanded = Dev.env["VOX_PLAYER_EXPAND"] != nil   // DEV: shot of the expanded bar
     @State private var full: CGFloat = 0
     @State private var folded: CGFloat = 0
     var body: some View {
@@ -917,48 +950,79 @@ struct TrailingIconLabel: LabelStyle {
     }
 }
 
-/// The player bar under a meeting: the scrubber with elapsed / total under it, then −5 s, play, +5 s centred and
-/// the volume menu at the trailing edge. The saved meeting and the live view of a job being processed share it.
-/// Large text: the times are capped and the volume menu drops out when the row no longer fits (the hardware
-/// buttons still set the volume), so no control ever overlaps another.
+/// The player bar under a meeting (redesign): a compact 56 pt bar — play, the speaker-lane scrubber, time and speed;
+/// the chevron expands it to −5 s / +5 s and volume. The saved meeting and the live view of a job share it.
 struct PlayerBar: View {
     @ObservedObject var player: Player
-    /// The side of the ±5 s / volume targets: ≥ 44 pt, grows with the text up to 60 pt.
+    /// Who speaks when: (start, end, colour) per line, drawn as the scrubber's lane (empty: a plain track).
+    var lanes: [(Double, Double, Color)] = []
+    @State private var expanded = false
     @ScaledMetric(relativeTo: .title2) private var side: CGFloat = 44
     private var target: CGFloat { min(max(side, 44), 60) }
-    private var transport: some View {
-        HStack(spacing: 24) {
-            PlayerSkipBack(player: player, side: target)
-            PlayerPlayPause(player: player)
-            PlayerSkipForward(player: player, side: target)
-        }
-    }
+    private var speed: String { player.rate == 1 ? "1×" : String(format: "%g×", player.rate) }
     var body: some View {
-        VStack(spacing: 2) {
-            PlayerSeekSlider(player: player)
-            HStack {
-                Text(Export.mmss(player.time)).accessibilityHidden(true)   // the slider's value says it
-                Spacer()
-                Text(Export.mmss(player.duration)).accessibilityHidden(true)
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                Button { player.toggle() } label: {
+                    Image(systemName: player.playing ? "pause.fill" : "play.fill").font(.body.weight(.semibold)).foregroundStyle(.white)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 40, height: 40).background(Vox.accent, in: Circle()).frame(width: 44, height: 44).contentShape(Circle())
+                }.buttonStyle(.plain).accessibilityLabel(L(player.playing ? "pause" : "play"))
+                PlayerLaneScrubber(player: player, lanes: lanes)
+                Text(Export.mmss(player.time) + " / " + Export.mmss(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(Vox.ink2)
+                    .lineLimit(1).fixedSize().accessibilityHidden(true).dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                Button { player.cycleRate() } label: {
+                    Text(speed).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(Vox.ink).frame(minWidth: 36, minHeight: 44)
+                }.buttonStyle(.plain).accessibilityLabel(L("cd_speed")).accessibilityValue(speed)
+                Button { withAnimation(.snappy) { expanded.toggle() } } label: {
+                    Image(systemName: "chevron.up").rotationEffect(.degrees(expanded ? 180 : 0)).font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink3)
+                        .frame(width: 32, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel(L(expanded ? "cd_player_less" : "cd_player_more"))
             }
-            .font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
-            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-            ViewThatFits(in: .horizontal) {
-                // Room for all: transport centred, volume trailing (a leading spacer of the same width keeps the centre).
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: target, height: 1)
-                    Spacer(minLength: 8)
-                    transport
-                    Spacer(minLength: 8)
+            .frame(minHeight: 56)
+            if expanded {
+                HStack(spacing: 24) {
+                    PlayerSkipBack(player: player, side: target)
+                    PlayerSkipForward(player: player, side: target)
                     PlayerVolumeMenu(player: player).frame(width: target, height: target)
-                }
-                transport
+                }.dynamicTypeSize(...DynamicTypeSize.accessibility3).transition(.opacity)
             }
-            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-            .padding(.top, 2)
         }
-        .padding(.horizontal, Vox.gutterWide).padding(.vertical, 8)
+        .padding(.horizontal, Vox.gutter).padding(.vertical, 2)
         .frame(maxWidth: .infinity)
-        .background(.bar)
+        .background(Vox.raised)
+        .overlay(alignment: .top) { Vox.hairline.frame(height: 1) }
+    }
+}
+
+/// The compact bar's scrubber: the speaker lane (each line in its speaker's tint) under the played part, a thumb, drag
+/// to seek (the end of a drag plays). VoiceOver: an adjustable "1:48 / 7:38" (±5 s per swipe).
+struct PlayerLaneScrubber: View {
+    @ObservedObject var player: Player
+    let lanes: [(Double, Double, Color)]
+    @State private var dragging = false
+    var body: some View {
+        GeometryReader { g in
+            let w = max(1, g.size.width), d = max(1, player.duration), x = CGFloat(min(1, player.time / d)) * w
+            ZStack(alignment: .leading) {
+                Capsule().fill(Vox.fill).frame(height: 6)
+                ForEach(Array(lanes.enumerated()), id: \.offset) { _, l in
+                    Rectangle().fill(l.2.opacity(0.55)).frame(width: max(1, CGFloat((l.1 - l.0) / d) * w), height: 6).offset(x: CGFloat(l.0 / d) * w)
+                }
+                Capsule().fill(Vox.ink.opacity(0.25)).frame(width: x, height: 6)
+                Circle().fill(Vox.accent).frame(width: dragging ? 18 : 14, height: dragging ? 18 : 14).offset(x: x - (dragging ? 9 : 7))
+            }
+            .frame(height: g.size.height)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in dragging = true; player.seek(Double(min(max(0, v.location.x / w), 1)) * d) }
+                .onEnded { _ in dragging = false; if !player.playing { player.toggle() } })
+        }
+        .frame(height: 44)
+        .accessibilityElement()
+        .accessibilityLabel(L("cd_seek")).accessibilityValue(L("cd_seek_value", Export.mmss(player.time), Export.mmss(player.duration)))
+        .accessibilityAdjustableAction { dir in
+            switch dir { case .increment: player.seek(player.time + 5); case .decrement: player.seek(player.time - 5); @unknown default: break }
+        }
     }
 }

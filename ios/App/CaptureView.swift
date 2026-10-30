@@ -28,7 +28,7 @@ struct CaptureView: View {
                     .accessibilityAddTraits(.isButton)
                 controls
             }
-            .background(Color(.systemBackground))
+            .background(Vox.bg)
             .toolbar {
                 ToolbarItem(placement: .principal) { pill }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -143,7 +143,7 @@ struct CaptureView: View {
                 VStack(spacing: 6) {
                     ZStack {
                         Circle().stroke(Color(.separator), lineWidth: 4).frame(width: 72, height: 72)
-                        RoundedRectangle(cornerRadius: 6).fill(.red).frame(width: 30, height: 30)
+                        RoundedRectangle(cornerRadius: 6).fill(Vox.record).frame(width: 30, height: 30)
                     }
                     Text(L("capture_stop")).font(.caption).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.center)
                 }

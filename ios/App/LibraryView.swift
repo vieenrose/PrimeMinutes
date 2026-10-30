@@ -156,43 +156,57 @@ struct LibraryView: View {
         return s.id.uuidString + "|" + s.title + "|" + ps.map { "\($0.kind)\($0.uttIndex)\($0.semanticOnly)" }.joined(separator: ",")
     }
     private func jobCard(_ j: Job) -> AnyView { AnyView(jobCardBody(j)) }
-    private func jobCardBody(_ j: Job) -> some View {
-        let active = j.id == m.runner.activeJob, failedDl = j.download?.error != nil
-        return HStack(spacing: 12) {
-            // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
-            // A Button, not a tap gesture: press highlight, VoiceOver button trait, Full Keyboard Access. The menu stays outside it.
-            Button { if !editing { path.append(.job(j.id)) } } label: {
-                // At AX sizes the glyph goes above the text, which then keeps the full row width.
-                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
-                    if let src = sources[j.id.uuidString] {
-                        let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
-                        EpisodeTile(source: src, symbol: failed ? "exclamationmark" : dl ? "arrow.down" : active ? "waveform" : "clock",
-                                    tint: failed ? Vox.danger.color : dl ? Vox.info.color : Vox.warning.color,
-                                    status: L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
-                    } else { JobGlyph(m: m, j: j) }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Vox.head(j.title ?? L("meeting")).lineLimit(2)
-                        if let src = sources[j.id.uuidString], let c = src.channelTitle, !c.isEmpty { Vox.meta(c) }
-                        Text(m.jobStatus(j)).font(.caption).foregroundStyle(failedDl ? Vox.danger.color : .secondary).lineLimit(2)
-                        if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.info.color).padding(.top, 4) }
-                    }
-                    Spacer(minLength: 0)
-                }.contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            if j.download != nil {
-                Menu { DownloadActions(m: m, j: j, askDelete: { dlDeleteAsk = j.id }) }
-                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
-            } else if active {
-                Menu { Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() } }
-                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
-            } else if m.runner.parked.contains(j.id) {
-                Menu { Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }; Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) } }
-                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
-            } else if j.id != m.capture.recordingJob {
-                Menu { Button(L("action_process_now"), systemImage: "text.line.first.and.arrowtriangle.forward") { m.runner.processNext(j) }; Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) } }
-                    label: { Image(systemName: "ellipsis").padding(12).contentShape(Rectangle()).accessibilityLabel(L("cd_manage")) }
-            }
+    /// A queue row's status pill: 排隊中 / 轉寫 n% / 下載 n% / 處理中 / failed (text, never colour-only).
+    private func jobPill(_ j: Job) -> VoxPill {
+        let failed = j.download?.error != nil || m.runner.failed[j.id] != nil, active = j.id == m.runner.activeJob
+        if failed { return VoxPill(text: L(j.download != nil ? "cd_status_download_failed" : "status_failed"), color: Vox.danger.color) }
+        if j.download != nil {
+            if let f = m.dlFraction(j) { return VoxPill(text: L("pill_download_pct", Int(f * 100)), color: Vox.accent) }
+            return VoxPill(text: L(m.imports.dlId == j.id && m.imports.dlPaused ? "download_paused_short" : "cd_status_downloading"), color: Vox.accent)
         }
+        if active { return VoxPill(text: L("cd_status_processing"), color: Vox.accent, spinning: true) }
+        if m.runner.parked.contains(j.id) { return VoxPill(text: L("download_paused_short"), color: Vox.warning.color) }
+        return VoxPill(text: L("cd_status_queued"), color: Vox.ink2)
+    }
+    /// A queue row's actions (the old ⋮): one list for the long-press menu, the swipes and VoiceOver.
+    @ViewBuilder private func jobActions(_ j: Job) -> some View {
+        if j.download != nil {
+            DownloadActions(m: m, j: j, askDelete: { dlDeleteAsk = j.id })
+        } else if j.id == m.runner.activeJob {
+            Button(L("action_stop_processing"), systemImage: "stop.circle", role: .destructive) { m.runner.stopProcessing() }
+        } else if m.runner.parked.contains(j.id) {
+            Button(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.circle") { m.runner.resume(j) }
+            Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) }
+        } else if j.id != m.capture.recordingJob {
+            Button(L("action_process_now"), systemImage: "text.line.first.and.arrowtriangle.forward") { m.runner.processNext(j) }
+            Button(L("action_remove_from_queue"), systemImage: "xmark.circle", role: .destructive) { m.runner.unqueue(j) }
+        }
+    }
+    private func jobCardBody(_ j: Job) -> some View {
+        let failedDl = j.download?.error != nil
+        // Android: a queued or processing row opens the meeting screen, live while it runs (transcript, notes, player).
+        // Redesign: no ⋮ — the actions are on long-press, the swipes and the VoiceOver actions.
+        return Button { if !editing { path.append(.job(j.id)) } } label: {
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
+                if let src = sources[j.id.uuidString] {
+                    let failed = j.download?.error != nil, dl = j.download != nil, active = j.id == m.runner.activeJob
+                    EpisodeTile(source: src, symbol: failed ? "exclamationmark" : dl ? "arrow.down" : active ? "waveform" : "clock",
+                                tint: failed ? Vox.danger.color : dl ? Vox.info.color : Vox.warning.color,
+                                status: L(failed ? "cd_status_download_failed" : dl ? "cd_status_downloading" : active ? "cd_status_processing" : "cd_status_queued"))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(j.title ?? L("meeting")).font(Vox.fontRowTitle).foregroundStyle(Vox.ink).lineLimit(2)
+                    if let src = sources[j.id.uuidString], let c = src.channelTitle, !c.isEmpty { Text(c).font(Vox.fontMeta).foregroundStyle(Vox.ink2) }
+                    Text(m.jobStatus(j)).font(Vox.fontMeta).foregroundStyle(failedDl ? Vox.danger.color : Vox.ink2).lineLimit(2)
+                    jobPill(j).padding(.top, 2)
+                    if let f = m.dlFraction(j) { ProgressView(value: f).tint(Vox.accent).padding(.top, 4) }
+                }
+                Spacer(minLength: 0)
+            }.padding(.vertical, 6).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+        .contextMenu { jobActions(j) }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) { jobActions(j) }
+        .accessibilityActions { jobActions(j) }
     }
 
     /// Screen open: unfocus the search, then the DEV (README animation / device test) hooks.
@@ -226,13 +240,13 @@ struct LibraryView: View {
         .toolbar { LibrarySelectToolbar(editing: editing, any: !m.library.sessions.isEmpty, count: selected.count,
                                         onEdit: { setEditing(!editing) }, onSelectAll: { selected = Set(shown.map(\.id)) }, onDelete: { deletingMany = true }) }
         // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
-        .searchSuggestions { if askReady && query.isEmpty { LibraryAskSuggestion { asking = "" } } }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(askReady ? "search_or_ask_hint" : EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
+        .searchSuggestions { if askReady { LibraryAskSuggestion(query: query.trimmingCharacters(in: .whitespaces)) { asking = query.trimmingCharacters(in: .whitespaces) } } }
         .submitLabel(askReady ? .send : .search)
         .autocorrectionDisabled()
         .onSubmit(of: .search) { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
         .onChange(of: query) { _, _ in runSearch() }
-        .toolbar { if askReady && !editing { LibraryAskToolbar { asking = query.trimmingCharacters(in: .whitespaces) } } }
+        // Redesign: Ask lives in the search pill (its suggestion row, and the keyboard's Send), not in the nav bar.
         // A meeting that finished processing lands in the library: confirm it by touch (a removal stays silent).
         .onChange(of: m.library.sessions.count) { prev, now in
             defer { countArmed = true }
@@ -593,18 +607,34 @@ struct BrandMark: View {
 /// not) and in Settings (Android ModelDownloadCard).
 struct ModelDownloadCard: View {
     @ObservedObject var downloads: ModelDownloads
+    /// Redesign: one bar per model (speech recognition + speakers, then the notes model), derived from the
+    /// prefetch's bytes so far; Cancel is neutral (bordered), Resume the accent.
+    private func bar(_ title: String, _ done: Int64, _ total: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(Vox.fontRowTitle).foregroundStyle(Vox.ink)
+                Spacer()
+                Text("\(SizeFormat.bytes(min(done, total))) / \(SizeFormat.bytes(total))").font(Vox.fontMeta.monospacedDigit()).foregroundStyle(Vox.ink2)
+            }
+            ProgressView(value: Double(min(done, total)), total: Double(max(1, total))).tint(Vox.accent)
+        }.accessibilityElement(children: .combine)
+    }
     var body: some View {
         if let p = downloads.prefetchProgress {
-            VStack(alignment: .leading, spacing: 4) {
+            let total = downloads.prefetchTotal, speech = downloads.prefetchSpeechBytes, got = Int64(Double(total) * p)
+            VStack(alignment: .leading, spacing: 10) {
+                if speech > 0 { bar(L("model_kind_asr"), got, speech) }
+                if total - speech > 0 { bar(L("model_kind_llm"), max(0, got - speech), total - speech) }
                 HStack {
-                    Vox.subhead("\(SizeFormat.bytes(Int64(Double(downloads.prefetchTotal) * p))) / \(SizeFormat.bytes(downloads.prefetchTotal))")
+                    Text(downloads.prefetchPaused ? L("download_paused") : L("dl_prefetching") + " \(Int(p * 100)) %").font(Vox.fontMeta).foregroundStyle(Vox.ink2)
                     Spacer()
-                    if downloads.prefetchPaused { Button(L("download_resume")) { DownloadResumer.shared.kick() }.font(.subheadline.weight(.semibold)).padding(.trailing, 8) }
-                    Button(L("cancel")) { downloads.cancelPrefetch() }.font(.subheadline)
+                    if downloads.prefetchPaused { Button(L("download_resume")) { DownloadResumer.shared.kick() }.buttonStyle(.borderedProminent).controlSize(.small) }
+                    Button(L("cancel")) { downloads.cancelPrefetch() }.buttonStyle(.bordered).tint(Vox.ink2).controlSize(.small)
                 }
-                ProgressView(value: p)
-                Vox.meta(downloads.prefetchPaused ? L("download_paused") : L("dl_prefetching") + " \(Int(p * 100)) %")
-            }.padding(Vox.inset).voxRow()
+            }
+            .padding(Vox.inset)
+            .background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous).stroke(Vox.hairline))
         }
     }
 }
@@ -726,31 +756,45 @@ struct LibraryRow: View {
             }
         }
     }
+    /// Up to five speaker dots and the speaker count (the meta line's tail); never colour-only: the count says it.
+    private var speakers: [Int] { Array(Set(s.lines.map(\.speaker))).sorted() }
+    private var speakerDots: some View {
+        HStack(spacing: 3) {
+            ForEach(speakers.prefix(5), id: \.self) { k in Circle().fill(Vox.speaker[max(0, k) % Vox.speaker.count]).frame(width: 7, height: 7) }
+        }.accessibilityHidden(true)
+    }
+    private var metaText: String {
+        var t = source.map { episodeMeta($0, s) } ?? "\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))"
+        if source == nil, !speakers.isEmpty { t += " · " }
+        return t
+    }
     private var content: some View {
-        // At AX sizes the status glyph goes above the title, which then keeps the full row width.
+        // Redesign: no status glyph on a finished row (title + meta line); a podcast row keeps its cover.
         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))) {
             let symbol = isNew ? "waveform" : s.noSpeech ? "mic.slash" : "checkmark"
             let status = L(isNew ? "cd_status_new" : s.noSpeech ? "status_no_speech" : "cd_status_done")
             if let source {
                 EpisodeTile(source: source, symbol: symbol, tint: done ? Vox.success.color : Color.gray, status: status)
-            } else {
-                Image(systemName: symbol)
-                    .font(.title3.weight(.semibold)).frame(width: 40, height: 40)
-                    .foregroundStyle(done ? Vox.success.color : Color.secondary)
-                    .voxTint(done ? Vox.success.color : Color.secondary, Vox.radiusSM)
-                    .accessibilityLabel(status)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Vox.head(s.title.isEmpty ? L("recent_untitled") : ScreenScript.title(s.title)).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
-                if let source { Vox.meta(episodeMeta(source, s)) }
-                else if s.isReceived { receivedText("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("received-label") }
-                else { Vox.meta("\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))") }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(s.title.isEmpty ? L("recent_untitled") : ScreenScript.title(s.title)).font(Vox.fontRowTitle).foregroundStyle(Vox.ink)
+                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                HStack(spacing: 0) {
+                    Group {
+                        if s.isReceived && source == nil { receivedText(metaText).accessibilityIdentifier("received-label") } else { Text(metaText) }
+                    }.font(Vox.fontMeta).foregroundStyle(Vox.ink2)
+                    if source == nil && !speakers.isEmpty {
+                        speakerDots.padding(.trailing, 4)
+                        Text(L("speakers_n", speakers.count)).font(Vox.fontMeta).foregroundStyle(Vox.ink2)
+                    }
+                }.lineLimit(2)
+                if s.noSpeech { VoxPill(text: L("status_no_speech"), color: Vox.ink2).padding(.top, 2) }
                 if searching { passageList }
                 if indexing { Vox.micro(L("studio_indexing")) }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
     }
     var body: some View {
@@ -773,6 +817,10 @@ struct LibraryRow: View {
             Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
         }
         .accessibilityAction(named: L("select")) { onSelect() }
+        .accessibilityAction(named: L("rename")) { onRename() }
+        .accessibilityAction(named: L("delete")) { onDelete() }
+        .accessibilityActions { if audio != nil || done && !s.lines.isEmpty { Button(L("share_title")) { onShare() } } }
+        .voxHairlineRow()
     }
 }
 
@@ -790,10 +838,8 @@ struct LibraryHeader: View {
     @ObservedObject private var resumer = DownloadResumer.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !EmbedHost.ready && !m.library.sessions.isEmpty {
-                if let p = downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, Vox.gutter).padding(.top, 6) }
-                else { Button(L("search_semantic_download", SizeFormat.bytes(ReaderModel.embed.files.reduce(0) { $0 + $1.size }))) { downloads.downloadEmbed() }.font(.caption).padding(.horizontal, Vox.gutter).padding(.top, 6) }
-            }
+            // Redesign: the semantic-search download link lives in Settings (Semantic search); only its progress shows here.
+            if !EmbedHost.ready, let p = downloads.embedProgress { Text(L("search_semantic_downloading", p)).font(Vox.fontMeta).foregroundStyle(Vox.ink2).padding(.horizontal, Vox.gutter).padding(.top, 6) }
             if downloads.prefetchProgress != nil { ModelDownloadCard(downloads: downloads).padding(.horizontal, Vox.gutter).padding(.top, 6) }
             else if resumer.paused > 0 && !m.imports.dlPaused { LibraryPausedRow().padding(.horizontal, Vox.gutter).padding(.top, 6) }
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
@@ -889,17 +935,17 @@ struct LibraryList: View {
     let clearFilters: () -> Void
     var body: some View {
         List(selection: $selection) {
-            Section { header.listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+            Section { header.listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {
-                Section { LibraryEmpty(downloads: m.downloads).padding(.top, 24).listRowBackground(Color.clear) }
+                Section { LibraryEmpty(downloads: m.downloads).padding(.top, 24).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             }
             if !m.library.sessions.isEmpty && sections.isEmpty && jobs.isEmpty {
-                Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear) }
+                Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             }
             if !jobs.isEmpty {
                 Section {
                     // the session keeps the job's id: without a distinct identity SwiftUI keeps the job card's body when the row becomes a session
-                    ForEach(jobs) { job($0).id("job-" + $0.id.uuidString).selectionDisabled() }
+                    ForEach(jobs) { job($0).id("job-" + $0.id.uuidString).selectionDisabled().voxHairlineRow() }
                 }
             }
             ForEach(sections) { sec in
@@ -907,11 +953,13 @@ struct LibraryList: View {
                     ForEach(sec.items) { s in row(s).id(rowKey(s)).tag(s.id) }
                 } header: {
                     if let g = sec.channel { ChannelHeader(group: g) { openChannel(g.key) } }
-                    else if let t = sec.title { Text(t) }
+                    else if let t = sec.title { Vox.group(t) }
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        // Redesign: no cards, rows on the page separated by hairlines; date groups kept.
+        .listStyle(.plain)
+        .voxPage()
     }
 }
 
@@ -923,33 +971,56 @@ struct LibrarySection: Identifiable {
     let items: [Session]
 }
 
-/// Under the list: what the engines are doing (tap: the running job), Process all, and the record button.
+/// Under the list (redesign): one slim queue bar (count, current step, progress; tap: the running job) and the red
+/// round record button on a fade. Process all stays on the bar while nothing runs.
 struct LibraryFooter: View {
     @ObservedObject var m: Model
     @Binding var path: [Route]
-    var body: some View {
-        VStack(spacing: 8) {
-            if m.runner.activeJob != nil {
-                Button { if let a = m.runner.activeJob { path.append(.job(a)) } } label: { HStack(spacing: 8) { ProgressView().controlSize(.small); VStack(alignment: .leading, spacing: 2) { Text(L("studio_processing_banner", m.screen.status)).font(.caption).lineLimit(1); if !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(.secondary) } }; Spacer() }
-                    .padding(Vox.insetTight).voxRow() }.buttonStyle(.plain).padding(.horizontal, Vox.gutter)
-            } else {
-                Vox.meta(m.screen.status).lineLimit(1).padding(.horizontal, Vox.gutter)
+    private var waiting: Int { m.runner.waiting.count }
+    private var queueBar: some View {
+        let active = m.runner.activeJob != nil
+        let idle = m.runner.waiting.filter { $0.download == nil }.count
+        return HStack(spacing: 10) {
+            if active { ProgressView().controlSize(.small) } else { Image(systemName: "list.bullet").foregroundStyle(Vox.ink2).accessibilityHidden(true) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L("queue_bar_title", max(waiting, active ? 1 : 0))).font(Vox.fontGroup).foregroundStyle(Vox.ink)
+                Text(active ? m.screen.status : L("cd_status_queued")).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(1)
+                if active && !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(Vox.ink3) }
             }
-            if m.runner.activeJob == nil && !m.capture.recording && m.runner.waiting.contains(where: { $0.download == nil }) {
-                Button { m.runner.drain() } label: { Label(L("source_process_all", m.runner.waiting.filter { $0.download == nil }.count), systemImage: "play.fill").fontWeight(.semibold).frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered).controlSize(.large).padding(.horizontal, Vox.gutter)
-            }
-            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
-                Label(m.capture.recording ? L("stop") : L("record"), systemImage: m.capture.recording ? "stop.fill" : "mic.fill")
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.roundedRectangle(radius: Vox.radiusXL))
-            .tint(m.capture.recording ? Vox.danger.color : Color.accentColor)
-            .padding(.horizontal, Vox.gutter).padding(.bottom, 8)
+            Spacer(minLength: 4)
+            if !active && !m.capture.recording && idle > 0 {
+                Button { m.runner.drain() } label: { Text(L("source_process_all", idle)).font(Vox.fontGroup) }
+                    .buttonStyle(.borderless).frame(minHeight: 44)
+            } else { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink3).accessibilityHidden(true) }
         }
-        .padding(.top, 8)
-        .background(.bar)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous).stroke(Vox.hairline))
+        .contentShape(Rectangle())
+        .onTapGesture { if let a = m.runner.activeJob ?? m.runner.waiting.first?.id { path.append(.job(a)) } }
+        .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton)
+        .accessibilityLabel(L("queue_bar_title", max(waiting, active ? 1 : 0)) + ", " + (active ? m.screen.status : L("cd_status_queued")))
+        .padding(.horizontal, Vox.gutter)
+    }
+    var body: some View {
+        VStack(spacing: 10) {
+            if m.runner.activeJob != nil || waiting > 0 { queueBar }
+            else if !m.screen.status.isEmpty { Text(m.screen.status).font(Vox.fontMeta).foregroundStyle(Vox.ink3).lineLimit(1).padding(.horizontal, Vox.gutter) }
+            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
+                ZStack {
+                    Circle().fill(Vox.record).frame(width: Vox.fab, height: Vox.fab).shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                    Image(systemName: m.capture.recording ? "stop.fill" : "mic.fill").font(.title.weight(.semibold)).foregroundStyle(.white)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(m.capture.recording ? L("stop") : L("record"))
+            .padding(.bottom, 6)
+        }
+        .padding(.top, 18)
+        .frame(maxWidth: .infinity)
+        // The fade: the list dissolves under the button instead of a bar edge.
+        .background(LinearGradient(colors: [Vox.bg.opacity(0), Vox.bg.opacity(0.92), Vox.bg], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)).ignoresSafeArea())
     }
 }
 
@@ -979,19 +1050,9 @@ struct LibrarySelectToolbar: ToolbarContent {
 
 /// Ask, offered in the search drawer while the field is empty and focused (the toolbar keeps it always reachable).
 struct LibraryAskSuggestion: View {
+    var query = ""
     let action: () -> Void
     var body: some View {
-        Button(action: action) { Label(L("ask_entry_cd"), systemImage: "bubble.left.and.text.bubble.right") }
-    }
-}
-
-/// Ask in the nav bar: a question about all the meetings (the search text, if any, becomes the question).
-struct LibraryAskToolbar: ToolbarContent {
-    let action: () -> Void
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button(action: action) { Label(L("ask_title"), systemImage: "bubble.left.and.text.bubble.right").labelStyle(.titleAndIcon) }
-                .accessibilityLabel(L("ask_entry_cd"))
-        }
+        Button(action: action) { Label(query.isEmpty ? L("ask_entry_cd") : L("ask_this", query), systemImage: "bubble.left.and.text.bubble.right").foregroundStyle(Vox.accent) }
     }
 }

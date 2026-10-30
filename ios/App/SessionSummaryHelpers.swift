@@ -22,40 +22,28 @@ struct SessionSummaryTab: View {
     let notesSection: (String, [String]) -> AnyView
     var body: some View {
         VStack(spacing: 12) {
-            // Android: the agent card exists only when the reading left notes (agent.restore found a journal).
-            if !session.notes.isEmpty { VStack(alignment: .leading, spacing: 6) { SessionCard {
-                HStack {
-                    Circle().fill(Vox.success.color).frame(width: 9, height: 9)
-                    VStack(alignment: .leading) {
-                        Vox.head(L("ai_notes"))
-                        Vox.meta(L("notes_n", session.notes.count))
-                    }
-                    Spacer()
-                    Text(L("done_pill")).font(.caption.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 4)
-                        .voxChip(Vox.success).voxFore(Vox.success)
-                }
-                // Android AgentPanel: "show process" under the header; opened, the notes, the caution, then "hide process".
-                if showProcess {
-                    ForEach(session.notes) { n in NoteRow(n: n) { sec in onSeekPlay(Double(sec)) } }
-                    // DEV builds: the saved reading's off-protocol counts (model guardrail).
-                    if Dev.on, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger.color : Color.secondary) }
-                }
-                ChevronToggle(title: L(showProcess ? "hide_process" : "show_process"), expanded: showProcess) { onToggleProcess() }
+            // Redesign: one AI status line (看過程 opens the 筆記 segment) instead of the agent card.
+            if !session.notes.isEmpty {
+                Button { onToggleProcess() } label: {
+                    HStack(spacing: 8) {
+                        Circle().fill(Vox.success.color).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(L("ai_status_read", session.notes.count)).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(2)
+                        Spacer(minLength: 4)
+                        Text(L("see_process")).font(Vox.fontGroup).foregroundStyle(Vox.accent)
+                    }.frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                .accessibilityElement(children: .combine).accessibilityHint(L("see_process"))
+                if Dev.on, showProcess, let g = session.readerGuard { Text("DEV guard · " + g.summary).font(.caption2.monospaced()).foregroundStyle(g.exceeds(ModelCard.default.reader.guardrail) ? Vox.danger.color : Color.secondary) }
             }
-            if showProcess { CardFooter(text: L("agent_notes_caution")) } } }
-            if !session.summary.isEmpty { VStack(alignment: .leading, spacing: 6) {
-                SessionCard {
-                    // No heading: the tab already carries the name (Android SummaryCard showHeading = false in portrait).
-                    // One overflow menu instead of an icon-only row above the text; the same pair on long press.
-                    HStack(alignment: .top, spacing: 8) {
-                        Collapsible(lines: 12) { Text(Markdown.render(refs(session.summary), anchors: playerAvailable ? Color.secondary : nil, speakers: names)) }.environment(\.openURL, OpenURLAction { u in
-                            if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
-                            return .systemAction })
-                            .contextMenu { CardActionItems(onCopy: onCopySummary, onEdit: onEditSummary) }
-                        CardActionsMenu(copyLabel: L("cd_copy_summary"), onCopy: onCopySummary, onEdit: onEditSummary)
-                    }
-                }
-                CardFooter(text: L("ai_disclaimer"))
+            if !session.summary.isEmpty { VStack(alignment: .leading, spacing: 10) {
+                // No card, no heading: the prose sits on the page; citations are pills (seek + play). Copy / Edit are in ⋯
+                // and on long press.
+                Collapsible(lines: 14) { Text(Markdown.render(refs(session.summary), anchors: playerAvailable ? Vox.accent : nil, speakers: names)).font(Vox.fontBody).lineSpacing(6).foregroundStyle(Vox.ink) }.environment(\.openURL, OpenURLAction { u in
+                    if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
+                    return .systemAction })
+                    .contextMenu { CardActionItems(onCopy: onCopySummary, onEdit: onEditSummary) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(L("ai_disclaimer")).font(Vox.fontMeta).foregroundStyle(Vox.ink3)
             } }
             if showActions, let a = session.actionItems { VStack(alignment: .leading, spacing: 6) {
                 SessionCard {
@@ -101,6 +89,55 @@ struct SessionNotesSection: View {
                 if u.scheme == "vox", let t = Double(u.host ?? "") { onSeekPlay(t); return .handled }
                 return .systemAction })
         }
+    }
+}
+
+/// The 筆記 segment (redesign): the reader's notes grouped by type, one line each; the time on the left plays from
+/// there; 核對 only on the error-prone types (decision, action, number).
+struct SessionNotesTab: View {
+    let notes: [Note]
+    let playerAvailable: Bool
+    let onSeekPlay: (Double) -> Void
+    @Environment(\.speakerRefs) private var refs
+    static func kind(_ n: Note) -> String {
+        let t = (n.tag ?? "").uppercased()
+        return ["DECISION", "ACTION", "PROPOSAL", "OPEN-ISSUE", "NUMBER"].first { !t.isEmpty && $0.hasPrefix(t) } ?? "OTHER"
+    }
+    static func color(_ k: String) -> Color {
+        switch k { case "DECISION": return Vox.noteDecision; case "ACTION": return Vox.noteAction; case "PROPOSAL": return Vox.noteProposal
+        case "OPEN-ISSUE": return Vox.noteOpen; case "NUMBER": return Vox.noteNumber; default: return Vox.ink2 }
+    }
+    static func label(_ k: String) -> String {
+        switch k { case "DECISION": return L("agent_tag_decision"); case "ACTION": return L("agent_tag_action"); case "OPEN-ISSUE": return L("agent_tag_open")
+        case "NUMBER": return L("agent_tag_number"); case "PROPOSAL": return L("agent_tag_proposal"); default: return L("notes_other") }
+    }
+    var body: some View {
+        let order = ["DECISION", "ACTION", "PROPOSAL", "OPEN-ISSUE", "NUMBER", "OTHER"]
+        let groups = Dictionary(grouping: notes, by: Self.kind)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            if notes.isEmpty { Vox.hint(L("notes_none")).padding(.top, 12) }
+            ForEach(order.filter { groups[$0] != nil }, id: \.self) { k in
+                HStack(spacing: 6) {
+                    Text(Self.label(k)).font(Vox.fontPill).foregroundStyle(Self.color(k))
+                        .padding(.horizontal, 7).padding(.vertical, 3).background(Self.color(k).opacity(0.12), in: RoundedRectangle(cornerRadius: Vox.radiusTag))
+                    Text("\(groups[k]!.count)").font(Vox.fontMeta).foregroundStyle(Vox.ink3)
+                }.padding(.top, 16).padding(.bottom, 6).accessibilityAddTraits(.isHeader)
+                ForEach(groups[k]!) { n in row(n, k); Vox.hairline.frame(height: 1) }
+            }
+        }.padding(.horizontal, Vox.gutter)
+    }
+    private func row(_ n: Note, _ k: String) -> some View {
+        let sec = ReaderProtocol.parseTs(n.ts)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Button { if let sec { onSeekPlay(Double(sec)) } } label: {
+                Text(n.ts).font(.footnote.monospacedDigit()).foregroundStyle(playerAvailable ? Vox.accent : Vox.ink3).frame(minWidth: 44, minHeight: 36, alignment: .leading)
+            }.buttonStyle(.plain).disabled(sec == nil || !playerAvailable).accessibilityLabel(L("cd_play_from", n.ts))
+            Text(refs(n.text)).font(.subheadline).foregroundStyle(Vox.ink).frame(maxWidth: .infinity, alignment: .leading)
+            if ["DECISION", "ACTION", "NUMBER"].contains(k), let sec, playerAvailable {
+                Button { onSeekPlay(Double(sec)) } label: { Text(L("agent_verify")).font(Vox.fontPill).voxFore(Vox.warning).padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Vox.warning.color.opacity(0.12), in: Capsule()).tapHeight() }.buttonStyle(.plain)
+            }
+        }.padding(.vertical, 6)
     }
 }
 

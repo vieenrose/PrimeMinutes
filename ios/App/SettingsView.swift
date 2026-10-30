@@ -141,6 +141,7 @@ struct SettingsView: View {
                     NavigationLink { LicensesView() } label: { VStack(alignment: .leading) { Text(L("about_licenses")); Vox.micro(L("about_licenses_desc")) } }
                 }
             }
+            .voxPage()
             // DEV (guide shot 03b): VOX_SETSCROLL scrolls to the AI notes model picker.
             .onAppear { if Dev.env["VOX_SETSCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo("readerModel", anchor: .center) } } }
             }

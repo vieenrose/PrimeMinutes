@@ -46,7 +46,7 @@ final class AirDropUITests: XCTestCase {
         guard let share = first(["Share"], in: app, 5) else { XCTFail("no Share"); return }
         share.tap(); sleep(2)
         app.buttons["share-what-session"].tap(); sleep(1)
-        app.buttons["share-to-nearby"].tap(); sleep(2); shot("s3-preparing")
+        app.buttons["share-to-other"].tap()   // redesign: one Share… → system sheet (AirDrop inside it); sleep(2); shot("s3-preparing")
         let airdrop = app.cells.matching(NSPredicate(format: "identifier == 'shareCell' AND label == 'AirDrop'")).firstMatch
         guard airdrop.waitForExistence(timeout: 90) else { shot("s4-nosheet"); XCTFail("no AirDrop in the share sheet"); return }
         shot("s4-sheet"); airdrop.tap(); sleep(5); shot("s5-airdrop")

@@ -57,15 +57,19 @@ enum Markdown {
             let secs = c.map { g1 * 3600 + g2 * 60 + $0 } ?? g1 * 60 + g2
             // Raised like a footnote mark, so the space the model puts before it would only open a gap.
             var before = String(text[last..<r.lowerBound]); while before.hasSuffix(" ") { before.removeLast() }
+            if !before.isEmpty { before += " " }
             if prevAnchor && before.isEmpty {
                 // "[0:44] [4:09]": with the space trimmed the two labels read as one ("0:444:09").
-                var sep = AttributedString(", "); sep[Attr.Foreground.self] = color; sep[Attr.Font.self] = .caption2.weight(.medium); sep[Attr.Baseline.self] = 6
+                var sep = AttributedString(" "); sep[Attr.Font.self] = .caption2
                 out += sep
             } else { out += inline(before) }
             out += AttributedString("\u{2060}"); prevAnchor = true
             var mark = AttributedString(c.map { _ in "\(text[a]):\(text[b]):\(text[Range(m.range(at: 3), in: text)!])" } ?? "\(text[a]):\(text[b])")
+            // Redesign: a citation pill (text on its 12 % tint, 10.5/600), padded with thin no-break spaces.
+            mark = AttributedString("\u{202F}") + mark + AttributedString("\u{202F}")
             mark[Attr.Link.self] = URL(string: "vox://\(secs)"); mark[Attr.Foreground.self] = color
-            mark[Attr.Font.self] = .caption2.weight(.medium); mark[Attr.Baseline.self] = 6
+            mark[Attr.Background.self] = color.opacity(0.12)
+            mark[Attr.Font.self] = .caption2.weight(.semibold); mark[Attr.Baseline.self] = 1
             out += mark; last = r.upperBound
         }
         return out + inline(String(text[last...]))
