@@ -106,13 +106,21 @@ struct CaptureView: View {
                         .accessibilityElement(children: .combine)
                     }
                     Color.clear.frame(height: 1).id("end")
-                        .onAppear { following = true }.onDisappear { following = false }
+                        .onAppear { following = true }   // the user scrolled back to the bottom
                 }
                 .padding(.horizontal, Vox.gutterWide).padding(.top, 4)
             }
+            // Only a real drag up stops following: a layout change (notes card growing, meters shown) that pushes
+            // the end marker out of view must not, so there is no onDisappear on it.
+            .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { g in if g.translation.height > 0 { following = false } })
+            .background(GeometryReader { g in
+                Color.clear.onChange(of: g.size.height) { _, _ in
+                    if following { proxy.scrollTo("end", anchor: .bottom) }   // viewport resized while following: stay pinned
+                }
+            })
             .overlay(alignment: .bottom) {
                 if !following && !m.screen.lines.isEmpty {
-                    Button { withAnimation { proxy.scrollTo("end", anchor: .bottom) } } label: {
+                    Button { following = true; withAnimation { proxy.scrollTo("end", anchor: .bottom) } } label: {
                         Label(L("capture_jump_latest"), systemImage: "arrow.down").font(.footnote.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.small).padding(.bottom, 8)
