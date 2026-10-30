@@ -140,8 +140,8 @@
 "pillar_private_desc" = "Audio never leaves your device";
 "pillar_offline_title" = "Works offline";
 "pillar_offline_desc" = "On a plane, a train, anywhere — no network";
-"pillar_cost_title" = "No subscription";
-"pillar_cost_desc" = "Yours to keep, no cloud fees";
+"pillar_cost_title" = "No cloud";
+"pillar_cost_desc" = "No servers — the AI runs on your phone";
 "re_transcribe" = "Re-transcribe";
 "re_summarize" = "Re-summarize";
 "studio_no_match" = "No session matches your search.";
