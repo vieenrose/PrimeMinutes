@@ -2053,7 +2053,7 @@ private fun TranscribeScreen(
                 .fillMaxSize()
                 .padding(horizontal = Spacing.lg),
         ) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(2.dp))
             updateBannerSlot()
             // Add audio / Stop / Re-run live in the top bar (top = functions, middle = text,
             // bottom = player), so the content area is just the empty state or the transcript.

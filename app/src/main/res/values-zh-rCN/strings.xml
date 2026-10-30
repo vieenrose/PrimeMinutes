@@ -748,6 +748,7 @@
         <item quantity="other">新增 %d 集</item>
     </plurals>
     <!-- Redesign 2026-10 -->
+    <string name="agent_status_summary_done">AI 摘要已完成</string>
     <string name="cd_edit_summary">编辑摘要</string>
     <string name="library_title">会议</string>
     <string name="tab_notes">笔记 %1$d</string>

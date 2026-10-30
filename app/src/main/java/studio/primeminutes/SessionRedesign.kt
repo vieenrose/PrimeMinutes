@@ -105,7 +105,11 @@ internal fun AgentStatusLine(running: Boolean, noteCount: Int, onOpen: (() -> Un
         Box(Modifier.size(7.dp).clip(CircleShape).background(if (running) PrimeMinutesPalette.Warning else PrimeMinutesPalette.Success))
         Spacer(Modifier.width(Spacing.sm))
         Text(
-            if (running) stringResource(R.string.agent_status_reading) else stringResource(R.string.agent_status_done, noteCount),
+            when {
+                running -> stringResource(R.string.agent_status_reading)
+                noteCount > 0 -> stringResource(R.string.agent_status_done, noteCount)
+                else -> stringResource(R.string.agent_status_summary_done)
+            },
             style = TypeRole.meta(), color = pal.Slate400, modifier = Modifier.weight(1f),
         )
         if (onOpen != null) Text(

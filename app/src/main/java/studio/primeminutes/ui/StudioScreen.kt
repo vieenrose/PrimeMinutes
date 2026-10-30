@@ -1001,10 +1001,9 @@ private fun SwipeToDelete(enabled: Boolean, onDelete: () -> Unit, content: @Comp
         enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(
-                Modifier.fillMaxSize().padding(horizontal = Gutter).clip(MaterialTheme.shapes.large)
-                    .background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = Spacing.lg),
+                Modifier.fillMaxSize().background(LocalPrimeMinutesPalette.current.Record).padding(horizontal = Gutter),
                 contentAlignment = Alignment.CenterEnd,
-            ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.onErrorContainer) }
+            ) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = Color.White) }
         },
     ) { content() }
 }
@@ -1091,6 +1090,8 @@ private fun SessionRow(
     Column(
         Modifier
             .fillMaxWidth()
+            // Opaque ground: the swipe's delete background must stay hidden until the row moves.
+            .background(pal.Slate900)
             .background(if (selected) pal.ActiveTint else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = longLabel)
             .semantics(mergeDescendants = true) {
