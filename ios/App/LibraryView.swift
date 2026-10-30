@@ -428,26 +428,26 @@ struct LiveJobView: View {
         .voxRow()
     }
     private var transcript: some View {
-        LazyVStack(alignment: .leading, spacing: 8) {
+        LazyVStack(alignment: .leading, spacing: TranscriptStyle.stackSpacing) {
             if m.screen.lines.isEmpty { Vox.fine(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).padding(.top, 8) }
             ForEach(m.screen.lines) { l in
                 let c = Self.palette[max(0, l.speaker) % Self.palette.count]
                 // A Button: press highlight and the VoiceOver button trait (play from this line); the speaker name inside stays its own button.
                 Button { if player.available { player.seekPlay(l.start) } } label: { HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: TranscriptStyle.textSpacing) {
+                        HStack(spacing: TranscriptStyle.headerSpacing) {
                             // Naming a speaker of the run: the people picker, as in the finished meeting. The label is
                             // read from the screen's names, so confirming a name relabels every line of this speaker.
                             Button { renamingSpeaker = l.speaker } label: {
-                                Text(m.screen.name(max(0, l.speaker))).font(.subheadline.bold()).foregroundStyle(c)
+                                Text(m.screen.name(max(0, l.speaker))).transcriptSpeaker(c)
                             }.buttonStyle(.borderless)
-                            Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text(Export.mmss(l.start)).transcriptTime()
                         }
-                        Text(l.text)
+                        Text(l.text).transcriptText()
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.vertical, 3).padding(.horizontal, 6)
+                .padding(.vertical, TranscriptStyle.rowPadding()).padding(.horizontal, 6)
                 .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM))
                 .contentShape(Rectangle()) }
                 .buttonStyle(.plain).id(l.id)

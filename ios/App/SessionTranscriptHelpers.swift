@@ -105,15 +105,16 @@ struct SessionTranscriptLines: View {
             }
             // A Button, not a tap gesture: press highlight, the VoiceOver button trait (play from this line),
             // Full Keyboard Access. The speaker name inside stays its own (borderless) button.
-            Button { onSeekPlay(l.start) } label: { VStack(alignment: .leading, spacing: 2) {
+            Button { onSeekPlay(l.start) } label: { VStack(alignment: .leading, spacing: TranscriptStyle.textSpacing) {
                 // Redesign: the live capture's layout — the name in its tint, the time, then the text on the page (no card).
-                HStack(spacing: 6) {
-                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).font(.subheadline.bold()).foregroundStyle(tint(l.speaker)) }.buttonStyle(.borderless).disabled(busy)
-                    Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(Vox.ink3)
+                HStack(spacing: TranscriptStyle.headerSpacing) {
+                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).transcriptSpeaker(tint(l.speaker)) }.buttonStyle(.borderless).disabled(busy)
+                    Text(Export.mmss(l.start)).transcriptTime()
                 }
-                Text(marked(l.text, query)).foregroundStyle(Vox.ink).lineSpacing(4)
+                Text(marked(l.text, query)).transcriptText()
             }
-            .id(l.id).padding(.vertical, 8).padding(.horizontal, Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
+            .id(l.id).padding(.vertical, TranscriptStyle.rowPadding(stack: 8))   // SessionView's LazyVStack spacing
+           .padding(.horizontal, Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
             .background(l.id == currentId ? Vox.accent.opacity(0.12) : (matchId != nil && matchId == l.id ? Vox.highlight.opacity(0.22) : Color.clear), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
             .contentShape(Rectangle()) }
             .buttonStyle(.plain)

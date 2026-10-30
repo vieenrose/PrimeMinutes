@@ -82,7 +82,7 @@ struct CaptureView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 // Top-aligned: lines start under the waveform and push down until they fill, then the view follows.
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: TranscriptStyle.stackSpacing) {
                     if m.screen.lines.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -94,13 +94,14 @@ struct CaptureView: View {
                     }
                     ForEach(m.screen.lines) { l in
                         let c = Self.palette[max(0, l.speaker) % Self.palette.count]
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(L("speaker_n", max(0, l.speaker) + 1)).font(.subheadline.bold()).foregroundStyle(c)
-                                Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: TranscriptStyle.textSpacing) {
+                            HStack(spacing: TranscriptStyle.headerSpacing) {
+                                Text(L("speaker_n", max(0, l.speaker) + 1)).transcriptSpeaker(c)
+                                Text(Export.mmss(l.start)).transcriptTime()
                             }
-                            Text(l.text)
+                            Text(l.text).transcriptText()
                         }
+                        .padding(.vertical, TranscriptStyle.rowPadding())
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id(l.id)
                         .accessibilityElement(children: .combine)

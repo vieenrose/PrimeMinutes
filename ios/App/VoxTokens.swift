@@ -314,3 +314,25 @@ struct VoxTokensPreview: View {
 }
 #Preview { VoxTokensPreview() }
 #endif
+
+// MARK: - Transcript rows
+
+/// One transcript typography for the live capture, the watch view of a running job and the finished meeting,
+/// so the three cannot drift: speaker name, time, text, and the gap between rows (the capture screen's sizes,
+/// all Dynamic Type text styles).
+enum TranscriptStyle {
+    /// Name/time row above the text, and the text under it.
+    static let headerSpacing: CGFloat = 6, textSpacing: CGFloat = 2, lineSpacing: CGFloat = 2
+    /// Visual gap between two rows' content; a list whose stack spacing is fixed pads each row to reach it.
+    static let rowGap: CGFloat = 14, stackSpacing: CGFloat = 6
+    static func rowPadding(stack: CGFloat = stackSpacing) -> CGFloat { max(0, (rowGap - stack) / 2) }
+}
+
+extension View {
+    /// A transcript speaker name in its tint.
+    func transcriptSpeaker(_ tint: Color) -> some View { font(.subheadline.bold()).foregroundStyle(tint) }
+    /// A transcript line's start time.
+    func transcriptTime() -> some View { font(.caption.monospacedDigit()).foregroundStyle(Vox.ink3) }
+    /// A transcript line's text.
+    func transcriptText() -> some View { font(.body).foregroundStyle(Vox.ink).lineSpacing(TranscriptStyle.lineSpacing) }
+}
