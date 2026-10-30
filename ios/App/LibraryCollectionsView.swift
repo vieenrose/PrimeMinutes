@@ -328,7 +328,8 @@ struct UserCollectionPage: View {
         let meetings = all.filter { LibrarySources.kind(received: $0.isReceived, source: ix[$0.id.uuidString]) == .meeting }
         return [AskScope(id: "collection", label: L("ask_scope_collection"), ids: Set(scoped.map(\.id)), count: scoped.count),
                 AskScope(id: "meetings", label: L("source_meetings"), ids: Set(meetings.map(\.id)), count: meetings.count),
-                AskScope(id: "all", label: L("source_all"), ids: nil, count: all.count)]
+                AskScope(id: "all", label: L("source_all"), ids: nil, count: all.count)].enumerated()
+            .filter { i, l in i != 1 || ((l.count ?? 0) > (scoped.count) && (l.count ?? 0) < all.count) }.map(\.element)
     }
     var body: some View {
         List {
@@ -442,7 +443,12 @@ struct AskScope: Identifiable {
             out.append(AskScope(id: "source", label: L(k == .meeting ? "source_meetings" : "source_received"), ids: ids, count: ids.count))
         }
         out.append(AskScope(id: "all", label: L("source_all"), ids: nil, count: all.count))
-        return out
+        return dedup(out, all: all.count)
+    }
+
+    /// Like Android's askLevels: a middle level that holds just this meeting or the whole library adds nothing.
+    static func dedup(_ levels: [AskScope], all: Int) -> [AskScope] {
+        levels.enumerated().filter { i, l in i == 0 || i == levels.count - 1 || ((l.count ?? 0) > 1 && (l.count ?? 0) < all) }.map(\.element)
     }
 }
 
