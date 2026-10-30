@@ -123,6 +123,8 @@ fun CaptureScreen(
     onNextTalk: () -> Unit,
     onStop: () -> Unit,
     onBack: () -> Unit,
+    /** Tapping the AI-notes line / card opens the full Agent panel. */
+    onOpenAgent: () -> Unit = {},
 ) {
     val pal = LocalPrimeMinutesPalette.current
     // A meeting is watched, not touched: keep the screen on while recording.
@@ -141,7 +143,10 @@ fun CaptureScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        CaptureTopBar(isRecording, recSeconds, metersPinned, onBack) {
+        // Before the first words (no transcript yet) the pill says what is happening — e.g. models
+        // loading — instead of a clock nobody is waiting on (iOS shows the status the same way).
+        val pillStatus = notice?.takeIf { it.isNotBlank() && utterances.isEmpty() }
+        CaptureTopBar(isRecording, recSeconds, pillStatus, metersPinned, onBack) {
             metersPinned = !metersPinned
             studio.primeminutes.core.config.ThemeStore.saveCaptureMeters(ctx, metersPinned)
         }
@@ -152,7 +157,7 @@ fun CaptureScreen(
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         WaveformStrip(micLevel, isRecording)
                         Spacer(Modifier.weight(1f))
-                        agent?.let { AgentLine(it, utterances) }
+                        agent?.let { AgentLine(it, utterances, onOpenAgent) }
                         CaptureButtons(isRecording, onNextTalk, onStop)
                     }
                     Spacer(Modifier.width(Spacing.xl))
@@ -165,7 +170,7 @@ fun CaptureScreen(
                 WaveformStrip(micLevel, isRecording)
                 Spacer(Modifier.height(Spacing.sm))
                 TranscriptPanel(utterances, stable, notice)
-                agent?.let { AgentLine(it, utterances) }
+                agent?.let { AgentLine(it, utterances, onOpenAgent) }
                 CaptureButtons(isRecording, onNextTalk, onStop)
                 Spacer(Modifier.height(Spacing.sm))
             }
@@ -177,6 +182,7 @@ fun CaptureScreen(
 private fun CaptureTopBar(
     isRecording: Boolean,
     recSeconds: Int,
+    status: String?,
     metersPinned: Boolean,
     onBack: () -> Unit,
     onToggleMeters: () -> Unit,
@@ -186,7 +192,7 @@ private fun CaptureTopBar(
         IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
             Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200)
         }
-        RecordingPill(isRecording, recSeconds, Modifier.align(Alignment.Center))
+        RecordingPill(isRecording, recSeconds, status, Modifier.align(Alignment.Center).padding(horizontal = 52.dp))
         Box(Modifier.align(Alignment.CenterEnd)) {
             var open by remember { mutableStateOf(false) }
             IconButton(onClick = { open = true }) {
@@ -205,13 +211,16 @@ private fun CaptureTopBar(
 
 /** Centred pill: pulsing red dot + elapsed time (tabular, no shift per tick). */
 @Composable
-private fun RecordingPill(isRecording: Boolean, recSeconds: Int, modifier: Modifier = Modifier) {
+private fun RecordingPill(isRecording: Boolean, recSeconds: Int, status: String?, modifier: Modifier = Modifier) {
     val pal = LocalPrimeMinutesPalette.current
     val cd = stringResource(R.string.a11y_rec_pill, recSeconds / 60, recSeconds % 60)
     Row(
         modifier.clip(CircleShape).background(pal.InsetSurface)
             .padding(horizontal = 14.dp, vertical = 6.dp)
-            .clearAndSetSemantics { if (isRecording) contentDescription = cd },
+            .clearAndSetSemantics {
+                if (status != null) { contentDescription = status; liveRegion = LiveRegionMode.Polite }
+                else if (isRecording) contentDescription = cd
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isRecording) {
@@ -219,8 +228,10 @@ private fun RecordingPill(isRecording: Boolean, recSeconds: Int, modifier: Modif
             Spacer(Modifier.width(Spacing.sm))
         }
         Text(
-            if (isRecording) studio.primeminutes.fmtSec(recSeconds) else stringResource(R.string.capture_title),
-            style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+            status ?: if (isRecording) studio.primeminutes.fmtSec(recSeconds) else stringResource(R.string.capture_title),
+            style = if (status != null) MaterialTheme.typography.titleSmall
+                else MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             fontWeight = FontWeight.Medium,
             color = pal.Slate200,
             maxLines = 1,
@@ -287,9 +298,9 @@ private fun WaveformStrip(micLevel: Float, active: Boolean) {
     }
 }
 
-/** The agent's status, pinned above the controls (the existing strip, moved under the transcript). */
+/** The agent's line (then card of latest notes), pinned above the controls; tap opens the Agent panel. */
 @Composable
-private fun AgentLine(agent: AgentUiState, utterances: List<TranscriptEvent.Utterance>) {
+private fun AgentLine(agent: AgentUiState, utterances: List<TranscriptEvent.Utterance>, onOpen: () -> Unit) {
     // The live notes name speakers as the booth does (S2 → 語者 2 / 说话人 2 / Speaker 2).
     val ctx = LocalContext.current
     val known = utterances.mapNotNull { u -> u.speaker }.toSet().ifEmpty { null }
@@ -297,7 +308,7 @@ private fun AgentLine(agent: AgentUiState, utterances: List<TranscriptEvent.Utte
         studio.primeminutes.core.reader.SpeakerRefs.resolve(t, { id -> ctx.getString(R.string.speaker_n, id + 1) }, known)
     }) {
         val pal = LocalPrimeMinutesPalette.current
-        AgentStrip(agent, if (EinkPolicy.motionAllowed(pal)) Modifier.animateContentSize() else Modifier)
+        CaptureAgentNotes(agent, onOpen, if (EinkPolicy.motionAllowed(pal)) Modifier.animateContentSize() else Modifier)
     }
 }
 

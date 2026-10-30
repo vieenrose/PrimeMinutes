@@ -1881,7 +1881,9 @@ private fun TranscribeScreen(
                 onOpenChannel = { key -> subsOpenId = key; subsOpen = true },
             )
         }
-        Screen.Capture -> CaptureScreen(
+        Screen.Capture -> {
+            var agentOpen by remember { mutableStateOf(false) }
+            CaptureScreen(
             isRecording = s.isRecording,
             recSeconds = recSeconds,
             micLevel = s.micLevel,
@@ -1892,7 +1894,23 @@ private fun TranscribeScreen(
             onNextTalk = { vm.nextTalk() },
             onStop = { vm.stop() },
             onBack = { vm.showScreen(Screen.Studio) },
-        )
+            onOpenAgent = { agentOpen = true },
+            )
+            // The full Agent panel over the recording, as on iOS (the recording keeps running beneath).
+            if (agentOpen) androidx.compose.material3.ModalBottomSheet(
+                onDismissRequest = { agentOpen = false },
+                containerColor = pal.PanelSurface,
+            ) {
+                CompositionLocalProvider(
+                    studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t },
+                ) {
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                        studio.primeminutes.ui.AgentPanel(agent)
+                    }
+                }
+            }
+        }
         Screen.Session -> {
     val sessionBarScroll = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(

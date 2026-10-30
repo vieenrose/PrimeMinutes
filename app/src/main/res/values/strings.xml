@@ -241,7 +241,6 @@
     <string name="capture_title">Record</string>
     <string name="capture_next_talk">Next talk</string>
     <string name="capture_stop">Stop &amp; save</string>
-    <string name="capture_live_waiting">Listening…</string>
     <string name="capture_listening_hint">Listening — the transcript will appear here once someone speaks</string>
     <string name="capture_jump_latest">Latest</string>
     <string name="menu_show_meters">Show performance info</string>
@@ -250,6 +249,8 @@
     <string name="capture_warn_memory">Memory is running low: close other apps if transcription falls behind</string>
     <string name="capture_warn_battery">Battery is low: plug in the charger to keep recording</string>
     <string name="capture_warn_load">The processor is at full load: transcription may lag behind</string>
+    <string name="capture_warn_mic">The microphone was cut off: another app may be using it</string>
+    <string name="capture_warn_storage">Storage is almost full (under 500 MB)</string>
     <string name="studio_return_capture">Recording… (return)</string>
     <string name="action_process_now">Process now</string>
     <string name="action_open">Open</string>
@@ -403,9 +404,9 @@
         <item quantity="other">First reading in about %d minutes</item>
     </plurals>
     <string name="agent_first_soon">First reading in under a minute</string>
-    <string name="agent_first_pending">First reading when the bar fills</string>
+    <string name="agent_first_pending">Starts in a few minutes</string>
     <string name="agent_first_short">Stopping sooner? The notes are written after you stop.</string>
-    <string name="agent_simple_listening">Reading the transcript — notes are written when the bar fills</string>
+    <string name="agent_simple_listening">Reading the transcript — new notes every few minutes</string>
     <string name="settings_reader_model">AI notes model</string>
     <string name="reader_model_e2b">Mobile E2B</string>
     <string name="reader_model_e4b">Mobile E4B</string>

@@ -233,7 +233,6 @@
     <string name="capture_title">錄音</string>
     <string name="capture_next_talk">下一場</string>
     <string name="capture_stop">停止並儲存</string>
-    <string name="capture_live_waiting">聆聽中…</string>
     <string name="capture_listening_hint">正在聆聽，說話後逐字稿會出現在這裡</string>
     <string name="capture_jump_latest">最新</string>
     <string name="menu_show_meters">顯示效能資訊</string>
@@ -242,6 +241,8 @@
     <string name="capture_warn_memory">記憶體不足：逐字稿跟不上時，請關閉其他 App</string>
     <string name="capture_warn_battery">電量偏低：請接上充電器，以免錄音中斷</string>
     <string name="capture_warn_load">處理器滿載：逐字稿可能延遲</string>
+    <string name="capture_warn_mic">麥克風被中斷了：可能有其他 App 正在使用</string>
+    <string name="capture_warn_storage">儲存空間快滿了（不到 500 MB）</string>
     <string name="studio_return_capture">錄音中…（返回）</string>
     <string name="action_process_now">立即處理</string>
     <string name="action_open">開啟</string>
@@ -394,9 +395,9 @@
         <item quantity="other">第一次閱讀約在 %d 分鐘後</item>
     </plurals>
     <string name="agent_first_soon">第一次閱讀不到 1 分鐘後開始</string>
-    <string name="agent_first_pending">進度條滿時開始第一次閱讀</string>
+    <string name="agent_first_pending">幾分鐘後開始整理</string>
     <string name="agent_first_short">提早停止錄音的話，會在停止後寫筆記</string>
-    <string name="agent_simple_listening">閱讀逐字稿中——進度條滿時整理下一批筆記</string>
+    <string name="agent_simple_listening">閱讀逐字稿中——每隔幾分鐘整理一批筆記</string>
     <string name="settings_reader_model">AI 筆記模型</string>
     <string name="reader_model_e2b">行動版 E2B</string>
     <string name="reader_model_e4b">行動版 E4B</string>

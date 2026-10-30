@@ -78,9 +78,18 @@ private fun Gauge(label: String, pct: Int, alert: Boolean) {
 }
 
 /** What the recording screen warns about, worst first; null = all fine. */
-internal enum class CaptureWarn { HEAT, MEMORY, BATTERY, LOAD }
+internal enum class CaptureWarn { MIC, STORAGE, HEAT, MEMORY, BATTERY, LOAD }
 
-internal fun captureWarn(s: studio.primeminutes.core.hw.HwSample): CaptureWarn? = when {
+/** Free space under which the recording screen warns (a long meeting plus its processing needs room). */
+internal const val LOW_STORAGE_BYTES = 500L * 1024 * 1024
+
+internal fun captureWarn(
+    s: studio.primeminutes.core.hw.HwSample,
+    freeBytes: Long = Long.MAX_VALUE,
+    micLost: Boolean = false,
+): CaptureWarn? = when {
+    micLost -> CaptureWarn.MIC
+    freeBytes in 0 until LOW_STORAGE_BYTES -> CaptureWarn.STORAGE
     s.thermalSevere || (s.tempC ?: 0) >= 42 -> CaptureWarn.HEAT
     s.lowMemory || s.ramPct > 90 -> CaptureWarn.MEMORY
     s.batteryPct in 0..14 && !s.charging -> CaptureWarn.BATTERY
@@ -98,7 +107,9 @@ fun CaptureMeters(pinned: Boolean, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val pal = LocalPrimeMinutesPalette.current
     val s = remember { hwSamples(ctx) }.collectAsState(initial = null).value
-    val warn = s?.let(::captureWarn)
+    // Read at each 2 s sample alongside it: free space where recordings are written, and whether the
+    // system silenced our capture (another app took the mic, or the privacy toggle; API 29+).
+    val warn = s?.let { captureWarn(it, freeBytes(ctx), micSilenced(ctx)) }
     var lastWarn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<CaptureWarn?>(null) }
     var lastWarnAt by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     androidx.compose.runtime.LaunchedEffect(s) {
@@ -121,6 +132,8 @@ fun CaptureMeters(pinned: Boolean, modifier: Modifier = Modifier) {
         shown?.let {
             Text(
                 stringResource(when (it) {
+                    CaptureWarn.MIC -> R.string.capture_warn_mic
+                    CaptureWarn.STORAGE -> R.string.capture_warn_storage
                     CaptureWarn.HEAT -> R.string.capture_warn_heat
                     CaptureWarn.MEMORY -> R.string.capture_warn_memory
                     CaptureWarn.BATTERY -> R.string.capture_warn_battery
@@ -140,4 +153,14 @@ fun CaptureMeters(pinned: Boolean, modifier: Modifier = Modifier) {
                 (s.tempC ?: 0) >= 42 || (!s.charging && s.batteryPct < 15))
         }
     }
+}
+
+private fun freeBytes(ctx: android.content.Context): Long =
+    runCatching { android.os.StatFs(ctx.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
+
+/** Only a positive signal: no configuration at all is not "lost" (test builds feed a file, not the mic). */
+private fun micSilenced(ctx: android.content.Context): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < 29) return false
+    val am = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return false
+    return runCatching { am.activeRecordingConfigurations.any { it.isClientSilenced } }.getOrDefault(false)
 }

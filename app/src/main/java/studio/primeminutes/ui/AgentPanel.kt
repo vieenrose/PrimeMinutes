@@ -1,5 +1,9 @@
 package studio.primeminutes.ui
 
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -801,3 +805,88 @@ fun AgentStrip(agent: AgentUiState, modifier: Modifier = Modifier) {
 
 /** One saved AI-notes journal line: "#id [ts] (TYPE) text". */
 private val JOURNAL_LINE_RE = Regex("""^#(\d+) \[(\d+:\d{2}(?::\d{2})?)\] (?:\((\w[\w-]*|-)\) )?(.+)$""")
+
+/**
+ * The reader on the recording screen, pinned above the controls: one quiet line until the first notes
+ * (when the first reading comes, or what it is doing), then a card with the latest three notes, one
+ * line each. The whole thing is a button that opens the full Agent panel ([onOpen]).
+ */
+@Composable
+fun CaptureAgentNotes(agent: AgentUiState, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val pal = LocalPrimeMinutesPalette.current
+    val st = agent.state ?: return
+    val openLabel = stringResource(R.string.agent_title)
+    if (agent.notes.isEmpty()) {
+        Column(modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(pal.Hairline))
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen)
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusDot(stateColor(st.state), pulsing = agent.working, size = 8)
+                Spacer(Modifier.width(Spacing.sm))
+                Column(Modifier.weight(1f)) {
+                    val line = when {
+                        agent.beforeFirstReading -> agent.firstEtaMin.let { eta ->
+                            when {
+                                eta == null -> stringResource(R.string.agent_first_pending)
+                                eta <= 0 -> stringResource(R.string.agent_first_soon)
+                                else -> pluralStringResource(R.plurals.agent_first_eta, eta, eta)
+                            }
+                        }
+                        else -> statusLine(st)
+                    }
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold, color = pal.Slate200)) { append(openLabel) }
+                            withStyle(androidx.compose.ui.text.SpanStyle(color = pal.Slate400)) { append(" · "); append(line) }
+                        },
+                        style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (agent.beforeFirstReading) Text(
+                        stringResource(R.string.agent_first_short), style = MaterialTheme.typography.labelSmall,
+                        color = pal.Slate400, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text("›", style = MaterialTheme.typography.titleMedium, color = pal.Slate400)
+            }
+        }
+    } else {
+        val count = pluralStringResource(R.plurals.agent_notes_count, agent.notes.size, agent.notes.size)
+        Column(
+            modifier.fillMaxWidth().padding(top = 6.dp).clip(MaterialTheme.shapes.medium)
+                .background(pal.InsetSurface)
+                .clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(stateColor(st.state), pulsing = agent.working, size = 8)
+                Spacer(Modifier.width(Spacing.sm))
+                Text(openLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = pal.Slate200)
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    if (st.state == AgentState.READING) "$count · ${stringResource(R.string.agent_state_reading)}" else count,
+                    style = MaterialTheme.typography.labelMedium, color = pal.Slate400, modifier = Modifier.weight(1f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Text("›", style = MaterialTheme.typography.titleMedium, color = pal.Slate400)
+            }
+            agent.notes.takeLast(3).forEach { note ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(note.ts, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = pal.Slate400)
+                    Spacer(Modifier.width(Spacing.sm))
+                    note.tag?.takeIf { it != "-" }?.let { TagChip(it); Spacer(Modifier.width(6.dp)) }
+                    Text(
+                        LocalSpeakerRefs.current(note.text),
+                        style = MaterialTheme.typography.bodySmall, color = pal.Slate200,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
