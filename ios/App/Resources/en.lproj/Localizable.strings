@@ -705,6 +705,9 @@
 "download_paused_short" = "Paused";
 "pill_download_pct" = "Download %d%%";
 "queue_bar_title" = "Processing queue · %d";
+"queue_bar_paused" = "Paused · %d";
+"queue_bar_paused_hint" = "Stopped — can resume";
+"queue_sheet_empty" = "Nothing waiting";
 "search_or_ask_hint" = "Search or ask";
 "ask_this" = "Ask: %@";
 "summary_edit" = "Edit summary";

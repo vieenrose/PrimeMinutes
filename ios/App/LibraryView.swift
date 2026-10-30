@@ -417,6 +417,10 @@ struct LiveJobView: View {
                 Spacer(minLength: 0)
                 if let j = job, j.download?.error != nil { Button(L("retry")) { m.imports.retry(j) }.font(.subheadline.weight(.semibold)) }
                 else if let j = job, j.download != nil, m.imports.dlId == j.id, m.imports.dlPaused { Button(L("download_resume")) { m.imports.resumeDownload() }.font(.subheadline.weight(.semibold)) }
+                else if let j = job, !active, m.runner.parked.contains(j.id) {
+                    Button { m.runner.resume(j) } label: { Label(L(m.runner.failed[j.id] != nil ? "retry" : "action_resume"), systemImage: m.runner.failed[j.id] != nil ? "arrow.clockwise" : "play.fill") }
+                        .buttonStyle(.borderedProminent).controlSize(.small).font(.subheadline.weight(.semibold))
+                }
                 // The engines' load while this job runs (Android: the same place, the status row of the meeting screen).
                 if active { HwStatusLine() }
             }
@@ -669,6 +673,11 @@ func pausedText(_ b: (Int64, Int64)?) -> String {
                 for s in await m.library.all() where del.contains(s.id) { m.library.remove(s); StatusLog.add("DEV deleted meeting \(s.id)") }
                 await m.runner.syncQueue()
             }
+        }
+        // VOX_FAKE_PARKED=1 (UI-only sim): a stopped job and a queued one in the bar/sheet, without an engine.
+        if Dev.env["VOX_FAKE_PARKED"] != nil {
+            var a = Job(audio: "fake-a.m4a"); a.title = "週會 10/30"; var b = Job(audio: "fake-b.m4a"); b.title = "客戶訪談"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { m.runner.waiting = [a, b]; m.runner.parked = [a.id] }
         }
         // VOX_SNAP_ACTIVE=<spec>: VOX_SNAP's shots again each time the app comes back to the front (a paused download).
         if let sa = Dev.env["VOX_SNAP_ACTIVE"] {
@@ -970,36 +979,56 @@ struct LibrarySection: Identifiable {
     let items: [Session]
 }
 
-/// Under the list (redesign): one slim queue bar (count, current step, progress; tap: the running job) and the red
-/// round record button on a fade. Process all stays on the bar while nothing runs.
+/// Under the list (redesign): one slim queue bar, one tap target that opens the queue sheet. Its trailing action:
+/// Resume when a job was stopped (paused), Process all when jobs only wait; the red record button below.
 struct LibraryFooter: View {
     @ObservedObject var m: Model
     @Binding var path: [Route]
+    @State private var sheet = false
     private var waiting: Int { m.runner.waiting.count }
+    private var plan: (run: [UUID], unpark: Set<UUID>) {
+        QueueResume.plan(waiting: m.runner.waiting.map { ($0.id, $0.download != nil) }, parked: m.runner.parked, failed: Set(m.runner.failed.keys))
+    }
+    private var title: String {
+        let active = m.runner.activeJob != nil, paused = plan.unpark.count
+        return !active && paused > 0 ? L("queue_bar_paused", paused) : L("queue_bar_title", max(waiting, active ? 1 : 0))
+    }
+    private var subtitle: String {
+        if m.runner.activeJob != nil { return m.screen.status }
+        return !plan.unpark.isEmpty ? L("queue_bar_paused_hint") : L("cd_status_queued")
+    }
     private var queueBar: some View {
-        let active = m.runner.activeJob != nil
-        let idle = m.runner.waiting.filter { $0.download == nil }.count
-        return HStack(spacing: 10) {
-            if active { ProgressView().controlSize(.small) } else { Image(systemName: "list.bullet").foregroundStyle(Vox.ink2).accessibilityHidden(true) }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(L("queue_bar_title", max(waiting, active ? 1 : 0))).font(Vox.fontGroup).foregroundStyle(Vox.ink)
-                Text(active ? m.screen.status : L("cd_status_queued")).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(1)
-                if active && !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(Vox.ink3) }
+        let active = m.runner.activeJob != nil, p = plan, paused = !active && !p.unpark.isEmpty
+        let canRun = !active && !m.capture.recording && !p.run.isEmpty
+        return Button { sheet = true } label: {
+            HStack(spacing: 10) {
+                if active { ProgressView().controlSize(.small) }
+                else { Image(systemName: paused ? "pause.circle.fill" : "list.bullet").foregroundStyle(paused ? Vox.warning.color : Vox.ink2).accessibilityHidden(true) }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(Vox.fontGroup).foregroundStyle(Vox.ink)
+                    Text(subtitle).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(1)
+                    if active && !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(Vox.ink3) }
+                }
+                Spacer(minLength: 4)
+                if canRun {
+                    Button { m.runner.processAll() } label: {
+                        Label(paused ? L("action_resume") : L("source_process_all", p.run.count), systemImage: paused ? "play.fill" : "play")
+                            .font(Vox.fontGroup).labelStyle(.titleAndIcon)
+                    }.buttonStyle(.borderedProminent).controlSize(.small).frame(minHeight: 44)
+                }
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink3).accessibilityHidden(true)
             }
-            Spacer(minLength: 4)
-            if !active && !m.capture.recording && idle > 0 {
-                Button { m.runner.drain() } label: { Text(L("source_process_all", idle)).font(Vox.fontGroup) }
-                    .buttonStyle(.borderless).frame(minHeight: 44)
-            } else { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink3).accessibilityHidden(true) }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous).stroke(Vox.hairline))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous).stroke(Vox.hairline))
-        .contentShape(Rectangle())
-        .onTapGesture { if let a = m.runner.activeJob ?? m.runner.waiting.first?.id { path.append(.job(a)) } }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton)
-        .accessibilityLabel(L("queue_bar_title", max(waiting, active ? 1 : 0)) + ", " + (active ? m.screen.status : L("cd_status_queued")))
+        .accessibilityLabel(title + ", " + subtitle)
+        .accessibilityAction(named: Text(paused ? L("action_resume") : L("source_process_all", p.run.count))) { if canRun { m.runner.processAll() } }
         .padding(.horizontal, Vox.gutter)
+        .sheet(isPresented: $sheet) { QueueSheet(m: m) { id in sheet = false; path.append(.job(id)) }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
     }
     var body: some View {
         VStack(spacing: 10) {
@@ -1053,5 +1082,43 @@ struct LibraryAskSuggestion: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) { Label(query.isEmpty ? L("ask_entry_cd") : L("ask_this", query), systemImage: "bubble.left.and.text.bubble.right").foregroundStyle(Vox.accent) }
+    }
+}
+
+/// The processing queue (opened from the library's queue bar): every waiting job with its one primary action —
+/// Resume (stopped) / Retry (failed), Stop (running), Process now (queued) — swipe to remove; the title opens the job.
+struct QueueSheet: View {
+    @ObservedObject var m: Model
+    let open: (UUID) -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(m.runner.waiting, id: \.id) { j in
+                    let active = m.runner.activeJob == j.id, parked = m.runner.parked.contains(j.id), failed = m.runner.failed[j.id] != nil
+                    HStack(spacing: 12) {
+                        Button { open(j.id) } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(j.title ?? L("meeting")).font(Vox.fontRowTitle).foregroundStyle(Vox.ink).lineLimit(2)
+                                Text(m.jobStatus(j)).font(Vox.fontMeta).foregroundStyle(failed ? Vox.danger.color : parked ? Vox.warning.color : Vox.ink2).lineLimit(2)
+                            }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                        if j.download != nil { EmptyView() }
+                        else if active {
+                            Button(role: .destructive) { m.runner.stopProcessing() } label: { Label(L("action_stop_processing"), systemImage: "stop.fill") }.buttonStyle(.bordered).controlSize(.small)
+                        } else if parked {
+                            Button { m.runner.resume(j) } label: { Label(L(failed ? "retry" : "action_resume"), systemImage: failed ? "arrow.clockwise" : "play.fill") }.buttonStyle(.borderedProminent).controlSize(.small)
+                        } else if j.id != m.capture.recordingJob {
+                            Button { m.runner.processNext(j); if m.runner.activeJob == nil { m.runner.drain() } } label: { Text(L("action_process_now")) }.buttonStyle(.bordered).controlSize(.small)
+                        }
+                    }
+                    .swipeActions { if !active { Button(L("action_remove_from_queue"), role: .destructive) { m.runner.unqueue(j) } } }
+                }
+            }
+            .listStyle(.plain)
+            .overlay { if m.runner.waiting.isEmpty { Vox.fine(L("queue_sheet_empty")) } }
+            .navigationTitle(L("queue_bar_title", m.runner.waiting.count)).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("done")) { dismiss() } } }
+        }
     }
 }

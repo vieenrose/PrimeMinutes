@@ -68,6 +68,11 @@ final class ReaderWorker: @unchecked Sendable {
     /// The background window is over: stop the queued job at its checkpoint; the next window or launch resumes it.
     func yieldToSystem() { guard activeJob != nil, liveJob == nil else { return }; yielding = true; StopFlag.on = true }
     func resume(_ j: Job) { parked.remove(j.id); failed[j.id] = nil; drain() }
+    /// The queue bar's "Process all": stopped (parked) jobs are released, then the queue drains (no relaunch needed).
+    func processAll() {
+        let p = QueueResume.plan(waiting: waiting.map { ($0.id, $0.download != nil) }, parked: parked, failed: Set(failed.keys))
+        parked.subtract(p.unpark); drain()
+    }
     /// Jobs whose last run failed → their error, shown on the queue row with Retry.
     @Published var failed: [UUID: String] = [:]
     func processNext(_ j: Job) { guard j.id != activeJob else { return }; Task { await queue.promote(j.id); await syncQueue() } }

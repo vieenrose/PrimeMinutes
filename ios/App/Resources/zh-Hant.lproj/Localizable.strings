@@ -705,6 +705,9 @@
 "download_paused_short" = "已暫停";
 "pill_download_pct" = "下載 %d%%";
 "queue_bar_title" = "處理佇列 · %d";
+"queue_bar_paused" = "已暫停 · %d";
+"queue_bar_paused_hint" = "已停止，可接著處理";
+"queue_sheet_empty" = "沒有待處理的項目";
 "search_or_ask_hint" = "搜尋或提問";
 "ask_this" = "提問：%@";
 "summary_edit" = "編輯摘要";

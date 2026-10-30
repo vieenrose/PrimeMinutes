@@ -705,6 +705,9 @@
 "download_paused_short" = "已暂停";
 "pill_download_pct" = "下载 %d%%";
 "queue_bar_title" = "处理队列 · %d";
+"queue_bar_paused" = "已暂停 · %d";
+"queue_bar_paused_hint" = "已停止，可接着处理";
+"queue_sheet_empty" = "没有待处理的项目";
 "search_or_ask_hint" = "搜索或提问";
 "ask_this" = "提问：%@";
 "summary_edit" = "编辑摘要";
