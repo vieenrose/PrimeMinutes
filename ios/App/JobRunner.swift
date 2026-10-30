@@ -234,6 +234,11 @@ final class ReaderWorker: @unchecked Sendable {
                 if let job { Checkpoint.save(final, job.id) }
                 if lowRam { eng?.close(); StatusLog.add("trace models freed, reader starts (\(os_proc_available_memory() / 1_048_576) MB free)"); worker.resume() }
             }
+            // The notes phase shows the whole transcript: a file run paints no live lines (diarization settles at
+            // finish) and a checkpointed/resumed run skips the feed entirely, so without this the transcript pane
+            // would sit on "listening" until the summary is written.
+            let shown = conv.utterances(final)
+            await MainActor.run { guard live || !self.recording else { return }; self.screen.lines = shown }
             // No speech (silence, fillers, noise tags): the AI notes model is not run on it (Android SpeechCheck).
             let silent = !SpeechCheck.hasSpeech(final.map(\.text))
             if silent { worker.stop(); StatusLog.add("trace no speech: AI notes model not run") }
