@@ -16,8 +16,8 @@
     <string name="pillar_private_desc">Audio never leaves your device</string>
     <string name="pillar_offline_title">Works offline</string>
     <string name="pillar_offline_desc">On a plane, a train, anywhere — no network</string>
-    <string name="pillar_cost_title">No subscription</string>
-    <string name="pillar_cost_desc">Yours to keep, no cloud fees</string>
+    <string name="pillar_cost_title">No cloud</string>
+    <string name="pillar_cost_desc">No servers — the AI runs on your phone</string>
 
     <!-- Source bar / add-source sheet -->
     <string name="add_audio">Add audio</string>

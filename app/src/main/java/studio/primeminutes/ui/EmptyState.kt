@@ -17,10 +17,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -169,8 +169,8 @@ private fun Hero(iconSize: Int) {
 @Composable
 private fun Pillars() {
     Pillar(Icons.Filled.Lock, R.string.pillar_private_title, R.string.pillar_private_desc)
-    Pillar(Icons.Filled.CloudOff, R.string.pillar_offline_title, R.string.pillar_offline_desc)
-    Pillar(Icons.Filled.Savings, R.string.pillar_cost_title, R.string.pillar_cost_desc)
+    Pillar(Icons.Filled.WifiOff, R.string.pillar_offline_title, R.string.pillar_offline_desc)
+    Pillar(Icons.Filled.CloudOff, R.string.pillar_cost_title, R.string.pillar_cost_desc)
 }
 
 @Composable

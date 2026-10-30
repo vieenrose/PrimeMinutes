@@ -16,8 +16,8 @@
     <string name="pillar_private_desc">音訊永不離開您的裝置</string>
     <string name="pillar_offline_title">離線運作</string>
     <string name="pillar_offline_desc">在飛機、高鐵或任何無網路環境皆可使用</string>
-    <string name="pillar_cost_title">無需訂閱</string>
-    <string name="pillar_cost_desc">一次擁有，無雲端費用</string>
+    <string name="pillar_cost_title">不靠雲端</string>
+    <string name="pillar_cost_desc">不需要伺服器，AI 直接在手機上跑</string>
 
     <!-- Source bar / add-source sheet -->
     <string name="add_audio">加入音訊</string>
