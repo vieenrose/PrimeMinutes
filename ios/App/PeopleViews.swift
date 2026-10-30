@@ -33,6 +33,7 @@ struct PersonPickerSheet: View {
     /// Under the voice section: why there is none ("Not enough speech to compare voices"), or nil.
     var voiceNote: String? = nil
     var onPlaySample: (() -> Void)? = nil
+    @Environment(\.voiceNoteAction) private var voiceNoteAction
     var allowClear: Bool? = nil
     /// "Choose from contacts…" (the system picker, no permission): a new person, or an existing one, with an address.
     var allowContacts = true
@@ -89,7 +90,10 @@ struct PersonPickerSheet: View {
                 if query.trimmingCharacters(in: .whitespaces).isEmpty && (!suggested.isEmpty || voiceNote != nil) {
                     Section(L("people_section_voice")) {
                         ForEach(suggested, id: \.0.id) { p, s in row(p.name, hint(p) ?? peopleMeetingsText(usage[p.id]?.meetings ?? 0), dots: s.level) { onPick(.existing(p)) } }
-                        if suggested.isEmpty, let voiceNote { Text(voiceNote).font(.footnote).foregroundStyle(.secondary) }
+                        if suggested.isEmpty, let voiceNote {
+                            Text(voiceNote).font(.footnote).foregroundStyle(.secondary)
+                            if let a = voiceNoteAction { Button(a.label, action: a.run).font(.footnote) }
+                        }
                     }
                 }
                 if !sec.inMeeting.isEmpty {
