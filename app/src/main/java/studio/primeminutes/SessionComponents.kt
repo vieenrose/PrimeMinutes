@@ -589,8 +589,8 @@ internal fun SectionCard(content: @Composable androidx.compose.foundation.layout
         colors = CardDefaults.cardColors(containerColor = pal.PanelSurface),
         shape = MaterialTheme.shapes.large,
         border = BorderStroke(1.dp, pal.Hairline),
-        // Hairline border + a whisper of shadow: 8 dp read as heavy floating slabs on the light theme.
-        elevation = CardDefaults.cardElevation(defaultElevation = if (pal.isDark) 0.dp else 1.dp),
+        // Redesign: a grouped block is flat — hairline edge, elevation 0 (shadows are for the FAB only).
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(Modifier.padding(Spacing.lg), content = content)
     }
