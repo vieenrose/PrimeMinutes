@@ -120,6 +120,13 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import studio.primeminutes.R
 import studio.primeminutes.core.library.SessionLibrary
+import studio.primeminutes.core.library.LibraryCollections
+import studio.primeminutes.core.library.Provenance
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LayersClear
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import studio.primeminutes.core.embed.EmbedHost
 import studio.primeminutes.core.embed.EmbedRegistry
 import studio.primeminutes.core.embed.Embedder
@@ -231,8 +238,9 @@ fun StudioScreen(
     indexingIds: Set<String> = emptySet(),
     /** Open a meeting at a time (a search passage was tapped). */
     onOpenAt: (SessionLibrary.Entry, Double) -> Unit = { e, _ -> onOpen(e) },
-    /** Ask (experimental): null when the feature is off; the query becomes the question. */
-    onAsk: ((String) -> Unit)? = null,
+    /** Ask (experimental): null when the feature is off; the query becomes the question, asked over the levels given
+     *  (the first: the screen's scope, then wider, [LibraryCollections.askLevels]). */
+    onAsk: ((String, List<LibraryCollections.AskLevel>) -> Unit)? = null,
     initialQuery: String = "",
     /** DEV (debug builds): typed into the search box one character at a time, for README animations. */
     typeQuery: String = "",
@@ -247,6 +255,9 @@ fun StudioScreen(
     people: List<Pair<studio.primeminutes.core.people.Person, Set<String>>> = emptyList(),
     /** A channel header of the Podcasts view was tapped: its channel page (key: [studio.primeminutes.core.library.Provenance.groupKey]). */
     onOpenChannel: (String) -> Unit = {},
+    /** The library's collections (channels are derived, the user's are stored) and their edits. */
+    collections: LibraryCollections.Doc = LibraryCollections.Doc(),
+    onEditCollections: ((LibraryCollections.Doc) -> LibraryCollections.Doc) -> Unit = {},
 ) {
     // Times and dates follow the interface language (it can differ from the device's).
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -260,6 +271,13 @@ fun StudioScreen(
     val haptics = LocalHapticFeedback.current
     var actionsFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
     var renameFor by remember { mutableStateOf<SessionLibrary.Entry?>(null) }
+    // Collections: the picker (meeting ids to add), a collection's actions / rename / delete, a new one's name, the filter panel.
+    var pickerFor by remember { mutableStateOf<List<String>?>(null) }
+    var collActionsFor by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf(false) }
+    var deletingColl by remember { mutableStateOf(false) }
+    var newCollFor by remember { mutableStateOf<List<String>?>(null) }
+    var filterPanel by remember { mutableStateOf(false) }
     // A single delete is held back while its Undo snackbar shows: the row hides at once and the files
     // go only when the snackbar times out (a killed app in that window keeps the meeting — the safe side).
     val pendingDeletes = remember { mutableStateMapOf<String, Unit>() }
@@ -324,6 +342,26 @@ fun StudioScreen(
     var personFilter by remember { mutableStateOf<String?>(null) }
     val personIds = people.firstOrNull { it.first.id == personFilter }?.second
     LaunchedEffect(people) { if (personFilter != null && people.none { it.first.id == personFilter }) personFilter = null }
+    /** The collection page open (its key, [LibraryCollections.keyOf]); null: the library. Part of the scope. */
+    var openKey by remember { mutableStateOf<String?>(null) }
+    // Scope = the active filters (source, collection, person, status), tied to the screen: Back restores the previous one.
+    val scopeBack = remember { mutableStateListOf<ScopeSnap>() }
+    fun restoreScope(sn: ScopeSnap) { openKey = sn.openKey; sourceFilter = sn.source; statusFilter = sn.status; personFilter = sn.person }
+    fun clearScope() { scopeBack.clear(); restoreScope(ScopeSnap(null, SourceFilter.ALL, StatusFilter.ALL, null)) }
+    val scoped = openKey != null || sourceFilter != SourceFilter.ALL || statusFilter != StatusFilter.ALL || personFilter != null
+    fun openCollection(key: String) {
+        scopeBack.add(ScopeSnap(openKey, sourceFilter, statusFilter, personFilter))
+        openKey = key; sourceFilter = SourceFilter.ALL; statusFilter = StatusFilter.ALL; query = ""
+        // Opening a channel clears its "N new".
+        if (LibraryCollections.kindOf(key) == LibraryCollections.Kind.CHANNEL) {
+            val now = System.currentTimeMillis(); onEditCollections { LibraryCollections.markSeen(it, key, now) }
+        }
+    }
+    // A collection deleted while its page is open: back to the library.
+    LaunchedEffect(collections, openKey) {
+        val k = openKey ?: return@LaunchedEffect
+        if (LibraryCollections.kindOf(k) == LibraryCollections.Kind.USER && collections.collections.none { "uc:${it.id}" == k }) clearScope()
+    }
 
     // Multi-select for batch delete. A Set (not a List) so membership/removal is O(1) per row — after
     // Select-all that matters. Value is Unit; keys are entry ids.
@@ -334,6 +372,9 @@ fun StudioScreen(
     // Back with a library search typed clears it first (as in a session); only a back with no
     // query leaves the app. The keyboard, when up, takes the first back itself.
     BackHandler(!selectionMode && query.isNotEmpty()) { query = "" }
+    BackHandler(!selectionMode && query.isEmpty() && scoped) {
+        if (scopeBack.isNotEmpty()) restoreScope(scopeBack.removeAt(scopeBack.lastIndex)) else clearScope()
+    }
 
     val context = LocalContext.current
     LaunchedEffect(typeQuery) {
@@ -379,24 +420,36 @@ fun StudioScreen(
     val searching = query.trim().isNotEmpty()
     val wantSource = sourceFilter.category()
     fun inSource(e: SessionLibrary.Entry) = wantSource == null || e.category == wantSource
-    fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) && inSource(e) &&
+    fun inCollection(e: SessionLibrary.Entry) = openKey == null || LibraryCollections.keyOf(e, collections) == openKey
+    fun wanted(e: SessionLibrary.Entry) = (personIds == null || e.id in personIds) && inSource(e) && inCollection(e) &&
         when (want) { null -> true; SessionLibrary.Status.DONE -> isDone(e); else -> e.status == want }
-    val shownHits = remember(hits, statusFilter, sourceFilter, personIds) { hits.filter { wanted(it.entry) } }
-    val shown = remember(entries, searching, shownHits, statusFilter, sourceFilter, personIds) {
+    // Search runs over the whole library; the scope keeps its own hits, the rest is counted ("n more in All").
+    val shownHits = remember(hits, statusFilter, sourceFilter, personIds, openKey, collections) { hits.filter { wanted(it.entry) } }
+    val hitsElsewhere = if (scoped) hits.size - shownHits.size else 0
+    val shown = remember(entries, searching, shownHits, statusFilter, sourceFilter, personIds, openKey, collections) {
         if (searching) shownHits.map { it.entry }
-        else entries.filter(::wanted)
+        else entries.filter(::wanted).let { l ->
+            // A channel page lists its episodes newest published first.
+            if (openKey?.let(LibraryCollections::kindOf) == LibraryCollections.Kind.CHANNEL)
+                l.sortedByDescending { it.source?.published?.takeIf { p -> p > 0 }?.times(1000) ?: it.createdAt } else l
+        }
     }
-    // Group ONCE (LinkedHashMap preserves the newest-first order of the already-sorted list) instead
-    // of allocating a Calendar per entry on every recomposition inside the LazyColumn lambda.
-    val groups = remember(shown) { shown.groupBy { dayStart(it.createdAt) } }
-    // The Podcasts view: one group per channel (the newest-touched channel first, "Other podcasts" last),
-    // its episodes newest published first.
-    val byChannel = remember(shown, sourceFilter) {
-        if (sourceFilter != SourceFilter.PODCASTS) emptyList()
-        else shown.groupBy { studio.primeminutes.core.library.Provenance.groupKey(it.source) }.entries
-            .sortedWith(compareBy<Map.Entry<String, List<SessionLibrary.Entry>>> { it.key.isEmpty() }.thenByDescending { g -> g.value.maxOf { it.createdAt } })
-            .map { (k, v) -> k to v.sortedByDescending { it.source?.published?.takeIf { p -> p > 0 }?.times(1000) ?: it.createdAt } }
+    // The library's rows: items outside any collection mixed with the collection rows by their latest item
+    // (the Podcasts filter: channel rows only). Grouped ONCE by day (LinkedHashMap keeps the order) instead of
+    // allocating a Calendar per row on every recomposition inside the LazyColumn lambda.
+    val rows = remember(entries, collections, statusFilter, sourceFilter, personIds, openKey) {
+        if (openKey != null) emptyList()
+        else LibraryCollections.rows(entries, collections, podcastsOnly = sourceFilter == SourceFilter.PODCASTS, keep = ::wanted)
     }
+    val groups = remember(rows) { rows.groupBy { dayStart(it.date) } }
+    val visibleItems = if (searching || openKey != null) shown else rows.mapNotNull { (it as? LibraryCollections.Row.Item)?.entry }
+    val openColl = remember(openKey, entries, collections) {
+        openKey?.let { k -> LibraryCollections.build(entries, collections).firstOrNull { it.key == k } }
+    }
+    // A suggestion card (≥ 3 meetings with the same title once numbers and dates are removed), on the plain library only.
+    val suggestion = remember(entries, collections) { LibraryCollections.suggestion(entries, collections) }
+    fun askLevels() = LibraryCollections.askLevels(entries, collections, openKey, sourceFilter.category())
+    fun ask(q: String) { onAsk?.invoke(q, askLevels()) }
     // Source counts over the whole library; a source chip shows only when there are two sources or more.
     val sourceCounts = remember(entries) { entries.groupingBy { it.category }.eachCount() }
     val showSources = sourceCounts.size >= 2
@@ -463,7 +516,11 @@ fun StudioScreen(
             SelectionHeader(
                 count = selected.size,
                 onClose = { exitSelection() },
-                onSelectAll = { selected.clear(); shown.forEach { selected[it.id] = Unit } },
+                // Podcast episodes stay in their channel: only meetings go into a collection.
+                onAddTo = entries.filter { it.id in selected && it.category != Provenance.Category.PODCAST }.map { it.id }
+                    .takeIf { it.isNotEmpty() }?.let { ids -> { pickerFor = ids } },
+                // The rows on screen only: the library's collection rows keep their meetings out of a select-all.
+                onSelectAll = { selected.clear(); visibleItems.forEach { selected[it.id] = Unit } },
                 onDelete = {
                     if (selected.isNotEmpty()) {
                         val victims = entries.filter { it.id in selected }
@@ -476,7 +533,16 @@ fun StudioScreen(
             // M3 top app bar: brand, Add, Settings; it slides away as the list scrolls up (enterAlways).
             // Redesign: a large 「會議」 title; ＋ imports (file, podcast, YouTube); ⋮ holds Select and Settings.
             var libMenu by remember { mutableStateOf(false) }
-            TopAppBar(
+            if (openKey != null) CollectionHeader(
+                key = openKey!!, coll = openColl, name = openColl?.name ?: openKey?.let { LibraryCollections.nameOf(it, entries, collections) },
+                onBack = { if (scopeBack.isNotEmpty()) restoreScope(scopeBack.removeAt(scopeBack.lastIndex)) else clearScope() },
+                onAsk = if (onAsk != null) ({ ask("") }) else null,
+                onRecordInto = { LibraryCollections.target = openKey!!.removePrefix("uc:"); onRecord() },
+                onImportInto = { LibraryCollections.target = openKey!!.removePrefix("uc:"); onImport() },
+                onRename = { collActionsFor = openKey; renaming = true },
+                onDelete = { collActionsFor = openKey; deletingColl = true },
+                onChannelInfo = { onOpenChannel(openKey!!.removePrefix("ch:")) },
+            ) else TopAppBar(
                 title = {
                     Text(
                         stringResource(R.string.library_title), maxLines = 1,
@@ -485,7 +551,7 @@ fun StudioScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onImport) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Slate200) }
+                    IconButton(onClick = { LibraryCollections.target = null; onImport() }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Slate200) }
                     Box {
                         IconButton(onClick = { libMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate200) }
                         androidx.compose.material3.DropdownMenu(expanded = libMenu, onDismissRequest = { libMenu = false }) {
@@ -514,9 +580,16 @@ fun StudioScreen(
                     SearchBarDefaults.InputField(
                         query = query, onQueryChange = { query = it },
                         // The keyboard's action asks the query when Ask is on (it was Send before).
-                        onSearch = { if (it.isNotBlank()) onAsk?.invoke(it) },
+                        onSearch = { if (it.isNotBlank()) ask(it) },
                         expanded = false, onExpandedChange = {},
-                        placeholder = { Text(stringResource(R.string.studio_search_hint), maxLines = 1) },
+                        placeholder = {
+                            Text(when {
+                                openKey == null && !scoped -> stringResource(R.string.search_all_hint, entries.size)
+                                openKey == null -> stringResource(R.string.studio_search_hint)
+                                LibraryCollections.kindOf(openKey!!) == LibraryCollections.Kind.CHANNEL -> stringResource(R.string.search_in_channel)
+                                else -> stringResource(R.string.search_in_collection)
+                            }, maxLines = 1)
+                        },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         trailingIcon = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -531,7 +604,7 @@ fun StudioScreen(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.clip(CircleShape)
-                                            .clickable { onAsk(query) }
+                                            .clickable { ask(query) }
                                             .semantics(mergeDescendants = true) { role = Role.Button }
                                             .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
                                     ) {
@@ -558,6 +631,25 @@ fun StudioScreen(
             ) {}
             // The semantic-search model download lives in Settings > Search (redesign).
 
+            // The scope as one pill (hidden at All): what search and Ask act on; tap: the filters, ✕: back to All.
+            if (scoped) {
+                val sourceName = when (sourceFilter) {
+                    SourceFilter.ALL -> null
+                    SourceFilter.MEETINGS -> stringResource(R.string.ask_scope_meetings)
+                    SourceFilter.PODCASTS -> stringResource(R.string.ask_scope_podcasts)
+                    SourceFilter.RECEIVED -> stringResource(R.string.ask_scope_received)
+                }
+                val statusName = when (statusFilter) {
+                    StatusFilter.ALL -> null
+                    StatusFilter.NEW -> stringResource(R.string.pill_new)
+                    StatusFilter.DONE -> stringResource(R.string.cd_status_done)
+                }
+                val collName = openKey?.let { openColl?.name ?: LibraryCollections.nameOf(it, entries, collections) ?: stringResource(R.string.podcasts_other) }
+                val collCount = openColl?.let { c -> stringResource(if (c.kind == LibraryCollections.Kind.CHANNEL) R.string.coll_count_episodes else R.string.coll_count_meetings, c.items.size) }
+                val parts = listOfNotNull(collName, sourceName, people.firstOrNull { it.first.id == personFilter }?.first?.name, statusName)
+                ScopePill(parts.joinToString(" · ") + (collCount?.let { " · $it" } ?: ""), onOpen = { filterPanel = true }, onClear = { clearScope() })
+            }
+
             // An available app update — shown here on the home screen (where the user lands), not
             // only inside an open session. Renders nothing when there's no update / it's dismissed.
             Box(Modifier.padding(horizontal = Gutter)) { updateBanner() }
@@ -580,7 +672,7 @@ fun StudioScreen(
             // narrow within it, toggled.
             val showNew = newCount > 0 && (newCount < inSourceEntries.size || statusFilter == StatusFilter.NEW)
             val showDone = doneCount > 0 && (doneCount < inSourceEntries.size || statusFilter == StatusFilter.DONE)
-            if (showSources || showNew || showDone) {
+            if (openKey == null && (showSources || showNew || showDone)) {
                 Row(
                     // Scrolls sideways at large font scales instead of squeezing the last chip to a column.
                     Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())
@@ -609,7 +701,7 @@ fun StudioScreen(
             }
 
             // "Meetings with X": one chip per person of the directory, the most present first.
-            if (people.isNotEmpty()) {
+            if (openKey == null && people.isNotEmpty()) {
                 androidx.compose.foundation.lazy.LazyRow(
                     Modifier.fillMaxWidth().padding(top = Spacing.sm).testTag("people-filter"),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Gutter),
@@ -622,20 +714,6 @@ fun StudioScreen(
                 }
             }
 
-            // The queue as one slim bar (count, current step, progress); tap: the full queue. The screen's
-            // own run over something not in the library (a fresh import) shows here too and returns to it.
-            val queueCount = queuedIds.size + (if (processingId != null && processingId !in queuedIds) 1 else 0)
-            val ownRun = foregroundRun && !isRecording && entries.none { it.id == foregroundId }
-            if (queueCount > 0 || ownRun) {
-                QueueBar(
-                    title = if (queueCount > 0) stringResource(R.string.queue_title) + " · " + stringResource(R.string.queue_bar_count, queueCount)
-                        else stringResource(R.string.studio_processing_banner, foregroundLabel.ifBlank { stringResource(R.string.status_processing) }),
-                    step = if (queueCount > 0) processingLabel else "",
-                    fraction = if (queueCount > 0) processingFraction else foregroundFraction,
-                    active = processingId != null || ownRun,
-                    onClick = { if (queueCount > 0) queueOpen = true else onResumeSession() },
-                )
-            }
         }
 
         if (shown.isEmpty() && !isRecording) {
@@ -643,7 +721,7 @@ fun StudioScreen(
                 Modifier.weight(1f).fillMaxWidth().padding(32.dp),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val firstRun = query.isBlank() && statusFilter == StatusFilter.ALL && sourceFilter == SourceFilter.ALL && personFilter == null
+                val firstRun = query.isBlank() && !scoped
                 if (firstRun) {
                     // First run: a clear invitation, not a faint glyph in a void. Record is the big
                     // button below; importing a file is the other way in, so it gets a button here.
@@ -663,6 +741,7 @@ fun StudioScreen(
                     when {
                         firstRun -> stringResource(R.string.library_empty)
                         densePending != null -> stringResource(R.string.studio_searching)
+                        searching && scoped -> stringResource(R.string.scope_none_here, query.trim())
                         else -> stringResource(R.string.studio_no_match)
                     },
                     color = pal.Slate400, style = MaterialTheme.typography.bodyLarge,
@@ -671,7 +750,17 @@ fun StudioScreen(
                 // A no-match from a search + filters was a dead end: the only way out was clearing the
                 // field by hand and finding the filter chips behind the empty list.
                 val filtered = query.trim().isNotEmpty() || statusFilter != StatusFilter.ALL || sourceFilter != SourceFilter.ALL || personFilter != null
-                if (!firstRun && densePending == null && filtered) {
+                if (!firstRun && densePending == null && searching && scoped) {
+                    // Nothing in the scope: searching all of the library is the way on.
+                    if (hitsElsewhere > 0) Text(stringResource(R.string.scope_elsewhere, hitsElsewhere).removeSuffix(" ›"),
+                        color = pal.Slate400, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = Spacing.sm))
+                    Spacer(Modifier.height(Spacing.xl))
+                    Button(onClick = { val q = query; clearScope(); query = q }, modifier = Modifier.testTag("scope-search-all")) {
+                        Text(stringResource(R.string.scope_search_all))
+                    }
+                } else if (openKey != null && !firstRun && densePending == null && !filtered) {
+                    Text(stringResource(R.string.coll_empty), color = pal.Slate400, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                } else if (!firstRun && densePending == null && filtered) {
                     Spacer(Modifier.height(Spacing.xl))
                     androidx.compose.material3.OutlinedButton(
                         onClick = { query = ""; statusFilter = StatusFilter.ALL; sourceFilter = SourceFilter.ALL; personFilter = null },
@@ -711,8 +800,16 @@ fun StudioScreen(
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
                 // Hairline-separated rows (no cards); the bottom pad clears the record FAB.
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 120.dp),
+                // The record button and the queue strip are docked below the list: nothing covers its last row.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = Spacing.lg),
             ) {
+                if (searching && hitsElsewhere > 0) item(key = "elsewhere", contentType = "elsewhere") {
+                    Text(
+                        stringResource(R.string.scope_elsewhere, hitsElsewhere), color = pal.Sky, style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { val q = query; clearScope(); query = q }
+                            .heightIn(min = 44.dp).padding(horizontal = Gutter, vertical = Spacing.sm).testTag("scope-elsewhere"),
+                    )
+                }
                 if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
                     val e = h.entry
                     val status = rowStatus(e, processingId, queuedIds, foregroundId)
@@ -734,6 +831,9 @@ fun StudioScreen(
                             onSelect = { selectionMode = true; selected[e.id] = Unit },
                             onDeleteAction = if (status != RowStatus.Processing) ({ requestDelete(e) }) else null,
                             speakers = speakerIdsOf[e.id].orEmpty(),
+                            // Under All a hit says which collection it sits in (a podcast already names its channel).
+                            collection = if (openKey == null) LibraryCollections.keyOf(e, collections)?.takeIf { it.startsWith("uc:") }
+                                ?.let { LibraryCollections.nameOf(it, entries, collections) } else null,
                         )
                         }
                         if (status == RowStatus.Done) h.passages.forEach { p ->
@@ -742,12 +842,16 @@ fun StudioScreen(
                             }
                         }
                     }
-                } else if (sourceFilter == SourceFilter.PODCASTS) byChannel.forEach { (key, list) ->
-                    stickyHeader(key = "channel-$key", contentType = "channel") {
-                        ChannelHeader(key, list, onOpen = if (key.isNotEmpty()) ({ onOpenChannel(key) }) else null)
+                } else if (openKey != null) items(shown, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
+                else {
+                    if (!scoped) suggestion?.let { sg ->
+                        item(key = "suggest-${sg.key}", contentType = "suggest") {
+                            SuggestionCard(sg,
+                                onCreate = { val id = LibraryCollections.newId(); onEditCollections { LibraryCollections.create(it, sg.name, sg.ids, id, System.currentTimeMillis()) } },
+                                onSkip = { onEditCollections { LibraryCollections.dismiss(it, sg.key) } })
+                        }
                     }
-                    items(list, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
-                } else groups.forEach { (day, list) ->
+                    groups.forEach { (day, list) ->
                     stickyHeader(key = "day-$day", contentType = "header") {
                         Text(
                             dayLabel(day, today, yesterday),
@@ -756,18 +860,54 @@ fun StudioScreen(
                                 .semantics { heading() },
                         )
                     }
-                    items(list, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
+                    items(list, key = { r -> when (r) { is LibraryCollections.Row.Item -> r.entry.id; is LibraryCollections.Row.Coll -> r.collection.key } },
+                        contentType = { r -> if (r is LibraryCollections.Row.Coll) "coll" else "row" }) { r ->
+                        when (r) {
+                            is LibraryCollections.Row.Item -> libraryRow(r.entry)
+                            is LibraryCollections.Row.Coll -> {
+                                val c = r.collection
+                                // Only what is being processed now (a queued item waiting while the queue is paused is not "processing").
+                                val live = c.items.filter { it.id == processingId || it.id == foregroundId }
+                                val frac = when {
+                                    c.items.any { it.id == processingId } -> processingFraction
+                                    c.items.any { it.id == foregroundId } -> foregroundFraction
+                                    else -> 0f
+                                }
+                                CollectionRow(c, newCount = c.newCount(collections), processing = live.size, fraction = frac,
+                                    onClick = { if (!selectionMode) openCollection(c.key) },
+                                    onLongClick = { if (!selectionMode && c.kind == LibraryCollections.Kind.USER) collActionsFor = c.key })
+                            }
+                        }
+                    }
+                    }
                 }
             }
         }
 
-    }
-        // Redesign: the record button is a red round FAB on a fade (it also returns to a running capture).
+        // The queue, docked like the recording screen's minimized notes strip: it takes its own space between
+        // the list and the record button (never over a row); tap: the full queue. The screen's own run over
+        // something not in the library (a fresh import) shows here too and returns to it.
+        val queueCount = queuedIds.size + (if (processingId != null && processingId !in queuedIds) 1 else 0)
+        val ownRun = foregroundRun && !isRecording && entries.none { it.id == foregroundId }
+        if (!selectionMode && (queueCount > 0 || ownRun)) {
+            val running = processingId != null || ownRun
+            val frac = if (processingId != null) processingFraction else foregroundFraction
+            val name = when {
+                processingId != null -> entries.firstOrNull { it.id == processingId }?.let { it.title ?: SessionLibrary.defaultTitle(it.createdAt, uiLocale) } ?: processingLabel
+                else -> foregroundLabel.ifBlank { stringResource(R.string.status_processing) }
+            }
+            QueueStrip(
+                text = if (running) stringResource(R.string.queue_running, name, (frac * 100).toInt()) else stringResource(R.string.queue_paused, queueCount),
+                running = running, fraction = frac,
+                onResume = if (!running) onProcessAll else null,
+                onClick = { if (queueCount > 0) queueOpen = true else onResumeSession() },
+            )
+        }
+
+        // Redesign: the record button is a red round FAB (it also returns to a running capture), docked under the list.
         if (!selectionMode) {
             Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(pal.Slate900.copy(alpha = 0f), pal.Slate900, pal.Slate900)))
-                    .padding(top = Spacing.xl, bottom = Spacing.sm),
+                Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.sm),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (pendingCount > 0) {
@@ -785,7 +925,11 @@ fun StudioScreen(
                 androidx.compose.material3.Surface(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (isRecording) onResumeCapture() else onRecord()
+                        if (isRecording) onResumeCapture() else {
+                            // On a collection page the new recording goes into it.
+                            LibraryCollections.target = openKey?.takeIf { it.startsWith("uc:") }?.removePrefix("uc:")
+                            onRecord()
+                        }
                     },
                     shape = CircleShape, color = pal.Record,
                     shadowElevation = if (pal.isEink) 0.dp else 3.dp,
@@ -804,6 +948,7 @@ fun StudioScreen(
                 )
             }
         }
+    }
     }
 
     // --- The full queue: what is processing, what waits, and what can be done about each ---
@@ -841,6 +986,103 @@ fun StudioScreen(
                     }
                 }
                 if (pendingCount > 0) ActionRow(Icons.Filled.PlaylistPlay, stringResource(R.string.source_process_all, pendingCount)) { queueOpen = false; onProcessAll() }
+            }
+        }
+    }
+
+    // --- Collections: the picker for meetings, a new / renamed one's name, a collection's actions, the filter panel ---
+    pickerFor?.let { ids ->
+        ModalBottomSheet(onDismissRequest = { pickerFor = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = pal.Slate800) {
+            Column(Modifier.fillMaxWidth().padding(bottom = Spacing.xxl).testTag("collection-picker")) {
+                Text(stringResource(R.string.coll_add_to), style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm).semantics { heading() })
+                collections.collections.sortedByDescending { it.createdAt }.forEach { c ->
+                    val n = entries.count { collections.members[it.id] == c.id }
+                    ActionRow(Icons.Filled.Layers, c.name + " · " + stringResource(R.string.coll_count_meetings, n)) {
+                        pickerFor = null; exitSelection(); onEditCollections { LibraryCollections.move(it, ids, c.id) }
+                    }
+                }
+                ActionRow(Icons.Filled.Add, stringResource(R.string.coll_new)) { pickerFor = null; newCollFor = ids }
+                Text(stringResource(R.string.coll_move_note), style = MaterialTheme.typography.labelSmall, color = pal.Slate400,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm))
+            }
+        }
+    }
+    val renameId = collActionsFor?.takeIf { renaming && it.startsWith("uc:") }?.removePrefix("uc:")
+    if (newCollFor != null || renameId != null) {
+        var name by remember(renameId, newCollFor) { mutableStateOf(renameId?.let { id -> collections.collections.firstOrNull { it.id == id }?.name } ?: "") }
+        fun close() { newCollFor = null; renaming = false; collActionsFor = null }
+        AlertDialog(
+            onDismissRequest = { close() },
+            title = { Text(stringResource(if (renameId != null) R.string.coll_rename else R.string.coll_new_title)) },
+            text = {
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.coll_name)) }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("collection-name"))
+            },
+            confirmButton = {
+                TextButton(enabled = name.isNotBlank(), onClick = {
+                    val ids = newCollFor.orEmpty(); val n = name
+                    if (renameId != null) onEditCollections { LibraryCollections.rename(it, renameId, n) }
+                    else { val id = LibraryCollections.newId(); onEditCollections { LibraryCollections.create(it, n, ids, id, System.currentTimeMillis()) } }
+                    close(); exitSelection()
+                }, modifier = Modifier.testTag("collection-name-save")) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = { TextButton(onClick = { close() }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    val deleteId = collActionsFor?.takeIf { deletingColl && it.startsWith("uc:") }?.removePrefix("uc:")
+    if (deleteId != null) AlertDialog(
+        onDismissRequest = { deletingColl = false; collActionsFor = null },
+        title = { Text(stringResource(R.string.coll_delete)) },
+        text = { Text(stringResource(R.string.coll_delete_body)) },
+        confirmButton = {
+            TextButton(onClick = {
+                deletingColl = false; collActionsFor = null
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onEditCollections { LibraryCollections.delete(it, deleteId) }
+            }, modifier = Modifier.testTag("collection-delete-confirm")) { Text(stringResource(R.string.action_delete), color = PrimeMinutesPalette.Red) }
+        },
+        dismissButton = { TextButton(onClick = { deletingColl = false; collActionsFor = null }) { Text(stringResource(R.string.cancel)) } },
+    )
+    collActionsFor?.takeIf { !renaming && !deletingColl }?.let { key ->
+        ModalBottomSheet(onDismissRequest = { collActionsFor = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = pal.Slate800) {
+            Column(Modifier.fillMaxWidth().padding(bottom = Spacing.xxl)) {
+                Text(LibraryCollections.nameOf(key, entries, collections) ?: "", style = MaterialTheme.typography.titleMedium, color = pal.Slate200,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm).semantics { heading() })
+                ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.coll_rename)) { renaming = true }
+                ActionRow(Icons.Filled.Delete, stringResource(R.string.coll_delete), PrimeMinutesPalette.Red) { deletingColl = true }
+            }
+        }
+    }
+    if (filterPanel) ModalBottomSheet(onDismissRequest = { filterPanel = false }, containerColor = pal.Slate800) {
+        Column(Modifier.fillMaxWidth().padding(bottom = Spacing.xxl).testTag("filter-panel")) {
+            Text(stringResource(R.string.scope_filters), style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm).semantics { heading() })
+            @Composable fun chipRow(content: @Composable () -> Unit) = Row(
+                Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = Spacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically,
+            ) { content() }
+            if (openKey == null && showSources) chipRow {
+                for ((f, res) in listOf(SourceFilter.MEETINGS to R.string.filter_meetings, SourceFilter.PODCASTS to R.string.filter_podcasts,
+                        SourceFilter.RECEIVED to R.string.filter_received)) {
+                    val n = sourceCounts[f.category()!!] ?: 0
+                    if (n > 0) FilterChip(stringResource(res, n), sourceFilter == f) { sourceFilter = if (sourceFilter == f) SourceFilter.ALL else f }
+                }
+            }
+            if (newCount > 0 || doneCount > 0) chipRow {
+                if (newCount > 0) FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) {
+                    statusFilter = if (statusFilter == StatusFilter.NEW) StatusFilter.ALL else StatusFilter.NEW
+                }
+                if (doneCount > 0) FilterChip(stringResource(R.string.filter_done, doneCount), statusFilter == StatusFilter.DONE) {
+                    statusFilter = if (statusFilter == StatusFilter.DONE) StatusFilter.ALL else StatusFilter.DONE
+                }
+            }
+            if (people.isNotEmpty()) chipRow {
+                people.forEach { (p, ids) ->
+                    FilterChip("${p.name} · ${ids.size}", personFilter == p.id) { personFilter = if (personFilter == p.id) null else p.id }
+                }
             }
         }
     }
@@ -895,6 +1137,13 @@ fun StudioScreen(
                     ActionRow(Icons.Filled.PlayArrow, stringResource(R.string.action_open)) { actionsFor = null; onOpen(e) }
                 }
                 ActionRow(Icons.Filled.DriveFileRenameOutline, stringResource(R.string.action_rename)) { renameFor = e; actionsFor = null }
+                // Podcast episodes stay in their channel; a meeting moves between collections (one at a time).
+                if (e.category != Provenance.Category.PODCAST) {
+                    ActionRow(Icons.Filled.Layers, stringResource(R.string.coll_move_to)) { actionsFor = null; pickerFor = listOf(e.id) }
+                    if (LibraryCollections.keyOf(e, collections) != null) ActionRow(Icons.Filled.LayersClear, stringResource(R.string.coll_remove_from)) {
+                        actionsFor = null; onEditCollections { LibraryCollections.removeItems(it, listOf(e.id)) }
+                    }
+                }
                 ActionRow(Icons.Filled.Share, stringResource(R.string.share_title)) { actionsFor = null; onShare(e) }
                 ActionRow(Icons.Filled.Delete, stringResource(R.string.action_delete), PrimeMinutesPalette.Red) { actionsFor = null; requestDelete(e) }
                 }
@@ -1013,7 +1262,7 @@ private fun SwipeToDelete(enabled: Boolean, onDelete: () -> Unit, content: @Comp
 
 /** Contextual header shown during multi-select: exit · count · select-all · delete. */
 @Composable
-private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, onDelete: () -> Unit) {
+private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, onDelete: () -> Unit, onAddTo: (() -> Unit)? = null) {
     val pal = LocalPrimeMinutesPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1026,6 +1275,9 @@ private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> 
             modifier = Modifier.weight(1f).padding(start = Spacing.xs).semantics { heading() },
         )
         TextButton(onClick = onSelectAll) { Text(stringResource(R.string.select_all), color = pal.Sky, fontWeight = FontWeight.Bold) }
+        if (onAddTo != null) IconButton(onClick = onAddTo, modifier = Modifier.testTag("selection-add-to")) {
+            Icon(Icons.Filled.Layers, contentDescription = stringResource(R.string.coll_add_to), tint = pal.Sky)
+        }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete), tint = PrimeMinutesPalette.Red) }
     }
 }
@@ -1052,6 +1304,8 @@ private fun SessionRow(
     onSelect: () -> Unit = {},
     onDeleteAction: (() -> Unit)? = null,
     speakers: List<Int> = emptyList(),
+    /** The user collection it sits in, named in its meta line (search hits under All). */
+    collection: String? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -1133,6 +1387,7 @@ private fun SessionRow(
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val meta = buildString {
+                        collection?.takeIf { !podcast }?.let { append(it); append(" · ") }
                         if (podcast) {
                             channel?.let { append(it); append(" · ") }
                             append(DATE_FMT.format(Date(src?.published?.takeIf { it > 0 }?.times(1000) ?: entry.createdAt)))
@@ -1194,31 +1449,21 @@ internal fun StatusPill(text: String, color: Color) {
     )
 }
 
-/** The queue as one grouped block: dot · title · chevron, a thin progress line, the current step. */
+/** The queue as a docked strip (the recording screen's minimized notes strip): hairline, dot, one line, ›. */
 @Composable
-private fun QueueBar(title: String, step: String, fraction: Float, active: Boolean, onClick: () -> Unit) {
+private fun QueueStrip(text: String, running: Boolean, fraction: Float, onResume: (() -> Unit)?, onClick: () -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(
-        Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm)
-            .clip(MaterialTheme.shapes.large).background(pal.Fill)
-            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.queue_open), onClick = onClick)
-            .testTag("queue-bar")
-            .padding(horizontal = Spacing.md, vertical = Spacing.md),
+    studio.primeminutes.ui.components.DockedStrip(
+        onClick = onClick, onClickLabel = stringResource(R.string.queue_open),
+        leading = { Box(Modifier.size(8.dp).clip(CircleShape).background(if (running) PrimeMinutesPalette.Success else pal.Slate400)) },
+        modifier = Modifier.padding(horizontal = Gutter).testTag("queue-bar"),
+        trailing = if (onResume != null) ({
+            TextButton(onClick = onResume, modifier = Modifier.testTag("queue-resume")) { Text(stringResource(R.string.action_resume), color = pal.Sky, fontWeight = FontWeight.SemiBold) }
+        }) else null,
+        progress = if (running) fraction else null,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (active) PrimeMinutesPalette.Success else pal.Slate400))
-            Spacer(Modifier.width(Spacing.sm))
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
-        }
-        if (active) {
-            val bar = Modifier.fillMaxWidth().padding(top = Spacing.sm).height(3.dp).clip(RoundedCornerShape(2.dp))
-            if (fraction > 0f || pal.isEink) LinearProgressIndicator(progress = { fraction }, color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
-            else LinearProgressIndicator(color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
-        }
-        if (step.isNotBlank()) Text(step, style = TypeRole.meta(), color = pal.Slate400, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = Spacing.xs))
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1231,33 +1476,6 @@ private fun statusIcon(status: RowStatus): ImageVector = when (status) {
     RowStatus.Downloading -> Icons.Filled.Download
     RowStatus.DownloadFailed -> Icons.Filled.ErrorOutline
     else -> Icons.Filled.GraphicEq
-}
-
-/** The Podcasts view's sticky channel header: artwork, channel, "N in library", a chevron to the channel page. */
-@Composable
-private fun ChannelHeader(key: String, list: List<SessionLibrary.Entry>, onOpen: (() -> Unit)?) {
-    val pal = LocalPrimeMinutesPalette.current
-    val src = list.firstNotNullOfOrNull { it.source?.takeIf { s -> s.channelTitle != null } } ?: list.firstOrNull()?.source
-    val title = src?.channelTitle ?: stringResource(R.string.podcasts_other)
-    val desc = stringResource(R.string.cd_channel_group, title, list.size)
-    val openLabel = stringResource(R.string.cd_open_channel)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad)
-            .then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen) else Modifier)
-            .semantics(mergeDescendants = true) { contentDescription = desc; heading() }
-            .heightIn(min = 48.dp).padding(start = Gutter, end = Gutter, top = Spacing.sm, bottom = Spacing.xs),
-    ) {
-        if (key.isNotEmpty()) studio.primeminutes.ui.components.ChannelArtwork(
-            studio.primeminutes.online.ArtworkCache.keyOf(src?.seriesId, src?.artworkUrl), src?.artworkUrl, 28.dp)
-        else studio.primeminutes.ui.components.ChannelArtwork(null, null, 28.dp)
-        Spacer(Modifier.width(Spacing.sm))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = pal.Slate200, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(stringResource(R.string.channel_in_library, list.size), style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
-        }
-        if (onOpen != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
-    }
 }
 
 /** A 36dp rounded tile holding a status glyph — soft-tinted, [filled] for the selection check, or
@@ -1349,4 +1567,166 @@ private fun dayLabel(day: Long, today: Long, yesterday: Long): String = when (da
     today -> stringResource(R.string.day_today)
     yesterday -> stringResource(R.string.day_yesterday)
     else -> DATE_FMT.format(Date(day)).uppercase()
+}
+
+/** The scope as it was (Back restores it). */
+private data class ScopeSnap(val openKey: String?, val source: SourceFilter, val status: StatusFilter, val person: String?)
+
+/** The scope as one pill under the search field: tap opens the filters, ✕ goes back to All. */
+@Composable
+private fun ScopePill(text: String, onOpen: () -> Unit, onClear: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clip(CircleShape).background(pal.ActiveTint).clickable(role = Role.Button, onClick = onOpen)
+                .heightIn(min = 36.dp).padding(start = Spacing.md).testTag("scope-pill"),
+        ) {
+            Text(stringResource(R.string.scope_label, text), style = MaterialTheme.typography.labelLarge, color = pal.Sky,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            IconButton(onClick = onClear, modifier = Modifier.size(36.dp).testTag("scope-clear")) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_scope_clear), tint = pal.Sky, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+/** A collection's mark: a channel's cover, a stack for the user's collections. */
+@Composable
+private fun CollectionMark(c: LibraryCollections.Collection?, kind: LibraryCollections.Kind, size: androidx.compose.ui.unit.Dp) {
+    val pal = LocalPrimeMinutesPalette.current
+    if (kind == LibraryCollections.Kind.CHANNEL) {
+        val art = c?.artwork
+        studio.primeminutes.ui.components.ChannelArtwork(
+            art?.let { studio.primeminutes.online.ArtworkCache.keyOf(it.seriesId, it.artworkUrl) }, art?.artworkUrl, size)
+    } else Box(Modifier.size(size).clip(MaterialTheme.shapes.medium).background(pal.Sky.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+        Icon(Icons.Filled.Layers, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(size * 0.55f))
+    }
+}
+
+/** One collection in the library: mark, name, count, latest item, "N new" (channels), its processing state. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CollectionRow(c: LibraryCollections.Collection, newCount: Int, processing: Int, fraction: Float, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    val channel = c.kind == LibraryCollections.Kind.CHANNEL
+    val name = c.name ?: stringResource(if (channel) R.string.podcasts_other else R.string.coll_user)
+    val count = stringResource(if (channel) R.string.coll_count_episodes else R.string.coll_count_meetings, c.items.size)
+    val latest = c.latestItem
+    val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val latestLine = latest?.let { stringResource(R.string.coll_latest, it.title ?: SessionLibrary.defaultTitle(it.createdAt, uiLocale), DATE_FMT.format(Date(it.createdAt))) }
+    val pct = (fraction * 100).toInt()
+    val procLine = if (processing > 0) stringResource(if (channel) R.string.coll_processing_episodes else R.string.coll_processing_meetings, processing, pct) else null
+    val kindLabel = stringResource(if (channel) R.string.coll_channel else R.string.coll_user)
+    val badge = if (newCount > 0) stringResource(R.string.coll_new_badge, newCount) else null
+    Column(
+        Modifier.fillMaxWidth().background(pal.Slate900)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics(mergeDescendants = true) { contentDescription = listOfNotNull(name, kindLabel, count, badge, procLine, latestLine).joinToString(", ") }
+            .padding(horizontal = Gutter).testTag("collection-row"),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = Spacing.md)) {
+            CollectionMark(c, c.kind, 40.dp)
+            Spacer(Modifier.width(Spacing.md))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, color = pal.Slate200, style = TypeRole.rowTitle(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text(count, color = pal.Slate400, style = TypeRole.meta(), maxLines = 1)
+                }
+                Spacer(Modifier.height(3.dp))
+                Text(procLine ?: latestLine ?: kindLabel, color = if (procLine != null) PrimeMinutesPalette.Success else pal.Slate400,
+                    style = TypeRole.meta(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (badge != null) {
+                Spacer(Modifier.width(Spacing.sm))
+                StatusPill(badge, pal.Sky)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
+        }
+        if (processing > 0) LinearProgressIndicator(
+            progress = { fraction }, color = PrimeMinutesPalette.Success, trackColor = pal.Slate700,
+            modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.sm).height(3.dp).clip(RoundedCornerShape(2.dp)),
+        )
+        androidx.compose.material3.HorizontalDivider(color = pal.Hairline, thickness = 1.dp)
+    }
+}
+
+/** A collection page's top: back, name and counts, Ask this collection, and (the user's) record / import into it. */
+@Composable
+private fun CollectionHeader(
+    key: String, coll: LibraryCollections.Collection?, name: String?,
+    onBack: () -> Unit, onAsk: (() -> Unit)?, onRecordInto: () -> Unit, onImportInto: () -> Unit,
+    onRename: () -> Unit, onDelete: () -> Unit, onChannelInfo: () -> Unit,
+) {
+    val pal = LocalPrimeMinutesPalette.current
+    val kind = LibraryCollections.kindOf(key)
+    val channel = kind == LibraryCollections.Kind.CHANNEL
+    var menu by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs)) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = pal.Slate200) }
+        Spacer(Modifier.weight(1f))
+        if (!channel || key != "ch:") Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreHoriz, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate200) }
+            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (channel) androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.coll_channel_info)) }, onClick = { menu = false; onChannelInfo() })
+                else {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.coll_rename)) }, onClick = { menu = false; onRename() })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.coll_delete), color = PrimeMinutesPalette.Red) }, onClick = { menu = false; onDelete() })
+                }
+            }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter)) {
+        CollectionMark(coll, kind, 56.dp)
+        Spacer(Modifier.width(Spacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(name ?: stringResource(if (channel) R.string.podcasts_other else R.string.coll_user), style = TypeRole.largeTitle(), color = pal.Slate200,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
+            val n = coll?.items?.size ?: 0
+            val total = coll?.totalSec?.takeIf { it > 0 }?.let { stringResource(R.string.coll_total, studio.primeminutes.fmtSec(it)) }
+            Text(listOfNotNull(stringResource(if (channel) R.string.coll_channel else R.string.coll_user),
+                stringResource(if (channel) R.string.coll_count_episodes else R.string.coll_count_meetings, n), total).joinToString(" · "),
+                style = TypeRole.meta(), color = pal.Slate400, maxLines = 1)
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Spacing.sm), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        if (onAsk != null) Button(onClick = onAsk, modifier = Modifier.testTag("collection-ask")) {
+            Icon(Icons.Filled.QuestionAnswer, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(Spacing.sm))
+            Text(stringResource(if (channel) R.string.ask_this_channel else R.string.ask_this_collection), maxLines = 1)
+        }
+        if (!channel) Box {
+            var into by remember { mutableStateOf(false) }
+            androidx.compose.material3.OutlinedButton(onClick = { into = true }, border = androidx.compose.foundation.BorderStroke(1.dp, pal.Slate600),
+                modifier = Modifier.testTag("collection-record-into")) {
+                Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = pal.Record, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(Spacing.xs))
+                Text(stringResource(R.string.coll_record_into), color = pal.Sky, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            androidx.compose.material3.DropdownMenu(expanded = into, onDismissRequest = { into = false }) {
+                androidx.compose.material3.DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Mic, null) }, text = { Text(stringResource(R.string.record_fab)) },
+                    onClick = { into = false; onRecordInto() })
+                androidx.compose.material3.DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Add, null) }, text = { Text(stringResource(R.string.add_audio)) },
+                    onClick = { into = false; onImportInto() })
+            }
+        }
+    }
+}
+
+/** "N meetings look alike — make a collection?" (once per group: Skip is for good). */
+@Composable
+private fun SuggestionCard(sg: LibraryCollections.Suggestion, onCreate: () -> Unit, onSkip: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = Spacing.sm).clip(MaterialTheme.shapes.medium)
+            .background(pal.ActiveTint).padding(start = Spacing.md, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs).testTag("collection-suggestion"),
+    ) {
+        Icon(Icons.Filled.Layers, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(Spacing.sm))
+        Text(stringResource(R.string.coll_suggest, sg.ids.size, sg.name), style = MaterialTheme.typography.bodyMedium, color = pal.Slate200, modifier = Modifier.weight(1f))
+        TextButton(onClick = onCreate, modifier = Modifier.testTag("collection-suggestion-create")) { Text(stringResource(R.string.coll_create), color = pal.Sky, fontWeight = FontWeight.Bold) }
+        TextButton(onClick = onSkip) { Text(stringResource(R.string.coll_skip), color = pal.Slate400) }
+    }
 }

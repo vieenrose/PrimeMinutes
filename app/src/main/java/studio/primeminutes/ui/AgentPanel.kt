@@ -817,17 +817,10 @@ fun CaptureAgentNotes(agent: AgentUiState, onOpen: () -> Unit, modifier: Modifie
     val st = agent.state ?: return
     val openLabel = stringResource(R.string.agent_title)
     if (agent.notes.isEmpty()) {
-        Column(modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(pal.Hairline))
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen)
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusDot(stateColor(st.state), pulsing = agent.working, size = 8)
-                Spacer(Modifier.width(Spacing.sm))
-                Column(Modifier.weight(1f)) {
+        studio.primeminutes.ui.components.DockedStrip(
+            onClick = onOpen, onClickLabel = openLabel, modifier = modifier,
+            leading = { StatusDot(stateColor(st.state), pulsing = agent.working, size = 8) },
+        ) {
                     val line = when {
                         agent.beforeFirstReading -> agent.firstEtaMin.let { eta ->
                             when {
@@ -849,9 +842,6 @@ fun CaptureAgentNotes(agent: AgentUiState, onOpen: () -> Unit, modifier: Modifie
                         stringResource(R.string.agent_first_short), style = MaterialTheme.typography.labelSmall,
                         color = pal.Slate400, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                }
-                Text("›", style = MaterialTheme.typography.titleMedium, color = pal.Slate400)
-            }
         }
     } else {
         val count = pluralStringResource(R.plurals.agent_notes_count, agent.notes.size, agent.notes.size)

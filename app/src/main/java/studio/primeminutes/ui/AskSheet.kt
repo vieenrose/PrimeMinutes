@@ -87,6 +87,9 @@ import androidx.compose.ui.semantics.liveRegion
 import studio.primeminutes.ui.theme.Spacing
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.role
+import studio.primeminutes.core.library.LibraryCollections
 
 /** `[[entryId@sec]]` as AskEngine publishes the model's `[[k]]` tags (and a tolerant `[[id@sec]`/`[id@sec]`). */
 private val CITE_RE = Regex("""\[{1,2}([A-Za-z0-9_\-]+)@(\d+)]{1,2}""")
@@ -111,7 +114,13 @@ fun AskSheet(
     onDismiss: () -> Unit,
     /** The in-meeting Ask: questions over this meeting only, its earlier questions shown above. */
     scope: SessionLibrary.Entry? = null,
+    /** Where it may look (≤ 3 levels, the first = where it was opened): a switch at the top; empty: [entries] / [scope]. */
+    levels: List<LibraryCollections.AskLevel> = emptyList(),
 ) {
+    var levelAt by remember { mutableStateOf(0) }
+    val level = levels.getOrNull(levelAt)
+    @Suppress("NAME_SHADOWING") val entries = level?.entries ?: entries
+    @Suppress("NAME_SHADOWING") val scope = if (level != null) level.meeting else scope
     val pal = LocalPrimeMinutesPalette.current
     val context = LocalContext.current
     val lang = LocalConfiguration.current.locales[0].toLanguageTag()
@@ -151,6 +160,15 @@ fun AskSheet(
     LaunchedEffect(busy) {
         if (busy) askWasBusy = true
         else if (askWasBusy) { askWasBusy = false; askHaptics.confirm() }
+    }
+    // Another scope: the conversation starts over there, the last question asked again.
+    fun switchLevel(i: Int) {
+        if (i == levelAt || busy) return
+        val q = AskEngine.turns.value.lastOrNull()?.question ?: question
+        levelAt = i
+        AskEngine.reset()
+        val l = levels[i]
+        if (q.isNotBlank()) AskEngine.ask(context, l.entries, q, lang, l.meeting)
     }
     fun send() {
         val q = followUp.trim(); if (q.isEmpty() || busy) return
@@ -213,6 +231,7 @@ fun AskSheet(
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(if (scope != null) R.string.ask_meeting_clear else R.string.ask_reset), tint = pal.Slate400)
                 }
             }
+            if (levels.size > 1) AskScopeSwitch(levels, levelAt, enabled = !busy, onPick = ::switchLevel)
             Column(
                 Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
             ) {
@@ -318,6 +337,39 @@ fun AskSheet(
             }
         }
     }
+}
+
+/** The Ask sheet's scope switch: one segment per level, its name and item count. */
+@Composable
+private fun AskScopeSwitch(levels: List<LibraryCollections.AskLevel>, at: Int, enabled: Boolean, onPick: (Int) -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(Modifier.fillMaxWidth().padding(top = Spacing.sm).clip(CircleShape).background(pal.Fill).padding(3.dp).testTag("ask-scope")) {
+        levels.forEachIndexed { i, l ->
+            val on = i == at
+            val name = stringResource(when (l.level) {
+                LibraryCollections.Level.MEETING -> R.string.ask_scope_meeting
+                LibraryCollections.Level.CHANNEL -> R.string.ask_scope_channel
+                LibraryCollections.Level.COLLECTION -> R.string.ask_scope_collection
+                LibraryCollections.Level.PODCASTS -> R.string.ask_scope_podcasts
+                LibraryCollections.Level.MEETINGS -> R.string.ask_scope_meetings
+                LibraryCollections.Level.RECEIVED -> R.string.ask_scope_received
+                LibraryCollections.Level.ALL -> R.string.ask_scope_all
+            })
+            Text(
+                if (l.meeting != null) name else stringResource(R.string.ask_scope_count, name, l.entries.size),
+                style = MaterialTheme.typography.labelLarge, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (on) pal.Slate200 else pal.Slate400,
+                modifier = Modifier.weight(1f).clip(CircleShape).background(if (on) pal.Slate800 else androidx.compose.ui.graphics.Color.Transparent)
+                    .semantics { selected = on; role = Role.Tab }
+                    .clickable(enabled = enabled) { onPick(i) }.padding(vertical = 8.dp, horizontal = 4.dp),
+            )
+        }
+    }
+    val l = levels[at]
+    if (l.level != LibraryCollections.Level.ALL && l.meeting == null) Text(
+        stringResource(R.string.ask_scope_only, l.entries.size), style = MaterialTheme.typography.labelSmall, color = pal.Slate400,
+        modifier = Modifier.padding(top = 4.dp, start = 4.dp),
+    )
 }
 
 /** An excerpt's text with its S-numbers (a note passage) named as its meeting names them (display only). */
