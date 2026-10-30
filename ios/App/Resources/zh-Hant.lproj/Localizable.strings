@@ -175,7 +175,7 @@
 "agent_first_eta_one" = "第一次閱讀約在 %d 分鐘後";
 "agent_first_eta" = "第一次閱讀約在 %d 分鐘後";
 "agent_first_soon" = "第一次閱讀不到 1 分鐘後開始";
-"agent_first_pending" = "進度條滿時開始第一次閱讀";
+"agent_first_pending" = "幾分鐘後開始整理";
 "agent_first_short" = "提早停止錄音的話，會在停止後寫筆記";
 "cd_status_new" = "新的";
 "cd_status_processing" = "處理中";
@@ -677,3 +677,12 @@
 "sub_bg_notif_body" = "%d 集新集數";
 "sub_bg_last_run" = "背景檢查：%@";
 "sub_bg_never_run" = "背景檢查：尚未執行";
+"a11y_rec_pill" = "錄音中，已錄 %@";
+"capture_listening_hint" = "正在聆聽，說話後逐字稿會出現在這裡";
+"capture_jump_latest" = "最新";
+"menu_show_meters" = "顯示效能資訊";
+"cd_more" = "更多";
+"cd_capture_stop" = "停止並儲存錄音";
+"capture_warn_heat" = "手機過熱，轉錄可能跟不上";
+"capture_warn_memory" = "記憶體不足，請關閉其他 App";
+"capture_warn_storage" = "儲存空間快滿了（不到 500 MB）";

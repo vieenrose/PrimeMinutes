@@ -301,42 +301,54 @@ private struct ReplyPreview: View {
     }
 }
 
-/// Android AgentStrip: the reader's status pinned on the recording screen — state, notes so far, the window filling
-/// up while it listens, then the line being written or the latest note.
+/// The reader's status pinned above the recording controls: one quiet line until the first notes, then a card with
+/// the latest three (one line each). Tapping it opens the full Agent panel.
 struct AgentStrip: View {
     @ObservedObject var agent: AgentUi
     @Environment(\.speakerRefs) private var refs
     var body: some View {
+        // New notes are announced once, when the card first appears (not on every later note).
+        content.onChange(of: agent.notes.isEmpty) { _, empty in
+            if !empty { AccessibilityNotification.Announcement(notesCount(agent.notes.count)).post() } }
+    }
+    @ViewBuilder private var content: some View {
         if let st = agent.state {
-            let p = AgentPanel(agent: agent), cur = agent.steps.last { !$0.restart }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Dot(color: p.color(st), pulsing: agent.working)
-                    Text(L("agent_title")).font(.subheadline.weight(.semibold))
-                    Spacer()
-                    if !agent.notes.isEmpty { Text(notesCount(agent.notes.count)).font(.caption).foregroundStyle(.secondary) }
-                    Text(p.chip(st)).font(.caption2.weight(.semibold)).foregroundStyle(p.color(st))
-                        .padding(.horizontal, 8).padding(.vertical, 3).background(p.color(st).opacity(0.14), in: Capsule())
-                }
-                if st == .listening, let cur { Bar(value: cur.tokens, max: agent.windowMax, active: true).frame(height: 3) }
-                if st == .reading, let last = agent.reply.split(separator: "\n").last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                    Text(String(last).replacingOccurrences(of: "NOTE ", with: "") + " ▍").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                } else if let n = agent.notes.last {
-                    HStack(spacing: 8) {
-                        Text(n.ts).font(.caption2.monospaced()).foregroundStyle(.blue)
-                        Text(refs(n.text)).font(.caption).lineLimit(1)
-                    }
-                } else if agent.beforeFirstReading {
-                    // Not "0 notes" for minutes: when the first reading comes, and that a shorter recording gets its notes after Stop.
+            let p = AgentPanel(agent: agent)
+            if agent.notes.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles").foregroundStyle(.tint).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(FirstReading.line(agent)).font(.caption)
-                        Text(L("agent_first_short")).font(.caption2).foregroundStyle(.secondary)
+                        Text(L("agent_title")).font(.subheadline.weight(.semibold))
+                        + Text(" · ") + Text(agent.beforeFirstReading ? FirstReading.line(agent) : p.line(st)).font(.subheadline).foregroundColor(.secondary)
+                        if agent.beforeFirstReading { Text(L("agent_first_short")).font(.caption).foregroundStyle(.secondary) }
                     }
-                } else { Text(p.line(st)).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+                }
+                .frame(minHeight: 44).padding(.horizontal, Vox.gutterWide)
+                .overlay(alignment: .top) { Divider() }
+                .contentShape(Rectangle())
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Dot(color: p.color(st), pulsing: agent.working)
+                        Text(L("agent_title")).font(.subheadline.weight(.semibold))
+                        Text(notesCount(agent.notes.count) + (st == .reading ? " · " + p.chip(st) : "")).font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+                    }
+                    ForEach(agent.notes.suffix(3)) { n in
+                        HStack(spacing: 8) {
+                            Text(n.ts).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                            Text(refs(n.text)).font(.footnote).lineLimit(1)
+                        }
+                    }
+                }
+                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: Vox.radiusMD))
+                .padding(.horizontal, Vox.gutterWide).padding(.top, 6)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.2)))
         }
     }
 }

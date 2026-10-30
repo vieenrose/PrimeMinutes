@@ -175,7 +175,7 @@
 "agent_first_eta_one" = "第一次阅读约在 %d 分钟后";
 "agent_first_eta" = "第一次阅读约在 %d 分钟后";
 "agent_first_soon" = "第一次阅读不到 1 分钟后开始";
-"agent_first_pending" = "进度条满时开始第一次阅读";
+"agent_first_pending" = "几分钟后开始整理";
 "agent_first_short" = "提早停止录音的话，会在停止后写笔记";
 "cd_status_new" = "新的";
 "cd_status_processing" = "处理中";
@@ -677,3 +677,12 @@
 "sub_bg_notif_body" = "%d 集新集数";
 "sub_bg_last_run" = "后台检查：%@";
 "sub_bg_never_run" = "后台检查：尚未运行";
+"a11y_rec_pill" = "录音中，已录 %@";
+"capture_listening_hint" = "正在聆听，说话后逐字稿会出现在这里";
+"capture_jump_latest" = "最新";
+"menu_show_meters" = "显示性能信息";
+"cd_more" = "更多";
+"cd_capture_stop" = "停止并保存录音";
+"capture_warn_heat" = "手机过热，转录可能跟不上";
+"capture_warn_memory" = "内存不足，请关闭其他 App";
+"capture_warn_storage" = "存储空间快满了（不到 500 MB）";

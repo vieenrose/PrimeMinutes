@@ -12,6 +12,8 @@ import AVFoundation
 
     @Published var recording = false
     @Published var elapsed = 0
+    /// The waveform's input (mic thread → view).
+    let meter = LevelMeter()
     /// Being recorded: not for the queue yet.
     private(set) var recordingJob: UUID?
     private var recorder: Recorder?
@@ -36,7 +38,7 @@ import AVFoundation
             guard await Recorder.requestPermission() else { screen.status = L("mic_permission_required"); return }
             guard await downloads.downloadSpeech() else { return }
             screen.status = L("loading_models"); screen.clear()
-            elapsed = 0
+            elapsed = 0; meter.reset()
             let r = Recorder(); recorder = r; recording = true; startingRecord = false; UIApplication.shared.isIdleTimerDisabled = true
             var job = Job(audio: UUID().uuidString + ".wav")
             job.captureStart = job.date.timeIntervalSince1970   // the mail's meeting time: the recording's start
@@ -52,7 +54,7 @@ import AVFoundation
                 guard let eng = ModelDownloads.nemoEngine() else {
                     await MainActor.run { self.screen.status = L("models_missing"); self.recording = false; UIApplication.shared.isIdleTimerDisabled = false }; return }
                 let agc = LiveAgc()
-                do { try r.start { [buffer = self.buffer] c in var c = c; agc.process(&c); wav.append(c); buffer.add(c) } }
+                do { try r.start { [buffer = self.buffer, meter = self.meter] c in var c = c; agc.process(&c); wav.append(c); buffer.add(c); meter.add(c) } }
                 catch { await MainActor.run { self.screen.status = L("mic_error", "\(error)"); self.recording = false }; return }
                 var frozen: [Utterance] = []; let conv = TextConv()
                 while await MainActor.run(body: { self.recording }) {
@@ -71,7 +73,7 @@ import AVFoundation
     /// The recording fed straight into `process` (ASR + diarization + reader live), archived at the end like a queued job.
     private func recordLive(_ job: Job, _ wav: WavWriter, _ r: Recorder) async {
         let buf = ChunkBuffer(), agc = LiveAgc()
-        do { try r.start { c in var c = c; agc.process(&c); wav.append(c); buf.add(c) } }
+        do { try r.start { [meter] c in var c = c; agc.process(&c); wav.append(c); buf.add(c); meter.add(c) } }
         catch { screen.status = L("mic_error", "\(error)"); recording = false; recordingJob = nil; return }
         liveBuffer = buf; runner.beginLive(job.id)
         let t0 = Date()   // the timer runs on the clock, not on what the recognizer has caught up with (models still loading)

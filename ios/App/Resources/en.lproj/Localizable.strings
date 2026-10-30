@@ -175,7 +175,7 @@
 "agent_first_eta_one" = "First reading in about %d minute";
 "agent_first_eta" = "First reading in about %d minutes";
 "agent_first_soon" = "First reading in under a minute";
-"agent_first_pending" = "First reading when the bar fills";
+"agent_first_pending" = "Starts in a few minutes";
 "agent_first_short" = "Stopping sooner? The notes are written after you stop.";
 "cd_status_new" = "New";
 "cd_status_processing" = "Processing";
@@ -677,3 +677,12 @@
 "sub_bg_notif_body" = "New episodes: %d";
 "sub_bg_last_run" = "Background check: %@";
 "sub_bg_never_run" = "Background check: not run yet";
+"a11y_rec_pill" = "Recording, %@ elapsed";
+"capture_listening_hint" = "Listening — the transcript appears here once someone speaks";
+"capture_jump_latest" = "Latest";
+"menu_show_meters" = "Show performance info";
+"cd_more" = "More";
+"cd_capture_stop" = "Stop and save the recording";
+"capture_warn_heat" = "The phone is hot: transcription may fall behind";
+"capture_warn_memory" = "Memory is low: close other apps";
+"capture_warn_storage" = "Storage is almost full (under 500 MB)";

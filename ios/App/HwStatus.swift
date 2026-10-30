@@ -38,9 +38,11 @@ import UIKit
 /// `CPU ▬▬▭ RAM ▬▭▭ BAT ▬▬▬` hairline gauges; red only when worth acting on (>90 %, battery <15 % off charger).
 struct HwStatusLine: View {
     @AppStorage("hwMonitor") private var on = true
+    /// Shown regardless of the Settings switch (the recording screen's warning banner / ⋯ menu toggle).
+    var force = false
     @StateObject private var s = HwSampler()
     var body: some View {
-        if on {
+        if on || force {
             HStack(spacing: 8) {
                 gauge("CPU", s.cpu, s.cpu > 90)
                 gauge("RAM", s.ram, s.ram > 90)
