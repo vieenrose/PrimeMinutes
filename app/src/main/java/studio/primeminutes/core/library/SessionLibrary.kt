@@ -176,6 +176,8 @@ object SessionLibrary {
         // Reclaim raw WAVs of entries whose session file is already built (their player sources are
         // no longer in use — starting a new recording reset the UI session).
         pruneWavs(context, excludeId = entry.id)
+        // Recorded / imported from a collection page: it joins that collection.
+        LibraryCollections.claim(context, entry.id)
         entry
     }.onFailure { Log.w(TAG, "could not promote recording into library", it) }.getOrNull()
 

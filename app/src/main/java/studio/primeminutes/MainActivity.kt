@@ -626,6 +626,11 @@ private fun TranscribeScreen(
     val snackbarHostState = vm.snackbar
     // Ask (experimental, plan §6): the Studio question being answered; null = sheet closed.
     var askQuestion by remember { mutableStateOf<String?>(null) }
+    // Where the library Ask may look (its scope switch); empty: the whole library.
+    var askLevels by remember { mutableStateOf<List<studio.primeminutes.core.library.LibraryCollections.AskLevel>>(emptyList()) }
+    // The library's collections, read once off the main thread; edits write the file and publish the new doc.
+    val collDoc by studio.primeminutes.core.library.LibraryCollections.doc.collectAsState()
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { studio.primeminutes.core.library.LibraryCollections.load(context) } }
     // A speaker merge (from, into) waiting for its confirmation.
     var mergeAsk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // The People screen (the directory of named speakers), over whatever screen opened it.
@@ -1890,7 +1895,11 @@ private fun TranscribeScreen(
                 initialQuery = devQuery,
                 typeQuery = devExtras?.getString("vox_type") ?: "",
                 // Ask shows once its models are there (AskEngine.available).
-                onAsk = if (s.config.askEnabled && askModelReady) { q -> askQuestion = q.trim() } else null,
+                onAsk = if (s.config.askEnabled && askModelReady) { q, levels -> askLevels = levels; askQuestion = q.trim() } else null,
+                collections = collDoc,
+                onEditCollections = { edit ->
+                    scope.launch { withContext(Dispatchers.IO) { studio.primeminutes.core.library.LibraryCollections.update(context, edit) } }
+                },
                 searchDownload = searchDownload,
                 onDownloadSearchModel = { downloadSearchModel() },
                 indexingIds = indexingIds,
@@ -2486,8 +2495,9 @@ private fun TranscribeScreen(
         } else androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
             studio.primeminutes.ui.AskSheet(
                 question = q, entries = remember(s.recentsVersion) { SessionLibrary.list(context) },
-                onOpenAt = { e, t -> askQuestion = null; pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
-                onDismiss = { askQuestion = null },
+                levels = askLevels,
+                onOpenAt = { e, t -> askQuestion = null; askLevels = emptyList(); pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) },
+                onDismiss = { askQuestion = null; askLevels = emptyList() },
             )
         }
     }
@@ -2496,7 +2506,15 @@ private fun TranscribeScreen(
     if (askMeeting != null && askScope != null) androidx.compose.runtime.CompositionLocalProvider(studio.primeminutes.ui.LocalScreenScript provides screenScript) {
         studio.primeminutes.ui.AskSheet(
             question = askMeeting ?: "", entries = listOf(askScope), scope = askScope,
-            onOpenAt = { _, t -> askMeeting = null; resultsOpen = false; openCite((t * 1000).toInt()) },
+            // This meeting, then its collection (or its source), then all: a citation elsewhere opens that meeting.
+            levels = remember(askScope.id, collDoc, s.recentsVersion) {
+                studio.primeminutes.core.library.LibraryCollections.askLevels(SessionLibrary.list(context), collDoc, null, null, meeting = askScope)
+            },
+            onOpenAt = { e, t ->
+                askMeeting = null; resultsOpen = false
+                if (e.id != askScope.id) { pendingSeekSec = t; vm.openSessionUri(Uri.fromFile(e.audioFile)) }
+                else openCite((t * 1000).toInt())
+            },
             onDismiss = { askMeeting = null },
         )
     }
