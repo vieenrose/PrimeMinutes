@@ -530,6 +530,11 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         }
         recordingPipeline.resetStopFlags()
         val previousJob = pipelineJob
+        // A foreground import / Resume superseded by this start (not stopped by the user): its meeting
+        // goes back to the head of the queue once it has unwound (see SupersedeRequeue). Read on MAIN,
+        // before runStarting/pipelineStarted overwrite the registry's run.
+        val requeueSuperseded = SupersedeRequeue.applies(
+            RunRegistry.jobs.value.pipeline, previousJob?.isActive == true, stopping === previousJob)
         // The reader is no longer superseded with the run: it finishes its meeting. Only a device too
         // small for both models makes it give way to a recording.
         if (recording) reader.readerYieldForRecording()
@@ -564,6 +569,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
             // process kill. join() is cancellable: if THIS job is itself superseded while waiting,
             // it unwinds normally.
             previousJob?.let { runCatching { it.join() } }
+            if (requeueSuperseded) SupersedeRequeue.requeue(this@TranscriptionService, importPipeline.unfinished)
             // Re-assert this run's config after the join (a dying drain may have overwritten the
             // shared Holder); a drain loads its own persisted config inside QueueRunner.run.
             if (!processQueue) TranscriptionConfig.Holder.config = cfgSnapshot
