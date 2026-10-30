@@ -378,13 +378,13 @@ struct AskSheet: View {
                                     ForEach(Array(t.excerpts.enumerated()), id: \.offset) { _, x in
                                         Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
-                                                Text(ReaderProtocol.formatTs(x.sec)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                                Text(ReaderProtocol.formatTs(x.sec)).font(Vox.fontPill.monospacedDigit()).foregroundStyle(Vox.accent).padding(.horizontal, 6).padding(.vertical, 2).background(Vox.accent.opacity(0.12), in: Capsule())
                                                 Text(meeting != nil ? Self.named(x) : ScreenScript.gen(x.session.title) + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                             }
                                         }.buttonStyle(.plain)
                                     }
                                 }
-                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12)).id(t.id)
+                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup)).overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup).stroke(Vox.hairline)).id(t.id)
                         }
                         if case .failed(let e) = ask.phase { Text(L("ask_failed", e)).font(.footnote).foregroundStyle(.red) }
                         if ask.phase == .busy { Text(L("ask_busy")).font(.footnote).foregroundStyle(.secondary) }
@@ -400,7 +400,7 @@ struct AskSheet: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)   // dragging the answers down drops the keyboard; tap the field to ask again
-            .background(Color(.systemGroupedBackground))
+            .background(Vox.bg)
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : meeting != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).focused($composer).submitLabel(.send).onSubmit(send)
@@ -411,7 +411,11 @@ struct AskSheet: View {
                     } else {
                         Button(action: send) { Image(systemName: "paperplane.fill").tapTarget() }.disabled(followup.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityLabel(L("ask_cd"))
                     }
-                }.padding(12).background(.bar)
+                }
+                // Redesign: the composer pill.
+                .padding(.leading, 16).padding(.trailing, 6).frame(minHeight: 48)
+                .background(Vox.fill, in: Capsule())
+                .padding(.horizontal, 12).padding(.vertical, 8).background(Vox.bg)
             }
             // The principal VStack below is the bar's title (title + subtitle); a navigationTitle under it is dead.
             .navigationBarTitleDisplayMode(.inline)
@@ -514,8 +518,10 @@ struct AskSheet: View {
             // of that meeting (a made-up second), else dropped.
             let same = xs.filter { $0.session.id.uuidString == id }
             if let x = same.first(where: { $0.sec == sec }) ?? same.min(by: { abs($0.sec - sec) < abs($1.sec - sec) }) {
-                var a = AttributedString(withTitle ? ScreenScript.gen(x.session.title) + " · " + ReaderProtocol.formatTs(x.sec) : "[" + ReaderProtocol.formatTs(x.sec) + "]")
-                a[Attr.Link.self] = URL(string: "voxask://\(id)/\(x.sec)"); a[Attr.Foreground.self] = .accentColor   // Attr: Sendable-safe keys
+                // Redesign: the summary's citation pill (text on its 12 % tint, thin no-break spaces as padding).
+                var a = AttributedString("\u{202F}" + (withTitle ? ScreenScript.gen(x.session.title) + " · " + ReaderProtocol.formatTs(x.sec) : ReaderProtocol.formatTs(x.sec)) + "\u{202F}")
+                a[Attr.Link.self] = URL(string: "voxask://\(id)/\(x.sec)"); a[Attr.Foreground.self] = Vox.accent   // Attr: Sendable-safe keys
+                a[Attr.Background.self] = Vox.accent.opacity(0.12); a[Attr.Font.self] = .caption.weight(.semibold)
                 out += a
             }
             last = mt.range.location + mt.range.length

@@ -62,6 +62,8 @@ import Network
     @Published var prefetchProgress: Double?
     /// Bytes the running prefetch fetches in all (the card shows "so far / total").
     @Published private(set) var prefetchTotal: Int64 = 0
+    /// The speech part of the running prefetch (the card draws one bar per model: speech, then notes).
+    @Published private(set) var prefetchSpeechBytes: Int64 = 0
     /// The prefetch is waiting to resume (suspended app, lost network): the card says Paused, with Resume.
     @Published var prefetchPaused = false
     /// Cancel on the progress card: no automatic restart (network change) until the app restarts or the user
@@ -139,7 +141,7 @@ import Network
     private func maybePrefetch() {
         let p = pending
         guard prefetchTask == nil, !cancelledThisRun, DownloadPlan.mayPrefetch(consent, unmetered: unmetered, p) else { return }
-        prefetchProgress = 0; prefetchTotal = p.total
+        prefetchProgress = 0; prefetchTotal = p.total; prefetchSpeechBytes = p.speechBytes
         let reader = Prefs.readerTarget
         StatusLog.add("prefetch \(SizeFormat.bytes(p.total))")
         // Speech first, on its own task: a recording started meanwhile waits for these files only, never

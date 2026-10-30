@@ -110,7 +110,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack(path: $path) {
             LibraryView(m: m, path: $path, onAdd: { showAdd = true }, onSettings: { showSettings = true })
-            .navigationTitle(L("app_name")).navigationBarTitleDisplayMode(.large)
+            .navigationTitle(L("meetings_title")).navigationBarTitleDisplayMode(.large)
             .toolbar { LibraryToolbar(onAdd: { showAdd = true }, onSettings: { showSettings = true }) }
             .navigationDestination(for: Route.self) { r in
                 switch r {
@@ -155,7 +155,7 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) { SettingsView(m: m, language: $language, theme: $theme) { s, t in
                 // The People screen opens a meeting at the person's first line: Settings closes, the meeting opens.
                 showSettings = false; LibraryView.markSeen(s.id); m.openAt = (s.id, t); path = [.session(s)]
-            } }
+            }.preferredColorScheme((Theme(rawValue: theme) ?? .auto).scheme) }
             // A received meeting restores at once (no model needed); plain audio asks for the models first.
             // A YouTube / PeerTube link is no longer imported (removed in 0.55): explained, never fetched.
             .onOpenURL { u in if !u.isFileURL && VideoLinks.isVideoLink(u.absoluteString) { videoLink = true } else { m.imports.open(u) { a in m.downloads.withModels(a) } } }

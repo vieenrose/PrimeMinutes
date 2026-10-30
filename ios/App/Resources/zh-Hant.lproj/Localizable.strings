@@ -697,3 +697,26 @@
 "capture_warn_heat" = "手機過熱，轉錄可能跟不上";
 "capture_warn_memory" = "記憶體不足，請關閉其他 App";
 "capture_warn_storage" = "儲存空間快滿了（不到 500 MB）";
+
+/* Unified redesign (2026-10-30) */
+"meetings_title" = "會議";
+"speakers_n" = "%d 位講者";
+"status_failed" = "失敗";
+"download_paused_short" = "已暫停";
+"pill_download_pct" = "下載 %d%%";
+"queue_bar_title" = "處理佇列 · %d";
+"search_or_ask_hint" = "搜尋或提問";
+"ask_this" = "提問：%@";
+"summary_edit" = "編輯摘要";
+"cd_meeting_view" = "會議檢視";
+"tab_notes_n" = "筆記 %d";
+"ai_status_read" = "AI 已讀完整場會議 · %d 則筆記";
+"see_process" = "看過程";
+"notes_other" = "其他";
+"notes_none" = "這場會議沒有筆記。";
+"cd_play_from" = "從 %@ 播放";
+"now_playing_jump" = "目前播放";
+"share_go" = "分享…";
+"cd_speed" = "播放速度";
+"cd_player_more" = "更多播放控制";
+"cd_player_less" = "收合播放控制";

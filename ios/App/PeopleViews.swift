@@ -290,7 +290,7 @@ struct PeopleScreen: View {
                     let sub = ([p.note ?? (homonyms.contains(p.id) ? ms.first?.title : nil)].compactMap { $0 } + [peopleMeetingsText(ms.count)]).joined(separator: " · ")
                     NavigationLink(value: p.id) {
                         HStack(spacing: 12) {
-                            Image(systemName: "person.fill").foregroundStyle(.secondary).accessibilityHidden(true)   // the name beside it is the label
+                            PersonAvatar(name: p.name, slot: p.id.unicodeScalars.reduce(0) { $0 + Int($1.value) })   // the name beside it is the label
                             VStack(alignment: .leading, spacing: 2) { Text(p.name).fontWeight(.medium); Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
@@ -304,6 +304,7 @@ struct PeopleScreen: View {
             if n > 0 { Button(L("people_delete_clear", n), role: .destructive) { Task { await store.delete(p.id, clearNames: true) }; Haptics.destructive() } }
             Button(L("cancel"), role: .cancel) {}
         } message: { _ in Text(L("people_delete_text")) }
+        .voxPage()
         .navigationTitle(L("people_title"))
         .navigationDestination(for: String.self) { id in PersonPage(id: id, library: library, openMeeting: openMeeting) }
         .navigationDestination(isPresented: Binding(get: { openId != nil }, set: { if !$0 { openId = nil } })) {
@@ -374,6 +375,7 @@ private struct PersonPage: View {
                 }
             }
         }
+        .voxPage()
         .navigationTitle(p.name).navigationBarTitleDisplayMode(.inline)
         .alert(L("people_rename"), isPresented: $renaming) {
             TextField(L("speaker_name"), text: $draft)
@@ -451,5 +453,18 @@ struct PeopleFilterChips: View {
                 .background(on ? Color.accentColor : Color(.secondarySystemGroupedBackground), in: Capsule())
                 .foregroundStyle(on ? Color.white : Color.primary)
         }.buttonStyle(.plain)
+    }
+}
+
+/// A person's avatar (redesign): the initial on a speaker-tint wash (decoration: the name beside it is the label).
+struct PersonAvatar: View {
+    let name: String
+    let slot: Int
+    var body: some View {
+        let c = Vox.speaker[slot % Vox.speaker.count]
+        Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+            .font(.subheadline.weight(.semibold)).foregroundStyle(c)
+            .frame(width: 34, height: 34).background(c.opacity(0.14), in: Circle())
+            .accessibilityHidden(true)
     }
 }

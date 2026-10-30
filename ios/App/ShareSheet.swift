@@ -79,12 +79,21 @@ struct MeetingShareSheet: View {
                         }
                     }
                 }
-                Section(L("share_where")) {
-                    whereRow(.nearby, "airplayaudio", L("share_nearby"), L("share_nearby_desc"))
+            }
+            // Redesign: one 分享… button; AirDrop, Mail and every other destination come from the system share sheet.
+            .voxPage()
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 6) {
                     let total = what.map(bytes) ?? 0
-                    whereRow(.mail, "envelope", L("share_mail"), total > ShareCore.mailLimit ? L("share_mail_big", size(total)) : L("share_mail_desc"), warn: total > ShareCore.mailLimit)
-                    whereRow(.other, "ellipsis.circle", L("share_other"), L("share_other_desc"))
+                    if total > ShareCore.mailLimit { Text(L("share_mail_big", size(total))).font(Vox.fontMeta).foregroundStyle(Vox.ink3).multilineTextAlignment(.center) }
+                    Button { go(.other) } label: {
+                        Label(L("share_go"), systemImage: "square.and.arrow.up").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: Vox.radiusButton))
+                    .disabled(what == nil || progress != nil).accessibilityIdentifier("share-to-other")
                 }
+                .padding(.horizontal, Vox.gutter).padding(.top, 10).padding(.bottom, 8)
+                .background(Vox.bg)
             }
             .navigationTitle(L("share_title")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("cancel")) { task?.cancel(); onDone() } } }

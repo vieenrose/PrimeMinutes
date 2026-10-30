@@ -697,3 +697,26 @@
 "capture_warn_heat" = "手机过热，转录可能跟不上";
 "capture_warn_memory" = "内存不足，请关闭其他 App";
 "capture_warn_storage" = "存储空间快满了（不到 500 MB）";
+
+/* Unified redesign (2026-10-30) */
+"meetings_title" = "会议";
+"speakers_n" = "%d 位讲者";
+"status_failed" = "失败";
+"download_paused_short" = "已暂停";
+"pill_download_pct" = "下载 %d%%";
+"queue_bar_title" = "处理队列 · %d";
+"search_or_ask_hint" = "搜索或提问";
+"ask_this" = "提问：%@";
+"summary_edit" = "编辑摘要";
+"cd_meeting_view" = "会议视图";
+"tab_notes_n" = "笔记 %d";
+"ai_status_read" = "AI 已读完整场会议 · %d 条笔记";
+"see_process" = "看过程";
+"notes_other" = "其他";
+"notes_none" = "这场会议没有笔记。";
+"cd_play_from" = "从 %@ 播放";
+"now_playing_jump" = "当前播放";
+"share_go" = "分享…";
+"cd_speed" = "播放速度";
+"cd_player_more" = "更多播放控制";
+"cd_player_less" = "收起播放控制";

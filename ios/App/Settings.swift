@@ -133,7 +133,7 @@ struct ThemeStyle: ViewModifier {
     func body(content: Content) -> some View {
         if theme == .eink {
             content.tint(.black).environment(\.legibilityWeight, .bold).transaction { $0.disablesAnimations = true; $0.animation = nil }
-        } else { content }
+        } else { content.tint(Vox.accent) }   // P2: the one action colour app-wide (toggles, links, buttons)
     }
 }
 
