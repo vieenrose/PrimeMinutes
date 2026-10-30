@@ -288,6 +288,9 @@ fun StudioScreen(
             if (!undone) onDeleteMany(fresh)
         }
     }
+    // A meeting held back for Undo no longer counts as waiting to be processed (back on Undo).
+    @Suppress("NAME_SHADOWING")
+    val pendingCount = (pendingCount - entries.count { it.id in pendingDeletes && it.status == SessionLibrary.Status.RECORDED && it.wavFile.exists() && it.id !in queuedIds }).coerceAtLeast(0)
     @Suppress("NAME_SHADOWING")
     val entries = if (pendingDeletes.isEmpty()) entries else entries.filter { it.id !in pendingDeletes }
     // A row's tap: a live run opens its live view (the queue's, or the screen's own run), a download item its

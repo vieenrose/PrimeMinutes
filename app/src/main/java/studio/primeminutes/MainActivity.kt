@@ -434,7 +434,10 @@ class MainActivity : ComponentActivity() {
                         TranscribeScreen(sessionVm, ::startTranscription, ::stopTranscription, ::startRecording, ::processQueue)
                         // The app-level snackbar host; the Session scaffold shows the same queue itself.
                         val rootScreen by sessionVm.state.collectAsState()
-                        if (rootScreen.screen != Screen.Session) Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding(), contentAlignment = Alignment.BottomCenter) {
+                        if (rootScreen.screen != Screen.Session) Box(Modifier.fillMaxSize().navigationBarsPadding().imePadding()
+                            // The library's red record button sits bottom-centre: the snackbar (Undo) goes above it.
+                            .padding(bottom = if (rootScreen.screen == Screen.Studio && !rootScreen.showConfigSheet) 104.dp else 0.dp),
+                            contentAlignment = Alignment.BottomCenter) {
                             SnackbarHost(studio.primeminutes.ui.AppSnackbar.host)
                         }
                         BatteryExemptionDialog()
