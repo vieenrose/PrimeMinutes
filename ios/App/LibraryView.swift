@@ -434,15 +434,14 @@ struct LiveJobView: View {
                 let c = Self.palette[max(0, l.speaker) % Self.palette.count]
                 // A Button: press highlight and the VoiceOver button trait (play from this line); the speaker name inside stays its own button.
                 Button { if player.available { player.seekPlay(l.start) } } label: { HStack(alignment: .top, spacing: 10) {
-                    RoundedRectangle(cornerRadius: Vox.radiusXS).fill(c).frame(width: 3)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             // Naming a speaker of the run: the people picker, as in the finished meeting. The label is
                             // read from the screen's names, so confirming a name relabels every line of this speaker.
                             Button { renamingSpeaker = l.speaker } label: {
-                                Text(m.screen.name(max(0, l.speaker))).font(.caption.bold()).foregroundStyle(c)
+                                Text(m.screen.name(max(0, l.speaker))).font(.subheadline.bold()).foregroundStyle(c)
                             }.buttonStyle(.borderless)
-                            Vox.micro(Export.mmss(l.start))
+                            Text(Export.mmss(l.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                         Text(l.text)
                     }
