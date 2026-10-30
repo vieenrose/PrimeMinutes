@@ -17,7 +17,7 @@
 </p>
 
 <p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="連續錄兩場會議"><br>
-<sub>連續錄兩場會議，停止後自動完成筆記、摘要與標題（iPhone 14 Pro Max，E4B；部分片段加速）</sub></p>
+<sub>連續錄兩場會議，停止後自動完成筆記、摘要與標題（錄音畫面為 iPhone 17e 新版錄音室，之後的導覽為 iPhone 14 Pro Max；E4B；部分片段加速）</sub></p>
 
 ## 下載
 
