@@ -866,7 +866,8 @@ fun StudioScreen(
                             is LibraryCollections.Row.Item -> libraryRow(r.entry)
                             is LibraryCollections.Row.Coll -> {
                                 val c = r.collection
-                                val live = c.items.filter { it.id == processingId || it.id == foregroundId || it.id in queuedIds }
+                                // Only what is being processed now (a queued item waiting while the queue is paused is not "processing").
+                                val live = c.items.filter { it.id == processingId || it.id == foregroundId }
                                 val frac = when {
                                     c.items.any { it.id == processingId } -> processingFraction
                                     c.items.any { it.id == foregroundId } -> foregroundFraction
@@ -1701,7 +1702,7 @@ private fun CollectionHeader(
                 modifier = Modifier.testTag("collection-record-into")) {
                 Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = pal.Record, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(Spacing.xs))
-                Text(stringResource(R.string.coll_record_into), color = pal.Sky, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.coll_record_into), color = pal.Sky, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             androidx.compose.material3.DropdownMenu(expanded = into, onDismissRequest = { into = false }) {
                 androidx.compose.material3.DropdownMenuItem(leadingIcon = { Icon(Icons.Filled.Mic, null) }, text = { Text(stringResource(R.string.record_fab)) },
