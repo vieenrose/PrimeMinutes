@@ -114,6 +114,13 @@ details p{margin:0 0 24px;color:var(--mute)}
 .closing{text-align:center;padding:136px 0}
 .closing img{width:64px;height:64px;border-radius:15px;margin:0 auto 28px}
 .closing .btns{justify-content:center;margin-top:36px}
+.qrs{display:flex;justify-content:center;gap:40px;margin-top:40px}
+.qrs figure{margin:0;text-align:center}
+.qrs img{width:132px;height:132px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:16px;image-rendering:pixelated}
+.qrs figcaption{margin-top:10px;font-size:14px;color:var(--mute)}
+.qrs-hero{justify-content:flex-start;gap:24px;margin:28px 0 0}
+.qrs-hero img{width:112px;height:112px}
+@media (max-width:720px){.qrs{display:none}}
 
 footer{border-top:1px solid var(--line);padding:40px 0;color:var(--dim);font-size:14px}
 footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -171,6 +178,10 @@ footer .links{display:flex;gap:22px}
         <a class="btn btn-ghost" href="https://testflight.apple.com/join/saH9YxEA">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31a4.05 4.05 0 00-3.19-1.73c-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76A4.26 4.26 0 005.26 9.8c-1.53 2.65-.39 6.58 1.1 8.73.73 1.05 1.6 2.24 2.74 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13a9.4 9.4 0 001.2-2.46 3.82 3.82 0 01-2.28-3.52zM14.2 6.13a3.9 3.9 0 00.9-2.82 3.97 3.97 0 00-2.57 1.33 3.7 3.7 0 00-.92 2.73 3.28 3.28 0 002.59-1.24z"/></svg>
           <span>iPhone 公開測試<small>TestFlight・iOS 17 以上</small></span></a>
+      </div>
+      <div class="qrs qrs-hero rv">
+        <figure><img src="site/qr-android.svg?v=20261030e" alt="Android 版下載 QR code" width="132" height="132"><figcaption>Android</figcaption></figure>
+        <figure><img src="site/qr-ios.svg?v=20261030e" alt="iPhone 公開測試 QR code" width="132" height="132"><figcaption>iPhone</figcaption></figure>
       </div>
       <p class="req rv">不用註冊帳號。第一次使用時下載 AI 模型，之後都在手機上離線執行。</p>
     </div>
@@ -271,8 +282,12 @@ footer .links{display:flex;gap:22px}
     <h2 class="rv">下一場會議，<br>讓手機幫你記。</h2>
     <p class="sub rv" style="margin:0 auto">Android 與 iPhone 都可以用，功能一致。</p>
     <div class="btns rv">
-      <a class="btn btn-primary" href="https://github.com/vieenrose/PrimeMinutes/releases/latest"><span>下載 Android 版<small>v0.56.3</small></span></a>
-      <a class="btn btn-ghost" href="https://testflight.apple.com/join/saH9YxEA"><span>iPhone 公開測試<small>0.56.1・iOS 17 以上</small></span></a>
+      <a class="btn btn-primary" href="https://github.com/vieenrose/PrimeMinutes/releases/latest"><span>下載 Android 版<small>v0.56.4</small></span></a>
+      <a class="btn btn-ghost" href="https://testflight.apple.com/join/saH9YxEA"><span>iPhone 公開測試<small>0.56.2・iOS 17 以上</small></span></a>
+    </div>
+    <div class="qrs rv" aria-label="用手機掃描下載">
+      <figure><img src="site/qr-android.svg?v=20261030e" alt="Android 版下載 QR code" width="132" height="132"><figcaption>掃描下載 Android 版</figcaption></figure>
+      <figure><img src="site/qr-ios.svg?v=20261030e" alt="iPhone 公開測試 QR code" width="132" height="132"><figcaption>掃描加入 iPhone 測試</figcaption></figure>
     </div>
   </div>
 </section>
