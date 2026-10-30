@@ -173,8 +173,11 @@ struct WaveformStrip: View {
     let meter: LevelMeter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        TimelineView(.periodic(from: .now, by: reduceMotion ? 0.25 : 0.05)) { _ in
+        TimelineView(.periodic(from: .now, by: reduceMotion ? 0.25 : 0.05)) { tl in
+            // The Canvas only redraws when its closure reads the timeline's date: reading the meter alone (a reference
+            // type) left the first frame on screen, a flat strip.
             Canvas { ctx, size in
+                _ = tl.date
                 let bars = meter.bars(), n = bars.count
                 let step = size.width / CGFloat(n), w = max(1.5, step * 0.55)
                 for (i, v) in bars.enumerated() {
