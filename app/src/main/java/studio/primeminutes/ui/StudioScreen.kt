@@ -1071,11 +1071,11 @@ fun StudioScreen(
                     if (n > 0) FilterChip(stringResource(res, n), sourceFilter == f) { sourceFilter = if (sourceFilter == f) SourceFilter.ALL else f }
                 }
             }
-            chipRow {
-                FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) {
+            if (newCount > 0 || doneCount > 0) chipRow {
+                if (newCount > 0) FilterChip(stringResource(R.string.filter_new, newCount), statusFilter == StatusFilter.NEW) {
                     statusFilter = if (statusFilter == StatusFilter.NEW) StatusFilter.ALL else StatusFilter.NEW
                 }
-                FilterChip(stringResource(R.string.filter_done, doneCount), statusFilter == StatusFilter.DONE) {
+                if (doneCount > 0) FilterChip(stringResource(R.string.filter_done, doneCount), statusFilter == StatusFilter.DONE) {
                     statusFilter = if (statusFilter == StatusFilter.DONE) StatusFilter.ALL else StatusFilter.DONE
                 }
             }
