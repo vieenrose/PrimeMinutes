@@ -763,4 +763,36 @@
         <item quantity="one">%d new episode</item>
         <item quantity="other">%d new episodes</item>
     </plurals>
+    <!-- Redesign 2026-10 -->
+    <string name="library_title">Meetings</string>
+    <string name="tab_notes">Notes %1$d</string>
+    <string name="tab_notes_plain">Notes</string>
+    <string name="agent_see_process">See process</string>
+    <string name="agent_status_done">AI notes done · %1$d</string>
+    <string name="agent_status_reading">AI is reading…</string>
+    <string name="jump_now_playing">Now playing</string>
+    <string name="share_go">Share…</string>
+    <string name="share_format">Format</string>
+    <string name="share_content">Include</string>
+    <string name="queue_title">Processing queue</string>
+    <string name="queue_bar_count">%1$d in queue</string>
+    <string name="queue_open">Open the processing queue</string>
+    <string name="pill_queued">Queued</string>
+    <string name="pill_processing">Processing %1$d%%</string>
+    <string name="pill_working">Processing</string>
+    <string name="pill_downloading">Downloading %1$d%%</string>
+    <string name="pill_new">Not processed</string>
+    <string name="pill_ready">Ready</string>
+    <string name="pill_failed">Failed</string>
+    <string name="pill_no_speech">No speech</string>
+    <string name="speakers_count">%1$d speakers</string>
+    <string name="action_more">More actions</string>
+    <string name="notes_empty">No notes yet</string>
+    <string name="cd_play_from">Play from %1$s</string>
+    <string name="player_more">More player controls</string>
+    <string name="player_speed">Playback speed %1$s</string>
+    <string name="player_position">%1$s of %2$s</string>
+    <string name="record_fab">Record</string>
+    <string name="notes_check">Check</string>
+    <string name="menu_select">Select</string>
 </resources>

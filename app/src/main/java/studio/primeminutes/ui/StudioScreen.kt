@@ -133,6 +133,9 @@ import kotlinx.coroutines.delay
 import studio.primeminutes.ui.theme.LocalPrimeMinutesPalette
 import studio.primeminutes.ui.theme.PrimeMinutesPalette
 import studio.primeminutes.ui.theme.Spacing
+import studio.primeminutes.ui.theme.TypeRole
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.customActions
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -342,7 +345,12 @@ fun StudioScreen(
     // The query whose dense pass is still running: until it lands, an empty list means "searching",
     // not "no match" (the first query of a session also waits for the model to load).
     var densePending by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(entries) { LibrarySearch.refresh(context, entries) }
+    // The meta line's speaker dots read the search cache: re-read once a refresh has filled it.
+    var speakerTick by remember { mutableStateOf(0) }
+    LaunchedEffect(entries) { LibrarySearch.refresh(context, entries); speakerTick++ }
+    val speakerIdsOf = remember(entries, speakerTick) {
+        entries.associate { e -> e.id to (LibrarySearch.speakers(e)?.second?.sorted() ?: emptyList()) }
+    }
     LaunchedEffect(query, entries, searchModelReady) {
         val q = query.trim()
         if (q.isBlank()) { hits = emptyList(); densePending = null; return@LaunchedEffect }
@@ -431,18 +439,22 @@ fun StudioScreen(
                         if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
                     } else onRowTap(e, status)
                 },
-                onLongClick = {
-                    if (!selectionMode) { selectionMode = true; selected[e.id] = Unit }
-                },
+                // Redesign: no per-row ⋮ — long-press opens the row's actions (select is one of them).
+                onLongClick = { if (!selectionMode) actionsFor = e },
                 onManage = { actionsFor = e },
+                onRename = { renameFor = e },
+                onSelect = { selectionMode = true; selected[e.id] = Unit },
+                onDeleteAction = if (status != RowStatus.Processing) ({ requestDelete(e) }) else null,
+                speakers = speakerIdsOf[e.id].orEmpty(),
             )
         }
     }
 
     val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    var queueOpen by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().background(pal.Slate900Grad).statusBarsPadding().navigationBarsPadding()) {
     Column(
-        Modifier.fillMaxSize().background(pal.Slate900Grad).statusBarsPadding().navigationBarsPadding()
-            .nestedScroll(topBarScroll.nestedScrollConnection),
+        Modifier.fillMaxSize().nestedScroll(topBarScroll.nestedScrollConnection),
     ) {
         if (selectionMode) {
             SelectionHeader(
@@ -459,23 +471,33 @@ fun StudioScreen(
             )
         } else {
             // M3 top app bar: brand, Add, Settings; it slides away as the list scrolls up (enterAlways).
+            // Redesign: a large 「會議」 title; ＋ imports (file, podcast, YouTube); ⋮ holds Select and Settings.
+            var libMenu by remember { mutableStateOf(false) }
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.foundation.Image(
-                            androidx.compose.ui.res.painterResource(R.drawable.ic_brand), contentDescription = null,
-                            modifier = Modifier.size(32.dp),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            stringResource(R.string.app_name), maxLines = 1,
-                            style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
-                        )
-                    }
+                    Text(
+                        stringResource(R.string.library_title), maxLines = 1,
+                        style = TypeRole.largeTitle(), color = pal.Slate200,
+                        modifier = Modifier.semantics { heading() },
+                    )
                 },
                 actions = {
-                    IconButton(onClick = onImport) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Sky) }
-                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Tune, contentDescription = stringResource(R.string.cd_settings), tint = pal.Slate400) }
+                    IconButton(onClick = onImport) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_audio), tint = pal.Slate200) }
+                    Box {
+                        IconButton(onClick = { libMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more_options), tint = pal.Slate200) }
+                        androidx.compose.material3.DropdownMenu(expanded = libMenu, onDismissRequest = { libMenu = false }) {
+                            if (shown.isNotEmpty()) androidx.compose.material3.DropdownMenuItem(
+                                leadingIcon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(18.dp)) },
+                                text = { Text(stringResource(R.string.menu_select)) },
+                                onClick = { libMenu = false; selectionMode = true },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                leadingIcon = { Icon(Icons.Filled.Tune, null, Modifier.size(18.dp)) },
+                                text = { Text(stringResource(R.string.cd_settings)) },
+                                onClick = { libMenu = false; onSettings() },
+                            )
+                        }
+                    }
                 },
                 windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
@@ -505,7 +527,7 @@ fun StudioScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
+                                        modifier = Modifier.clip(CircleShape)
                                             .clickable { onAsk(query) }
                                             .semantics(mergeDescendants = true) { role = Role.Button }
                                             .heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
@@ -526,23 +548,12 @@ fun StudioScreen(
                     )
                 },
                 expanded = false, onExpandedChange = {},
-                colors = SearchBarDefaults.colors(containerColor = pal.PanelSurface),
+                colors = SearchBarDefaults.colors(containerColor = pal.Fill),
+                shape = CircleShape,
+                tonalElevation = 0.dp, shadowElevation = 0.dp,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter),
             ) {}
-            if (searching && !searchModelReady) {
-                // Lexical only until the model is there: say how to get the semantic pass.
-                val mb = studio.primeminutes.core.models.SizeFormat.bytes(EmbedRegistry.byId(EmbedRegistry.DEFAULT_ID).totalBytes)
-                val dl = searchDownload
-                Text(
-                    if (dl == null) stringResource(R.string.search_semantic_download, mb)
-                    else stringResource(R.string.search_semantic_downloading, (dl * 100).toInt()),
-                    color = pal.Sky, style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 6.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .clickable(enabled = dl == null, onClick = onDownloadSearchModel)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
+            // The semantic-search model download lives in Settings > Search (redesign).
 
             // An available app update — shown here on the home screen (where the user lands), not
             // only inside an open session. Renders nothing when there's no update / it's dismissed.
@@ -608,12 +619,18 @@ fun StudioScreen(
                 }
             }
 
-            // While recording, the big bottom button already says so (and returns to the booth).
-            if (foregroundRun && !isRecording && entries.none { it.id == foregroundId }) {
-                Banner(
-                    icon = Icons.Filled.PlaylistPlay, tint = pal.Sky,
-                    text = stringResource(R.string.studio_processing_banner, foregroundLabel.ifBlank { stringResource(R.string.status_processing) }),
-                    onClick = onResumeSession,
+            // The queue as one slim bar (count, current step, progress); tap: the full queue. The screen's
+            // own run over something not in the library (a fresh import) shows here too and returns to it.
+            val queueCount = queuedIds.size + (if (processingId != null && processingId !in queuedIds) 1 else 0)
+            val ownRun = foregroundRun && !isRecording && entries.none { it.id == foregroundId }
+            if (queueCount > 0 || ownRun) {
+                QueueBar(
+                    title = if (queueCount > 0) stringResource(R.string.queue_title) + " · " + stringResource(R.string.queue_bar_count, queueCount)
+                        else stringResource(R.string.studio_processing_banner, foregroundLabel.ifBlank { stringResource(R.string.status_processing) }),
+                    step = if (queueCount > 0) processingLabel else "",
+                    fraction = if (queueCount > 0) processingFraction else foregroundFraction,
+                    active = processingId != null || ownRun,
+                    onClick = { if (queueCount > 0) queueOpen = true else onResumeSession() },
                 )
             }
         }
@@ -690,8 +707,8 @@ fun StudioScreen(
         } else {
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 10.dp, bottom = 8.dp),
+                // Hairline-separated rows (no cards); the bottom pad clears the record FAB.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 120.dp),
             ) {
                 if (searching) items(shownHits, key = { it.entry.id }, contentType = { "hit" }) { h ->
                     val e = h.entry
@@ -708,8 +725,12 @@ fun StudioScreen(
                                     if (e.id in selected) selected.remove(e.id) else selected[e.id] = Unit
                                 } else onRowTap(e, status)
                             },
-                            onLongClick = { if (!selectionMode) { selectionMode = true; selected[e.id] = Unit } },
+                            onLongClick = { if (!selectionMode) actionsFor = e },
                             onManage = { actionsFor = e },
+                            onRename = { renameFor = e },
+                            onSelect = { selectionMode = true; selected[e.id] = Unit },
+                            onDeleteAction = if (status != RowStatus.Processing) ({ requestDelete(e) }) else null,
+                            speakers = speakerIdsOf[e.id].orEmpty(),
                         )
                         }
                         if (status == RowStatus.Done) h.passages.forEach { p ->
@@ -727,9 +748,9 @@ fun StudioScreen(
                     stickyHeader(key = "day-$day", contentType = "header") {
                         Text(
                             dayLabel(day, today, yesterday),
-                            style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                            color = pal.Slate200, letterSpacing = TextUnit(1f, TextUnitType.Sp),
-                            modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad).padding(start = Gutter, top = Spacing.md, bottom = Spacing.xs),
+                            style = TypeRole.groupHeader(), color = pal.Ink3,
+                            modifier = Modifier.fillMaxWidth().background(pal.Slate900Grad).padding(start = Gutter, top = Spacing.lg, bottom = Spacing.xs)
+                                .semantics { heading() },
                         )
                     }
                     items(list, key = { it.id }, contentType = { "row" }) { e -> libraryRow(e) }
@@ -737,37 +758,86 @@ fun StudioScreen(
             }
         }
 
-        // Pinned actions (hidden during selection — the contextual header owns Delete there).
+    }
+        // Redesign: the record button is a red round FAB on a fade (it also returns to a running capture).
         if (!selectionMode) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 10.dp)) {
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(pal.Slate900.copy(alpha = 0f), pal.Slate900, pal.Slate900)))
+                    .padding(top = Spacing.xl, bottom = Spacing.sm),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 if (pendingCount > 0) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(MaterialTheme.shapes.medium)
-                            .clickable(role = Role.Button, onClick = onProcessAll).padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        modifier = Modifier.heightIn(min = 48.dp).clip(CircleShape)
+                            .clickable(role = Role.Button, onClick = onProcessAll).padding(horizontal = Spacing.md, vertical = Spacing.xs),
                     ) {
                         Icon(Icons.Filled.PlaylistPlay, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(R.string.source_process_all, pendingCount), color = pal.Sky, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Spacer(Modifier.height(Spacing.xs))
                 }
-                Button(
+                val recLabel = stringResource(if (isRecording) R.string.studio_return_capture else R.string.record_fab)
+                androidx.compose.material3.Surface(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (isRecording) onResumeCapture() else onRecord()
                     },
-                    shape = MaterialTheme.shapes.large,
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isRecording) PrimeMinutesPalette.Red else pal.Sky),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    shape = CircleShape, color = pal.Record,
+                    shadowElevation = if (pal.isEink) 0.dp else 3.dp,
+                    modifier = Modifier.size(72.dp).semantics { contentDescription = recLabel }.testTag("record-fab"),
                 ) {
-                    Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(Spacing.sm))
-                    Text(
-                        stringResource(if (isRecording) R.string.studio_return_capture else R.string.source_record),
-                        fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        // A white dot (record) or a white square (a capture is running: back to it).
+                        if (isRecording) Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(Color.White))
+                        else Box(Modifier.size(26.dp).clip(CircleShape).background(Color.White))
+                    }
                 }
+                Text(
+                    if (isRecording) fmtRec(recSeconds) else recLabel,
+                    style = TypeRole.meta(), color = if (isRecording) pal.Record else pal.Slate400,
+                    modifier = Modifier.padding(top = Spacing.xs).clearAndSetSemantics {},
+                )
+            }
+        }
+    }
+
+    // --- The full queue: what is processing, what waits, and what can be done about each ---
+    if (queueOpen) {
+        val q = entries.filter { it.id == processingId || it.id in queuedIds }
+            .sortedBy { if (it.id == processingId) 0 else 1 }
+        ModalBottomSheet(onDismissRequest = { queueOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = pal.Slate800) {
+            Column(Modifier.fillMaxWidth().padding(bottom = Spacing.xxl)) {
+                Text(stringResource(R.string.queue_title), style = MaterialTheme.typography.titleMedium, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm).semantics { heading() })
+                q.forEachIndexed { i, e ->
+                    if (i > 0) androidx.compose.material3.HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(horizontal = Spacing.lg))
+                    val live = e.id == processingId
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .then(if (live) Modifier.clickable(role = Role.Button) { queueOpen = false; onWatchLive(e) } else Modifier)
+                            .padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(e.title ?: SessionLibrary.defaultTitle(e.createdAt, uiLocale), style = TypeRole.rowTitle(), color = pal.Slate200,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (live && processingLabel.isNotBlank()) Text(processingLabel, style = TypeRole.meta(), color = pal.Slate400, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (live) {
+                            TextButton(onClick = { queueOpen = false; onWatchLive(e) }) { Text(stringResource(R.string.action_watch_live), color = pal.Sky) }
+                            IconButton(onClick = { onStopProcessing() }) { Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.action_stop_processing), tint = pal.Record) }
+                        } else {
+                            if (processingId == null) IconButton(onClick = { queueOpen = false; onProcessNow(e) }) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.action_process_now), tint = pal.Sky)
+                            }
+                            IconButton(onClick = { onRemoveFromQueue(e) }) {
+                                Icon(Icons.Filled.RemoveCircleOutline, contentDescription = stringResource(R.string.action_remove_from_queue), tint = pal.Slate400)
+                            }
+                        }
+                    }
+                }
+                if (pendingCount > 0) ActionRow(Icons.Filled.PlaylistPlay, stringResource(R.string.source_process_all, pendingCount)) { queueOpen = false; onProcessAll() }
             }
         }
     }
@@ -958,7 +1028,12 @@ private fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> 
     }
 }
 
-/** One shelf row. Status is carried by a distinct glyph SHAPE (+ color), so it reads on e-ink. */
+/**
+ * One library row (redesign): title (2 lines max) over a meta line — time · length · speaker dots ·
+ * count — with hairline separators, no card and no ⋮. A status pill appears only while the row is
+ * not done. Long-press opens its actions, an end-to-start swipe deletes; TalkBack gets every action
+ * as a custom action (rename, select, delete, more).
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionRow(
@@ -971,20 +1046,15 @@ private fun SessionRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onManage: () -> Unit,
+    onRename: () -> Unit = {},
+    onSelect: () -> Unit = {},
+    onDeleteAction: (() -> Unit)? = null,
+    speakers: List<Int> = emptyList(),
 ) {
     val pal = LocalPrimeMinutesPalette.current
     val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val processing = status == RowStatus.Processing
     val downloading = status == RowStatus.Downloading
-    val statusColor = when (status) {
-        RowStatus.Processing, RowStatus.Queued -> PrimeMinutesPalette.Warning
-        RowStatus.Done -> PrimeMinutesPalette.Success
-        RowStatus.New, RowStatus.NoSpeech -> pal.Slate400
-        RowStatus.Downloading -> pal.Sky
-        RowStatus.DownloadFailed -> PrimeMinutesPalette.Red
-    }
-    // Screen-reader description: status is otherwise carried only by a glyph shape + color, invisible
-    // to TalkBack. Announce "<title>, <status>"; selection is exposed as the semantic selected state.
     val statusLabel = stringResource(when (status) {
         RowStatus.New -> R.string.cd_status_new
         RowStatus.Queued -> R.string.cd_status_queued
@@ -994,110 +1064,161 @@ private fun SessionRow(
         RowStatus.Downloading -> R.string.cd_status_downloading
         RowStatus.DownloadFailed -> R.string.cd_status_download_failed
     })
+    val pct = (processingFraction * 100).toInt()
+    // The pill: text always (never colour alone); none once the row is done.
+    val pill: Pair<String, Color>? = when (status) {
+        RowStatus.Done -> null
+        RowStatus.Queued -> stringResource(R.string.pill_queued) to pal.Slate400
+        RowStatus.Processing -> (if (pct > 0) stringResource(R.string.pill_processing, pct) else stringResource(R.string.pill_working)) to PrimeMinutesPalette.Success
+        RowStatus.Downloading -> (if (pct > 0) stringResource(R.string.pill_downloading, pct) else statusLabel) to pal.Sky
+        RowStatus.DownloadFailed -> stringResource(R.string.pill_failed) to pal.ErrorText
+        RowStatus.NoSpeech -> stringResource(R.string.pill_no_speech) to pal.Slate400
+        RowStatus.New -> stringResource(if (entry.sourceOnly) R.string.pill_ready else R.string.pill_new) to pal.WarningText
+    }
     val src = entry.source
     val podcast = entry.category == studio.primeminutes.core.library.Provenance.Category.PODCAST
     val received = entry.category == studio.primeminutes.core.library.Provenance.Category.RECEIVED
     val channel = src?.channelTitle?.takeIf { podcast }
     val receivedLabel = stringResource(R.string.label_received)
-    // "<title>, <channel>, <status>[, Received]": the artwork is decorative, the channel is said.
-    val rowDesc = listOfNotNull(entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale), channel, statusLabel,
-        receivedLabel.takeIf { received }).joinToString(", ")
-    val longLabel = stringResource(R.string.cd_start_selection)
+    val title = entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale)
+    val speakersLabel = if (speakers.isNotEmpty()) stringResource(R.string.speakers_count, speakers.size) else null
+    val rowDesc = listOfNotNull(title, channel, statusLabel, speakersLabel, receivedLabel.takeIf { received }).joinToString(", ")
+    val longLabel = stringResource(R.string.action_more)
+    val renameLabel = stringResource(R.string.action_rename)
+    val selectLabel = stringResource(R.string.action_select)
+    val deleteLabel = stringResource(R.string.action_delete)
     val isSelected = selected
     Column(
         Modifier
-            .fillMaxWidth().padding(horizontal = Gutter)
-            .clip(MaterialTheme.shapes.large)
-            .background(if (selected) pal.ActiveTint else pal.PanelSurface)
-            .border(1.dp, if (selected) pal.Sky else pal.Hairline, MaterialTheme.shapes.large)
-            // Long-press is the only way into selection mode, so TalkBack has to name it; without a
-            // label the screen reader announces the row and nothing about the second gesture.
+            .fillMaxWidth()
+            .background(if (selected) pal.ActiveTint else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = longLabel)
             .semantics(mergeDescendants = true) {
                 contentDescription = rowDesc
                 if (selectionMode) this.selected = isSelected
-            }
-            .padding(horizontal = Spacing.md, vertical = Spacing.md),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Leading glyph doubles as the selection checkbox in selection mode (same 36dp footprint,
-            // no layout shift). Status is encoded by SHAPE, not just color, so it reads on e-ink.
-            when {
-                selectionMode && selected -> GlyphTile(pal.Sky, filled = true) { Icon(Icons.Filled.CheckCircle, null, tint = pal.OnSky, modifier = Modifier.size(20.dp)) }   // OnSky: white on the dark theme's light-blue accent was ~2.6:1
-                selectionMode -> GlyphTile(pal.Slate400, outlined = true) {}
-                // A podcast episode: its channel's artwork, the status glyph as a corner badge (same shapes).
-                podcast -> Box(Modifier.size(36.dp)) {
-                    studio.primeminutes.ui.components.ChannelArtwork(
-                        studio.primeminutes.online.ArtworkCache.keyOf(src?.seriesId, src?.artworkUrl), src?.artworkUrl, 36.dp)
-                    Box(
-                        Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(18.dp).clip(CircleShape)
-                            .background(pal.PanelSurface).padding(1.dp).clip(CircleShape).background(statusColor.copy(alpha = 0.22f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (status == RowStatus.Processing) Icon(Icons.Filled.GraphicEq, null, tint = statusColor, modifier = Modifier.size(12.dp))
-                        else Icon(statusIcon(status), null, tint = statusColor, modifier = Modifier.size(12.dp))
-                    }
-                }
-                status == RowStatus.Processing -> GlyphTile(statusColor) { WaveBars(statusColor) }
-                else -> GlyphTile(statusColor, outlined = status == RowStatus.New) {
-                    Icon(statusIcon(status), contentDescription = null, tint = statusColor, modifier = Modifier.size(20.dp))
-                }
-            }
-            Spacer(Modifier.width(Spacing.md))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    entry.title ?: SessionLibrary.defaultTitle(entry.createdAt, uiLocale),
-                    color = pal.Slate200, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                // The per-row ⋮ is gone: every action stays one TalkBack gesture away.
+                if (!selectionMode) customActions = listOfNotNull(
+                    androidx.compose.ui.semantics.CustomAccessibilityAction(renameLabel) { onRename(); true },
+                    androidx.compose.ui.semantics.CustomAccessibilityAction(selectLabel) { onSelect(); true },
+                    onDeleteAction?.let { d -> androidx.compose.ui.semantics.CustomAccessibilityAction(deleteLabel) { d(); true } },
+                    androidx.compose.ui.semantics.CustomAccessibilityAction(longLabel) { onManage(); true },
                 )
-                val meta = buildString {
-                    // A podcast episode: "Channel · date · length" (its publication date when known).
-                    if (podcast) {
-                        channel?.let { append(it); append(" · ") }
-                        append(DATE_FMT.format(Date(src?.published?.takeIf { it > 0 }?.times(1000) ?: entry.createdAt)))
-                    } else append(TIME_FMT.format(Date(entry.createdAt)))
-                    // A download item has no length yet (or only the feed's): its state says more.
-                    if (entry.durationSec > 0 || entry.download == null) {
-                        append(" · ")
-                        append(studio.primeminutes.fmtSec(entry.durationSec))
-                    }
-                    if (processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
-                    if (status == RowStatus.NoSpeech && entry.title != statusLabel) { append(" · "); append(statusLabel) }
+            }
+            .padding(horizontal = Gutter),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = Spacing.md)) {
+            when {
+                selectionMode -> {
+                    Box(
+                        Modifier.size(24.dp).clip(CircleShape)
+                            .background(if (selected) pal.Sky else Color.Transparent)
+                            .border(1.5.dp, if (selected) pal.Sky else pal.Slate600, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { if (selected) Icon(Icons.Filled.Check, null, tint = pal.OnSky, modifier = Modifier.size(16.dp)) }
+                    Spacer(Modifier.width(Spacing.md))
                 }
-                Text(meta, color = if (status == RowStatus.DownloadFailed) PrimeMinutesPalette.Red else pal.Slate400,
-                    style = MaterialTheme.typography.labelMedium, maxLines = if (status == RowStatus.DownloadFailed || podcast) 2 else 1, overflow = TextOverflow.Ellipsis)
-                // Received from someone (a .pmin / shared meeting): a label with an icon, never a colour alone.
+                // A podcast episode keeps its channel's cover.
+                podcast -> {
+                    studio.primeminutes.ui.components.ChannelArtwork(
+                        studio.primeminutes.online.ArtworkCache.keyOf(src?.seriesId, src?.artworkUrl), src?.artworkUrl, 40.dp)
+                    Spacer(Modifier.width(Spacing.md))
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, color = pal.Slate200, style = TypeRole.rowTitle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val meta = buildString {
+                        if (podcast) {
+                            channel?.let { append(it); append(" · ") }
+                            append(DATE_FMT.format(Date(src?.published?.takeIf { it > 0 }?.times(1000) ?: entry.createdAt)))
+                        } else append(TIME_FMT.format(Date(entry.createdAt)))
+                        if (entry.durationSec > 0 || entry.download == null) {
+                            append(" · ")
+                            append(studio.primeminutes.fmtSec(entry.durationSec))
+                        }
+                        if (status == RowStatus.DownloadFailed && processingLabel.isNotBlank()) { append(" · "); append(processingLabel) }
+                    }
+                    Text(meta, color = if (status == RowStatus.DownloadFailed) pal.ErrorText else pal.Slate400,
+                        style = TypeRole.meta(), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (speakers.isNotEmpty()) {
+                        Text("  ·  ", color = pal.Slate400, style = TypeRole.meta())
+                        SpeakerDots(speakers)
+                        Text(" " + speakersLabel, color = pal.Slate400, style = TypeRole.meta(), maxLines = 1)
+                    }
+                }
                 if (received) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                     Icon(Icons.Filled.MoveToInbox, contentDescription = null, tint = pal.Sky, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(receivedLabel, color = pal.Sky, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(receivedLabel, color = pal.Sky, style = TypeRole.meta(), fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
-            // In selection mode the leading glyph IS the checkbox, so no trailing control.
-            if (!selectionMode) {
-                // Summarizing reports no fraction (the reader works in windows): no "0 %" chip then.
-                if (processing) { if (processingFraction > 0f) Chip("%d%%".format((processingFraction * 100).toInt()), PrimeMinutesPalette.Warning) }
-                // Visible manage affordance for EVERY non-processing row (no hidden long-press-only menu).
-                else IconButton(onClick = onManage, modifier = Modifier.size(48.dp).offset(x = 8.dp)) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_manage), tint = pal.Slate400)
-                }
+            if (pill != null && !selectionMode) {
+                Spacer(Modifier.width(Spacing.sm))
+                StatusPill(pill.first, pill.second)
             }
         }
-        if (downloading) {
-            val barMod = Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(2.dp))
-            if (processingFraction > 0f || pal.isEink) LinearProgressIndicator(
-                progress = { processingFraction }, color = pal.Sky, trackColor = pal.Slate700, modifier = barMod,
+        if ((downloading || processing) && (processingFraction > 0f || pal.isEink)) {
+            LinearProgressIndicator(
+                progress = { processingFraction }, color = if (processing) PrimeMinutesPalette.Success else pal.Sky, trackColor = pal.Slate700,
+                modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.sm).height(3.dp).clip(RoundedCornerShape(2.dp)),
             )
         }
-        if (processing) {
-            val barMod = Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(2.dp))
-            // No fraction (summarizing) → indeterminate bar instead of an empty one that looks stuck;
-            // e-ink keeps a static bar (an endless animation repaints the panel).
-            if (processingFraction > 0f || pal.isEink) LinearProgressIndicator(
-                progress = { processingFraction }, color = PrimeMinutesPalette.Warning, trackColor = pal.Slate700, modifier = barMod,
-            ) else LinearProgressIndicator(color = PrimeMinutesPalette.Warning, trackColor = pal.Slate700, modifier = barMod)
+        androidx.compose.material3.HorizontalDivider(color = pal.Hairline, thickness = 1.dp)
+    }
+}
+
+/** Up to four speaker dots in their tints (identity is also said in words next to them). */
+@Composable
+private fun SpeakerDots(ids: List<Int>) {
+    val pal = LocalPrimeMinutesPalette.current
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        ids.take(4).forEach { id ->
+            Box(Modifier.size(width = 9.dp, height = 7.dp).clip(RoundedCornerShape(2.dp))
+                .background(Color(studio.primeminutes.data.speakerColorOn(id, pal.isDark))))
         }
     }
 }
+
+/** A 22 dp status pill: tinted fill, text in the hue (≥ 4.5:1). */
+@Composable
+internal fun StatusPill(text: String, color: Color) {
+    Text(
+        text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1,
+        modifier = Modifier.heightIn(min = 22.dp).clip(CircleShape).background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 9.dp, vertical = 3.dp),
+    )
+}
+
+/** The queue as one grouped block: dot · title · chevron, a thin progress line, the current step. */
+@Composable
+private fun QueueBar(title: String, step: String, fraction: Float, active: Boolean, onClick: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Column(
+        Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = Spacing.sm)
+            .clip(MaterialTheme.shapes.large).background(pal.Fill)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.queue_open), onClick = onClick)
+            .testTag("queue-bar")
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (active) PrimeMinutesPalette.Success else pal.Slate400))
+            Spacer(Modifier.width(Spacing.sm))
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = pal.Slate200,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Slate400)
+        }
+        if (active) {
+            val bar = Modifier.fillMaxWidth().padding(top = Spacing.sm).height(3.dp).clip(RoundedCornerShape(2.dp))
+            if (fraction > 0f || pal.isEink) LinearProgressIndicator(progress = { fraction }, color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
+            else LinearProgressIndicator(color = PrimeMinutesPalette.Success, trackColor = pal.Slate700, modifier = bar)
+        }
+        if (step.isNotBlank()) Text(step, style = TypeRole.meta(), color = pal.Slate400, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = Spacing.xs))
+    }
+}
+
+private fun fmtRec(sec: Int) = "%d:%02d".format(sec / 60, sec % 60)
 
 private fun statusIcon(status: RowStatus): ImageVector = when (status) {
     RowStatus.Done -> Icons.Filled.CheckCircle
@@ -1159,25 +1280,23 @@ private fun WaveBars(color: Color) {
 
 @Composable
 private fun FilterChip(label: String, on: Boolean, onClick: () -> Unit) {
-    // The M3 FilterChip (selected checkmark, tonal fill, 48 dp touch target) instead of a styled Text.
+    // Redesign chip: a 30 dp pill (48 dp target) — ink-filled when on, a hairline outline when off.
     val pal = LocalPrimeMinutesPalette.current
-    androidx.compose.material3.FilterChip(
-        selected = on,
-        onClick = onClick,
-        label = { Text(label, style = MaterialTheme.typography.labelLarge) },
-        leadingIcon = if (on) {
-            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }
-        } else null,
-        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-            labelColor = pal.Slate400,
-            selectedContainerColor = pal.Sky.copy(alpha = 0.18f),
-            selectedLabelColor = pal.Sky,
-            selectedLeadingIconColor = pal.Sky,
-        ),
-        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
-            enabled = true, selected = on, borderColor = pal.Hairline, selectedBorderColor = Color.Transparent,
-        ),
-    )
+    Box(
+        Modifier.heightIn(min = 48.dp).semantics { selected = on; role = Role.Tab }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (on) pal.Slate900 else pal.Slate400,
+            modifier = Modifier.heightIn(min = 30.dp).clip(CircleShape)
+                .background(if (on) pal.Slate200 else Color.Transparent)
+                .border(1.dp, if (on) pal.Slate200 else pal.Hairline, CircleShape)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
 }
 
 @Composable
