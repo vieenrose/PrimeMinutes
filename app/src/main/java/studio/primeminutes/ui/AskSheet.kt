@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -228,16 +229,22 @@ fun AskSheet(
                     if (n == history.size && history.isNotEmpty()) androidx.compose.material3.HorizontalDivider(
                         Modifier.padding(top = Spacing.md), color = pal.Hairline,
                     )
-                    Text(
-                        t.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                        color = pal.Slate200, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
-                    )
+                    // Redesign: the question is a right-aligned bubble (fill, 16 dp, tail corner 4 dp); the answer reads
+                    // as prose under it, full width, with the summary's citation pills.
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                        Text(
+                            t.question, style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
+                            modifier = Modifier.fillMaxWidth(0.82f).wrapContentWidth(Alignment.End)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp))
+                                .background(pal.Fill).padding(horizontal = 14.dp, vertical = 10.dp).testTag("ask-question-bubble"),
+                        )
+                    }
                     // Selectable (long-press, then copy) like iOS's `.textSelection`; a tap on a citation still opens it.
                     if (t.answer.isNotBlank()) androidx.compose.foundation.text.selection.SelectionContainer {
                         Text(
                             answerText(gen(t.answer), t.pool, pal.Sky, onOpenAt, withTitle = scope == null, title = gen,
                                 speakerN = { n -> ctx.getString(R.string.speaker_n, n) }),
-                            style = MaterialTheme.typography.bodyMedium, color = pal.Slate200,
+                            style = studio.primeminutes.ui.theme.TypeRole.readingBody(), color = pal.Slate200,
                         )
                     }
                     if (t.done && t.excerpts.isNotEmpty()) {
