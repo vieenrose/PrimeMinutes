@@ -49,7 +49,9 @@ object ProcessingQueue {
         val f = file(context)
         if (!f.exists()) return emptyList()
         return runCatching {
-            val arr = JSONObject(f.readText()).getJSONArray("ids")
+            val text = f.readText().trim()
+            // A bare array (or an empty file) is the same list without its wrapper: accept it silently.
+            val arr = if (text.isEmpty()) JSONArray() else if (text.startsWith("[")) JSONArray(text) else JSONObject(text).getJSONArray("ids")
             (0 until arr.length()).map { arr.getString(it) }
         }.onFailure { Log.w(TAG, "corrupt queue file, discarding", it) }
             .getOrElse { runCatching { f.delete() }; emptyList() }
