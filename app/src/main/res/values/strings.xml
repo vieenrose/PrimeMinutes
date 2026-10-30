@@ -764,6 +764,7 @@
         <item quantity="other">%d new episodes</item>
     </plurals>
     <!-- Redesign 2026-10 -->
+    <string name="cd_edit_summary">Edit summary</string>
     <string name="library_title">Meetings</string>
     <string name="tab_notes">Notes %1$d</string>
     <string name="tab_notes_plain">Notes</string>

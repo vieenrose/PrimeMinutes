@@ -806,9 +806,13 @@ private fun TranscribeScreen(
             Spacer(Modifier.height(Spacing.sm))
         }
     }
-    // Session tabs (portrait): 0 = Summary, 1 = Transcript. Each session opens on Summary when one
-    // exists, else on the (possibly still streaming) Transcript.
-    var sessTab by remember { mutableIntStateOf(1) }
+    // Session tabs (portrait, redesign segmented): 0 = Summary, 1 = Notes, 2 = Transcript. Each session
+    // opens on Summary when one exists, else on the (possibly still streaming) Transcript.
+    var sessTab by remember { mutableIntStateOf(2) }
+    /** The Agent panel as a sheet ("看過程" on the summary's AI status line). */
+    var agentSheet by remember { mutableStateOf(false) }
+    var playerExpanded by remember { mutableStateOf(false) }
+    var playbackSpeed by remember { mutableStateOf(1f) }
     // Title changes — the LLM title arriving OR a user edit — propagate to the library entry's meta +
     // its home-screen row, so the auto-saved name upgrades to the real title automatically.
     LaunchedEffect(s.title, s.libraryDir) {
@@ -1275,7 +1279,7 @@ private fun TranscribeScreen(
         } else i
     } }
 
-    LaunchedEffect(s.sessionGen) { sessTab = if (s.summary != null) 0 else 1 }
+    LaunchedEffect(s.sessionGen) { sessTab = if (s.summary != null) 0 else 2 }
     val utterances = s.utterances
     val stats = computeDiarizationStats(utterances)
     // Landscape uses a two-pane layout: title/summary/stats move to a left overview pane.
@@ -1333,7 +1337,7 @@ private fun TranscribeScreen(
     var devSearchAsked by remember { mutableStateOf(false) }
     if (devExtras?.getString("vox_msearch") != null && !devSearchAsked) LaunchedEffect(s.utterances.size) {
         if (s.utterances.isEmpty()) return@LaunchedEffect
-        delay(1_500); devSearchAsked = true; sessTab = 1
+        delay(1_500); devSearchAsked = true; sessTab = 2
         semanticSearch = devExtras.getBoolean("vox_sem"); vm.setSearch(true, devExtras.getString("vox_msearch")!!)
     }
     // The search model's cold load was most of an in-meeting Ask's retrieval (3.8–5.7 s of ~4–6 s on the
@@ -1356,7 +1360,7 @@ private fun TranscribeScreen(
         if (s.opening || !s.transcriptReady || s.utterances.isEmpty()) return@LaunchedEffect
         pendingSeekSec = null
         val idx = studio.primeminutes.core.embed.MeetingSearch.lineAt(s.utterances, t).coerceAtLeast(0)
-        sessTab = 1
+        sessTab = 2
         // The transcript list is composed only once its tab shows: an animated scroll issued before its
         // first layout did nothing, so the meeting opened at 0:00. Wait for the items, then jump.
         kotlinx.coroutines.withTimeoutOrNull(3_000) {
@@ -1478,6 +1482,16 @@ private fun TranscribeScreen(
     val dlEntry by produceState<SessionLibrary.Entry?>(null, s.downloadEntryId, dlChangesNow) {
         value = s.downloadEntryId?.let { id -> withContext(Dispatchers.IO) { SessionLibrary.byId(context, id) } }
     }
+    val noteGroupsNow = noteGroups(s.meetingNotes, s.actionItems.takeIf { s.config.showActionItems })
+    val noteCount = noteGroupsNow.sumOf { it.lines.size }
+    val copySummaryHaptic = LocalHapticFeedback.current
+    fun copySummary() {
+        val sm = s.summary ?: return
+        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes summary", refs(sm)))
+        copySummaryHaptic.confirm()
+        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.summary_copied)) }
+    }
     val summaryCards: @Composable () -> Unit = {
         CompositionLocalProvider(
             studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t },
@@ -1494,9 +1508,11 @@ private fun TranscribeScreen(
             }
             // The reading agent at work (live during recording/processing; stays after as a log).
             val shownAgent = if (s.watchingQueue) queueAgent else agent
-            if (shownAgent.active) SectionCard {
-                studio.primeminutes.ui.AgentPanel(shownAgent, anchorSeek)
-            }
+            // Redesign: one line for the reader; 看過程 opens the full Agent panel in a sheet.
+            if (shownAgent.active || s.summary != null) AgentStatusLine(
+                running = s.running, noteCount = noteCount,
+                onOpen = if (shownAgent.active) ({ agentSheet = true }) else null,
+            )
             // Portrait: the title is in the top bar; the card only appears to edit it.
             s.title?.takeIf { twoPane || s.editingTitle }?.let { t ->
                 TitleCard(t, llmDisplay, s.editingTitle,
@@ -1508,41 +1524,11 @@ private fun TranscribeScreen(
             // is provably in the clipboard gets a light tap (iOS pairs the same moment with haptics).
             val copyHaptic = LocalHapticFeedback.current
             s.summary?.let { sm ->
-                SummaryCard(sm, llmDisplay, s.editingSummary,
-                    onBeginEdit = { vm.editSummary(true) },
-                    onSave = { vm.saveSummary(it) },
-                    onCancel = { vm.editSummary(false) },
-                    onCopy = {
-                        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
-                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes summary", refs(sm)))
-                        copyHaptic.confirm()
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.summary_copied)) }
-                    },
-                    onSeek = anchorSeek, showHeading = twoPane)
+                if (s.editingSummary) UtteranceTextEditor(initial = sm, onSave = { vm.saveSummary(it) }, onCancel = { vm.editSummary(false) }, minLines = 4)
+                else SummaryProse(studio.primeminutes.ui.LocalSpeakerRefs.current(sm), anchorSeek)
             }
-            // Action items: a short follow-up section under the summary (experimental, opt-in).
-            val hasActions = s.actionItems?.trim()?.let { it.isNotEmpty() && it != "-" } == true
-            if (s.config.showActionItems && (hasActions || s.editingActions)) s.actionItems?.let { ai ->
-                ActionItemsCard(ai, s.editingActions,
-                    onBeginEdit = { vm.editActions(true) },
-                    onSave = { vm.saveActions(it) },
-                    onCancel = { vm.editActions(false) },
-                    onCopy = {
-                        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
-                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Prime Minutes action items", refs(ai)))
-                        copyHaptic.confirm()
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.action_items_copied)) }
-                    },
-                    onSeek = anchorSeek)
-            }
-            // Sections the v2 NOTES format adds; rendered only when non-empty.
-            s.meetingNotes?.let { n ->
-                NotesSection(stringResource(R.string.notes_decisions), n.decisions, anchorSeek)
-                NotesSection(stringResource(R.string.notes_open), n.open, anchorSeek)
-                NotesSection(stringResource(R.string.notes_topics), n.topics, anchorSeek)
-                // Keys a future model version adds: shown rather than silently dropped.
-                n.extra.forEach { (key, lines) -> NotesSection(key, lines, anchorSeek) }
-            }
+            // Landscape has no segmented control: the notes follow the summary in its overview pane.
+            if (twoPane) NotesTab(noteGroupsNow, anchorSeek)
             if (stats.perSpeaker.isNotEmpty()) SectionCard {
                 SpeakerStatsPanel(stats = stats, label = { sid ->
                     s.speakerNames[sid]?.name ?: stringResource(R.string.speaker_n, sid + 1)
@@ -1917,6 +1903,16 @@ private fun TranscribeScreen(
             }
         }
         Screen.Session -> {
+    if (agentSheet) androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = { agentSheet = false },
+        containerColor = pal.PanelSurface,
+    ) {
+        CompositionLocalProvider(studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t }) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                studio.primeminutes.ui.AgentPanel(if (s.watchingQueue) queueAgent else agent, if (s.audioUri != null) ({ ms -> agentSheet = false; seekAndPlay(ms) }) else null)
+            }
+        }
+    }
     val sessionBarScroll = androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         modifier = Modifier.fillMaxSize().background(pal.Slate900Grad)
@@ -1965,7 +1961,7 @@ private fun TranscribeScreen(
                 canResume = !s.running && resumableEntry != null,
                 onResume = { resumableEntry?.let { vm.resumeEntry(it) } },
                 onSearch = {
-                    sessTab = 1
+                    sessTab = 2
                     val on = !vm.now.searchActive
                     vm.setSearch(on, if (on) vm.now.searchQuery else "")
                 },
@@ -1974,6 +1970,12 @@ private fun TranscribeScreen(
                 onAskMeeting = if (askMeetingAvailable) ({ askMeeting = "" }) else null,
                 onShare = s.libraryDir?.takeIf { !s.running }?.let { d -> { SessionLibrary.byId(context, d.name)?.let { openShare(it) } ?: vm.notify(context.getString(R.string.session_share_failed)) } },
                 scrollBehavior = sessionBarScroll,
+                // Redesign: the title sits in the content header (portrait); ⋯ gains rename, copy/edit summary, delete.
+                showTitle = twoPane,
+                onRename = if (!s.title.isNullOrBlank() && !s.running) ({ vm.editTitle(true) }) else null,
+                onCopySummary = if (s.summary != null && !s.editingSummary) ({ copySummary() }) else null,
+                onEditSummary = if (s.summary != null && !s.running && !s.editingSummary) ({ sessTab = 0; vm.editSummary(true) }) else null,
+                onDelete = meetingEntry?.takeIf { !s.running }?.let { e -> { vm.deleteEntries(listOf(e)); vm.leaveToStudio() } },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1986,47 +1988,60 @@ private fun TranscribeScreen(
                     positionMs = ms.coerceIn(0, durationMs)
                     resumeOrRecover(positionMs)
                 }
-                // An M3 bottom-bar surface: rounded top edge, tonal + shadow lift over the
-                // transcript (a hairline instead on e-ink, where a shadow greys out).
+                // Redesign: a flat bar with a hairline on top — compact (play, speaker-lane scrubber, time,
+                // speed) and expandable to the full controls (±5 s, volume).
+                LaunchedEffect(playbackSpeed, isPlaying, player) {
+                    // setPlaybackParams starts a paused MediaPlayer: only applied while it plays.
+                    if (isPlaying) player?.let { p -> runCatching { p.playbackParams = p.playbackParams.setSpeed(playbackSpeed) } }
+                }
                 Surface(
-                    color = pal.PanelSurface, tonalElevation = 3.dp,
-                    shadowElevation = if (pal.isEink || pal.isDark) 0.dp else 6.dp,
-                    shape = RoundedCornerShape(topStart = Radius.Sheet, topEnd = Radius.Sheet),
-                    border = if (pal.isEink || pal.isDark) BorderStroke(1.dp, pal.Hairline) else null,
+                    color = pal.Slate900, tonalElevation = 0.dp, shadowElevation = 0.dp,
                     modifier = Modifier.onGloballyPositioned { playerBarPx = it.size.height },
                 ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = Spacing.lg),
-                    ) {
-                        PlayerBar(
-                            utterances = utterances,
-                            positionMs = positionMs,
-                            durationMs = durationMs,
-                            dragMs = dragMs,
-                            isPlaying = isPlaying,
-                            volume = volume,
-                            muted = muted,
-                            activeIndex = activeIndex,
-                            onPlayPause = {
-                                val p = player ?: return@PlayerBar
-                                if (isPlaying) { runCatching { p.pause() }; isPlaying = false; buffering = false }
-                                else resumeOrRecover(null)
-                            },
-                            onSeekTo = { doSeek(it) },
-                            onDragChange = { dragMs = it },
-                            onSkip = { delta -> doSeek((dragMs ?: positionMs) + delta) },
-                            onVolume = { v -> volume = v; muted = v == 0f; player?.setVolume(v, v) },
-                            onToggleMute = {
-                                muted = !muted
-                                val v = if (muted) 0f else volume.coerceAtLeast(0.05f).also { volume = it }
-                                player?.setVolume(v, v)
-                            },
-                            compact = landscape,
-                            buffering = buffering,
-                        )
+                    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+                        androidx.compose.material3.HorizontalDivider(color = pal.Hairline)
+                        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg)) {
+                            val playPause = {
+                                val p = player
+                                if (p != null) {
+                                    if (isPlaying) { runCatching { p.pause() }; isPlaying = false; buffering = false }
+                                    else resumeOrRecover(null)
+                                }
+                            }
+                            if (playerExpanded) PlayerBar(
+                                utterances = utterances,
+                                positionMs = positionMs,
+                                durationMs = durationMs,
+                                dragMs = dragMs,
+                                isPlaying = isPlaying,
+                                volume = volume,
+                                muted = muted,
+                                activeIndex = activeIndex,
+                                onPlayPause = playPause,
+                                onSeekTo = { doSeek(it) },
+                                onDragChange = { dragMs = it },
+                                onSkip = { delta -> doSeek((dragMs ?: positionMs) + delta) },
+                                onVolume = { v -> volume = v; muted = v == 0f; player?.setVolume(v, v) },
+                                onToggleMute = {
+                                    muted = !muted
+                                    val v = if (muted) 0f else volume.coerceAtLeast(0.05f).also { volume = it }
+                                    player?.setVolume(v, v)
+                                },
+                                compact = landscape,
+                                buffering = buffering,
+                            )
+                            CompactPlayer(
+                                utterances = utterances, positionMs = positionMs, durationMs = durationMs, dragMs = dragMs,
+                                isPlaying = isPlaying, buffering = buffering, activeIndex = activeIndex,
+                                speed = playbackSpeed,
+                                onSpeed = {
+                                    val steps = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+                                    playbackSpeed = steps[(steps.indexOf(playbackSpeed) + 1) % steps.size]
+                                },
+                                expanded = playerExpanded, onExpand = { playerExpanded = !playerExpanded },
+                                onPlayPause = playPause, onSeekTo = { doSeek(it) }, onDragChange = { dragMs = it },
+                            )
+                        }
                     }
                 }
             }
@@ -2109,7 +2124,27 @@ private fun TranscribeScreen(
             } else {
                 // Portrait: Summary · Transcript tabs — each job gets a shallow room
                 // instead of one long scroll (Prime Minutes 2.0).
-                SessionTabs(selected = sessTab, onSelect = { sessTab = it })
+                // Redesign: the header (title, meta, speaker chips) over the segmented 摘要 / 筆記 n / 逐字稿.
+                if (s.editingTitle && s.title != null) TitleCard(s.title!!, llmDisplay, true,
+                    onBeginEdit = {}, onSave = { vm.saveTitle(it) }, onCancel = { vm.editTitle(false) })
+                else MeetingHeader(
+                    title = refs(s.title, screen = true) ?: meetingEntry?.let { it.title ?: SessionLibrary.defaultTitle(context, it.createdAt) } ?: "",
+                    meta = listOfNotNull(
+                        meetingEntry?.let { java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, context.resources.configuration.locales[0]).format(java.util.Date(SessionLibrary.meetingStart(it) ?: it.createdAt)) },
+                        (durationMs.takeIf { it > 0 } ?: meetingEntry?.durationSec?.times(1000))?.takeIf { it > 0 }?.let { fmtMs(it) },
+                    ).joinToString(" · "),
+                    speakers = speakerIds.map { it to speakerLabel(it) },
+                    onTitleClick = if (!s.title.isNullOrBlank() && !s.running) ({ vm.editTitle(true) }) else null,
+                )
+                studio.primeminutes.ui.SessionSegmented(
+                    selected = sessTab,
+                    labels = listOf(
+                        stringResource(R.string.tab_summary),
+                        if (noteCount > 0) stringResource(R.string.tab_notes, noteCount) else stringResource(R.string.tab_notes_plain),
+                        stringResource(R.string.tab_transcript),
+                    ),
+                    onSelect = { sessTab = it },
+                )
                 Spacer(Modifier.height(Spacing.sm))
                 // Pinned run-status (same row as the transcript tab): the summary scroll must
                 // also say processing continues once its cards have arrived mid-run.
@@ -2123,6 +2158,14 @@ private fun TranscribeScreen(
                     0 -> Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                     ) { summaryCards(); Spacer(Modifier.height(Spacing.sm)) }
+                    1 -> Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    ) {
+                        CompositionLocalProvider(
+                            studio.primeminutes.ui.LocalSpeakerRefs provides { t -> refs(t, screen = true) ?: t },
+                        ) { NotesTab(noteGroupsNow, anchorSeek) }
+                        Spacer(Modifier.height(Spacing.lg))
+                    }
                     else -> {
                         if (s.searchActive) TranscriptSearchBar(
                             query = s.searchQuery, onQuery = { vm.setSearchQuery(it) },
@@ -2156,11 +2199,26 @@ private fun TranscribeScreen(
                                 )
                             }
                         }
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            transcriptItems(this)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                transcriptItems(this)
+                            }
+                            // 目前播放: the playing line scrolled out of view → one tap brings it back.
+                            val playingOffscreen by remember { derivedStateOf {
+                                val vis = listState.layoutInfo.visibleItemsInfo
+                                val target = headerCount + activeIndex + (if (utterances.isNotEmpty()) 1 else 0)
+                                activeIndex >= 0 && vis.isNotEmpty() && (target < vis.first().index || target > vis.last().index)
+                            } }
+                            if (player != null && activeIndex >= 0 && playingOffscreen) NowPlayingJump(
+                                onClick = {
+                                    lastUserScrollNanos = 0L
+                                    scope.launch { runCatching { listState.animateScrollToItem(headerCount + activeIndex, scrollOffset = -200) } }
+                                },
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md),
+                            )
                         }
                     }
                 }
