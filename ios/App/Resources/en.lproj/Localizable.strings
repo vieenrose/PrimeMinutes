@@ -773,3 +773,6 @@
 "ask_scope_channel" = "This channel";
 "ask_scope_collection" = "This collection";
 "ask_scope_note" = "Answers only from: %@";
+"cite_preview" = "Cited transcript preview";
+"cite_preview_full" = "See full transcript →";
+"cite_preview_close" = "Close preview";
