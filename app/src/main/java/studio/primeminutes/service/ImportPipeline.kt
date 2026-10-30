@@ -39,6 +39,13 @@ internal class ImportPipeline(private val host: PipelineHost) {
     /** The foreground import in flight (work WAV, checkpoint, banked entry). */
     val inFlight = InFlightImport { wav, sec -> SessionLibrary.promoteRecording(host.context, wav, sec, importStart, importKind) }
 
+    /**
+     * The library entry of the last foreground run (import, Resume) as its ASR phase ended, kept until
+     * its results are embedded: a run superseded by a new import leaves it here, and the service puts
+     * it back at the head of the [studio.primeminutes.core.library.ProcessingQueue] ([SupersedeRequeue]).
+     */
+    @Volatile var unfinished: SessionLibrary.Entry? = null
+
     /** The import in flight's capture start ([SessionLibrary.Entry.captureStart]): its media creation date, else unknown. */
     @Volatile private var importStart: Long = SessionLibrary.UNKNOWN_START
     /** A live capture left in audio/ (recovered) is a recording; anything else imported is a file. */
@@ -86,6 +93,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
         val existing = if (ownWav && srcFile!!.name == SessionLibrary.WAV_NAME)
             srcFile.parentFile?.let { SessionLibrary.byId(ctx, it.name) } else null
         var entry: SessionLibrary.Entry? = existing
+        if (foreground && summarizeAfter) unfinished = null
         // An import stopped mid-decode: its recording.wav is only the decoded prefix, and its source
         // was kept next to it. Any run over the entry (Resume, re-transcribe, the queue) decodes that
         // source again — the whole file — instead of streaming the prefix.
@@ -336,9 +344,19 @@ internal class ImportPipeline(private val host: PipelineHost) {
                     withContext(NonCancellable) { host.emitEvent(TranscriptEvent.RecordingSaved(Uri.fromFile(e.wavFile).toString())) }
                 }
             }
+            // Not finished until its results are embedded (cleared below): a superseded run is requeued.
+            if (summarizeAfter && foreground) unfinished = entry ?: existing ?: inFlight.savedEntry
             // The audio is in the library now (or there was none to save): the shared copy is no
-            // longer the only one, so a later launch has nothing to recover.
-            if (foreground) ImportRecovery.clear(ctx)
+            // longer the only one, so a later launch has nothing to recover. Only this run's own
+            // marker: a run superseded by a new import must not drop the marker of that new import.
+            if (foreground) ImportRecovery.keptPath(ctx).let { kept ->
+                if (kept == null || kept == srcFile?.absolutePath) ImportRecovery.clear(ctx)
+            }
+            // Decoded to the end and banked: the import copy (audio/shared_*) has no further use — it
+            // used to stay until the next cold start, also after its session was deleted.
+            if (foreground && decodedAll.get() && (entry ?: inFlight.savedEntry) != null) importCopy?.let { c ->
+                if (c.exists()) runCatching { c.delete() }
+            }
             Log.i(STOP_TAG, "runPipeline finally DONE entry=${entry?.id ?: "null"}")
         }
 
@@ -404,6 +422,7 @@ internal class ImportPipeline(private val host: PipelineHost) {
                     // Semantic index, like the other two save paths; without it a meeting imported
                     // while the app was open stayed unindexed until the next start's catch-up.
                     studio.primeminutes.core.embed.LibraryIndexer.request(ctx, updated.id)
+                    if (unfinished?.id == updated.id) unfinished = null
                 }
             }.onFailure { android.util.Log.w("primeminutes-library", "could not auto-save import", it) } }
             inFlight.wav = null   // fully attached; nothing left for a later stop to bank

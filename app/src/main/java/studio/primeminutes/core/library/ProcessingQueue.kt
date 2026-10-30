@@ -36,6 +36,14 @@ object ProcessingQueue {
         write(context, cur + newIds.filter { it !in cur })
     }
 
+    /**
+     * Put [id] at the head of the queue (moved there if already queued): a meeting a new import
+     * interrupted goes back in front, so it is the next one processed once that import is done.
+     */
+    fun enqueueFront(context: Context, id: String) = synchronized(lock) {
+        write(context, listOf(id) + read(context).filter { it != id })
+    }
+
     fun remove(context: Context, id: String) = synchronized(lock) {
         write(context, read(context).filter { it != id })
     }

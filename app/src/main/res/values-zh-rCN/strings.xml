@@ -298,7 +298,7 @@
     <string name="filter_done">已完成（%d）</string>
     <string name="import_confirm_title">导入这个文件？</string>
     <string name="import_confirm_recording">录音进行中。导入会先停止并保存录音，再转录分享的文件。</string>
-    <string name="import_confirm_running">处理进行中。导入会中断处理，并转录分享的文件。</string>
+    <string name="import_confirm_running">处理进行中。导入会暂停当前的处理，先转录分享的文件，完成后自动继续处理暂停的会议。</string>
     <string name="import_confirm_ok">导入</string>
     <string name="svc_preparing">准备中…</string>
     <string name="svc_processing">处理中…</string>
