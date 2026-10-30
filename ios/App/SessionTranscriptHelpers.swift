@@ -589,9 +589,13 @@ struct SessionInsets: ViewModifier {
     let playerAvailable: Bool
     let playerBar: AnyView
     let header: AnyView
+    var preview: AnyView? = nil
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .bottom) { if playerAvailable { playerBar } }
+            // The citation preview sits just above the player (never over it); without audio it stands alone.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if preview != nil || playerAvailable { VStack(spacing: 0) { if let preview { preview }; if playerAvailable { playerBar } } }
+            }
             // A run's status stays pinned above the scrollable content (Android TranscriptSearchBar),
             // not in it: scrolling either tab kept pushing it off screen.
             // So do the Summary/Transcript tabs and the speaker strip (a pinned header, as in native iOS apps).
@@ -669,6 +673,7 @@ struct SessionScrollPage: View {
     let playerBar: AnyView
     let header: AnyView
     var notes: AnyView = AnyView(EmptyView())
+    var preview: AnyView? = nil
     var body: some View {
         ScrollView {
             SessionTabPage(tab: $tab, summary: summary, transcript: transcript, notes: notes)
@@ -677,6 +682,6 @@ struct SessionScrollPage: View {
         .modifier(UserScrollWatch { scrolled() })   // on the scroll view only: a drag on the player bar's slider is not a scroll
         .background(Vox.page)
         .onAppear { appear() }
-        .modifier(SessionInsets(follow: follow, sessionId: sessionId, busy: busy, playerAvailable: playerAvailable, playerBar: playerBar, header: header))
+        .modifier(SessionInsets(follow: follow, sessionId: sessionId, busy: busy, playerAvailable: playerAvailable, playerBar: playerBar, header: header, preview: preview))
     }
 }

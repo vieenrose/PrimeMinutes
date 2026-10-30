@@ -227,6 +227,37 @@ struct SessionView: View {
         }
     }
     @State private var showProcess = Dev.env["VOX_PROCESS"] != nil
+    /// The citation preview open above the player (CitePreviewPanel); `citeGen` counts opens so a tap that both hits a
+    /// pill and the summary around it does not close the panel it just opened.
+    @State private var cite: CiteTarget?
+    @State private var citeGen = 0
+    /// A cite can open the preview without audio as long as there is a transcript to show.
+    private var citable: Bool { player.available || !v.lines.isEmpty }
+    /// A citation tapped (summary pill, 核對, in-meeting Ask): stay here, play from the cited second, show its lines.
+    private func openCite(_ t: Double) {
+        citeGen += 1
+        if let i = CiteWindow.turn(t, starts: v.lines.map(\.start)) { withAnimation(.snappy) { cite = CiteTarget(sec: t, turn: i) } }
+        if player.available { player.seekPlay(t) }
+    }
+    private func closeCite() { if cite != nil { withAnimation(.snappy) { cite = nil } } }
+    /// A tap on the summary outside a pill closes the preview (deferred: a pill tap's open lands after this gesture).
+    private func summaryTapped() {
+        guard cite != nil else { return }
+        let g = citeGen
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { if citeGen == g { closeCite() } }
+    }
+    /// 「看完整逐字稿 →」: the 逐字稿 segment scrolled to the cited line; the player keeps going.
+    private func citeFull(_ id: UUID) {
+        closeCite(); tab = 1; jumpTo = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { jumpTo = id }
+    }
+    @ViewBuilder private var citePreview: some View {
+        if let c = cite {
+            CitePreviewPanel(player: player, cite: c, lines: v.lines, tint: { tint($0) }, name: { [v] in v.name($0) },
+                onFull: { citeFull($0) }, onClose: { closeCite() })
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
 
     private func card<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         SessionCard(c)
@@ -241,8 +272,8 @@ struct SessionView: View {
             palette: Self.palette,
             names: names,
             refs: { refs($0) },
-            playerAvailable: player.available,
-            onSeekPlay: { player.seekPlay($0) },
+            playerAvailable: citable,
+            onSeekPlay: { openCite($0) },
             onCopySummary: { UIPasteboard.general.string = refs(v.summary, screen: false); Haptics.success(); announce(L("summary_copied")) },
             onEditSummary: { draft = v.summary; editingSummary = true },
             onCopyActions: { if let a = v.actionItems { UIPasteboard.general.string = refs(a, screen: false); Haptics.success(); announce(L("action_items_copied")) } },
@@ -257,8 +288,8 @@ struct SessionView: View {
             items: items,
             names: names,
             refs: { refs($0) },
-            playerAvailable: player.available,
-            onSeekPlay: { player.seekPlay($0) }
+            playerAvailable: citable,
+            onSeekPlay: { openCite($0) }
         )
     }
     private var transcriptTab: some View {
@@ -323,14 +354,10 @@ struct SessionView: View {
     }
     /// Open the transcript search (magnifier): transcript tab, field focused, embedder preloading.
     private func openSearch() { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() }
-    /// An Ask citation tapped: back to the transcript, scroll to the cited line, park the player there.
+    /// An Ask citation tapped: the sheet closes onto the same tab and the citation preview opens there (as a summary pill).
     private func askCitation(_ t: Double) {
-        askMeeting = nil; tab = 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
-            if s.lines.indices.contains(i) { let l = s.lines[i]; jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id } }
-            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
-        }
+        askMeeting = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openCite(t) }
     }
     /// Undo the resummary: restore the pre-run summary/title/notes/actions/reader.
     private func undoResummary() {
@@ -441,11 +468,12 @@ struct SessionView: View {
     }
     /// The scroll page, out of the body chain so the solver sees one call.
     private func scrollPage(_ proxy: ScrollViewProxy) -> some View {
-        SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab), transcript: AnyView(transcriptTab),
+        SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summaryTab.contentShape(Rectangle()).simultaneousGesture(TapGesture().onEnded { summaryTapped() })), transcript: AnyView(transcriptTab),
             appear: { appear(proxy) }, scrolled: { userScrolledAt = Date() },
             follow: followScroll(proxy), sessionId: s.id, busy: busy,
             playerAvailable: player.available, playerBar: AnyView(playerBar), header: AnyView(stickyHeader),
-            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: { player.seekPlay($0) })))
+            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: { player.seekPlay($0) }, citable: citable, onVerify: { openCite($0) })),
+            preview: cite == nil ? nil : AnyView(citePreview))
     }
     /// The pinned tabs + speaker strip (SessionInsets' top inset).
     private var stickyHeader: some View {

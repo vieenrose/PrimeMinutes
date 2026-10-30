@@ -723,3 +723,6 @@
 "cd_speed" = "Playback speed";
 "cd_player_more" = "More player controls";
 "cd_player_less" = "Fewer player controls";
+"cite_preview" = "Cited transcript preview";
+"cite_preview_full" = "See full transcript →";
+"cite_preview_close" = "Close preview";

@@ -98,6 +98,9 @@ struct SessionNotesTab: View {
     let notes: [Note]
     let playerAvailable: Bool
     let onSeekPlay: (Double) -> Void
+    /// 核對: the citation preview (CitePreviewPanel), also without audio when there is a transcript.
+    var citable = false
+    var onVerify: ((Double) -> Void)? = nil
     @Environment(\.speakerRefs) private var refs
     static func kind(_ n: Note) -> String {
         let t = (n.tag ?? "").uppercased()
@@ -133,8 +136,8 @@ struct SessionNotesTab: View {
                 Text(n.ts).font(.footnote.monospacedDigit()).foregroundStyle(playerAvailable ? Vox.accent : Vox.ink3).frame(minWidth: 44, minHeight: 36, alignment: .leading)
             }.buttonStyle(.plain).disabled(sec == nil || !playerAvailable).accessibilityLabel(L("cd_play_from", n.ts))
             Text(refs(n.text)).font(.subheadline).foregroundStyle(Vox.ink).frame(maxWidth: .infinity, alignment: .leading)
-            if ["DECISION", "ACTION", "NUMBER"].contains(k), let sec, playerAvailable {
-                Button { onSeekPlay(Double(sec)) } label: { Text(L("agent_verify")).font(Vox.fontPill).voxFore(Vox.warning).padding(.horizontal, 7).padding(.vertical, 3)
+            if ["DECISION", "ACTION", "NUMBER"].contains(k), let sec, playerAvailable || citable {
+                Button { (onVerify ?? onSeekPlay)(Double(sec)) } label: { Text(L("agent_verify")).font(Vox.fontPill).voxFore(Vox.warning).padding(.horizontal, 7).padding(.vertical, 3)
                     .background(Vox.warning.color.opacity(0.12), in: Capsule()).tapHeight() }.buttonStyle(.plain)
             }
         }.padding(.vertical, 6)

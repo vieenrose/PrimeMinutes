@@ -39,3 +39,4 @@ VOX_OPENCC_DIR=$D/../App/Resources/opencc EXPORT_SCRIPT_OUT=$O $O/export-script-
 swiftc -parse-as-library -O $D/../App/OpenCC.swift $D/../App/ScreenScript.swift $D/../App/Transcript.swift $D/../App/BoundaryEdits.swift $D/../App/LongUtteranceSplitter.swift $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $D/ScreenScriptTests.swift -o $O/screen-script-tests
 VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/screen-script-tests
 swiftc -parse-as-library -O $D/../App/QueueResume.swift $D/QueueResumeTests.swift -o $O/queue-resume-tests && $O/queue-resume-tests
+swiftc -parse-as-library -O $D/../App/ShareCore.swift $D/../App/CiteWindow.swift $D/CiteWindowTests.swift -o $O/cite-window-tests && $O/cite-window-tests

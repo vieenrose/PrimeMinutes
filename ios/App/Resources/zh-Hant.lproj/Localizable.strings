@@ -723,3 +723,6 @@
 "cd_speed" = "播放速度";
 "cd_player_more" = "更多播放控制";
 "cd_player_less" = "收合播放控制";
+"cite_preview" = "引用逐字稿預覽";
+"cite_preview_full" = "看完整逐字稿 →";
+"cite_preview_close" = "關閉預覽";
