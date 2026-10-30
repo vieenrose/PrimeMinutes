@@ -140,8 +140,8 @@
 "pillar_private_desc" = "音訊永不離開您的裝置";
 "pillar_offline_title" = "離線運作";
 "pillar_offline_desc" = "在飛機、高鐵或任何無網路環境皆可使用";
-"pillar_cost_title" = "無需訂閱";
-"pillar_cost_desc" = "一次擁有，無雲端費用";
+"pillar_cost_title" = "不靠雲端";
+"pillar_cost_desc" = "不需要伺服器，AI 直接在手機上跑";
 "re_transcribe" = "重新轉錄";
 "re_summarize" = "重新摘要";
 "studio_no_match" = "沒有符合搜尋的場次。";

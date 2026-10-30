@@ -838,8 +838,8 @@ struct LibraryEmpty: View {
             Vox.hint(L("empty_subtitle")).multilineTextAlignment(.center)
             VStack(alignment: .leading, spacing: 12) {
                 pillar("lock.fill", "pillar_private")
-                pillar("icloud.slash.fill", "pillar_offline")
-                pillar("banknote.fill", "pillar_cost")
+                pillar("wifi.slash", "pillar_offline")
+                pillar("icloud.slash", "pillar_cost")
             }.padding(.top, 6)
             Vox.fine(L("library_empty")).multilineTextAlignment(.center).padding(.top, 4)
             if downloads.pending.any && downloads.prefetchProgress == nil {
