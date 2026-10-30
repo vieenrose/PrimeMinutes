@@ -345,6 +345,14 @@ struct AskSheet: View {
     let open: (Session, Double) -> Void
     /// The in-meeting Ask: questions over this meeting only, its earlier questions (AskHistory) shown above.
     var meeting: Session? = nil
+    /// The scope switch (spec scope-redesign): ≤ 3 levels, the first the default (where Ask was opened). Empty from a
+    /// meeting: this meeting, its collection / channel / source type, All (computed at appear).
+    var scopes: [AskScope] = []
+    @State private var levels: [AskScope] = []
+    @State private var scopeIx = 0
+    /// The meeting the questions are about: the in-meeting Ask while its scope is "this meeting".
+    private var here: Session? { meeting != nil && (levels.isEmpty || levels[min(scopeIx, levels.count - 1)].isMeeting) ? meeting : nil }
+    private var inScope: [Session] { levels.isEmpty ? m.library.sessions : levels[min(scopeIx, levels.count - 1)].filter(m.library.sessions) }
     @State private var followup = ""
     @State private var history: [AskEngine.Turn] = []
     @State private var confirmClear = false
@@ -359,14 +367,15 @@ struct AskSheet: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        if !history.isEmpty { Text(L("ask_meeting_earlier")).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
-                        ForEach(history + ask.turns) { t in
-                            if !history.isEmpty, t.id == ask.turns.first?.id { Divider() }
+                        if levels.count > 1 { AskScopeBar(scopes: levels, index: $scopeIx) }
+                        if here != nil, !history.isEmpty { Text(L("ask_meeting_earlier")).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
+                        ForEach((here != nil ? history : []) + ask.turns) { t in
+                            if here != nil, !history.isEmpty, t.id == ask.turns.first?.id { Divider() }
                             Text(ScreenScript.gen(t.question)).font(.headline).frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
                             VStack(alignment: .leading, spacing: 8) {
                                 if t.answer.isEmpty && !t.done { phaseRow } else {
                                     if !t.done { phaseRow }
-                                    Text(Self.linked(t.answer, t.pool, withTitle: meeting == nil)).font(.body).textSelection(.enabled)
+                                    Text(Self.linked(t.answer, t.pool, withTitle: here == nil)).font(.body).textSelection(.enabled)
                                         .environment(\.openURL, OpenURLAction { u in
                                             if u.scheme == "voxask", let s = t.pool.first(where: { $0.session.id.uuidString == u.host?.uppercased() }), let sec = Int(u.path.dropFirst()) { open(s.session, t.pool.first(where: { $0.session.id == s.session.id && $0.sec == sec })?.at ?? Double(sec)); return .handled }
                                             return .systemAction })
@@ -379,7 +388,7 @@ struct AskSheet: View {
                                         Button { open(x.session, x.at) } label: {
                                             HStack(alignment: .top, spacing: 6) {
                                                 Text(ReaderProtocol.formatTs(x.sec)).font(Vox.fontPill.monospacedDigit()).foregroundStyle(Vox.accent).padding(.horizontal, 6).padding(.vertical, 2).background(Vox.accent.opacity(0.12), in: Capsule())
-                                                Text(meeting != nil ? Self.named(x) : ScreenScript.gen(x.session.title) + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
+                                                Text(here != nil ? Self.named(x) : ScreenScript.gen(x.session.title) + " — " + Self.named(x)).font(.caption).lineLimit(2).multilineTextAlignment(.leading)
                                             }
                                         }.buttonStyle(.plain)
                                     }
@@ -388,6 +397,7 @@ struct AskSheet: View {
                         }
                         if case .failed(let e) = ask.phase { Text(L("ask_failed", e)).font(.footnote).foregroundStyle(.red) }
                         if ask.phase == .busy { Text(L("ask_busy")).font(.footnote).foregroundStyle(.secondary) }
+                        if levels.count > 1, scopeIx < levels.count, case let l = levels[scopeIx], !l.isMeeting { Text(L("ask_scope_note", l.label)).font(.caption).foregroundStyle(.secondary) }
                         Text(L("ask_disclaimer")).font(.caption2).foregroundStyle(.secondary)
                     }.padding(16)
                 }
@@ -403,7 +413,7 @@ struct AskSheet: View {
             .background(Vox.bg)
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : meeting != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).focused($composer).submitLabel(.send).onSubmit(send)
+                    TextField(L(!ask.turns.isEmpty ? "ask_followup_hint" : here != nil ? "ask_meeting_hint" : "ask_open_hint"), text: $followup).focused($composer).submitLabel(.send).onSubmit(send)
                     // Hides the keyboard (a .keyboard toolbar never showed for this field on iOS 26: it sits in a safeAreaInset).
                     if composer { Button { composer = false } label: { Image(systemName: "keyboard.chevron.compact.down").tapTarget() }.accessibilityLabel(L("done")) }
                     if ask.phase.working {
@@ -421,15 +431,15 @@ struct AskSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { VStack {
-                    Text(L(meeting != nil ? "ask_meeting_title" : "ask_title")).font(.headline)
-                    Text(meeting.map { ScreenScript.gen($0.title) + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    Text(L(here != nil ? "ask_meeting_title" : "ask_title")).font(.headline)
+                    Text(here.map { ScreenScript.gen($0.title) + " · " + L("ask_experimental") } ?? L("ask_experimental")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 } }
                 ToolbarItem(placement: .cancellationAction) { Button(L("done")) { dismiss() } }
                 // In-meeting: a new conversation also forgets this meeting's earlier questions.
                 // Saved questions are lost for good, so a meeting with any asks first; nothing to clear → disabled.
-                ToolbarItem(placement: .primaryAction) { Button { if meeting != nil, !(history.isEmpty && ask.turns.isEmpty) { confirmClear = true } else { ask.reset() } } label: { Image(systemName: "arrow.counterclockwise") }
+                ToolbarItem(placement: .primaryAction) { Button { if here != nil, !(history.isEmpty && ask.turns.isEmpty) { confirmClear = true } else { ask.reset() } } label: { Image(systemName: "arrow.counterclockwise") }
                     .disabled(history.isEmpty && ask.turns.isEmpty)
-                    .accessibilityLabel(L(meeting != nil ? "ask_meeting_clear" : "ask_reset"))
+                    .accessibilityLabel(L(here != nil ? "ask_meeting_clear" : "ask_reset"))
                     .confirmationDialog(L("ask_meeting_clear"), isPresented: $confirmClear, titleVisibility: .visible) {
                         Button(L("ask_meeting_clear"), role: .destructive) { ask.reset(); if let m = meeting { history = []; AskHistory.clear(m.id) } }
                         Button(L("cancel"), role: .cancel) {}
@@ -443,7 +453,8 @@ struct AskSheet: View {
                     return AskEngine.Turn(question: i.q, answer: i.a, excerpts: xs, done: true, pool: xs)
                 }
             }
-            if ask.turns.isEmpty, !initial.isEmpty { ask.ask(m.library.sessions, question: initial, meeting: meeting) }
+            levels = !scopes.isEmpty ? scopes : meeting.map { AskScope.levels(for: $0, library: m.library.sessions) } ?? []
+            if ask.turns.isEmpty, !initial.isEmpty { ask.ask(inScope, question: initial, meeting: here) }
             else if meeting != nil, initial.isEmpty { SessionView.preloadEmbedder() }
             // The keyboard with the sheet: typing is the reason this sheet opens, and the composer lives in a
             // safe-area inset so the keyboard lifts it. 0.4 s lets the sheet finish presenting first.
@@ -464,6 +475,8 @@ struct AskSheet: View {
                 try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
+        // Another scope: another conversation (its excerpts came from the old one).
+        .onChange(of: scopeIx) { _, _ in ask.reset() }
         .onDisappear { ask.release() }
     }
     /// The stage and the seconds since the question: a 20 s wait with a bare spinner looked hung.
@@ -474,7 +487,7 @@ struct AskSheet: View {
                 ProgressView().controlSize(.small)
                 Group {
                     switch ask.phase {
-                    case .retrieving: Text(L(meeting != nil ? "ask_meeting_stage_searching" : "ask_stage_searching", secs))
+                    case .retrieving: Text(L(here != nil ? "ask_meeting_stage_searching" : "ask_stage_searching", secs))
                     case .reading(let n): Text(L("ask_stage_reading", n, secs))
                     default: Text(L("ask_stage_answering", secs))
                     }
@@ -484,7 +497,7 @@ struct AskSheet: View {
     }
     private func send() {
         let q = followup.trimmingCharacters(in: .whitespacesAndNewlines); guard !q.isEmpty else { return }
-        followup = ""; ask.ask(m.library.sessions, question: q, meeting: meeting)
+        followup = ""; ask.ask(inScope, question: q, meeting: here)
     }
     /// An excerpt as listed under the sources: its S-numbers (a note passage) named as its meeting names them (display only).
     static func named(_ x: AskEngine.Excerpt) -> String {

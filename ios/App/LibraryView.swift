@@ -15,6 +15,12 @@ struct LibraryView: View {
     @State private var sources: [String: EpisodeSource] = [:]
     /// The person whose meetings the list is narrowed to (nil: everyone).
     @State private var personFilter: String? = Dev.env["VOX_FILTER"].flatMap { n in PeopleStore.shared.doc.people.first { PersonNames.same($0.name, n, PeopleStore.fold) }?.id }
+    /// The date part of the scope; with source and person, the scope of search and Ask (spec scope-redesign).
+    @State private var dateFilter: DateScope = .any
+    @State private var scopeSheet = false
+    /// The meetings the Add to collection sheet files (multi-select, or one row's Move to collection).
+    @State private var filing: [UUID]?
+    @ObservedObject private var colls = CollectionStore.shared
     @State private var renaming: Session?
     @State private var renameTarget: UUID?
     @State private var deleting: Session?
@@ -72,6 +78,20 @@ struct LibraryView: View {
             if let (s, t) = found() { openAt(s, t) }
         }
     }
+    /// Ask from the library (≤ 3 levels, the first where it was opened): the whole scope, its source alone, All.
+    private var askScopes: [AskScope] {
+        let all = m.library.sessions
+        guard !scope.isAll else { return [] }
+        let label = scopeText(source: source, collection: nil, person: personFilter, date: dateFilter, count: 0).components(separatedBy: " · ").dropLast().joined(separator: " · ")
+        let inS = all.filter(inScope)
+        var out = [AskScope(id: "scope", label: label, ids: Set(inS.map(\.id)), count: inS.count)]
+        if source != .all && (personFilter != nil || dateFilter != .any) {
+            let bySource = all.filter { source.matches(kind($0)) }
+            out.append(AskScope(id: "source", label: L("source_" + source.rawValue), ids: Set(bySource.map(\.id)), count: bySource.count))
+        }
+        out.append(AskScope(id: "all", label: L("source_all"), ids: nil, count: all.count))
+        return out
+    }
     private func openAt(_ s: Session, _ t: Double) { Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; m.openAt = (s.id, t); path.append(.session(s)) }
 
     enum Filter: String, CaseIterable { case all, new, done }
@@ -93,12 +113,58 @@ struct LibraryView: View {
         return present.count < 2 && source == .all ? [] : [(.all, ks.count)] + present
     }
     /// Queued items under the source filter (a podcast item is a Podcast; recordings and imports are Meetings).
-    private var shownJobs: [Job] { m.runner.waiting.filter { source.matches(kind($0)) } }
+    private var shownJobs: [Job] {
+        m.runner.waiting.filter { j in
+            guard source.matches(kind(j)) else { return false }
+            // Collection rows show their own items' processing state.
+            guard collectionMode else { return true }
+            return kind(j) != .podcast && colls.collectionOf(j.id) == nil
+        }
+    }
     private func reloadSources() { sources = LibrarySources.index(EpisodeSources.all()) }
+    /// The scope's own filters (source, person, date), without the All/New/Done one.
+    private func inScope(_ s: Session) -> Bool {
+        source.matches(kind(s)) && (personFilter.map { p in s.speakerPeople?.values.contains(p) == true } ?? true) && dateFilter.contains(s.date)
+    }
+    private var scope: LibraryScope { LibraryScope(source: source, person: personFilter, date: dateFilter) }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// The library as collection rows + loose meetings (no search, no person / date / status filter).
+    private var collectionMode: Bool { !searching && personFilter == nil && dateFilter == .any && filter == .all }
+    private var items: [Collections.Item] {
+        m.library.sessions.map { Collections.Item(id: $0.id, date: $0.date, title: $0.title, kind: kind($0), source: sources[$0.id.uuidString]) }
+    }
+    /// Search hits outside the scope ("n more in All").
+    private var elsewhere: Int { searching && !scope.isAll ? max(0, hits.count - shown.count) : 0 }
+    /// The collection a meeting is filed in (its channel for an episode), for its row's meta line.
+    private func collectionName(_ s: Session) -> String? { kind(s) == .podcast ? nil : colls.collectionOf(s.id)?.name }
+    /// A collection row's items in the queue, and the running one's progress.
+    private func processing(_ r: CollectionRow) -> (count: Int, progress: Double?) {
+        let js = m.runner.waiting.filter { inCollection($0, r) }
+        let active = js.contains { $0.id == m.runner.activeJob }
+        return (js.count, active ? m.runner.jobProgress : nil)
+    }
+    private func inCollection(_ j: Job, _ r: CollectionRow) -> Bool {
+        r.kind == .channel ? kind(j) == .podcast && LibrarySources.groupKey(sources[j.id.uuidString]) == r.key
+            : colls.collection(r.key)?.members.contains(j.id.uuidString) == true
+    }
+    /// The suggestion card's group (All, no filter): titles equal once dates / numbers go, ≥ 3 meetings.
+    private var suggestion: CollectionSuggestion? {
+        guard collectionMode, source == .all, !editing else { return nil }
+        let filed = Set(colls.doc.collections.flatMap(\.members).compactMap(UUID.init(uuidString:)))
+        let ms = m.library.sessions.filter { kind($0) == .meeting }.sorted { $0.date > $1.date }.map { (id: $0.id, title: $0.title) }
+        return Collections.suggestions(ms, excluded: filed, skipped: Set(colls.doc.skipped)).first
+    }
+    /// The first launch with collections: every channel's episodes count as seen (once the library is loaded).
+    private func seedSeen() {
+        guard !colls.doc.seeded, !m.library.sessions.isEmpty || sources.isEmpty else { return }
+        var ch: [String: [String]] = [:]
+        for s in m.library.sessions where kind(s) == .podcast { ch[LibrarySources.groupKey(sources[s.id.uuidString]), default: []].append(s.id.uuidString) }
+        colls.seed(channels: ch)
+    }
+    private func clearScope() { source = .all; personFilter = nil; dateFilter = .any; filter = .all }
     private var shown: [Session] {
         let base = m.library.sessions.filter { s in
-            guard source.matches(kind(s)) else { return false }
-            guard personFilter.map({ p in s.speakerPeople?.values.contains(p) == true }) ?? true else { return false }
+            guard inScope(s) else { return false }
             switch filter { case .all: return true; case .new: return isNew(s); case .done: return isDone(s) }
         }
         if query.trimmingCharacters(in: .whitespaces).isEmpty { return base }
@@ -106,16 +172,30 @@ struct LibraryView: View {
         return base.filter { order[$0.id] != nil }.sorted { order[$0.id]! < order[$1.id]! }
     }
     /// The list's sections: one per day; under Podcasts one per channel (header: the channel page); search: one ranked.
+    /// The list's sections. Search: one ranked section of meetings / episodes (in scope). All / Meetings / Received
+    /// with no other filter: meetings and collection rows mixed, by day of their latest item; Podcasts: the channels,
+    /// latest first. A person / date / status filter: the meetings in scope, by day.
     private var sections: [LibrarySection] {
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty { return shown.isEmpty ? [] : [LibrarySection(id: "search", title: nil, channel: nil, items: shown)] }
-        if source == .podcasts {
-            let by = Dictionary(uniqueKeysWithValues: shown.map { ($0.id, $0) })
-            return LibrarySources.groups(shown.map { (id: $0.id, source: sources[$0.id.uuidString]) }, otherTitle: L("source_other_podcasts"))
-                .map { g in LibrarySection(id: "ch-" + g.key, title: g.title, channel: g, items: g.sessionIds.compactMap { by[$0] }) }
+        if searching { return shown.isEmpty ? [] : [LibrarySection(id: "search", title: nil, items: shown.map { .session($0) })] }
+        if collectionMode {
+            let by = Dictionary(m.library.sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let es: [(date: Date, row: LibRow)] = Collections.entries(items, doc: colls.doc, source: source, otherTitle: L("source_other_podcasts")).compactMap { e in
+                switch e.entry {
+                case .session(let id): return by[id].map { (date: e.date, row: LibRow.session($0)) }
+                case .collection(let r): return (date: e.date, row: LibRow.collection(r))
+                }
+            }
+            if source == .podcasts { return es.isEmpty ? [] : [LibrarySection(id: "channels", title: L("coll_channels_by_latest"), items: es.map(\.row))] }
+            return days(es)
         }
-        let g = Dictionary(grouping: shown) { Calendar.current.startOfDay(for: $0.date) }
-        return g.keys.sorted(by: >).map { LibrarySection(id: "d-\($0.timeIntervalSince1970)", title: label($0), channel: nil, items: g[$0]!) }
+        return days(shown.map { (date: $0.date, row: LibRow.session($0)) })
     }
+    private func days(_ es: [(date: Date, row: LibRow)]) -> [LibrarySection] {
+        var order: [Date] = []; var by: [Date: [LibRow]] = [:]
+        for e in es.sorted(by: { $0.date > $1.date }) { let d = Calendar.current.startOfDay(for: e.date); if by[d] == nil { order.append(d) }; by[d, default: []].append(e.row) }
+        return order.map { LibrarySection(id: "d-\($0.timeIntervalSince1970)", title: label($0), items: by[$0]!) }
+    }
+    private func openCollection(_ r: CollectionRow) { path.append(r.kind == .channel ? .channel(r.key) : .collection(r.key)) }
     private func label(_ d: Date) -> String {
         if Calendar.current.isDateInToday(d) { return L("today") }
         if Calendar.current.isDateInYesterday(d) { return L("yesterday") }
@@ -139,11 +219,12 @@ struct LibraryView: View {
     }
     /// One session row as the list draws it (actions wired to this screen's state).
     private func row(_ s: Session) -> LibraryRow {
-        LibraryRow(s: s, isNew: isNew(s), done: isDone(s), source: sources[s.id.uuidString], searching: !query.isEmpty, passages: passages(s),
+        LibraryRow(s: s, isNew: isNew(s), done: isDone(s), source: sources[s.id.uuidString], collection: collectionMode ? nil : collectionName(s), searching: !query.isEmpty, passages: passages(s),
                    indexing: indexer.indexing.contains(s.id), editing: editing, audio: audioURL(s),
                    onActivate: { activate(s) }, onPassage: { p in if p.kind == .meeting { activate(s) } else { openAt(s, p.timeSec) } },
                    onSelect: { setEditing(true); selected.insert(s.id) }, onShare: { sharing = .of(s) },
-                   onRename: { draft = ScreenScript.title(s.title); renameTarget = s.id; renaming = s }, onDelete: { deleting = s })
+                   onRename: { draft = ScreenScript.title(s.title); renameTarget = s.id; renaming = s }, onDelete: { deleting = s },
+                   onFile: kind(s) == .podcast ? nil : { filing = [s.id] })
     }
     private func activate(_ s: Session) {
         Self.markSeen(s.id); seenRaw = UserDefaults.standard.string(forKey: "seenSessions") ?? ""; path.append(.session(s))
@@ -219,15 +300,24 @@ struct LibraryView: View {
         guard ScreenScript.typed(draft, shown: ScreenScript.title(s.title)) != nil else { return }
         s.rename(draft); m.library.update(s)
     }
-    private func devOnAppear() { if Dev.env["VOX_OPEN_CHANNEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if let k = sections.first(where: { $0.channel != nil && $0.channel?.key != LibrarySources.otherKey })?.channel?.key { path.append(.channel(k)) } } }; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
+    private func devOnAppear() { if Dev.env["VOX_OPEN_CHANNEL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if let r = sections.flatMap(\.items).compactMap({ if case .collection(let r) = $0, r.kind == .channel, r.key != LibrarySources.otherKey { return r } else { return nil } }).first { openCollection(r) } } }; if let w = Dev.env["VOX_WATCH"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(w) ?? 3)) { if let j = Dev.env["VOX_WATCH_LAST"] != nil ? m.runner.waiting.last : m.runner.waiting.first { path.append(.job(j.id)) } } }; if let q = Dev.env["VOX_LIBQUERY"] { DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_LIBQUERY_AT"] ?? "") ?? 1)) { query = q } }; if let q = Dev.env["VOX_ASK"] { UserDefaults.standard.set(true, forKey: "askOn"); DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Dev.env["VOX_ASK_AT"] ?? "") ?? 2)) { asking = q } }; if let d = Dev.env["VOX_DIALOG"], let s = m.library.sessions.first { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if d == "rename" { draft = s.title; renaming = s } else if d == "delete" { deleting = s } } }; if let c = Dev.env["VOX_OPEN_COLLECTION"] { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if let k = colls.doc.collections.first(where: { $0.name == c || c == "1" })?.id { path.append(.collection(k)) } } }; if let d = Dev.env["VOX_DATE"].flatMap(DateScope.init(rawValue:)) { dateFilter = d }; if Dev.env["VOX_SELECT"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { setEditing(true); selected = Set(m.library.sessions.prefix(2).map(\.id)) } }; if let q = Dev.env["VOX_TYPE"] { devType(q) }; if let ids = Dev.env["VOX_DELETE"] { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { let want = Set(ids.split(separator: ",").map(String.init)); for s in m.library.sessions where want.contains(s.id.uuidString) { m.library.remove(s); StatusLog.add("DEV deleted \(s.id.uuidString)") } } }; if let fs = Dev.env["VOX_RMDOC"] { for f in fs.split(separator: ",") where !f.contains("/") { try? FileManager.default.removeItem(atPath: NSHomeDirectory() + "/Documents/" + f) } } }
     /// The list with the source bookkeeping (split from `body`: one chain was too long to type-check).
     private var list: some View {
-        LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, sourceOptions: sourceOptions, source: $source, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter), sections: sections, jobs: shownJobs, searching: !query.trimmingCharacters(in: .whitespaces).isEmpty, densePending: densePending != nil,
-                    filtered: filter != .all || personFilter != nil || source != .all, selection: $selected, row: row, rowKey: rowKey, job: { jobCard($0) },
-                    openChannel: { path.append(.channel($0)) },
-                    clearFilters: { query = ""; filter = .all; personFilter = nil; source = .all })
-        .task { LibrarySourcesSetup.run(); reloadSources() }
-        .onChange(of: m.library.sessions.count) { _, _ in reloadSources() }
+        LibraryList(m: m, header: LibraryHeader(m: m, downloads: m.downloads, sourceOptions: sourceOptions, source: $source, filterOptions: filterOptions, filter: $filter, personFilter: $personFilter,
+                                                pill: scope.isAll ? nil : ScopePill(text: scopeText(source: source, collection: nil, person: personFilter, date: dateFilter, count: m.library.sessions.filter(inScope).count),
+                                                                                    onTap: { scopeSheet = true }, onClear: { clearScope() }),
+                                                openFilters: { scopeSheet = true }),
+                    sections: sections, jobs: shownJobs, searching: searching, densePending: densePending != nil,
+                    filtered: filter != .all || !scope.isAll, elsewhere: elsewhere, selection: $selected, row: row, rowKey: rowKey, job: { jobCard($0) },
+                    collection: { r in AnyView(CollectionRowView(row: r, processing: processing(r)) { openCollection(r) }) },
+                    suggestion: suggestion.map { sg in AnyView(CollectionSuggestionCard(s: sg, create: { colls.create(sg.name, ids: sg.ids); Haptics.success() }, skip: { colls.skip(sg.key) })) },
+                    searchAll: { clearScope() },
+                    clearFilters: { query = ""; clearScope() })
+        .task { LibrarySourcesSetup.run(); reloadSources(); colls.attach(m.runner); seedSeen() }
+        .onChange(of: m.library.sessions.count) { _, _ in reloadSources(); seedSeen() }
+        .onReceive(NotificationCenter.default.publisher(for: .voxLibrarySearch)) { n in clearScope(); query = n.object as? String ?? "" }
+        .sheet(isPresented: $scopeSheet) { ScopeFilterSheet(source: $source, person: $personFilter, date: $dateFilter, sessions: m.library.sessions) }
+        .sheet(item: Binding(get: { filing.map { FilingBox(ids: $0) } }, set: { filing = $0?.ids })) { b in AddToCollectionSheet(ids: b.ids) { _ in if editing { setEditing(false) } } }
         .onChange(of: m.runner.waiting.count) { _, _ in reloadSources() }
     }
     var body: some View {
@@ -238,7 +328,9 @@ struct LibraryView: View {
         // At AX5 the footer took half the screen: capped so the list keeps room to scroll.
         .safeAreaInset(edge: .bottom) { if !editing { LibraryFooter(m: m, path: $path).dynamicTypeSize(...DynamicTypeSize.accessibility1) } }
         .toolbar { LibrarySelectToolbar(editing: editing, any: !m.library.sessions.isEmpty, count: selected.count,
-                                        onEdit: { setEditing(!editing) }, onSelectAll: { selected = Set(shown.map(\.id)) }, onDelete: { deletingMany = true }) }
+                                        onEdit: { setEditing(!editing) }, onSelectAll: { selected = Set(sections.flatMap(\.items).compactMap { if case .session(let s) = $0 { return s.id } else { return nil } }) }, onDelete: { deletingMany = true },
+                                        fileable: m.library.sessions.filter { selected.contains($0.id) && kind($0) != .podcast }.count,
+                                        onFile: { filing = m.library.sessions.filter { selected.contains($0.id) && kind($0) != .podcast }.map(\.id) }) }
         // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(askReady ? "search_or_ask_hint" : EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
         .searchSuggestions { if askReady { LibraryAskSuggestion(query: query.trimmingCharacters(in: .whitespaces)) { asking = query.trimmingCharacters(in: .whitespaces) } } }
@@ -262,13 +354,13 @@ struct LibraryView: View {
         // Alerts, not confirmation dialogs: on iOS 26 a dialog from the List became a popover pinned to the
         // search field, far from the row, with no Cancel button.
         .alert(L("delete_confirm_many", selected.count), isPresented: $deletingMany) {
-            Button(L("delete"), role: .destructive) { for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; setEditing(false); Haptics.destructive() }
+            Button(L("delete"), role: .destructive) { colls.remove(Array(selected)); for s in m.library.sessions where selected.contains(s.id) { m.library.remove(s) }; setEditing(false); Haptics.destructive() }
             Button(L("cancel"), role: .cancel) {}
         }
         .sheet(item: $sharing) { t in MeetingShareSheet(target: t) { sharing = nil } }
-        .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "") { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } } }
+        .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) { AskSheet(m: m, initial: asking ?? "", open: { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openAt(s, t) } }, scopes: askScopes) }
         .alert(L("delete_confirm", deleting.map { ScreenScript.title($0.title) } ?? ""), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            Button(L("delete"), role: .destructive) { if let s = deleting { m.library.remove(s); Haptics.destructive() } }
+            Button(L("delete"), role: .destructive) { if let s = deleting { colls.remove([s.id]); m.library.remove(s); Haptics.destructive() } }
             Button(L("cancel"), role: .cancel) {}
         }
         .alert(L("download_delete_confirm"), isPresented: Binding(get: { dlDeleteAsk != nil }, set: { if !$0 { dlDeleteAsk = nil } })) {
@@ -732,6 +824,8 @@ struct LibraryRow: View {
     let done: Bool
     /// The podcast provenance: an episode row draws its channel artwork and "Channel · date · length".
     var source: EpisodeSource? = nil
+    /// The user collection it is filed in (search hits and filtered lists name it).
+    var collection: String? = nil
     let searching: Bool
     let passages: [LibrarySearch.Passage]
     let indexing: Bool
@@ -743,6 +837,8 @@ struct LibraryRow: View {
     let onShare: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
+    /// Move to collection… (nil: a podcast episode, which stays in its channel).
+    var onFile: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     /// A note names speakers by the reader's S-numbers: shown as the transcript names them (Android 150fe65d).
     private func snippet(_ p: LibrarySearch.Passage) -> String {
@@ -773,6 +869,7 @@ struct LibraryRow: View {
     }
     private var metaText: String {
         var t = source.map { episodeMeta($0, s) } ?? "\(s.date.formatted(date: .omitted, time: .shortened)) · \(Export.mmss(s.seconds))"
+        if let c = collection, source == nil { t = ScreenScript.gen(c) + " · " + t }
         if source == nil, !speakers.isEmpty { t += " · " }
         return t
     }
@@ -821,11 +918,13 @@ struct LibraryRow: View {
             Button(L("action_open"), systemImage: "play.fill") { onActivate() }
             Button(L("action_select"), systemImage: "checkmark.circle") { onSelect() }
             Button(L("rename"), systemImage: "pencil") { onRename() }
+            if let onFile { Button(L("coll_move_to"), systemImage: "square.stack.3d.up") { onFile() } }
             if audio != nil || done && !s.lines.isEmpty { Button(L("share_title"), systemImage: "square.and.arrow.up") { onShare() } }
             Button(L("delete"), systemImage: "trash", role: .destructive) { onDelete() }
         }
         .accessibilityAction(named: L("select")) { onSelect() }
         .accessibilityAction(named: L("rename")) { onRename() }
+        .accessibilityActions { if let onFile { Button(L("coll_move_to")) { onFile() } } }
         .accessibilityAction(named: L("delete")) { onDelete() }
         .accessibilityActions { if audio != nil || done && !s.lines.isEmpty { Button(L("share_title")) { onShare() } } }
         .voxHairlineRow()
@@ -842,8 +941,15 @@ struct LibraryHeader: View {
     let filterOptions: [(LibraryView.Filter, String)]
     @Binding var filter: LibraryView.Filter
     @Binding var personFilter: String?
+    /// The scope pill (hidden at All) and the filter panel's button.
+    var pill: ScopePill? = nil
+    var openFilters: () -> Void = {}
     @ObservedObject private var indexer = LibraryIndexer.shared
     @ObservedObject private var resumer = DownloadResumer.shared
+    private var filterButton: some View {
+        Button(action: openFilters) { Image(systemName: "line.3.horizontal.decrease.circle").font(.title3).tapTarget() }
+            .accessibilityLabel(L("scope_filters")).accessibilityIdentifier("scope-filters").padding(.trailing, Vox.gutter - 8)
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Redesign: the semantic-search download link lives in Settings (Semantic search); only its progress shows here.
@@ -853,8 +959,15 @@ struct LibraryHeader: View {
             if !indexer.indexing.isEmpty || indexer.pending > 0 {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Vox.meta(L("studio_indexing") + (indexer.pending > 0 ? " (\(indexer.pending + indexer.indexing.count))" : "")) }.padding(.horizontal, Vox.gutter).padding(.top, 6)
             }
-            if !sourceOptions.isEmpty { SourceChips(options: sourceOptions, selection: $source).padding(.top, 10) }
-            if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter).padding(.horizontal, Vox.gutter).padding(.vertical, 10) }
+            // The filter panel's button ends the first filter row: the source chips, else the status picker.
+            if !sourceOptions.isEmpty {
+                HStack(spacing: 0) { SourceChips(options: sourceOptions, selection: $source); filterButton }.padding(.top, 10)
+            }
+            if let pill { pill }
+            HStack(spacing: 4) {
+                if filterOptions.count > 1 { LibraryFilterPicker(options: filterOptions, selection: $filter) } else if sourceOptions.isEmpty { Spacer() }
+                if sourceOptions.isEmpty { filterButton }
+            }.padding(.leading, Vox.gutter).padding(.trailing, sourceOptions.isEmpty ? 0 : Vox.gutter).padding(.vertical, filterOptions.count > 1 || sourceOptions.isEmpty ? 8 : 0)
             PeopleFilterChips(sessions: m.library.sessions, selected: $personFilter)
         }
     }
@@ -907,6 +1020,9 @@ struct LibraryEmpty: View {
 struct LibraryNoMatch: View {
     let pending: Bool
     let filtered: Bool
+    /// Hits outside the scope: "Search in All" is then the primary way out.
+    var elsewhere = 0
+    var searchAll: () -> Void = {}
     let clearFilters: () -> Void
     var body: some View {
         if pending {
@@ -918,8 +1034,11 @@ struct LibraryNoMatch: View {
             // A no-match with a search and filter chips on was a dead end (Android parity: the way out is here).
             ContentUnavailableView {
                 Label(L("studio_no_match"), systemImage: "magnifyingglass")
+            } description: {
+                if elsewhere > 0 { Text(L("search_in_all_n", elsewhere)) }
             } actions: {
-                if filtered { Button(L("studio_clear_filters")) { clearFilters() }.buttonStyle(.bordered).controlSize(.large) }
+                if elsewhere > 0 { Button(L("search_in_all")) { searchAll() }.buttonStyle(.borderedProminent).controlSize(.large).accessibilityIdentifier("search-in-all") }
+                else if filtered { Button(L("studio_clear_filters")) { clearFilters() }.buttonStyle(.bordered).controlSize(.large) }
             }.frame(maxWidth: .infinity)
         }
     }
@@ -935,11 +1054,16 @@ struct LibraryList: View {
     let searching: Bool
     let densePending: Bool
     let filtered: Bool
+    /// Search hits outside the scope.
+    let elsewhere: Int
     @Binding var selection: Set<UUID>
     let row: (Session) -> LibraryRow
     let rowKey: (Session) -> String
     let job: (Job) -> AnyView
-    let openChannel: (String) -> Void
+    let collection: (CollectionRow) -> AnyView
+    let suggestion: AnyView?
+    /// "Search in All": the scope cleared, the query kept.
+    let searchAll: () -> Void
     let clearFilters: () -> Void
     var body: some View {
         List(selection: $selection) {
@@ -947,8 +1071,9 @@ struct LibraryList: View {
             if m.library.sessions.isEmpty && m.runner.waiting.isEmpty {
                 Section { LibraryEmpty(downloads: m.downloads).padding(.top, 24).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             }
+            if let suggestion { Section { suggestion.listRowInsets(EdgeInsets(top: 6, leading: Vox.gutter, bottom: 6, trailing: Vox.gutter)).listRowBackground(Color.clear).listRowSeparator(.hidden) } }
             if !m.library.sessions.isEmpty && sections.isEmpty && jobs.isEmpty {
-                Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear).listRowSeparator(.hidden) }
+                Section { LibraryNoMatch(pending: densePending, filtered: searching || filtered, elsewhere: searching ? elsewhere : 0, searchAll: searchAll, clearFilters: clearFilters).padding(.top, 12).listRowBackground(Color.clear).listRowSeparator(.hidden) }
             }
             if !jobs.isEmpty {
                 Section {
@@ -958,10 +1083,18 @@ struct LibraryList: View {
             }
             ForEach(sections) { sec in
                 Section {
-                    ForEach(sec.items) { s in row(s).id(rowKey(s)).tag(s.id) }
+                    ForEach(sec.items) { it in
+                        switch it {
+                        case .session(let s): row(s).id(rowKey(s)).tag(s.id)
+                        case .collection(let r): collection(r).id("coll-" + r.id).selectionDisabled().voxHairlineRow()
+                        }
+                    }
                 } header: {
-                    if let g = sec.channel { ChannelHeader(group: g) { openChannel(g.key) } }
-                    else if let t = sec.title { Vox.group(t) }
+                    if let t = sec.title { Vox.group(t) }
+                } footer: {
+                    if sec.id == "search", elsewhere > 0 {
+                        Button(L("search_in_all_n", elsewhere), action: searchAll).font(Vox.fontMeta).accessibilityIdentifier("search-in-all")
+                    }
                 }
             }
         }
@@ -971,13 +1104,22 @@ struct LibraryList: View {
     }
 }
 
-/// One section of the library list: a day, a channel (Podcasts filter) or the ranked search hits.
+/// One section of the library list: a day, the channels (Podcasts filter) or the ranked search hits.
 struct LibrarySection: Identifiable {
     let id: String
     let title: String?
-    let channel: ChannelGroup?
-    let items: [Session]
+    let items: [LibRow]
 }
+
+/// A library list row: a meeting / episode, or a collection.
+enum LibRow: Identifiable {
+    case session(Session)
+    case collection(CollectionRow)
+    var id: String { switch self { case .session(let s): return s.id.uuidString; case .collection(let r): return r.id } }
+}
+
+/// Session ids as a sheet item.
+struct FilingBox: Identifiable { let ids: [UUID]; var id: String { ids.map(\.uuidString).joined() } }
 
 /// Under the list (redesign): one slim queue bar, one tap target that opens the queue sheet. Its trailing action:
 /// Resume when a job was stopped (paused), Process all when jobs only wait; the red record button below.
@@ -997,58 +1139,55 @@ struct LibraryFooter: View {
         if m.runner.activeJob != nil { return m.screen.status }
         return !plan.unpark.isEmpty ? L("queue_bar_paused_hint") : L("cd_status_queued")
     }
-    private var queueBar: some View {
+    /// The queue, docked (the capture screen's AI-notes strip): its own layout space between the list and the record
+    /// button, so no row hides behind it. One line: state · count (or the running item and its percent), the one
+    /// primary action (Resume / Process all), the chevron; tap: the queue sheet.
+    private var queueStrip: some View {
         let active = m.runner.activeJob != nil, p = plan, paused = !active && !p.unpark.isEmpty
         let canRun = !active && !m.capture.recording && !p.run.isEmpty
-        return Button { sheet = true } label: {
-            HStack(spacing: 10) {
-                if active { ProgressView().controlSize(.small) }
-                else { Image(systemName: paused ? "pause.circle.fill" : "list.bullet").foregroundStyle(paused ? Vox.warning.color : Vox.ink2).accessibilityHidden(true) }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(Vox.fontGroup).foregroundStyle(Vox.ink)
-                    Text(subtitle).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(1)
-                    if active && !m.screen.notes.isEmpty { Text(L("agent_listening", m.screen.notes.count)).font(.caption2).foregroundStyle(Vox.ink3) }
-                }
-                Spacer(minLength: 4)
-                if canRun {
-                    Button { m.runner.processAll() } label: {
-                        Label(paused ? L("action_resume") : L("source_process_all", p.run.count), systemImage: paused ? "play.fill" : "play")
-                            .font(Vox.fontGroup).labelStyle(.titleAndIcon)
-                    }.buttonStyle(.borderedProminent).controlSize(.small).frame(minHeight: 44)
-                }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink3).accessibilityHidden(true)
+        let running = m.runner.waiting.first { $0.id == m.runner.activeJob }
+        let line = active ? L("cd_status_processing") + " · " + (running?.title ?? L("meeting")) + " \(Int(m.runner.jobProgress * 100))%" : title
+        return DockedStrip {
+            if active { ProgressView().controlSize(.small) }
+            else { Image(systemName: paused ? "pause.circle.fill" : "list.bullet").foregroundStyle(paused ? Vox.warning.color : Vox.ink2).accessibilityHidden(true) }
+        } content: {
+            Text(line).font(.subheadline.weight(.semibold)).foregroundStyle(Vox.ink).lineLimit(1).truncationMode(.middle)
+        } trailing: {
+            if canRun {
+                Button { m.runner.processAll() } label: { Text(paused ? L("action_resume") : L("source_process_all", p.run.count)).font(.subheadline.weight(.semibold)) }
+                    .buttonStyle(.borderedProminent).controlSize(.small).accessibilityIdentifier("queue-run")
             }
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Vox.raised, in: RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Vox.radiusGroup, style: .continuous).stroke(Vox.hairline))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .background(Vox.bg)
+        .onTapGesture { sheet = true }
         .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton)
-        .accessibilityLabel(title + ", " + subtitle)
+        .accessibilityLabel(line + ", " + subtitle)
         .accessibilityAction(named: Text(paused ? L("action_resume") : L("source_process_all", p.run.count))) { if canRun { m.runner.processAll() } }
-        .padding(.horizontal, Vox.gutter)
+        .accessibilityIdentifier("queue-strip")
         .sheet(isPresented: $sheet) { QueueSheet(m: m) { id in sheet = false; path.append(.job(id)) }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
     }
     var body: some View {
-        VStack(spacing: 10) {
-            if m.runner.activeJob != nil || waiting > 0 { queueBar }
-            else if !m.screen.status.isEmpty { Text(m.screen.status).font(Vox.fontMeta).foregroundStyle(Vox.ink3).lineLimit(1).padding(.horizontal, Vox.gutter) }
-            Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
-                ZStack {
-                    Circle().fill(Vox.record).frame(width: Vox.fab, height: Vox.fab).shadow(color: .black.opacity(0.18), radius: 6, y: 2)
-                    Image(systemName: m.capture.recording ? "stop.fill" : "mic.fill").font(.title.weight(.semibold)).foregroundStyle(.white)
-                        .contentTransition(.symbolEffect(.replace))
+        VStack(spacing: 0) {
+            if m.runner.activeJob != nil || waiting > 0 { queueStrip }
+            VStack(spacing: 6) {
+                if m.runner.activeJob == nil && waiting == 0 && !m.screen.status.isEmpty { Text(m.screen.status).font(Vox.fontMeta).foregroundStyle(Vox.ink3).lineLimit(1).padding(.horizontal, Vox.gutter) }
+                Button { Haptics.toggle(!m.capture.recording); if m.capture.recording { m.capture.toggleRecord() } else { m.downloads.withModels { m.capture.toggleRecord() } } } label: {
+                    ZStack {
+                        Circle().fill(Vox.record).frame(width: Vox.fab, height: Vox.fab).shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                        Image(systemName: m.capture.recording ? "stop.fill" : "mic.fill").font(.title.weight(.semibold)).foregroundStyle(.white)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(m.capture.recording ? L("stop") : L("record"))
+                .padding(.bottom, 6)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(m.capture.recording ? L("stop") : L("record"))
-            .padding(.bottom, 6)
+            .padding(.top, 10)
         }
-        .padding(.top, 18)
         .frame(maxWidth: .infinity)
-        // The fade: the list dissolves under the button instead of a bar edge.
-        .background(LinearGradient(colors: [Vox.bg.opacity(0), Vox.bg.opacity(0.92), Vox.bg], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)).ignoresSafeArea())
+        // Solid, docked: the list ends above the strip and the button (it scrolls fully into view).
+        .background(Vox.bg.ignoresSafeArea())
+        .overlay(alignment: .top) { if m.runner.activeJob == nil && waiting == 0 { Divider() } }
     }
 }
 
@@ -1060,6 +1199,9 @@ struct LibrarySelectToolbar: ToolbarContent {
     let onEdit: () -> Void
     let onSelectAll: () -> Void
     let onDelete: () -> Void
+    /// Selected meetings that can be filed (podcast episodes stay in their channel).
+    var fileable = 0
+    var onFile: () -> Void = {}
     var body: some ToolbarContent {
         if editing {
             ToolbarItem(placement: .topBarLeading) { Button(L("done"), action: onEdit).fontWeight(.semibold) }
@@ -1068,6 +1210,7 @@ struct LibrarySelectToolbar: ToolbarContent {
                 Spacer()
                 Text(L("selection_count", count)).font(.subheadline).foregroundStyle(.secondary).fixedSize()
                 Spacer()
+                Button(action: onFile) { Image(systemName: "folder.badge.plus") }.disabled(fileable == 0).accessibilityLabel(L("coll_add_to")).accessibilityIdentifier("coll-add-selected")
                 Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.disabled(count == 0).accessibilityLabel(L("delete"))
             }
         } else if any {

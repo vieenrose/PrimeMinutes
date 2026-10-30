@@ -190,6 +190,12 @@ struct ChannelPage: View {
     @State private var notice: String?
     @State private var deleting = false
     @State private var busy = false
+    // Scope inside the channel (spec scope-redesign): search, person / date folded into the pill, Ask this channel.
+    @State private var query = ""
+    @State private var person: String?
+    @State private var date: DateScope = .any
+    @State private var filters = false
+    @State private var asking: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     init(key: String, onOpen: @escaping (UUID) -> Void) {
@@ -208,6 +214,27 @@ struct ChannelPage: View {
         return library.sessions.compactMap { s in ix[s.id.uuidString].map { (s, $0) } }
     }
     private var feedUrl: String? { sub?.feedUrl ?? mine.compactMap(\.feedUrl).last }
+    private var scoped: [(Session, EpisodeSource)] {
+        inLibrary.filter { s, _ in (person.map { p in s.speakerPeople?.values.contains(p) == true } ?? true) && date.contains(s.date) }
+    }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var shown: [(Session, EpisodeSource)] {
+        guard searching else { return scoped }
+        let order = Dictionary(LibrarySearch.lexical(scoped.map(\.0), query: query.trimmingCharacters(in: .whitespaces)).enumerated().map { ($0.element.session.id, $0.offset) }, uniquingKeysWith: { a, _ in a })
+        return scoped.filter { order[$0.0.id] != nil }.sorted { order[$0.0.id]! < order[$1.0.id]! }
+    }
+    private var elsewhere: Int {
+        guard searching else { return 0 }
+        return max(0, LibrarySearch.lexical(library.sessions, query: query.trimmingCharacters(in: .whitespaces)).count - shown.count)
+    }
+    private var askScopes: [AskScope] {
+        let all = library.sessions, ix = LibrarySources.index(sources)
+        let pods = all.filter { LibrarySources.kind(received: $0.isReceived, source: ix[$0.id.uuidString]) == .podcast }
+        return [AskScope(id: "channel", label: L("ask_scope_channel"), ids: Set(scoped.map(\.0.id)), count: scoped.count),
+                AskScope(id: "podcasts", label: L("source_podcasts"), ids: Set(pods.map(\.id)), count: pods.count),
+                AskScope(id: "all", label: L("source_all"), ids: nil, count: all.count)]
+    }
+    private func searchAll() { let q = query; dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { NotificationCenter.default.post(name: .voxLibrarySearch, object: q) } }
 
     private var statusLine: String {
         var parts = [L("channel_in_library", inLibrary.count)]
@@ -243,14 +270,30 @@ struct ChannelPage: View {
                 } else if let f = feedUrl {
                     Button { subscribe(f) } label: { Label(L("sub_subscribe"), systemImage: "plus.circle") }.disabled(busy).accessibilityIdentifier("channel-subscribe")
                 }
+                if !inLibrary.isEmpty {
+                    Button { asking = "" } label: { Label(L("ask_this_channel"), systemImage: "sparkles").frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent).disabled(scoped.isEmpty || !AskEngine.available).accessibilityIdentifier("ask-channel")
+                }
             }
-            if let s = sub {
+            if person != nil || date != .any {
+                ScopePill(text: scopeText(source: nil, collection: title, person: person, date: date, count: scoped.count), onTap: { filters = true }, onClear: { person = nil; date = .any })
+                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+            }
+            if searching && shown.isEmpty {
+                Section {
+                    VStack(spacing: 10) {
+                        Vox.hint(L("search_none_in_scope"))
+                        if elsewhere > 0 { Button(L("search_in_all")) { searchAll() }.buttonStyle(.borderedProminent).accessibilityIdentifier("search-in-all") }
+                    }.frame(maxWidth: .infinity).padding(.vertical, 12)
+                }
+            }
+            if let s = sub, !searching {
                 let fresh = s.episodes.filter { ep in SubscriptionStore.entry(index, ep).map { id in !library.sessions.contains { $0.id == id } } ?? true }
                 if !fresh.isEmpty { Section(L("channel_new_in_feed")) { ForEach(fresh) { ep in episodeRow(s, ep) } } }
             }
-            if !inLibrary.isEmpty {
-                Section(L("channel_in_library_header")) {
-                    ForEach(inLibrary, id: \.0.id) { s, src in
+            if !shown.isEmpty {
+                Section {
+                    ForEach(shown, id: \.0.id) { s, src in
                         Button { onOpen(s.id) } label: {
                             HStack(spacing: 12) {
                                 EpisodeTile(source: src, symbol: s.noSpeech ? "mic.slash" : "checkmark", tint: s.noSpeech ? .gray : Vox.success.color, status: L(s.noSpeech ? "status_no_speech" : "cd_status_done"))
@@ -262,28 +305,41 @@ struct ChannelPage: View {
                             }.contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityIdentifier("channel-episode")
                     }
+                } header: { Text(L("channel_in_library_header")) } footer: {
+                    if elsewhere > 0 { Button(L("search_in_all_n", elsewhere)) { searchAll() }.font(.footnote).accessibilityIdentifier("search-in-all") }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(L("search_in_channel")))
         .navigationTitle(ScreenScript.gen(title)).navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $filters) { ScopeFilterSheet(person: $person, date: $date, sessions: inLibrary.map(\.0)) }
+        .sheet(isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) {
+            AskSheet(m: m, initial: asking ?? "", open: { s, t in asking = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { m.openAt = (s.id, t); onOpen(s.id) } }, scopes: askScopes)
+        }
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) { Button(L("scope_filters"), systemImage: "line.3.horizontal.decrease.circle") { filters = true } }
             if let s = sub {
-                Menu {
-                    Button(L(s.paused ? "sub_resume" : "sub_pause"), systemImage: s.paused ? "play" : "pause") { store.setPaused(s.id, !s.paused) }
-                    ShareLink(item: "\(s.title) — \(s.feedUrl)") { Label(L("sub_share"), systemImage: "square.and.arrow.up") }
-                    Button(L("sub_delete"), systemImage: "trash", role: .destructive) { deleting = true }
-                } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("sub_more")) }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button(L(s.paused ? "sub_resume" : "sub_pause"), systemImage: s.paused ? "play" : "pause") { store.setPaused(s.id, !s.paused) }
+                        ShareLink(item: "\(s.title) — \(s.feedUrl)") { Label(L("sub_share"), systemImage: "square.and.arrow.up") }
+                        Button(L("sub_delete"), systemImage: "trash", role: .destructive) { deleting = true }
+                    } label: { Image(systemName: "ellipsis.circle").accessibilityLabel(L("sub_more")) }
+                }
             }
         }
         .alert(L("sub_delete"), isPresented: $deleting) {
             Button(L("sub_delete"), role: .destructive) { store.remove(key) }
             Button(L("cancel"), role: .cancel) {}
         } message: { Text(L("sub_delete_note")) }
-        .task { sources = EpisodeSources.all(); if sub != nil { await store.checkIfStale(key) }; await refresh() }
-        .onReceive(runner.$waiting) { _ in Task { sources = EpisodeSources.all(); await refresh() } }
+        .task { sources = EpisodeSources.all(); markSeen(); if let a = Dev.env["VOX_COLL_ASK"] { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { asking = a } }; if sub != nil { await store.checkIfStale(key) }; await refresh() }
+        .onReceive(runner.$waiting) { _ in Task { sources = EpisodeSources.all(); markSeen(); await refresh() } }
+        .onChange(of: library.sessions.count) { _, _ in markSeen() }
     }
     private func refresh() async { index = await store.libraryIndex(m) }
+    /// Opening the page clears the channel's "N new" badge.
+    private func markSeen() { CollectionStore.shared.markSeen(channel: key, ids: inLibrary.map(\.0.id)) }
     private func subscribe(_ f: String) {
         busy = true; notice = nil
         Task { defer { busy = false }; if case .failure(let e) = await store.subscribe(feedUrl: f, title: title, artist: artist) { notice = L(e.error.key) } }

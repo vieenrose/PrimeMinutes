@@ -301,6 +301,30 @@ private struct ReplyPreview: View {
     }
 }
 
+/// A full-width strip docked between a screen's content and its bottom controls (it takes its own layout space,
+/// never floats over content): a leading glyph, one line of status, optional trailing actions, the chevron; a hairline
+/// on top. Tapping it opens a sheet (the caller's). Shared by the capture screen's AI notes and the library's queue.
+struct DockedStrip<Leading: View, Content: View, Trailing: View>: View {
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var content: Content
+    @ViewBuilder var trailing: Trailing
+    init(@ViewBuilder leading: () -> Leading, @ViewBuilder content: () -> Content, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
+        self.leading = leading(); self.content = content(); self.trailing = trailing()
+    }
+    var body: some View {
+        HStack(spacing: 10) {
+            leading
+            content
+            Spacer(minLength: 0)
+            trailing
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+        }
+        .frame(minHeight: 44).padding(.horizontal, Vox.gutterWide)
+        .overlay(alignment: .top) { Divider() }
+        .contentShape(Rectangle())
+    }
+}
+
 /// The reader's status pinned above the recording controls: one quiet line until the first notes, then a card with
 /// the latest three (one line each). Tapping it opens the full Agent panel.
 struct AgentStrip: View {
@@ -315,19 +339,15 @@ struct AgentStrip: View {
         if let st = agent.state {
             let p = AgentPanel(agent: agent)
             if agent.notes.isEmpty {
-                HStack(spacing: 10) {
+                DockedStrip {
                     Image(systemName: "sparkles").foregroundStyle(.tint).accessibilityHidden(true)
+                } content: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L("agent_title")).font(.subheadline.weight(.semibold))
                         + Text(" · ") + Text(agent.beforeFirstReading ? FirstReading.line(agent) : p.line(st)).font(.subheadline).foregroundColor(.secondary)
                         if agent.beforeFirstReading { Text(L("agent_first_short")).font(.caption).foregroundStyle(.secondary) }
                     }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
                 }
-                .frame(minHeight: 44).padding(.horizontal, Vox.gutterWide)
-                .overlay(alignment: .top) { Divider() }
-                .contentShape(Rectangle())
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
