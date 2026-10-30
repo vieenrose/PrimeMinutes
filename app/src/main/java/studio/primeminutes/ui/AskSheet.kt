@@ -164,14 +164,14 @@ fun AskSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(if (scope != null) R.string.ask_meeting_title else R.string.ask_title),
-                            style = MaterialTheme.typography.titleLarge, color = pal.Slate200, fontWeight = FontWeight.Bold,
+                            style = studio.primeminutes.ui.theme.TypeRole.meetingTitle(), color = pal.Slate200,
                             maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).semantics { heading() },
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             stringResource(R.string.ask_experimental), style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold, color = pal.WarningText,
-                            modifier = Modifier.clip(CircleShape).background(pal.AccentWash)
+                            modifier = Modifier.clip(CircleShape).background(pal.WarningTint)
                                 .padding(horizontal = 9.dp, vertical = 4.dp),
                         )
                     }
@@ -288,9 +288,9 @@ fun AskSheet(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)
-                    .clip(MaterialTheme.shapes.medium).background(pal.PanelSurface)
-                    .border(1.dp, pal.Hairline, MaterialTheme.shapes.medium)
-                    .heightIn(min = 44.dp).padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    // Redesign: the composer is a fill pill.
+                    .clip(CircleShape).background(pal.Fill)
+                    .heightIn(min = 48.dp).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 BasicTextField(
                     value = followUp, onValueChange = { followUp = it }, singleLine = true,
@@ -347,9 +347,11 @@ private fun answerText(
         append('⁠')
         withLink(LinkAnnotation.Clickable(
             tag = "cite-${e.id}@${x.sec}",
-            styles = TextLinkStyles(style = SpanStyle(color = color, fontSize = 0.7.em, baselineShift = BaselineShift.Superscript)),
+            // Redesign: the same citation pill as the summary (tinted fill, SemiBold accent, slightly raised).
+            styles = TextLinkStyles(style = SpanStyle(color = color, background = color.copy(alpha = 0.12f), fontWeight = FontWeight.SemiBold,
+                fontSize = 0.68.em, baselineShift = BaselineShift(0.25f))),
             linkInteractionListener = { onOpenAt(e, x.at) },   // the passage's exact start (a tag carries whole seconds)
-        )) { append(if (withTitle) "[${title(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}]" else "[${ReaderProtocol.formatTs(x.sec)}]") }
+        )) { append(if (withTitle) "\u2009${title(e.title ?: "").take(24)} · ${ReaderProtocol.formatTs(x.sec)}\u2009" else "\u2009${ReaderProtocol.formatTs(x.sec)}\u2009") }
     }
     append(raw.substring(last))
 }

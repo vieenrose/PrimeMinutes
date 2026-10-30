@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -687,27 +688,28 @@ private fun LicensesDialog(onDismiss: () -> Unit) {
     }
 }
 
-/** A titled card: one topic per card, so the page reads as a few groups rather than one long list. */
+/** Redesign: a group header (12.5/600, ink3) over a grouped block — raised surface, 14 dp, hairline edge. */
 @Composable
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     val pal = LocalPrimeMinutesPalette.current
-    Column(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(pal.InsetSurface).padding(Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        // Section title marked as a heading: TalkBack's heading swipe jumps card to card on a page
-        // that is a dozen cards long (no heading was set anywhere in the app until now).
-        Text(title, style = MaterialTheme.typography.titleSmall, color = pal.Sky, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.semantics { heading() })
-        content()
+    Column(Modifier.fillMaxWidth()) {
+        // Section title marked as a heading: TalkBack's heading swipe jumps group to group.
+        Text(title, style = studio.primeminutes.ui.theme.TypeRole.groupHeader(), color = pal.Ink3,
+            modifier = Modifier.padding(start = Spacing.xs, bottom = 6.dp).semantics { heading() })
+        Column(
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(pal.Slate800)
+                .border(1.dp, pal.Hairline, MaterialTheme.shapes.large).padding(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            content = content,
+        )
     }
 }
 
 /** Title only, for the hidden backend picker inside the Inference card. */
 @Composable
 private fun Section(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, color = LocalPrimeMinutesPalette.current.Sky,
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = Spacing.sm).semantics { heading() })
+    Text(title, style = studio.primeminutes.ui.theme.TypeRole.groupHeader(), color = LocalPrimeMinutesPalette.current.Ink3,
+        modifier = Modifier.padding(top = Spacing.sm).semantics { heading() })
 }
 
 @Composable

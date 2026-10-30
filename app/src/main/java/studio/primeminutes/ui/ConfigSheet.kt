@@ -73,7 +73,7 @@ fun ConfigSheet(
     val barScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.fillMaxSize().nestedScroll(barScroll.nestedScrollConnection).testTag("settings-screen"),
-        containerColor = pal.Slate800,   // the cards (InsetSurface) were drawn for this surface
+        containerColor = pal.Slate900,   // redesign: grouped blocks (raised) sit on the page ground
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -86,7 +86,7 @@ fun ConfigSheet(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = pal.Slate800, scrolledContainerColor = pal.Slate800,
+                    containerColor = pal.Slate900, scrolledContainerColor = pal.Slate900,
                     titleContentColor = pal.Slate200, navigationIconContentColor = pal.Slate200,
                 ),
                 scrollBehavior = barScroll,

@@ -31,7 +31,7 @@ import studio.primeminutes.ui.theme.Spacing
 fun ModelDownloadCard(status: ModelPrefetch.Status, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val pal = LocalPrimeMinutesPalette.current
     Column(
-        modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(pal.Sky.copy(alpha = 0.10f))
+        modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(pal.Fill)
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
