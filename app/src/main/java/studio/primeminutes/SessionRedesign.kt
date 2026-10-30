@@ -141,7 +141,7 @@ internal fun SummaryProse(summary: String, onSeek: ((Int) -> Unit)?) {
 }
 
 /** One group of the Notes tab: its heading, its colour, its lines (raw, anchors included). */
-internal data class NoteGroup(val label: String, val color: Color, val lines: List<String>)
+internal data class NoteGroup(val label: String, val color: Color, val lines: List<String>, val check: Boolean = false)
 
 private val FIRST_ANCHOR = Regex("""\[(\d+):(\d{2})(?::(\d{2}))?(?:\s*[,，、;；][^\]]*)?]""")
 
@@ -159,6 +159,25 @@ internal fun noteGroups(n: MeetingNotes?, actionItems: String?): List<NoteGroup>
         NoteGroup(stringResource(R.string.notes_topics), c(0xFF8A5CD0, 0xFFC4A8F5), n?.topics.orEmpty()),
     ).plus(n?.extra.orEmpty().map { (k, v) -> NoteGroup(k, c(0xFFB03A8A, 0xFFF08CCB), v) })
         .filter { it.lines.isNotEmpty() }
+}
+
+/** The live reader's kept notes grouped by type (決議, 待辦, 提議, 未決, 數字, other), each line "text [ts]". */
+@Composable
+internal fun agentNoteGroups(notes: List<studio.primeminutes.core.reader.Note>): List<NoteGroup> {
+    val dark = LocalPrimeMinutesPalette.current.isDark
+    fun c(light: Long, darkC: Long) = Color(if (dark) darkC else light)
+    val colors = mapOf(
+        "DECISION" to c(0xFF2E9156, 0xFF7FD3A2), "ACTION" to c(0xFF2F6FDE, 0xFF8DB4FF), "PROPOSAL" to c(0xFF8A5CD0, 0xFFC4A8F5),
+        "OPEN-ISSUE" to c(0xFF8A5A12, 0xFFE0A84A), "NUMBER" to c(0xFFB03A8A, 0xFFF08CCB),
+    )
+    val order = listOf("DECISION", "ACTION", "PROPOSAL", "OPEN-ISSUE", "NUMBER")
+    val by = notes.groupBy { studio.primeminutes.ui.fullTag(it.tag?.takeIf { t -> t != "-" } ?: "") }
+    val other = stringResource(R.string.tab_notes_plain)
+    return (order + by.keys.filter { it !in order }.sorted()).mapNotNull { k ->
+        val l = by[k]?.sortedBy { studio.primeminutes.core.reader.ReaderProtocol.parseTs(it.ts) ?: 0 } ?: return@mapNotNull null
+        NoteGroup(if (k.isEmpty()) other else studio.primeminutes.ui.tagLabel(k), colors[k] ?: LocalPrimeMinutesPalette.current.Slate400,
+            l.map { "${it.text} [${it.ts}]" }, check = k in setOf("DECISION", "ACTION", "NUMBER"))
+    }
 }
 
 /** The Notes tab: grouped by type, one line each, the time on the left plays from there. */
@@ -201,6 +220,13 @@ internal fun NotesTab(groups: List<NoteGroup>, onSeek: ((Int) -> Unit)?) {
                         renderMarkdown(refs(text), anchorColor = if (onSeek != null) pal.Sky else null, onSeek = onSeek),
                         style = MaterialTheme.typography.bodyMedium.copy(lineHeight = MaterialTheme.typography.bodyMedium.fontSize * 1.6f),
                         color = pal.Slate200, modifier = Modifier.weight(1f),
+                    )
+                    // 核對 only on the error-prone types (decisions, actions, figures): plays the cited moment.
+                    if (g.check && secs != null && onSeek != null) Text(
+                        stringResource(R.string.notes_check), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                        color = pal.WarningText,
+                        modifier = Modifier.padding(start = Spacing.sm).clip(CircleShape).background(pal.WarningTint)
+                            .clickable(role = Role.Button) { onSeek(secs * 1000) }.padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                 }
             }

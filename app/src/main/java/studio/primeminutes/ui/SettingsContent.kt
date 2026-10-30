@@ -949,7 +949,7 @@ private fun NavRow(label: String, value: String, tag: String, enabled: Boolean =
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, modifier = Modifier.weight(1f))
         if (value.isNotEmpty()) Text(value, style = MaterialTheme.typography.bodyMedium, color = pal.Slate400, maxLines = 1,
-            modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 180.dp), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 130.dp), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = pal.Ink3)
     }
 }

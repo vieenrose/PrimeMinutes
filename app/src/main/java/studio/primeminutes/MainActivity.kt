@@ -1482,7 +1482,9 @@ private fun TranscribeScreen(
     val dlEntry by produceState<SessionLibrary.Entry?>(null, s.downloadEntryId, dlChangesNow) {
         value = s.downloadEntryId?.let { id -> withContext(Dispatchers.IO) { SessionLibrary.byId(context, id) } }
     }
+    // The v2 notes when the session has them, else the live reader's kept notes (the current reader's output).
     val noteGroupsNow = noteGroups(s.meetingNotes, s.actionItems.takeIf { s.config.showActionItems })
+        .ifEmpty { agentNoteGroups((if (s.watchingQueue) queueAgent else agent).notes) }
     val noteCount = noteGroupsNow.sumOf { it.lines.size }
     val copySummaryHaptic = LocalHapticFeedback.current
     fun copySummary() {
