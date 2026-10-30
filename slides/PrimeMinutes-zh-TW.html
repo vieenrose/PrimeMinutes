@@ -99,6 +99,23 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
 @keyframes fadeUp { from { opacity:0; transform:translateY(26px); } to { opacity:1; transform:none; } }
 .slide .anim { opacity:0; }
 .slide.visible .anim { animation:fadeUp .55s cubic-bezier(.2,.7,.2,1) both; animation-delay:var(--d,0ms); }
+/* === TOUCH (phones) === */
+.deck-viewport, #zoom { touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+#zoom img { transform-origin:center center; will-change:transform; }
+#zoom.drag img { transition:none; }
+#zoom img { transition:transform .18s ease-out; }
+#rot { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:#0d1420e6; color:#cfe3f5; font-size:18px; text-align:center; }
+#rot.on { display:flex; }
+#rot .box { border:1px solid #29405a; border-radius:14px; padding:22px 26px; background:#0d1420; max-width:80vw; }
+#rot .ic { display:block; width:26px; height:44px; margin:0 auto 16px; border:3px solid #cfe3f5; border-radius:6px; animation:rotHint 2.2s ease-in-out infinite; }
+#rot button { margin-top:16px; font:inherit; font-size:15px; color:#cfe3f5; background:transparent; border:1px solid #29405a; border-radius:999px; padding:8px 20px; }
+@keyframes rotHint { 0%,30% { transform:rotate(0); } 60%,100% { transform:rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #rot .ic { animation:none; }
+  #zoom img, #bar, #hint { transition:none !important; }
+  .slide.visible .anim { animation:none !important; opacity:1 !important; }
+}
+@media print { #rot { display:none !important; } }
 </style>
 </head>
 <body>
@@ -121,7 +138,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     </div>
   </div>
   <p style="margin-top:14px; color:#93a1af; font-size:.8em">標誌：墨色的紀錄頁，一條綠色關鍵線釘住整場的重點</p>
-  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.61 · Android v0.56.3 · iOS 0.56.1 build 27 · 版次 2026-10-30</p>
+  <p style="margin-top:6px; color:#93a1af; font-size:.8em">簡報 v2.62 · Android v0.56.3 · iOS 0.56.1 build 27 · 版次 2026-10-30</p>
 </section>
 
 <!-- 2 問題 -->
@@ -320,7 +337,7 @@ table.t.rowlab tr:nth-child(even) td:first-child { background:#e8eef4; }
     <span class="pill">iOS TestFlight 公開測試</span>
     <span class="pill">github.com/vieenrose/PrimeMinutes</span>
   </div>
-  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.56.3 · iOS 0.56.1 TestFlight build 27 · 簡報 v2.61</p>
+  <p style="margin-top:14px; color:#93a1af; font-size:.8em">目前 Android v0.56.3 · iOS 0.56.1 TestFlight build 27 · 簡報 v2.62</p>
   <p style="margin-top:6px; color:#93a1af; font-size:.8em">小提醒：開會時把手機放桌子中央、靠近講話的人，分人分得最準；答案都附出處，重要的事點回原話確認一下。</p>
   <p class="lede" style="margin-top:26px">謝謝！示範與 Q&amp;A 時間。</p>
 </section>
@@ -389,6 +406,64 @@ function buildOv(){slides.forEach((s,n)=>{const cell=document.createElement('div
 function ovfit(){const cell=ov.querySelector('.ovcell');if(!cell)return;ov.style.setProperty('--k',(cell.clientWidth-2)/V);}
 function toggleOv(){if(!ovBuilt)buildOv();ov.classList.add('on');ovfit();}
 addEventListener('resize',()=>{if(ov.classList.contains('on'))ovfit();});
+
+/* === TOUCH: swipe / edge taps / pinch-zoom / rotate hint / double-tap fullscreen === */
+let lastPT='mouse',suppressClick=0;
+addEventListener('pointerdown',e=>{lastPT=e.pointerType;},true);
+// swallow the synthetic click after a handled touch gesture
+addEventListener('click',e=>{if(Date.now()<suppressClick){e.stopPropagation();e.preventDefault();}},true);
+const vp=document.querySelector('.deck-viewport')||document.body;
+const pts=new Map();let sw=null,pinched=false,lastTap=0;
+vp.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;pts.set(e.pointerId,e);
+  if(pts.size===1){sw={x:e.clientX,y:e.clientY,t:Date.now()};pinched=false;}else pinched=true;});
+const vpEnd=e=>{if(e.pointerType!=='touch'||!pts.has(e.pointerId))return;pts.delete(e.pointerId);
+  if(pts.size||!sw)return;const dx=e.clientX-sw.x,dy=e.clientY-sw.y,s0=sw;sw=null;
+  if(e.type==='pointercancel'||pinched||zoom.classList.contains('on')||ov.classList.contains('on'))return;
+  if(Math.abs(dx)>=50&&Math.abs(dx)>1.5*Math.abs(dy)){suppressClick=Date.now()+400;go(i+(dx<0?1:-1));return;}
+  if(Math.abs(dx)<10&&Math.abs(dy)<10&&Date.now()-s0.t<500){
+    const tgt=e.target;if(tgt.closest&&tgt.closest('a,button,.shot img,input,select,textarea'))return;
+    suppressClick=Date.now()+400;const x=e.clientX/innerWidth,now=Date.now();
+    if(x>.7)go(i+1);else if(x<.3)go(i-1);
+    else{if(now-lastTap<350){lastTap=0;toggleFs();}else lastTap=now;}}};
+vp.addEventListener('pointerup',vpEnd);vp.addEventListener('pointercancel',vpEnd);
+function toggleFs(){const d=document,el=d.documentElement;
+  try{if(d.fullscreenElement||d.webkitFullscreenElement){(d.exitFullscreen||d.webkitExitFullscreen).call(d);}
+  else{const r=el.requestFullscreen||el.webkitRequestFullscreen;if(r){const p=r.call(el);if(p&&p.catch)p.catch(()=>{});}}}catch(_){}}
+// pinch-zoom + pan + swipe-down/tap-to-close inside the image zoom
+const zp=new Map();let zs=1,zx=0,zy=0,zg=null;
+const zApply=()=>{zimg.style.transform='translate('+zx+'px,'+zy+'px) scale('+zs+')';};
+const zReset=()=>{zs=1;zx=0;zy=0;zApply();};
+new MutationObserver(()=>{if(!zoom.classList.contains('on'))zReset();}).observe(zoom,{attributes:true,attributeFilter:['class']});
+const zState=()=>{const a=[...zp.values()];if(a.length>=2){const[p,q]=a;
+  return{n:2,d:Math.hypot(p.x-q.x,p.y-q.y),cx:(p.x+q.x)/2,cy:(p.y+q.y)/2};}
+  return{n:1,cx:a[0].x,cy:a[0].y};};
+zoom.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;
+  zp.set(e.pointerId,{x:e.clientX,y:e.clientY});zoom.classList.add('drag');
+  const st=zState();zg={...st,s:zs,x:zx,y:zy,t:Date.now(),x0:e.clientX,y0:e.clientY,moved:zg&&zp.size>1?true:false,multi:zp.size>1||(zg&&zg.multi)};});
+zoom.addEventListener('pointermove',e=>{if(!zp.has(e.pointerId)||!zg)return;zp.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const st=zState();if(st.n===2&&zg.n===2){zs=Math.max(1,Math.min(6,zg.s*st.d/zg.d));}
+  zx=zg.x+(st.cx-zg.cx);zy=zg.y+(st.cy-zg.cy);
+  if(zs===1&&!zg.multi)zx=zg.x; // at 1x only vertical drag (swipe-down to close)
+  if(Math.hypot(e.clientX-zg.x0,e.clientY-zg.y0)>10)zg.moved=true;zApply();});
+const zEnd=e=>{if(!zp.has(e.pointerId))return;zp.delete(e.pointerId);
+  if(zp.size){const st=zState();zg={...zg,...st,s:zs,x:zx,y:zy};return;}
+  zoom.classList.remove('drag');const g=zg;zg=null;if(!g)return;
+  suppressClick=Date.now()+400;
+  if(e.type==='pointercancel'){if(zs<=1)zReset();return;}
+  if(!g.moved&&!g.multi){zClose();return;}               // tap closes
+  if(zs<=1.02&&!g.multi&&e.clientY-g.y0>80){zClose();return;} // swipe down closes
+  if(zs<=1.02)zReset();};
+zoom.addEventListener('pointerup',zEnd);zoom.addEventListener('pointercancel',zEnd);
+// portrait-phone rotate hint
+const rot=document.createElement('div');rot.id='rot';
+rot.innerHTML='<div class="box"><span class="ic"></span>請將手機轉為橫向<br><button type="button">知道了</button></div>';
+document.body.appendChild(rot);let rotOff=false;
+const mqP=matchMedia('(orientation: portrait) and (pointer: coarse) and (max-width: 900px)');
+const rotUpd=()=>rot.classList.toggle('on',mqP.matches&&!rotOff);
+rot.addEventListener('click',e=>{e.stopPropagation();rotOff=true;rotUpd();});
+rot.addEventListener('pointerdown',e=>e.stopPropagation());
+(mqP.addEventListener?mqP.addEventListener('change',rotUpd):mqP.addListener(rotUpd));rotUpd();
+if(matchMedia('(pointer: coarse)').matches)hint.textContent='左右滑動或點兩側換頁 · 點圖片放大 · 中間點兩下全螢幕';
 
 go(parseInt(location.hash.slice(1))-1||0);
 </script>
