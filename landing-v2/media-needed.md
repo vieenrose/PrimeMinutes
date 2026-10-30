@@ -17,3 +17,5 @@ Format: webp 480 px wide, 9:19.5 portrait unless noted; zh-TW UI, light theme; d
 | M12 | og:image | 1200×630 in slate/blue palette | — | site/og.png (dark/green) |
 
 Already P2 and reusable as-is: share-sheet-zh, share-pdf-zh, import-cloud-zh (iOS reshoot 2026-10-30).
+
+Status 2026-10-31 (Android remainder pass): M12 done as `assets/og.png` (1200×630, slate/blue, from the P2 summary and notes shots; `og:image` now points there instead of the old root `site/og.png`). M9 `channel-zh.webp` reshot with the last-check time pinned to 10:00. M10 is iPhone-only (not in this pass). M11 left as text: citation preview and collections are merged on Android but not released on either platform yet.
