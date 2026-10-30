@@ -351,6 +351,39 @@ struct SessionView: View {
         if let t = Dev.env["VOX_PLAYAT"].flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { player.seek(t); if !player.playing { player.toggle() } } }
         if Dev.env["VOX_SCROLL"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("stats", anchor: .top) } }
         if let t = openAt { openAtSeek(t, proxy) }
+        if let sc = Dev.env["VOX_CITE_SCRIPT"] { devScript(sc) }
+    }
+    /// DEV (device checks without UI Automation): VOX_CITE_SCRIPT="2=cite:22;5=close;…" runs the same calls a tap does,
+    /// at those seconds after the meeting opens — cite:S, verify:S, ask:S, outside, close, full, tab:N, pause,
+    /// title:X / titledone, sum:X / sumdone, line:I:X / linedone, move:I:K, mergeask:A:B / merge, rename:K, delete, dismiss.
+    private func devScript(_ sc: String) {
+        for step in sc.split(separator: ";") {
+            let kv = step.split(separator: "=", maxSplits: 1).map(String.init); guard kv.count == 2, let at = Double(kv[0]) else { continue }
+            let a = kv[1].split(separator: ":", maxSplits: 2).map(String.init), arg = { (i: Int) in a.count > i ? a[i] : "" }
+            DispatchQueue.main.asyncAfter(deadline: .now() + at) {
+                switch a[0] {
+                case "cite", "verify": openCite(Double(arg(1)) ?? 0)
+                case "ask": askCitation(Double(arg(1)) ?? 0)
+                case "outside": summaryTapped()
+                case "close": closeCite()
+                case "full": if let c = cite, v.lines.indices.contains(c.turn) { citeFull(v.lines[c.turn].id) }
+                case "tab": tab = Int(arg(1)) ?? 0
+                case "pause": player.pause()
+                case "title": draft = v.title + arg(1); renamingTitle = true
+                case "titledone": renamingTitle = false; commitTitle()
+                case "sum": draft = v.summary + arg(1); editingSummary = true
+                case "sumdone": saveSummaryEdit()
+                case "line": if let i = Int(arg(1)), v.lines.indices.contains(i) { editingLine = v.lines[i].id; draft = v.lines[i].text + arg(2) }
+                case "linedone": saveLineEdit()
+                case "move": if let i = Int(arg(1)), let k = Int(arg(2)), s.lines.indices.contains(i) { reassign(s.lines[i].id, k) }
+                case "mergeask": if let f = Int(arg(1)), let t = Int(arg(2)) { merging = (f, t) }
+                case "merge": if let (f, t) = merging { merge(f, t) }; merging = nil
+                case "rename": renamingSpeaker = Int(arg(1))
+                case "delete": player.stop(); Model.shared.library.remove(s); dismissMeeting()
+                default: renamingSpeaker = nil; editingLine = nil; editingSummary = false; renamingTitle = false
+                }
+            }
+        }
     }
     /// Open the transcript search (magnifier): transcript tab, field focused, embedder preloading.
     private func openSearch() { tab = 1; searching = true; searchFocus = true; Self.preloadEmbedder() }
