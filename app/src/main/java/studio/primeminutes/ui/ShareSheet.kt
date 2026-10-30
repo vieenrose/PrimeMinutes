@@ -37,6 +37,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,110 +108,85 @@ fun ShareSheet(
             Text(title, style = MaterialTheme.typography.bodyMedium, color = pal.Slate400, maxLines = 1,
                 modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.sm))
 
-            Section(stringResource(R.string.share_what))
-            Column(Modifier.selectableGroup()) {
-                WhatRow(Icons.Filled.FolderZip, stringResource(R.string.share_what_session), stringResource(R.string.share_what_session_desc),
-                    SizeFormat.bytes(sessionBytes), selected = what == What.SESSION, enabled = hasSession,
-                    hint = if (online) stringResource(R.string.share_hint_copyright) else stringResource(R.string.share_hint_voices),
-                    tag = "share-what-session") { what = What.SESSION }
-                WhatRow(Icons.Filled.PictureAsPdf, stringResource(R.string.share_what_pdf), stringResource(R.string.share_what_pdf_desc),
-                    docBytes?.let { SizeFormat.bytes(it) } ?: "…", selected = what == What.PDF, enabled = hasSession, hint = null,
-                    tag = "share-what-pdf") { what = What.PDF }
-                if (what == What.PDF) SingleChoiceSegmentedButtonRow(Modifier.padding(start = 72.dp, end = Spacing.lg, bottom = Spacing.xs).testTag("share-format")) {
-                    ShareKit.DocFormat.entries.forEachIndexed { i, f ->
-                        SegmentedButton(
-                            selected = fmt == f,
-                            onClick = { fmt = f; onFormat(f) },
-                            shape = SegmentedButtonDefaults.itemShape(i, ShareKit.DocFormat.entries.size),
-                            colors = SegmentedButtonDefaults.colors(activeContainerColor = pal.Sky.copy(alpha = 0.18f), activeContentColor = pal.Slate200, inactiveContentColor = pal.Slate400),
-                            modifier = Modifier.testTag("share-format-${f.name.lowercase()}"),
-                        ) { Text(stringResource(if (f == ShareKit.DocFormat.PDF) R.string.share_format_pdf else R.string.share_format_word)) }
-                    }
+            // Redesign: one format choice, the content toggles, one 分享… button; destinations (Quick Share,
+            // mail, any app) are the system share sheet's job.
+            Section(stringResource(R.string.share_format))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.lg).selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                FormatChip(stringResource(R.string.share_format_pdf), what == What.PDF && fmt == ShareKit.DocFormat.PDF, hasSession, "share-format-pdf") {
+                    what = What.PDF; fmt = ShareKit.DocFormat.PDF; onFormat(fmt)
                 }
-                if (what == What.PDF) Row(
-                    Modifier.fillMaxWidth().padding(start = 72.dp, end = Spacing.lg).heightIn(min = 48.dp)
+                FormatChip(stringResource(R.string.share_format_word), what == What.PDF && fmt == ShareKit.DocFormat.WORD, hasSession, "share-format-word") {
+                    what = What.PDF; fmt = ShareKit.DocFormat.WORD; onFormat(fmt)
+                }
+                FormatChip(stringResource(R.string.share_what_session), what == What.SESSION, hasSession, "share-what-session") { what = What.SESSION }
+                FormatChip(stringResource(R.string.share_what_audio), what == What.AUDIO, true, "share-what-audio") { what = What.AUDIO }
+            }
+            // What the choice is, its size, and its caution.
+            val (desc, size) = when (what) {
+                What.SESSION -> stringResource(R.string.share_what_session_desc) to SizeFormat.bytes(sessionBytes)
+                What.PDF -> stringResource(R.string.share_what_pdf_desc) to (docBytes?.let { SizeFormat.bytes(it) } ?: "…")
+                else -> stringResource(R.string.share_what_audio_desc) to SizeFormat.bytes(audioBytes)
+            }
+            Text("$desc · $size", style = MaterialTheme.typography.bodySmall, color = pal.Slate400,
+                modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm))
+            if (what != What.PDF) Text(
+                if (online) stringResource(R.string.share_hint_copyright) else stringResource(R.string.share_hint_voices),
+                color = pal.WarningText, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = 2.dp))
+
+            if (what == What.PDF) {
+                Section(stringResource(R.string.share_content))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).heightIn(min = 48.dp)
                         .clickable(role = Role.Switch) { attach = !attach },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.share_attach_audio, SizeFormat.bytes(audioBytes)), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium)
-                        if (online) Text(stringResource(R.string.share_hint_copyright), color = pal.WarningText, style = MaterialTheme.typography.bodySmall)
+                        if (online && attach) Text(stringResource(R.string.share_hint_copyright), color = pal.WarningText, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = attach, onCheckedChange = { attach = it }, modifier = Modifier.testTag("share-attach-audio"),
                         colors = SwitchDefaults.colors(checkedTrackColor = pal.Sky, checkedThumbColor = pal.OnSky))
                 }
-                WhatRow(Icons.Filled.MusicNote, stringResource(R.string.share_what_audio), stringResource(R.string.share_what_audio_desc),
-                    SizeFormat.bytes(audioBytes), selected = what == What.AUDIO, enabled = true,
-                    hint = if (online) stringResource(R.string.share_hint_copyright) else stringResource(R.string.share_hint_voices),
-                    tag = "share-what-audio") { what = What.AUDIO }
             }
 
-            HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(vertical = Spacing.sm))
-            Section(stringResource(R.string.share_where))
-            WhereRow(Icons.Filled.NearMe, null, stringResource(R.string.share_where_nearby), stringResource(R.string.share_where_nearby_desc), true, "share-where-nearby") { go(Where.NEARBY) }
-            WhereRow(Icons.Filled.Email, null, stringResource(R.string.share_where_mail),
-                if ((total ?: 0L) > ShareKit.MAIL_LIMIT) stringResource(R.string.share_mail_too_big) else stringResource(R.string.share_where_mail_desc),
-                true, "share-where-mail", warn = (total ?: 0L) > ShareKit.MAIL_LIMIT) { go(Where.MAIL) }
-            HorizontalDivider(color = pal.Hairline, modifier = Modifier.padding(vertical = Spacing.xs))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.share_other_apps), color = pal.Slate200, style = MaterialTheme.typography.bodyMedium) },
-                leadingContent = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null, tint = pal.Slate400, modifier = Modifier.size(20.dp)) },
-                trailingContent = { total?.let { Text(SizeFormat.bytes(it), color = pal.Slate400, style = MaterialTheme.typography.bodySmall) } },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { go(Where.OTHER) }.testTag("share-where-other"),
-            )
+            if ((total ?: 0L) > ShareKit.MAIL_LIMIT) Text(stringResource(R.string.share_mail_too_big), color = pal.WarningText,
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs))
+            Spacer(Modifier.height(Spacing.lg))
+            studio.primeminutes.ui.components.GradientButton(
+                text = stringResource(R.string.share_go) + (total?.let { "  ·  " + SizeFormat.bytes(it) } ?: ""),
+                icon = Icons.Filled.Share,
+                enabled = what != What.PDF || docBytes != null,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).heightIn(min = 52.dp).testTag("share-where-other"),
+            ) { go(Where.OTHER) }
         }
+    }
+}
+
+@Composable
+private fun FormatChip(label: String, on: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
+    val pal = LocalPrimeMinutesPalette.current
+    Box(
+        Modifier.heightIn(min = 48.dp).selectable(selected = on, enabled = enabled, role = Role.RadioButton, onClick = onClick).testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+            color = when { on -> pal.Slate900; enabled -> pal.Slate200; else -> pal.Slate400.copy(alpha = 0.5f) },
+            modifier = Modifier.heightIn(min = 34.dp).clip(CircleShape)
+                .background(if (on) pal.Slate200 else pal.Fill)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        )
     }
 }
 
 @Composable
 private fun Section(text: String) {
     val pal = LocalPrimeMinutesPalette.current
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, color = pal.Sky, fontWeight = FontWeight.Bold,
+    Text(text, style = studio.primeminutes.ui.theme.TypeRole.groupHeader(), color = pal.Ink3,
         modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = Spacing.xs).semantics { heading() })
-}
-
-@Composable
-private fun WhatRow(icon: ImageVector, title: String, desc: String, size: String, selected: Boolean, enabled: Boolean, hint: String?, tag: String, onClick: () -> Unit) {
-    val pal = LocalPrimeMinutesPalette.current
-    val alpha = if (enabled) 1f else 0.4f
-    ListItem(
-        headlineContent = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Text(title, color = pal.Slate200.copy(alpha = alpha), modifier = Modifier.weight(1f, fill = false))
-                Text(size, color = pal.Slate400.copy(alpha = alpha), style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        supportingContent = {
-            Column {
-                Text(desc, color = pal.Slate400.copy(alpha = alpha))
-                if (hint != null && selected) Text(hint, color = pal.WarningText, style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        leadingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = selected, onClick = null, enabled = enabled, colors = RadioButtonDefaults.colors(selectedColor = pal.Sky))
-                Spacer(Modifier.size(Spacing.xs))
-                Icon(icon, null, tint = pal.Sky.copy(alpha = alpha), modifier = Modifier.size(20.dp))
-            }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick).testTag(tag),
-    )
-}
-
-@Composable
-private fun WhereRow(icon: ImageVector, image: ImageBitmap?, title: String, desc: String, enabled: Boolean, tag: String, warn: Boolean = false, onClick: () -> Unit) {
-    val pal = LocalPrimeMinutesPalette.current
-    val alpha = if (enabled) 1f else 0.45f
-    ListItem(
-        headlineContent = { Text(title, color = pal.Slate200.copy(alpha = alpha)) },
-        supportingContent = { Text(desc, color = if (warn) pal.WarningText else pal.Slate400.copy(alpha = alpha)) },
-        leadingContent = {
-            if (image != null) Image(image, null, Modifier.size(28.dp))
-            else Icon(icon, null, tint = pal.Sky.copy(alpha = alpha), modifier = Modifier.size(28.dp))
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick).testTag(tag),
-    )
 }
