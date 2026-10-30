@@ -16,8 +16,8 @@
   <a href="https://vieenrose.github.io/PrimeMinutes/slides/PrimeMinutes-zh-TW.html"><img alt="簡報" src="https://img.shields.io/badge/簡報-線上預覽-0A7A52"></a>
 </p>
 
-<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="連續錄兩場會議"><br>
-<sub>連續錄兩場會議，停下來就自動完成筆記、摘要和標題（部分片段加速）</sub></p>
+<p align="center"><img src="docs/screenshots/demo-studio.gif" width="300" alt="錄音、佇列、摘要原話預覽、合集提問與搜尋"><br>
+<sub>邊錄邊記筆記；佇列可暫停再繼續；點摘要裡的時間就看到原話；在合集裡提問、搜遍所有會議（部分片段加速）</sub></p>
 
 ## 下載安裝
 
