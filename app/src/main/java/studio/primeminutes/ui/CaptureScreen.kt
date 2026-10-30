@@ -404,16 +404,8 @@ private fun UtteranceRow(utterances: List<TranscriptEvent.Utterance>, i: Int, st
     val showTag = settled && u.speaker != null && (i == 0 || utterances[i - 1].speaker != u.speaker)
     Column(Modifier.fillMaxWidth().padding(top = if (showTag && i > 0) 12.dp else 2.dp, bottom = 2.dp)) {
         if (showTag) {
-            val color = Color(speakerColorOn(u.speaker, pal.isDark))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
-                Text(
-                    stringResource(R.string.speaker_n, u.speaker + 1),
-                    color = color,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
-                )
+                studio.primeminutes.TranscriptSpeakerChip(stringResource(R.string.speaker_n, u.speaker + 1), u.speaker)
                 Spacer(Modifier.width(6.dp))
                 Text(
                     studio.primeminutes.fmtSec(u.startSec.toInt()),

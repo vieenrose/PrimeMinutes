@@ -892,21 +892,10 @@ internal fun UtteranceRow(
     Column(
         Modifier
             .fillMaxWidth()
-            // A turn = one visual block: the first line opens it with clear space above
-            // (OUTSIDE drawBehind, so the separator stays rail-free); continuation lines
-            // are flush, making the speaker rail one unbroken bar over the whole turn.
-            .padding(top = topPadding ?: if (showSpeaker) 20.dp else 8.dp)
+            // A turn opens with clear space above; continuation lines sit close, like the capture
+            // screen's live transcript (no speaker rail: the chip names the speaker in words).
+            .padding(top = topPadding ?: if (showSpeaker) 12.dp else 2.dp)
             .drawBehind {
-                // Speaker rail: a thin bar in the speaker's colour on EVERY line of a
-                // same-speaker run. The chip is only shown on the run's first line, so
-                // the rail is what visually attaches the continuation lines to their
-                // speaker — without it, chip-less lines looked unattributed.
-                utt.speaker?.let { sid ->
-                    drawRect(
-                        Color(speakerColorOn(sid, pal.isDark)).copy(alpha = 0.35f),
-                        size = Size(2.5.dp.toPx(), size.height),
-                    )
-                }
                 // Playing line: a neutral wash (the text colour at low alpha) — never a hue, which
                 // a speaker could also own; the speaker rail above stays untouched.
                 if (active) drawRect(pal.Slate200.copy(alpha = if (pal.isEink) 0.12f else 0.07f))
@@ -966,24 +955,23 @@ internal fun UtteranceRow(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (label != null && utt.speaker != null) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                            color = Color(speakerColorOn(utt.speaker, pal.isDark)),
-                            modifier = if (editable) Modifier.clickable(role = Role.Button) { onBeginSpeakerEdit(utt.speaker) } else Modifier,
+                        TranscriptSpeakerChip(
+                            label, utt.speaker,
+                            onClick = if (editable) ({ onBeginSpeakerEdit(utt.speaker) }) else null,
                         )
-                        Text(" · ", style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
+                        Spacer(Modifier.width(6.dp))
                     }
                     // The playing line also says so in its timestamp (▶, full contrast) — a cue that
                     // does not rely on colour at all.
-                    if (active) Text("▶ ${fmt(utt.startSec)}", style = MaterialTheme.typography.labelMedium,
+                    val timeStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
+                    if (active) Text("▶ ${fmt(utt.startSec)}", style = timeStyle,
                         fontWeight = FontWeight.Bold, color = pal.Slate200)
-                    else Text(fmt(utt.startSec), style = MaterialTheme.typography.labelMedium, color = pal.Slate400)
+                    else Text(fmt(utt.startSec), style = timeStyle, color = pal.Slate400)
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     highlightedTranscript(utt.text, highlight, pal.Sky, pal.Slate200),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = pal.Slate200,
                 )
                 LineMenu(utt.speaker, speakerIds, speakerNames, onBeginEdit, onReassignLine, onMergeSpeaker,
@@ -991,6 +979,26 @@ internal fun UtteranceRow(
             }
         }
     }
+}
+
+/**
+ * The speaker chip of a transcript turn — the capture screen's live-transcript style, shared by the
+ * saved-meeting transcript: the name in bold in the speaker's colour on a 15 % wash of it.
+ */
+@Composable
+internal fun TranscriptSpeakerChip(label: String, speaker: Int, onClick: (() -> Unit)? = null) {
+    val pal = LocalPrimeMinutesPalette.current
+    val color = Color(speakerColorOn(speaker, pal.isDark))
+    Text(
+        label,
+        color = color,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 /** Inline-content id for the speaker chip embedded at the head of a transcript line. */
