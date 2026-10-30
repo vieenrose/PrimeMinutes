@@ -115,6 +115,7 @@ fun SettingsContent(
     onChange: (TranscriptionConfig) -> Unit,
     onUpdateFound: (UpdateInfo) -> Unit = {},
     onOpenPeople: (() -> Unit)? = null,
+    pageState: androidx.compose.runtime.MutableState<String?>? = null,
 ) {
     val pal = LocalPrimeMinutesPalette.current
     Column(Modifier.padding(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
@@ -123,7 +124,9 @@ fun SettingsContent(
         val prefetch by studio.primeminutes.core.models.ModelPrefetch.status.collectAsState()
         prefetch?.let { st -> studio.primeminutes.ui.components.ModelDownloadCard(st, onCancel = { studio.primeminutes.core.models.ModelPrefetch.cancel() }) }
         // Redesign: the top level is one-line rows in grouped hairline blocks; a row opens its detail page.
-        var page by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        // The host (ConfigSheet) owns the page so its top-bar back and scroll follow it.
+        val ownPage = androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+        var page by (pageState ?: ownPage)
         androidx.activity.compose.BackHandler(page != null) { page = null }
         if (page == null) {
             val theme = LocalThemeController.current.mode
@@ -944,7 +947,9 @@ private fun NavRow(label: String, value: String, tag: String, enabled: Boolean =
     val pal = LocalPrimeMinutesPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .semantics(mergeDescendants = true) {}
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .testTag(tag),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, color = pal.Slate200, modifier = Modifier.weight(1f))
