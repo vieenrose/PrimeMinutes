@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prime Minutes｜會議紀錄，在手機上就寫好</title>
+<meta name="description" content="錄下會議，逐字稿即時出現並標出誰在說話，AI 邊聽邊記筆記、寫好摘要，還能搜尋和提問。全程在手機上完成，不上傳。Android 與 iPhone。">
+<meta name="theme-color" content="#F5F7FA">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Prime Minutes｜會議紀錄，在手機上就寫好">
+<meta property="og:description" content="逐字稿、分辨講者、AI 筆記與摘要、搜尋與提問，全程在手機上完成，不上傳。">
+<meta property="og:image" content="assets/og.png">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<style>
+/* P2 cool slate + blue accent; red only for record / live */
+:root{
+  --bg:#F5F7FA; --surf:#FFFFFF; --sunk:#EDF1F5; --line:#DDE3EA; --ink:#14202E; --mute:#556677; --dim:#7D8B99;
+  --accent:#2F6BDE; --accent-ink:#1F4FAE; --accent-soft:#E7EEFC;
+  --rec:#D93F3F; --rec-soft:#FCEBEB;
+  --sans:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+  --w:1120px; --r:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.75 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+img,video{display:block;max-width:100%;height:auto}
+h1,h2,h3{line-height:1.3;letter-spacing:.01em;margin:0}
+p{margin:0}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 20px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+
+/* nav */
+nav{position:sticky;top:0;z-index:10;background:rgba(245,247,250,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700}
+.brand img{width:26px;height:26px;border-radius:7px}
+.navlinks{display:flex;gap:22px;align-items:center;font-size:14px;color:var(--mute)}
+.navlinks a{text-decoration:none;white-space:nowrap}.navlinks a:hover{color:var(--ink)}
+.navlinks a.hide-m{display:none}
+.navcta{color:#fff!important;background:var(--accent);padding:6px 14px;border-radius:999px}
+
+/* hero */
+.hero{padding:40px 0 56px}
+.hero .wrap{display:grid;gap:40px}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--mute);background:var(--surf);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 6px;margin-bottom:18px}
+.tag b{background:var(--accent-soft);color:var(--accent-ink);font-weight:600;padding:0 8px;border-radius:999px;font-size:12px}
+h1{font-size:clamp(34px,7vw,60px);font-weight:800;margin-bottom:18px}
+h1 em{font-style:normal;color:var(--accent)}
+.lead{font-size:clamp(16px,1.6vw,19px);color:var(--mute);max-width:32em;margin-bottom:28px}
+.req{font-size:13px;color:var(--dim);margin-top:14px}
+.phone{justify-self:center;width:min(280px,74vw);padding:8px;border-radius:40px;background:#0E1620;box-shadow:0 30px 60px -28px rgba(20,32,46,.45)}
+.phone video{width:100%;border-radius:32px;aspect-ratio:360/780;object-fit:cover;background:#fff}
+.caption{font-size:12px;color:var(--dim);text-align:center;margin-top:12px;max-width:290px;justify-self:center}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--rec);font-weight:600}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--rec)}
+
+/* download cards (kept from current page; restyled) */
+.dls{display:flex;flex-direction:column;gap:10px}
+.dl{display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:16px;text-decoration:none;color:var(--ink);border:1px solid var(--line);background:var(--surf);transition:transform .2s,border-color .2s}
+.dl:hover{transform:translateY(-2px);border-color:var(--accent)}
+.dl .qr{display:none;width:84px;height:84px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:10px;image-rendering:pixelated;flex:none}
+.dl b{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:16px;font-weight:600}
+.dl b svg{width:18px;height:18px}
+.dl small{display:block;margin-top:2px;font-size:13px;color:var(--mute)}
+.dl em{display:none;margin-top:8px;font-style:normal;font-size:12px;color:var(--dim)}
+.dl.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.dl.pri small,.dl.pri em{color:rgba(255,255,255,.8)}
+
+/* trust strip */
+.trust{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surf)}
+.trust ul{list-style:none;margin:0;padding:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-size:14px;color:var(--mute)}
+.trust li{display:flex;align-items:center;gap:8px}
+.trust svg{width:18px;height:18px;flex:none;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* sections */
+section{padding:64px 0}
+.eyebrow{font-size:13px;font-weight:600;letter-spacing:.14em;color:var(--accent);margin-bottom:10px}
+h2{font-size:clamp(26px,4vw,38px);font-weight:800;margin-bottom:12px}
+.sub{color:var(--mute);max-width:36em}
+
+/* flow steps */
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:24px 14px;margin-top:32px;counter-reset:s}
+.shot{border-radius:20px;border:1px solid var(--line);background:#fff;width:100%;aspect-ratio:9/19.5;object-fit:cover;object-position:top}
+.step figure{margin:0}
+.step figcaption{margin-top:12px;font-size:14px;color:var(--mute)}
+.step figcaption b{display:block;font-size:16px;color:var(--ink);margin-bottom:2px}
+.step figcaption b::before{counter-increment:s;content:counter(s);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-size:12px;margin-right:8px;vertical-align:2px}
+
+/* feature rows */
+.feat{display:grid;gap:28px;align-items:center;padding:44px 0;border-top:1px solid var(--line)}
+.feat:first-of-type{border-top:0}
+.feat .media{display:flex;gap:12px;justify-content:center}
+.feat .media > *{width:min(220px,44vw)}
+.feat .media.one > *{width:min(240px,62vw)}
+.feat h3{font-size:clamp(22px,3vw,30px);font-weight:800;margin-bottom:10px}
+.feat .k{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px}
+.feat .k.rec{color:var(--rec)}
+.feat p.d{color:var(--mute);margin-bottom:16px}
+.bul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.bul li{position:relative;padding-left:26px;font-size:15px}
+.bul li::before{content:"";position:absolute;left:4px;top:.62em;width:10px;height:6px;border-left:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg)}
+.bul li span{color:var(--mute)}
+.cite{display:inline-block;font-size:12px;line-height:1.5;padding:0 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);font-variant-numeric:tabular-nums;vertical-align:1px}
+.soon{display:inline-block;font-size:11px;font-weight:600;padding:0 7px;border-radius:999px;background:var(--sunk);color:var(--mute);margin-left:6px;vertical-align:2px}
+.ntypes{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 16px}
+.ntypes span{font-size:13px;padding:2px 10px;border-radius:8px;background:var(--surf);border:1px solid var(--line)}
+
+/* placeholder for media to be reshot */
+.ph{border:1.5px dashed #A9B6C4;border-radius:20px;background:repeating-linear-gradient(135deg,#EEF2F6 0 12px,#F5F7FA 12px 24px);aspect-ratio:9/19.5;display:grid;place-items:center;text-align:center;padding:16px;color:var(--mute);font-size:13px;line-height:1.5}
+.ph b{display:block;color:var(--ink);font-size:13px;margin-bottom:4px}
+.ph.wide{aspect-ratio:16/10}
+
+/* lanes diagram */
+.lanes{display:grid;gap:8px;margin:4px 0 18px}
+.lane{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
+.lane i{font-style:normal;font-size:12px;font-weight:700;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-ink)}
+.lane.r i{background:var(--rec-soft);color:var(--rec)}
+.lane span{color:var(--mute)}
+
+/* more grid */
+.more{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:28px}
+.mc{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+@media (min-width:720px){.mc{padding:20px}}
+.mc h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.mc p{font-size:14px;color:var(--mute)}
+.mc .ic{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;margin-bottom:12px}
+.mc .ic svg{width:19px;height:19px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* privacy */
+.privacy{background:#14202E;color:#E8EEF4}
+.privacy .eyebrow{color:#8DB0F2}
+.privacy .sub{color:#A7B5C3}
+.plist{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:0}
+.plist li{padding:16px 0;border-top:1px solid #2A394A;display:grid;grid-template-columns:24px 1fr;gap:12px;color:#A7B5C3;font-size:15px}
+.plist b{color:#fff;font-weight:600;display:block}
+.plist svg{width:18px;height:18px;stroke:#8DB0F2;fill:none;stroke-width:2;margin-top:5px}
+
+/* specs */
+.specs{display:grid;gap:12px;margin-top:28px}
+.spec{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.spec h3{font-size:16px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.spec h3 svg{width:18px;height:18px}
+.spec dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.spec dt{color:var(--dim)}
+.spec dd{margin:0}
+
+/* faq */
+.faq{max-width:780px;margin-top:20px}
+details{border-bottom:1px solid var(--line)}
+summary{list-style:none;cursor:pointer;padding:18px 36px 18px 0;font-size:16px;font-weight:600;position:relative}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";position:absolute;right:6px;top:50%;width:10px;height:10px;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+details[open] summary::after{transform:translateY(-30%) rotate(225deg)}
+details p{margin:0 0 18px;color:var(--mute);font-size:15px}
+
+.closing{text-align:center;background:var(--surf);border-top:1px solid var(--line)}
+.closing img.icon{width:56px;height:56px;border-radius:14px;margin:0 auto 20px}
+.closing .sub{margin:0 auto}
+.closing .dls{margin:28px auto 0;max-width:640px}
+
+footer{border-top:1px solid var(--line);padding:28px 0;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+footer a{text-decoration:none}footer a:hover{color:var(--ink)}
+footer .links{display:flex;gap:18px}
+
+/* ≥ 720 px */
+@media (min-width:720px){
+  .wrap{padding:0 32px}
+  .navlinks a.hide-m{display:inline}
+  .dls{flex-direction:row}
+  .dl{flex:1;padding:10px 16px 10px 10px}
+  .dl .qr,.dl em{display:block}
+  .trust ul{grid-template-columns:repeat(4,auto);justify-content:space-between}
+  .steps{grid-template-columns:repeat(4,1fr);gap:20px}
+
+  .specs{grid-template-columns:1fr 1fr}
+  .plist{grid-template-columns:1fr 1fr;column-gap:40px}
+  section{padding:88px 0}
+}
+/* ≥ 1000 px */
+@media (min-width:1000px){
+  .hero{padding:64px 0 80px}
+  .hero .wrap{grid-template-columns:1.2fr .8fr;gap:56px;align-items:center}
+  .feat{grid-template-columns:1fr 1fr;gap:56px;padding:64px 0}
+  .feat.flip .txt{order:2}
+  .more{grid-template-columns:repeat(3,1fr)}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.dl{transition:none}}
+</style>
+</head>
+<body>
+
+<nav aria-label="主選單">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/pm-app-icon.svg" alt="" width="26" height="26">Prime Minutes</a>
+    <div class="navlinks">
+      <a class="hide-m" href="#features">功能</a>
+      <a class="hide-m" href="#privacy">隱私</a>
+      <a class="hide-m" href="#specs">支援機型</a>
+      <a class="hide-m" href="#faq">常見問題</a>
+      <a class="navcta" href="#get">下載</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- 1 HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <div class="tag"><b>新版</b>全新介面：更安靜的配色、分頁更清楚</div>
+      <h1>開完會，<br><em>紀錄</em>已經寫好了。</h1>
+      <p class="lead">邊錄邊出逐字稿、標出誰在說話，AI 同時記下決議和待辦。停止錄音，摘要和標題就寫好了。全程在手機上完成，不上傳。</p>
+      <div class="dls" id="download">
+        <a class="dl pri" href="https://github.com/vieenrose/PrimeMinutes/releases/latest">
+          <img class="qr" src="assets/qr-android.svg" alt="Android 版下載 QR code" width="84" height="84">
+          <span><b><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22A11.4 11.4 0 0012 8.1c-1.77 0-3.43.38-4.92 1.04L5.22 5.92a.38.38 0 00-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>下載 Android 版</b><small>v0.56.5・Android 8.0 以上</small><em>手機掃描或點擊下載</em></span></a>
+        <a class="dl" href="https://testflight.apple.com/join/saH9YxEA">
+          <img class="qr" src="assets/qr-ios.svg" alt="iPhone 公開測試 QR code" width="84" height="84">
+          <span><b><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31a4.05 4.05 0 00-3.19-1.73c-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76A4.26 4.26 0 005.26 9.8c-1.53 2.65-.39 6.58 1.1 8.73.73 1.05 1.6 2.24 2.74 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13a9.4 9.4 0 001.2-2.46 3.82 3.82 0 01-2.28-3.52zM14.2 6.13a3.9 3.9 0 00.9-2.82 3.97 3.97 0 00-2.57 1.33 3.7 3.7 0 00-.92 2.73 3.28 3.28 0 002.59-1.24z"/></svg>iPhone 公開測試</b><small>TestFlight・iOS 17 以上</small><em>手機掃描或點擊加入</em></span></a>
+      </div>
+      <p class="req">不用註冊帳號。第一次使用時下載 AI 模型，之後都在手機上離線執行。</p>
+    </div>
+    <div style="display:grid">
+      <div class="phone">
+        <video src="assets/demo.mp4" poster="assets/demo-poster.webp" autoplay muted loop playsinline preload="none"
+          aria-label="示範：錄音時邊記筆記、佇列暫停再繼續、點摘要時間看原話、在合集裡提問、搜尋所有會議"></video>
+      </div>
+      <p class="caption">邊錄邊記、佇列暫停再繼續、點時間看原話、在合集裡提問（Android Note10+；部分片段加速）</p>
+    </div>
+  </div>
+</header>
+
+<!-- 2 TRUST STRIP -->
+<div class="trust" aria-label="重點">
+  <div class="wrap">
+    <ul>
+      <li><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>離線執行，不上傳</li>
+      <li><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>不用註冊帳號</li>
+      <li><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Android 與 iPhone</li>
+      <li><svg viewBox="0 0 24 24"><path d="M4 5h9M8 3v2M6 5c0 4 3 7 6 8M11 5c-1 4-4 7-7 8M13 21l4-10 4 10M14.5 17h5"/></svg>繁中・简中・English</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 3 HOW IT FLOWS -->
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">從錄音到紀錄</p>
+    <h2>按下錄音，其他交給它。</h2>
+    <p class="sub">不用設定、不用等上傳。停止之後，摘要、筆記和標題會自己完成。</p>
+    <div class="steps">
+      <div class="step"><figure><img class="shot" loading="lazy" src="assets/qs-capture.webp" alt="錄音畫面：逐字稿即時出現，講者以顏色標示" width="480" height="1040"><figcaption><b>錄音</b>字隨著說話出現，標上是誰。</figcaption></figure></div>
+      <div class="step"><figure><img class="shot" loading="lazy" src="assets/17-process.webp" alt="AI 筆記：依決議、待辦等分類列出" width="480" height="1040"><figcaption><b>邊聽邊記</b>決議、待辦在錄音中就陸續記下。</figcaption></figure></div>
+      <div class="step"><figure><img class="shot" loading="lazy" src="assets/10-summary.webp" alt="摘要畫面：會議摘要，附時間點" width="480" height="1040"><figcaption><b>摘要寫好</b>每句都附時間，點了就播原話。</figcaption></figure></div>
+      <div class="step"><figure><img class="shot" loading="lazy" src="assets/11-transcript.webp" alt="逐字稿畫面：依講者分段的完整對話" width="480" height="1040"><figcaption><b>修正、分享</b>長按改字、改講者，再分享出去。</figcaption></figure></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 KEY FEATURES -->
+<section id="features" style="padding-top:0">
+  <div class="wrap">
+
+    <article class="feat">
+      <div class="txt">
+        <p class="k rec"><span class="live">錄音中</span></p>
+        <h3>錄的同時，三件事一起做</h3>
+        <p class="d">不用等會開完。手機一邊聽，一邊把字打出來、分出講者、整理重點。</p>
+        <div class="lanes">
+          <div class="lane r"><i>1</i><div>逐字稿 <span>— 講完約兩秒上螢幕</span></div></div>
+          <div class="lane"><i>2</i><div>分辨講者 <span>— 最近幾秒先暫定，隨後自動校正</span></div></div>
+          <div class="lane"><i>3</i><div>AI 筆記 <span>— 邊聽邊記，記到哪裡看得到</span></div></div>
+        </div>
+        <ul class="bul">
+          <li>「下一場」直接接著錄，<span>前一場在背景繼續整理</span></li>
+          <li>RAM 較小的手機，<span>錄完再整理筆記，結果一樣</span></li>
+        </ul>
+      </div>
+      <div class="media one">
+        <video class="shot" src="assets/rec-loop.mp4" autoplay muted loop playsinline preload="none" width="480" height="1013" aria-label="錄音中：逐字稿隨說話出現，AI 筆記在下方更新"></video>
+      </div>
+    </article>
+
+    <article class="feat flip">
+      <div class="txt">
+        <p class="k">講者</p>
+        <h3>誰說了什麼，一眼就知道</h3>
+        <p class="d">每位講者有自己的顏色。名字設一次，之後的會議會建議同一個人，你確認了才算數。</p>
+        <ul class="bul">
+          <li>名字存在手機的<b>聯絡人</b>，<span>寄紀錄時直接帶出電子郵件</span></li>
+          <li>「辨識聲音」<b>預設關閉</b>，<span>存的是特徵數字、不是錄音，可一鍵清除</span></li>
+          <li>標錯了：長按改人，<span>或用分界編輯器拖動換人的位置，可復原</span></li>
+        </ul>
+      </div>
+      <div class="media">
+        <img class="shot" loading="lazy" src="assets/people-people-zh.webp" alt="說話者名錄" width="480" height="1013">
+        <img class="shot" loading="lazy" src="assets/boundary.webp" alt="分界編輯器：拖動換人的位置" width="480" height="1013">
+      </div>
+    </article>
+
+    <article class="feat">
+      <div class="txt">
+        <p class="k">摘要與筆記</p>
+        <h3>每一句重點，都點得回原話</h3>
+        <p class="d">摘要分段寫好，筆記照類型分開。句尾的時間標記 <span class="cite">12:04</span> 點一下，就從那裡開始播。</p>
+        <div class="ntypes" aria-label="筆記類型"><span>決議</span><span>待辦</span><span>提議</span><span>還沒定案</span><span>重要數字</span></div>
+        <ul class="bul">
+          <li>很長的會也會<b>寫完整</b>，<span>分段接著寫</span></li>
+          <li>決議、待辦、數字旁有「核對」標記，<span>提醒你點回去確認</span></li>
+          <li>點時間標記先看到那段原文<span class="soon">即將推出</span></li>
+        </ul>
+      </div>
+      <div class="media">
+        <img class="shot" loading="lazy" src="assets/summary-zh.webp" alt="摘要分頁：每句附上藍色時間標記" width="480" height="1013">
+        <img class="shot" loading="lazy" src="assets/notes-zh.webp" alt="筆記分頁：決議、待辦等分類，附「核對」" width="480" height="1013">
+      </div>
+    </article>
+
+    <article class="feat flip">
+      <div class="txt">
+        <p class="k">搜尋與提問</p>
+        <h3>不記得原話，也找得到</h3>
+        <p class="d">打意思就能搜遍所有會議。也可以直接問：「預算誰負責？什麼時候要交？」答案附上出處，點一下就聽原話。</p>
+        <ul class="bul">
+          <li>可以只看某個人講的，<span>或按日期、來源篩選</span></li>
+          <li>問一場會，<span>或一次問遍整個會議庫</span></li>
+          <li>找不到就直說沒有，<span>不硬湊答案</span></li>
+          <li>只在某個合集或頻道裡搜尋、提問<span class="soon">即將推出</span></li>
+        </ul>
+      </div>
+      <div class="media">
+        <img class="shot" loading="lazy" src="assets/meeting-search-zh.webp" alt="會議庫搜尋：用意思找到相關段落" width="480" height="1013">
+        <img class="shot" loading="lazy" src="assets/meeting-ask-zh.webp" alt="向會議提問：回答附上出處時間" width="480" height="1013">
+      </div>
+    </article>
+
+    <article class="feat">
+      <div class="txt">
+        <p class="k">匯入</p>
+        <h3>不只錄音，現成的也能轉</h3>
+        <p class="d">手上的錄音、影片、雲端硬碟的檔案，或是 Podcast、PeerTube 影片，都能轉成逐字稿和筆記。</p>
+        <ul class="bul">
+          <li>追蹤的節目自成<b>頻道</b>，<span>新集數一目了然</span></li>
+          <li>自己的會議也能收成<b>合集</b>，<span>例如每週例會</span><span class="soon">即將推出</span></li>
+          <li>匯入很多個也沒關係，<span>處理佇列一個個排好</span></li>
+        </ul>
+        <p class="req">線上內容僅供個人使用，請先確認你有權下載與轉錄。</p>
+      </div>
+      <div class="media">
+        <img class="shot" loading="lazy" src="assets/import-cloud-zh.webp" alt="加入音訊：檔案、雲端硬碟、Podcast" width="480" height="1039">
+        <img class="shot" loading="lazy" src="assets/channel-zh.webp" alt="節目頁：訂閱、檢查新集數、下載並轉錄" width="480" height="1013">
+      </div>
+    </article>
+
+    <article class="feat flip">
+      <div class="txt">
+        <p class="k">分享</p>
+        <h3>先選內容，再選要送去哪</h3>
+        <p class="d">一個分享按鈕：整場會議、摘要加逐字稿，或只有錄音。</p>
+        <ul class="bul">
+          <li>給主管：<b>PDF 或 Word</b>，<span>摘要、待辦在前，逐字稿在後</span></li>
+          <li>給同事：<b>整場會議檔</b>，<span>iPhone、Android 互相打得開</span></li>
+          <li>純文字、Markdown，<span>或用你自己的郵件 App 寄給與會者</span></li>
+        </ul>
+      </div>
+      <div class="media">
+        <img class="shot" loading="lazy" src="assets/share-sheet-zh.webp" alt="分享選單：選擇內容與格式" width="480" height="1039">
+        <img class="shot" loading="lazy" src="assets/share-pdf-zh.webp" alt="PDF：摘要、待辦與逐字稿" width="480" height="1039">
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- 5 MORE -->
+<section id="more" style="background:var(--surf);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <p class="eyebrow">細節</p>
+    <h2>還有這些，讓它更好用</h2>
+    <div class="more">
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div><h3>處理佇列</h3><p>匯入一批也不用守著。一次排好，AI 只載入一次，依序做完。</p></div>
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/></svg></div><h3>中斷也不怕</h3><p>停止就先存檔。電話打進來、App 被關掉，重開會問你要不要接著做完。</p></div>
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 4v16M16 4v16M4 12h16"/></svg></div><h3>合併與分割</h3><p>一場會錄成好幾段，合成一場；太長的錄音，在時間點切開。都能復原。</p></div>
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M18 15l2 2-2 2"/></svg></div><h3>三種介面語言</h3><p>繁體中文、简体中文、English。逐字稿和筆記的中文字也跟著你選的介面。</p></div>
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div><h3>快一點，或準一點</h3><p>文字和筆記的速度都能自己選；一般開會用預設就好。換了可以整場重跑。</p></div>
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/></svg></div><h3>會議庫照來源分</h3><p>會議、Podcast 一點就切換，每場都標著處理狀態。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 PRIVACY -->
+<section id="privacy" class="privacy">
+  <div class="wrap">
+    <p class="eyebrow">隱私</p>
+    <h2>會議內容，不離開你的手機。</h2>
+    <p class="sub">語音辨識、分辨講者、筆記、摘要、搜尋和提問，都在手機上執行。飛航模式也能用。</p>
+    <ul class="plist">
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>錄音和文字只存在本機</b>不登入、不同步到雲端。</div></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>只有兩種時候會連網</b>第一次下載 AI 模型（可設定僅限 Wi‑Fi），以及你自己加入的線上節目。</div></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>「辨識聲音」要你同意才開</b>聲音特徵不匯出、不備份，隨時可以刪除。幫別人命名前，先徵得同意。</div></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg><div><b>分享由你決定</b>寄信是幫你開好新郵件、附上檔案，App 本身不寄信。</div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7 SPECS -->
+<section id="specs">
+  <div class="wrap">
+    <p class="eyebrow">支援機型</p>
+    <h2>我的手機可以用嗎？</h2>
+    <div class="specs">
+      <div class="spec"><h3><svg viewBox="0 0 24 24" fill="#3DA35D" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22A11.4 11.4 0 0012 8.1c-1.77 0-3.43.38-4.92 1.04L5.22 5.92a.38.38 0 00-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52z"/></svg>Android</h3>
+        <dl><dt>系統</dt><dd>Android 8.0 以上</dd><dt>記憶體</dt><dd>8 GB 以上：錄音時同步記筆記；較小的手機錄完再整理</dd><dt>安裝</dt><dd>下載 APK 安裝，App 每天檢查一次新版</dd></dl></div>
+      <div class="spec"><h3><svg viewBox="0 0 24 24" fill="#14202E" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31a4.05 4.05 0 00-3.19-1.73c-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76A4.26 4.26 0 005.26 9.8c-1.53 2.65-.39 6.58 1.1 8.73.73 1.05 1.6 2.24 2.74 2.2 1.1-.05 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13a9.4 9.4 0 001.2-2.46 3.82 3.82 0 01-2.28-3.52z"/></svg>iPhone</h3>
+        <dl><dt>系統</dt><dd>iOS 17 以上</dd><dt>記憶體</dt><dd>6 GB 以上最順；3 GB 機型（如 iPhone XR）無法執行</dd><dt>安裝</dt><dd>TestFlight 公開測試</dd></dl></div>
+    </div>
+    <p class="req">首次下載：語音辨識加講者分離約 273 MB，會議 AI 約 2.2 GB。App 會先顯示總量。</p>
+  </div>
+</section>
+
+<!-- 8 FAQ -->
+<section id="faq" style="padding-top:0">
+  <div class="wrap">
+    <p class="eyebrow">常見問題</p>
+    <h2>你可能想問</h2>
+    <div class="faq">
+      <details><summary>真的完全不用網路嗎？</summary><p>第一次使用要先下載 AI 模型（可設定僅限 Wi‑Fi）。下載完之後，錄音、逐字稿、筆記、摘要、搜尋和提問都在手機上離線完成。</p></details>
+      <details><summary>iPhone 版要怎麼裝？</summary><p>目前是 TestFlight 公開測試：先在 App Store 安裝 TestFlight，再點上面的「iPhone 公開測試」連結加入。</p></details>
+      <details><summary>支援哪些語言？</summary><p>介面有繁體中文、简体中文和英文，逐字稿與筆記的中文字體會跟著介面語言。提問時用中文問就用中文答，用英文問就用英文答。</p></details>
+      <details><summary>講者分錯了怎麼辦？</summary><p>長按那一句就能改成別人；換人的位置不對，用分界編輯器拖一下。兩個講者其實是同一人，可以合併。每一步都能復原。</p></details>
+      <details><summary>AI 寫的內容可以全信嗎？</summary><p>摘要、筆記和提問的答案都附上出處，重要的決定和數字，建議點回原話確認一下。</p></details>
+      <details><summary>Android 和 iPhone 之間可以互傳嗎？</summary><p>可以。分享整場會議會產生一個 .pmin 檔，對方用 Prime Minutes 一點就能打開。</p></details>
+      <details><summary>錄音時手機放哪裡最好？</summary><p>放在桌子中間、靠近講話的人，講者分得最準。</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- 9 CLOSING -->
+<section class="closing" id="get">
+  <div class="wrap">
+    <img class="icon" loading="lazy" src="assets/pm-app-icon.svg" alt="Prime Minutes 圖示" width="56" height="56">
+    <h2>下一場會議，讓手機幫你記。</h2>
+    <p class="sub">Android 與 iPhone 功能一致。</p>
+    <div class="dls">
+      <a class="dl pri" href="https://github.com/vieenrose/PrimeMinutes/releases/latest">
+        <img class="qr" loading="lazy" src="assets/qr-android.svg" alt="Android 版下載 QR code" width="84" height="84">
+        <span><b>下載 Android 版</b><small>v0.56.5・Android 8.0 以上</small><em>手機掃描或點擊下載</em></span></a>
+      <a class="dl" href="https://testflight.apple.com/join/saH9YxEA">
+        <img class="qr" loading="lazy" src="assets/qr-ios.svg" alt="iPhone 公開測試 QR code" width="84" height="84">
+        <span><b>iPhone 公開測試</b><small>TestFlight・iOS 17 以上</small><em>手機掃描或點擊加入</em></span></a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Prime Minutes・Android v0.56.5・iOS 0.56.5</div>
+    <div class="links">
+      <a href="https://github.com/vieenrose/PrimeMinutes/issues">聯絡我們</a>
+      <a href="https://github.com/vieenrose/PrimeMinutes/discussions">討論區</a>
+    </div>
+  </div>
+</footer>
+<script>
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){var v=document.querySelector('video');if(v){v.removeAttribute('autoplay');v.controls=true;}}
+</script>
+</body>
+</html>
