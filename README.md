@@ -32,14 +32,15 @@
 
 | 邊錄邊出字 | 自動整理筆記 | 摘要點了就聽原話 |
 |:---:|:---:|:---:|
-| <img src="docs/screenshots/qs-capture.png" width="220" alt="錄音"> | <img src="docs/screenshots/17-process.png" width="220" alt="AI 筆記"> | <img src="docs/screenshots/10-summary.png" width="220" alt="摘要"> |
+| <img src="docs/screenshots/qs-capture.png" width="220" alt="錄音"> | <img src="docs/screenshots/17-process.png" width="220" alt="AI 筆記"> | <img src="docs/guide/70-citation-preview.png" width="220" alt="摘要：點時間看原話預覽"> |
 | **搜尋和提問** | **認得說話的人** | **逐字稿隨手修正** |
 | <img src="docs/screenshots/meeting-search-ask.gif" width="220" alt="搜尋與提問"> | <img src="docs/screenshots/people-voice-suggestion.png" width="220" alt="辨識聲音建議名字"> | <img src="docs/screenshots/11-transcript.png" width="220" alt="逐字稿"> |
 
 - **邊錄邊出字**：說完話大約兩秒，文字就上螢幕，還標好是誰說的。
 - **自動整理筆記**：錄音時就把決議、待辦、提議、還沒定案的事和數字整理出來；停下後自動寫好摘要和標題。
-- **摘要點了就聽原話**：每個時間點都能直接播放，對照原本怎麼說；文字、說話者、換人位置都能修正，也能復原。
+- **摘要點了就聽原話**：每個時間點都能直接播放，播放器上方同時跳出那幾句原話，對照原本怎麼說；文字、說話者、換人位置都能修正，也能復原。
 - **搜尋和提問**：用意思找遍所有會議，直接問問題，回答會附上出處。
+- **合集**：同一個專案的會議收進一個合集（例如「尾牙籌備」），可以只針對這幾場提問；標題開頭一樣的會議，App 會主動問要不要建成合集。
 - **認得說話的人**：名字用手機聯絡人，跨會議通用；開啟「辨識聲音」後，下次開會會建議名字（選用）。
 - **匯入和分享**：匯入音訊、影片、iCloud Drive 等雲端硬碟的檔案或 Podcast；用 AirDrop、電子郵件分享成 PDF、Word，或整場會議 `.pmin`，iPhone 和 Android 互相打得開。
 
