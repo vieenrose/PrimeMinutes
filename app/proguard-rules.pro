@@ -14,3 +14,9 @@
 
 # Nicer crash traces in release.
 -keepattributes SourceFile,LineNumberTable
+
+# WorkManager (0.56+, the podcast background check) starts at launch through androidx.startup and
+# builds its Room database, which Room instantiates REFLECTIVELY: Class.forName("…WorkDatabase_Impl")
+# .getDeclaredConstructor(). R8 dropped that no-arg constructor, so every release build since 0.56.0
+# died before the first frame with NoSuchMethodException: WorkDatabase_Impl.<init> [] (issue #9).
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
