@@ -92,6 +92,12 @@ jobs:
             ./gradlew :app:assembleDebug --no-daemon --stacktrace
           fi
 
+      # Room creates its databases by reflection; if R8 strips their no-arg constructor the app
+      # crashes at launch on every phone while debug builds look fine (issue #9).
+      - name: Check Room constructors survived R8
+        if: env.HAS_KEYSTORE == 'true'
+        run: scripts/room-ctor-check.sh "$ANDROID_HOME/build-tools/35.0.0/dexdump" app/build/outputs/apk/release/app-release.apk
+
       - name: Upload APK artifact (always — proves the build works)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
