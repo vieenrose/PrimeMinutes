@@ -317,7 +317,10 @@ struct LibraryView: View {
         .onChange(of: m.library.sessions.count) { _, _ in reloadSources(); seedSeen() }
         .onReceive(NotificationCenter.default.publisher(for: .voxLibrarySearch)) { n in clearScope(); query = n.object as? String ?? "" }
         .sheet(isPresented: $scopeSheet) { ScopeFilterSheet(source: $source, person: $personFilter, date: $dateFilter, sessions: m.library.sessions) }
-        .sheet(item: Binding(get: { filing.map { FilingBox(ids: $0) } }, set: { filing = $0?.ids })) { b in AddToCollectionSheet(ids: b.ids) { _ in if editing { setEditing(false) } } }
+        .sheet(item: Binding(get: { filing.map { FilingBox(ids: $0) } }, set: { filing = $0?.ids })) { b in AddToCollectionSheet(ids: b.ids) { id in
+            if editing { setEditing(false) }
+            if let id { path.append(.collection(id)) }   // filed into a collection: open it
+        } }
         .onChange(of: m.runner.waiting.count) { _, _ in reloadSources() }
     }
     var body: some View {
