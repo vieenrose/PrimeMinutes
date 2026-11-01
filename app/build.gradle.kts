@@ -91,6 +91,16 @@ android {
                 "proguard-rules.pro",
             )
             if (keystorePath != null) signingConfig = signingConfigs.getByName("release")
+            // -PreleaseSmoke builds this exact release (only the release keep rules, NOT
+            // proguard-debug-tests.pro, which keeps studio.primeminutes.** and kotlin.**) under the
+            // isolated .androidtest id, debug-signed, so a launch smoke on device catches R8 bugs
+            // in our own code before a release (#9: R8 stripped WorkManager's Room constructor).
+            // Not for instrumented tests.
+            if (project.hasProperty("releaseSmoke")) {
+                applicationIdSuffix = ".androidtest"
+                manifestPlaceholders["appLabel"] = "Prime Minutes test"
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 

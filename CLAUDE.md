@@ -12,6 +12,7 @@ git submodule update --init          # NOT --recursive: audio.cpp's nested submo
 ./gradlew testDebugUnitTest          # JVM unit tests (app/src/test)
 ./gradlew testDebugUnitTest --tests 'studio.primeminutes.core.llm.SummarizerTest'   # single class/method
 scripts/test-on-device.sh [serial]   # instrumented tests on a device — use this, NOT connectedAndroidTest
+./gradlew assembleRelease -PreleaseSmoke   # true release-R8 build as studio.primeminutes.androidtest, debug-signed: launch-smoke before every release
 ```
 
 - `connectedAndroidTest` uninstalls the release-signed app first, wiping the user's sessions and ~1.7 GB of models. `scripts/test-on-device.sh` installs under `-PisolatedTestId` (`studio.primeminutes.androidtest`) so it coexists; read its header for known "Unable to resolve activity" pitfalls.

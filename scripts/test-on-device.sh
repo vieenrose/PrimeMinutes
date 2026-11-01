@@ -16,6 +16,10 @@
 # The isolated app has its own storage: it re-downloads models (~1.7 GB) on first run and cannot
 # see the real app's sessions. That is the point — nothing of the user's is read or written.
 #
+# This runs a DEBUG build (debug minify keeps studio.primeminutes.**), so it misses R8 bugs in our
+# own code. Before a release, also launch-smoke `./gradlew assembleRelease -PreleaseSmoke` (the
+# real release R8 rules, same .androidtest id, debug-signed; not instrumentable).
+#
 # "Unable to resolve activity …" — two DIFFERENT causes, do not confuse them:
 #
 #   1. On the x86_64 EMULATOR, createComposeRule() tests (AddSourceSheetTest, SourceSheetsTest,
