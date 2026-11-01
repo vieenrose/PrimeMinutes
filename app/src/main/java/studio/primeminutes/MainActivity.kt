@@ -2166,15 +2166,6 @@ private fun TranscribeScreen(
                             onAsk = if (askMeetingAvailable) ({ askMeeting = s.searchQuery.trim() }) else null,
                             indexing = semanticIndexing,
                         )
-                        // Pinned run-status: while the run is in flight the top-bar status may
-                        // have scrolled out of mind, so the phase + progress stay visible above
-                        // the transcript. Idle layout is unchanged.
-                        if (s.running) RunStatusRow(
-                            status = s.status,
-                            progress = s.progress,
-                            transcriptAvailable = utterances.isNotEmpty(),
-                            statusIsError = s.statusIsError,
-                        )
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.weight(1f).fillMaxWidth(),
