@@ -103,6 +103,8 @@ struct SessionNotesTab: View {
     /// 核對: the citation preview (CitePreviewPanel), also without audio when there is a transcript.
     var citable = false
     var onVerify: ((Double) -> Void)? = nil
+    /// A run is still reading the meeting (LiveJobView): an empty list means "not yet", not "none".
+    var running = false
     @Environment(\.speakerRefs) private var refs
     static func kind(_ n: Note) -> String {
         let t = (n.tag ?? "").uppercased()
@@ -120,7 +122,7 @@ struct SessionNotesTab: View {
         let order = ["DECISION", "ACTION", "PROPOSAL", "OPEN-ISSUE", "NUMBER", "OTHER"]
         let groups = Dictionary(grouping: notes, by: Self.kind)
         LazyVStack(alignment: .leading, spacing: 0) {
-            if notes.isEmpty { Vox.hint(L("notes_none")).padding(.top, 12) }
+            if notes.isEmpty { Vox.hint(L(running ? "watch_live_hint" : "notes_none")).padding(.top, 12) }
             ForEach(order.filter { groups[$0] != nil }, id: \.self) { k in
                 HStack(spacing: 6) {
                     Text(Self.label(k)).font(Vox.fontPill).foregroundStyle(Self.color(k))

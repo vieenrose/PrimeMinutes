@@ -557,7 +557,7 @@ struct LiveJobView: View {
             sessionId: id, busy: true, playerAvailable: player.available,
             playerBar: AnyView(PlayerBar(player: player, lanes: v.lines.map { ($0.start, $0.end, tint($0.speaker)) })),
             header: AnyView(SessionStickyHeader(tab: $tab, speakers: speakers, tint: { tint($0) }, name: { m.screen.name($0) }, notes: v.notes.count, meta: meta, running: true)),
-            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: seekPlay)))
+            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: seekPlay, running: true)))
     }
     var body: some View {
         Group {
@@ -639,7 +639,7 @@ struct LiveJobView: View {
         // Saved: the live view becomes the meeting (Android: the watched item's screen shows the result).
         .onReceive(NotificationCenter.default.publisher(for: .voxSessionSaved)) { n in
             guard let s = n.object as? Session, s.id == id, let i = path.lastIndex(of: .job(id)) else { return }
-            player.stop(); path[i] = .session(s)
+            player.stop(); SessionView.handoffTab = (id, tab); path[i] = .session(s)
         }
     }
 

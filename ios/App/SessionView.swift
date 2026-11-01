@@ -109,6 +109,8 @@ struct SessionView: View {
     init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil, busy: Bool = false) {
         _s = State(initialValue: session); self.save = save; self.rerun = rerun; self.openAt = openAt; self.busy = busy
         if openAt != nil { _tab = State(initialValue: 1) }
+        // A run saved while watched (LiveJobView): the meeting opens on the tab the user was on, once.
+        if let h = Self.handoffTab, h.id == session.id { _tab = State(initialValue: h.tab); Self.handoffTab = nil }
         if let t = Dev.env["VOX_TAB"].flatMap(Int.init) { _tab = State(initialValue: t) }
         if let q = Dev.env["VOX_QUERY"] { _query = State(initialValue: q); _searching = State(initialValue: true) }; if Dev.env["VOX_SEM"] != nil { _semantic = State(initialValue: true) }
         _player = StateObject(wrappedValue: Player(file: session.audio))
@@ -132,6 +134,8 @@ struct SessionView: View {
     }
 
     @State private var tab = 0
+    /// The live view's tab at the save handoff, for the meeting replacing it (consumed by init).
+    nonisolated(unsafe) static var handoffTab: (id: UUID, tab: Int)?   // main thread only
     @State private var deletingMeeting = false
     @State private var agentOpen = false
     /// The saved reading as the Agent panel draws it (done, its notes).
