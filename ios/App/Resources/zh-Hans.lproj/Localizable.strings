@@ -714,6 +714,7 @@
 "cd_meeting_view" = "会议视图";
 "tab_notes_n" = "笔记 %d";
 "ai_status_read" = "AI 已读完整场会议 · %d 条笔记";
+"ai_status_reading" = "AI 正在阅读会议 · %d 条笔记";
 "see_process" = "看过程";
 "notes_other" = "其他";
 "notes_none" = "这场会议没有笔记。";

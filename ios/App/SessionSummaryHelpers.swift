@@ -20,14 +20,16 @@ struct SessionSummaryTab: View {
     let onEditActions: () -> Void
     let onToggleProcess: () -> Void
     let notesSection: (String, [String]) -> AnyView
+    /// A run is reading this meeting (LiveJobView): the status line says so and shows from the start (Android AgentStatusLine).
+    var running = false
     var body: some View {
         VStack(spacing: 12) {
             // Redesign: one AI status line (看過程 opens the 筆記 segment) instead of the agent card.
-            if !session.notes.isEmpty {
+            if running || !session.notes.isEmpty {
                 Button { onToggleProcess() } label: {
                     HStack(spacing: 8) {
-                        Circle().fill(Vox.success.color).frame(width: 7, height: 7).accessibilityHidden(true)
-                        Text(L("ai_status_read", session.notes.count)).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(2)
+                        Circle().fill(running ? Vox.info.color : Vox.success.color).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(L(running ? "ai_status_reading" : "ai_status_read", session.notes.count)).font(Vox.fontMeta).foregroundStyle(Vox.ink2).lineLimit(2)
                         Spacer(minLength: 4)
                         Text(L("see_process")).font(Vox.fontGroup).foregroundStyle(Vox.accent)
                     }.frame(minHeight: 44).contentShape(Rectangle())

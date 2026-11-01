@@ -714,6 +714,7 @@
 "cd_meeting_view" = "會議檢視";
 "tab_notes_n" = "筆記 %d";
 "ai_status_read" = "AI 已讀完整場會議 · %d 則筆記";
+"ai_status_reading" = "AI 正在閱讀會議 · %d 則筆記";
 "see_process" = "看過程";
 "notes_other" = "其他";
 "notes_none" = "這場會議沒有筆記。";

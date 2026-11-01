@@ -90,6 +90,8 @@ struct SessionTranscriptLines: View {
     let onMoveLine: (UUID) -> Void
     let onSeam: (Int) -> Void
     let lineMenu: (Utterance) -> AnyView
+    /// Speaker naming stays open during a live run (LiveJobView's naming flow); nil: only when not busy.
+    var canRename: Bool? = nil
     var body: some View {
         if !lines.isEmpty { Vox.micro(L("pipeline_transcript_via", "X-ASR", L("pipeline_diar_nemotron"))) }
         // A session with no lines had no guidance at all (the summary tab has one): say why the tab is blank.
@@ -108,7 +110,7 @@ struct SessionTranscriptLines: View {
             Button { onSeekPlay(l.start) } label: { VStack(alignment: .leading, spacing: TranscriptStyle.textSpacing) {
                 // Redesign: the live capture's layout — the name in its tint, the time, then the text on the page (no card).
                 HStack(spacing: TranscriptStyle.headerSpacing) {
-                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).transcriptSpeaker(tint(l.speaker)) }.buttonStyle(.borderless).disabled(busy)
+                    Button { onRenameSpeaker(l.speaker) } label: { Text(name(l.speaker)).transcriptSpeaker(tint(l.speaker)) }.buttonStyle(.borderless).disabled(!(canRename ?? !busy))
                     Text(Export.mmss(l.start)).transcriptTime()
                 }
                 Text(marked(l.text, query)).transcriptText()
@@ -445,10 +447,12 @@ struct SessionStickyHeader: View {
     var notes = 0
     /// The meta line: date · length, then the speakers as tinted chips.
     var meta = ""
+    /// A run is reading the meeting: 筆記 n is offered from the start, as on Android.
+    var running = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SessionMetaLine(meta: meta, speakers: speakers, tint: tint, name: name)
-            SessionTabPicker(tab: $tab, notes: notes)
+            SessionTabPicker(tab: $tab, notes: notes, running: running)
         }
     }
 }
@@ -474,10 +478,11 @@ struct SessionMetaLine: View {
 struct SessionTabPicker: View {
     @Binding var tab: Int
     var notes = 0
+    var running = false
     var body: some View {
         Picker(L("cd_meeting_view"), selection: $tab) {
             Text(L("tab_summary")).tag(0)
-            if notes > 0 { Text(L("tab_notes_n", notes)).tag(2) }
+            if notes > 0 || running { Text(L("tab_notes_n", notes)).tag(2) }
             Text(L("tab_transcript")).tag(1)
         }
         .pickerStyle(.segmented).padding(.horizontal, Vox.gutter)

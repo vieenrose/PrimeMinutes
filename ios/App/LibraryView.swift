@@ -470,7 +470,9 @@ struct LiveJobView: View {
     let id: UUID
     @Binding var path: [Route]
     @StateObject private var player = Player(file: nil)
-    @State private var tab = 0
+    @State private var tab = Dev.env["VOX_TAB"].flatMap(Int.init) ?? 0
+    @State private var agentOpen = false
+    @State private var userScrolledAt = Date.distantPast
     @State private var dlDeleteAsk = false   // download item awaiting its delete confirmation
     private var job: Job? { m.runner.waiting.first { $0.id == id } }
     private var active: Bool { m.runner.activeJob == id }
@@ -523,60 +525,70 @@ struct LiveJobView: View {
         .padding(Vox.inset).frame(maxWidth: .infinity, alignment: .leading)
         .voxRow()
     }
-    private var transcript: some View {
-        LazyVStack(alignment: .leading, spacing: TranscriptStyle.stackSpacing) {
-            if m.screen.lines.isEmpty { Vox.fine(L(showsRun ? "capture_live_waiting" : "watch_live_queued")).padding(.top, 8) }
-            ForEach(m.screen.lines) { l in
-                let c = Self.palette[max(0, l.speaker) % Self.palette.count]
-                // A Button: press highlight and the VoiceOver button trait (play from this line); the speaker name inside stays its own button.
-                Button { if player.available { player.seekPlay(l.start) } } label: { HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: TranscriptStyle.textSpacing) {
-                        HStack(spacing: TranscriptStyle.headerSpacing) {
-                            // Naming a speaker of the run: the people picker, as in the finished meeting. The label is
-                            // read from the screen's names, so confirming a name relabels every line of this speaker.
-                            Button { renamingSpeaker = l.speaker } label: {
-                                Text(m.screen.name(max(0, l.speaker))).transcriptSpeaker(c)
-                            }.buttonStyle(.borderless)
-                            Text(Export.mmss(l.start)).transcriptTime()
-                        }
-                        Text(l.text).transcriptText()
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, TranscriptStyle.rowPadding()).padding(.horizontal, 6)
-                .background(l.id == current ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusSM))
-                .contentShape(Rectangle()) }
-                .buttonStyle(.plain).id(l.id)
+    private func tint(_ k: Int) -> Color { Self.palette[max(0, k) % Self.palette.count] }
+    /// The run as the finished meeting shows it: its lines, names and the reader's notes so far.
+    private var shownSession: Session { var s = liveSession; s.notes = m.screen.agent.notes; return s }
+    /// The run's screen: the finished meeting's layout (SessionView) fed from the live run — meta line + 摘要 / 筆記 n /
+    /// 逐字稿, the pinned run status, the summary layout with the reader's status line, the same transcript rows.
+    /// Edits wait for the saved meeting, except naming a speaker (Android: one meeting screen, running or done).
+    private func runPage(_ proxy: ScrollViewProxy) -> some View {
+        let v = shownSession, speakers = Array(Set(v.lines.map(\.speaker))).sorted()
+        let names = speakers.map { (SpeakerRefs.unbreakable(m.screen.name($0)), tint($0)) }
+        let refs: (String) -> String = { [known = Set(speakers)] t in SpeakerRefs.resolve(t, label: { m.screen.name($0) }, known: known.isEmpty ? nil : known, wrap: SpeakerRefs.unbreakable) }
+        let seekPlay: (Double) -> Void = { if player.available { player.seekPlay($0) } }
+        let summary = SessionSummaryTab(session: v, busy: true, showActions: false, showProcess: false, palette: Self.palette, names: names, refs: refs,
+            playerAvailable: player.available, onSeekPlay: seekPlay, onCopySummary: {}, onEditSummary: {}, onCopyActions: {}, onEditActions: {},
+            onToggleProcess: { agentOpen = true }, notesSection: { _, _ in AnyView(EmptyView()) }, running: true)
+        let transcript = LazyVStack(alignment: .leading, spacing: 8) {
+            if v.lines.isEmpty { Vox.fine(L("capture_live_waiting")).padding(.top, 8) }
+            else {
+                SessionTranscriptLines(lines: v.lines, noSpeech: false, busy: true, currentId: current, query: "", matchId: nil,
+                    tint: { tint($0) }, name: { m.screen.name(max(0, $0)) }, marked: { t, _ in AttributedString(t) },
+                    onSeekPlay: seekPlay, onRenameSpeaker: { renamingSpeaker = $0 }, onEditLine: { _, _ in }, onMoveLine: { _ in }, onSeam: { _ in },
+                    lineMenu: { _ in AnyView(EmptyView()) }, canRename: true)
             }
-        }
+        }.padding(.horizontal, Vox.gutter)
+        let meta = (v.meetingStart ?? v.date).formatted(date: .abbreviated, time: .shortened) + " · " + Export.mmss(v.seconds)
+        return SessionScrollPage(proxy: proxy, tab: $tab, summary: AnyView(summary), transcript: AnyView(transcript),
+            appear: {}, scrolled: { userScrolledAt = Date() },
+            follow: SessionFollowScroll(proxy: proxy, playing: player.playing, queryEmpty: true, tab: tab, userScrolledAt: userScrolledAt,
+                current: current, match: 0, matchId: nil, jumpTo: nil, firstHitId: nil, resultsOpen: false, hasResults: false,
+                onFollow: { proxy.scrollTo($0, anchor: .center) }),
+            sessionId: id, busy: true, playerAvailable: player.available,
+            playerBar: AnyView(PlayerBar(player: player, lanes: v.lines.map { ($0.start, $0.end, tint($0.speaker)) })),
+            header: AnyView(SessionStickyHeader(tab: $tab, speakers: speakers, tint: { tint($0) }, name: { m.screen.name($0) }, notes: v.notes.count, meta: meta, running: true)),
+            notes: AnyView(SessionNotesTab(notes: v.notes, playerAvailable: player.available, onSeekPlay: seekPlay)))
     }
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    header
-                    if showsRun {
-                        Picker("", selection: $tab) { Text(L("tab_summary")).tag(0); Text(L("tab_transcript")).tag(1) }.pickerStyle(.segmented)
-                        if tab == 0 {
-                            if m.screen.agent.state == nil { Vox.fine(L("watch_live_hint")) }
-                            AgentPanel(agent: m.screen.agent) { sec in if player.available { player.seek(Double(sec)); if !player.playing { player.toggle() } } }
-                        } else { transcript }
-                    } else if let j = job {
-                        Vox.fine(L(j.download != nil ? "dl_item_hint" : "watch_live_queued"))
-                    }
-                }.padding(16)
+        Group {
+            if showsRun {
+                ScrollViewReader { proxy in
+                    runPage(proxy)
+                        // The newest line is followed as it comes, unless the user is playing or just scrolled.
+                        .onChange(of: m.screen.lines.count) { _, _ in
+                            if tab == 1, !player.playing, Date().timeIntervalSince(userScrolledAt) > 4, let l = m.screen.lines.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } }
+                        }
+                }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        header
+                        if let j = job { Vox.fine(L(j.download != nil ? "dl_item_hint" : "watch_live_queued")) }
+                    }.padding(16)
+                }
+                .background(Color(.systemGroupedBackground))
+                .safeAreaInset(edge: .bottom) { if player.available { PlayerBar(player: player) } }
             }
-            .onChange(of: m.screen.lines.count) { _, _ in if showsRun, tab == 1, !player.engaged, let l = m.screen.lines.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } } }
-            // While playing, the played line is followed instead of the newest one.
-            .onChange(of: current) { _, id in if showsRun, tab == 1, player.engaged, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
         }
         // Names arrive mid-run, so the reader's S-numbers resolve to them on screen: wrapped unbreakable, as the
         // watched run renders them on Android (MainActivity summary cards: refs(screen = true) / unbreakable).
         .environment(\.speakerRefs, { [known = Set(m.screen.lines.map(\.speaker))] t in
             SpeakerRefs.resolve(t, label: { m.screen.name($0) }, known: known.isEmpty ? nil : known, wrap: SpeakerRefs.unbreakable) })
-        .background(Color(.systemGroupedBackground))
-        .safeAreaInset(edge: .bottom) { if player.available { PlayerBar(player: player) } }
         .navigationTitle(job?.title ?? L("meeting")).navigationBarTitleDisplayMode(.inline)
+        // 看過程: the reader's journal, live (the finished meeting opens its saved reading the same way).
+        .sheet(isPresented: $agentOpen) {
+            NavigationStack { ScrollView { AgentPanel(agent: m.screen.agent) { sec in if player.available { player.seekPlay(Double(sec)) } }.padding() } }.presentationDetents([.medium, .large])
+        }
         .confirmationDialog(L("download_delete_confirm"), isPresented: $dlDeleteAsk, titleVisibility: .visible) {
             Button(L("delete"), role: .destructive) { if let j = job { m.imports.remove(j); Haptics.destructive() }; path.removeAll { $0 == .job(id) } }
         }
@@ -616,6 +628,8 @@ struct LiveJobView: View {
         }
         .onAppear {
             player.load(job?.audio)
+            // DEV VOX_TAB_CYCLE=<s>: 摘要 → 筆記 → 逐字稿 every s seconds, for mid-run screenshots of each tab.
+            if let c = Dev.env["VOX_TAB_CYCLE"].flatMap(Double.init) { for (i, t) in [2, 1].enumerated() { DispatchQueue.main.asyncAfter(deadline: .now() + c * Double(i + 1)) { tab = t } } }
             StatusLog.add("live view \(id): active=\(active) player=\(player.available) lines=\(m.screen.lines.count)")
             if Dev.env["VOX_PLAY"] != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if player.available && !player.playing { player.toggle() }; DispatchQueue.main.asyncAfter(deadline: .now() + 8) { StatusLog.add("live view player t=\(Int(player.time)) playing=\(player.playing) lines=\(m.screen.lines.count) status=\(m.screen.status)") } } }
         }

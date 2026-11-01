@@ -714,6 +714,7 @@
 "cd_meeting_view" = "Meeting view";
 "tab_notes_n" = "Notes %d";
 "ai_status_read" = "AI read the whole meeting · %d notes";
+"ai_status_reading" = "AI is reading the meeting · %d notes";
 "see_process" = "See process";
 "notes_other" = "Other";
 "notes_none" = "No notes for this meeting.";
