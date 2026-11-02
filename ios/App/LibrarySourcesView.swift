@@ -370,7 +370,8 @@ struct ChannelPage: View {
                     let job = runner.waiting.first { $0.id == entry }
                     Text(job.map { m.jobStatus($0) } ?? L("sub_imported")).font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    if job == nil { Button(L("sub_open")) { onOpen(entry) }.font(.subheadline.weight(.semibold)).buttonStyle(.borderless) }
+                    // Queued / downloading / transcribing too: onOpen routes an id not yet in the library to the live meeting screen.
+                    Button(L("sub_open")) { onOpen(entry) }.font(.subheadline.weight(.semibold)).buttonStyle(.borderless).accessibilityIdentifier("sub-open")
                 } else {
                     if isNew { HStack(spacing: 4) { Circle().fill(Vox.info.color).frame(width: 7, height: 7).accessibilityHidden(true); Text(L("sub_new")) }.font(.caption.weight(.semibold)).foregroundStyle(Vox.info.color) }
                     Spacer()
