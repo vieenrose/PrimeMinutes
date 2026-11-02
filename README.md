@@ -39,6 +39,7 @@ Android 安裝時如果被擋：Play 安全防護跳出警告，點「更多詳�
 | <img src="docs/screenshots/meeting-search-ask.gif" width="220" alt="搜尋與提問"> | <img src="docs/screenshots/people-voice-suggest-zh.png" width="220" alt="辨識聲音建議名字"> | <img src="docs/screenshots/share.gif" width="220" alt="分享"> |
 
 - **邊錄邊出字**：說完話大約兩秒，文字就上螢幕，還標好是誰說的。
+- **一鍵開始錄音**：桌面小工具、通知欄快速設定或長按 App 圖示，不用先打開 App 就能開始錄音。
 - **自動整理筆記**：錄音時就把決議、待辦、提議、還沒定案的事和數字整理出來；停下後自動寫好摘要和標題。
 - **摘要點了就聽原話**：每個時間點都能直接播放，對照原本怎麼說；文字、說話者、換人位置都能修正，也能復原。
 - **搜尋和提問**：用意思找遍所有會議，直接問問題，回答會附上出處。
