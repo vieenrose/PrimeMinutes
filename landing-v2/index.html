@@ -120,6 +120,7 @@ h2{font-size:clamp(26px,4vw,38px);font-weight:800;margin-bottom:12px}
 
 /* more grid */
 .more{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:28px}
+.more .mc:last-child:nth-child(odd){grid-column:1/-1}
 .mc{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:16px}
 @media (min-width:720px){.mc{padding:20px}}
 .mc h3{font-size:16px;font-weight:700;margin-bottom:4px}
@@ -379,6 +380,7 @@ footer .links{display:flex;gap:18px}
     <p class="eyebrow">細節</p>
     <h2>還有這些，讓它更好用</h2>
     <div class="more">
+      <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" style="fill:var(--accent)"/></svg></div><h3>一鍵開始錄音</h3><p>不用先找 App：桌面小工具、控制中心、Siri 都能直接開錄。Android 還有快速設定方塊。</p></div>
       <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg></div><h3>處理佇列</h3><p>匯入一批也不用守著。一次排好，AI 只載入一次，依序做完。</p></div>
       <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v4h4"/></svg></div><h3>中斷也不怕</h3><p>停止就先存檔。電話打進來、App 被關掉，重開會問你要不要接著做完。</p></div>
       <div class="mc"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 4v16M16 4v16M4 12h16"/></svg></div><h3>合併與分割</h3><p>一場會錄成好幾段，合成一場；太長的錄音，在時間點切開。都能復原。</p></div>

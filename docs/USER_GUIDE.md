@@ -210,6 +210,18 @@ App 不登入任何帳號，也不直接上傳到雲端。
 | AI 筆記列 | 寫出筆記前顯示預計何時開始；之後變成卡片列出最新三則，點一下打開 AI 筆記面板 | ✅ 手動 |
 | 停止 | 存檔、轉錄、摘要並取標題；完成後通知「場次已就緒」 | ✅ 手動 |
 
+### 4a. 不開 App 直接錄音
+
+想馬上錄，不用先找 App：
+
+- **Siri 或捷徑**：對 Siri 說「用 Prime Minutes 錄音」；也可以在「捷徑」App 裡點 Prime Minutes 的「錄音」。
+- **控制中心、鎖定畫面、動作按鈕**（iOS 18 以上）：把「錄製會議」加進控制中心或鎖定畫面，或指定給動作按鈕，按一下就開錄。
+- **主畫面小工具**：加一個 Prime Minutes 小工具，點一下就開錄。
+
+這幾個入口都會直接打開 App 的錄音室並開始錄音；要結束時，照平常按 **停止並儲存**。
+
+<p><img src="guide/76-shortcut-tile.png" width="200" alt="捷徑 App 裡的「錄音」"> <img src="guide/77-control-center.png" width="200" alt="控制中心裡的錄製會議按鈕"></p>
+
 ## 5. 場次：摘要分頁
 
 <p><img src="guide/10-summary.png" width="200"> <img src="guide/70-citation-preview.png" width="200" alt="點時間標籤：播放器上方跳出原話預覽，跟著播放移動"> <img src="guide/17-process.png" width="200"> <img src="guide/18-actions.png" width="200"> <img src="guide/20-dark-summary.png" width="200"></p>

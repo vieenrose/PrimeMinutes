@@ -36,6 +36,7 @@
 | **搜尋和提問** | **認得說話的人** | **逐字稿隨手修正** |
 | <img src="docs/screenshots/meeting-search-ask.gif" width="220" alt="搜尋與提問"> | <img src="docs/screenshots/people-voice-suggestion.png" width="220" alt="辨識聲音建議名字"> | <img src="docs/screenshots/11-transcript.png" width="220" alt="逐字稿"> |
 
+- **一鍵開始錄音**：對 Siri 說「用 Prime Minutes 錄音」，或用控制中心、鎖定畫面、動作按鈕、主畫面小工具，直接打開錄音室開錄。
 - **邊錄邊出字**：說完話大約兩秒，文字就上螢幕，還標好是誰說的。
 - **自動整理筆記**：錄音時就把決議、待辦、提議、還沒定案的事和數字整理出來；停下後自動寫好摘要和標題。
 - **摘要點了就聽原話**：每個時間點都能直接播放，播放器上方同時跳出那幾句原話，對照原本怎麼說；文字、說話者、換人位置都能修正，也能復原。
