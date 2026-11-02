@@ -142,6 +142,35 @@
             android:exported="false"
             android:foregroundServiceType="dataSync|microphone" />
 
+        <!-- Recording from outside the app (entry/RecordEntry): a one-button home-screen widget and
+             a Quick Settings tile. Both start the service themselves; the widget start is what lets
+             a microphone service begin while the app is in the background. -->
+        <receiver
+            android:name=".entry.RecordWidget"
+            android:exported="false"
+            android:label="@string/rec_entry_start">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_record_info" />
+        </receiver>
+
+        <service
+            android:name=".entry.RecordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_mic"
+            android:label="@string/rec_entry_start"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
         <!-- Serves the downloaded update APK to the system installer (cache/updates only). -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -104,6 +104,7 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     var ui: SessionUi? = null
 
     init {
+        live = java.lang.ref.WeakReference(this)
         studio.primeminutes.core.people.PeopleStore.init(app)
         studio.primeminutes.core.people.VoiceStore.init(app)
         studio.primeminutes.core.people.VoiceStore.catchUp(app)
@@ -354,6 +355,23 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     fun persistEdits() = apply(SessionReducer.persistEdits(now, env))
     fun launchAudio(uri: Uri, sourceTitle: String? = null, carry: SpeakerCarry? = null) = apply(SessionReducer.launchAudio(now, env, uri, sourceTitle, carry))
     fun beginRecording() = apply(SessionReducer.beginRecording(now, env))
+
+    /**
+     * A recording the service is starting from outside the app (the widget, the tile): this screen
+     * turns to it exactly as after its own record button, minus the service request (the service is
+     * already starting it). The run's generation, or null when this screen is already recording.
+     */
+    private fun adoptRecording(): Int? {
+        val next = SessionReducer.beginRecording(now, env)
+        if (next.effects.none { it is SessionEffect.StartRecording }) return null
+        apply(next.copy(effects = next.effects.filterNot { it is SessionEffect.StartRecording }))
+        return next.state.sessionGen
+    }
+
+    override fun onCleared() {
+        if (live?.get() === this) live = null
+        super.onCleared()
+    }
     fun nextTalk() = apply(SessionReducer.nextTalk(now, env))
     fun stop() = apply(SessionReducer.stop(now, env))
     fun leaveToStudio() = apply(SessionReducer.leaveToStudio(now, env))
@@ -773,6 +791,12 @@ class SessionViewModel internal constructor(app: Application, testStrings: Sessi
     }
 
     companion object {
+        /** The screen's ViewModel while one exists (for a recording started outside the app). */
+        @Volatile private var live: java.lang.ref.WeakReference<SessionViewModel>? = null
+
+        /** Main thread. See [adoptRecording]; null when no screen exists (or it already records). */
+        fun adoptExternalRecording(): Int? = live?.get()?.adoptRecording()
+
         /** How long a run's gen must stay gone from the service's work before the screen settles it. */
         private const val RUN_END_GRACE_MS = 1_500L
         /** Wait between an edit and its save: a burst of edits is one write. */

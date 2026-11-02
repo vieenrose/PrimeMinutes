@@ -842,4 +842,9 @@
     <string name="ask_scope_only">只根据这 %d 项回答</string>
     <string name="queue_running">处理中 · %1$s %2$d%%</string>
     <string name="queue_paused">已暂停 · %d</string>
+    <!-- Recording from outside the app: launcher shortcut, home-screen widget, Quick Settings tile. -->
+    <string name="rec_entry_start">开始录音</string>
+    <string name="rec_entry_stop">停止并保存</string>
+    <string name="rec_entry_recording">录音中</string>
+    <string name="rec_entry_widget_description">录音按钮：点一下开始录音，再点一下停止并保存</string>
 </resources>

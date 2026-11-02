@@ -381,6 +381,8 @@ class MainActivity : ComponentActivity() {
         // doesn't absorb, e.g. a navigation-bar or wallpaper-colour overlay) replays the SAME launch
         // intent, which re-offered an already imported file. New ones arrive via onNewIntent.
         if (savedInstanceState == null) handleIncoming(intent)
+        studio.primeminutes.entry.RecordEntry.publishShortcut(this)
+        studio.primeminutes.entry.RecordEntry.follow(this)
         Thread { studio.primeminutes.online.BackgroundCheck.sync(applicationContext, force = true) }.start()
         setContent {
             var themeMode by remember { mutableStateOf(ThemeStore.load(this)) }
@@ -545,6 +547,8 @@ class MainActivity : ComponentActivity() {
         // Back in front: a model download paused by the interruption tries again at once.
         ModelPrefetch.resumeNow()
         studio.primeminutes.online.ImportDownloads.resumeNow()
+        // The mic may have been granted, or the models fetched: the widget may start directly now.
+        studio.primeminutes.entry.RecordEntry.refresh(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -556,6 +560,11 @@ class MainActivity : ComponentActivity() {
     /** A "Share to Prime Minutes" or "Open with Prime Minutes" hands us an audio/video Uri — surface it to the
      *  Compose layer (consumed once), which copies it into app storage and starts a run. */
     private fun handleIncoming(intent: Intent?) {
+        // The launcher shortcut (or the widget / tile when they cannot start it): press the record button.
+        if (intent?.action == studio.primeminutes.entry.RecordEntry.ACTION_START_RECORDING) {
+            intent.action = Intent.ACTION_MAIN
+            startRecordingAsked.value = true; return
+        }
         // The "New episodes" notification: open that channel (blank = the shows list).
         intent?.getStringExtra(studio.primeminutes.online.BackgroundCheck.EXTRA_OPEN_CHANNEL)?.let {
             intent.removeExtra(studio.primeminutes.online.BackgroundCheck.EXTRA_OPEN_CHANNEL)
@@ -585,6 +594,8 @@ class MainActivity : ComponentActivity() {
         val sharedAudioUri = MutableStateFlow<Uri?>(null)
         /** A YouTube / PeerTube link reached the app: the UI explains once that it is not imported. */
         val sharedVideoLink = MutableStateFlow(false)
+        /** "Start recording" from the launcher shortcut, the widget or the tile; consumed once. */
+        val startRecordingAsked = MutableStateFlow(false)
         /** A channel to open from the "New episodes" notification ("" = the shows list); consumed once. */
         val openChannel = MutableStateFlow<String?>(null)
         /** Set once the online-import notice (personal use, your responsibility) has been accepted. */
@@ -1257,6 +1268,13 @@ private fun TranscribeScreen(
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         if (granted) vm.beginRecording() else recordPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    LaunchedEffect(Unit) {
+        MainActivity.startRecordingAsked.collect { asked ->
+            if (!asked || !MainActivity.startRecordingAsked.compareAndSet(true, false)) return@collect
+            // Already recording (started from the widget, say): the screen shows that capture.
+            if (!vm.now.isRecording && !RunRegistry.recordingJobActive) requestRecord()
+        }
     }
 
     // A shared file that turned out to embed a session (detected above) is recovered here.

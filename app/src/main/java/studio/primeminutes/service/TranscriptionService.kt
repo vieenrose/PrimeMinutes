@@ -95,6 +95,9 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         private const val STOP_DRAIN_MS = 15_000L
 
         const val ACTION_RECORD = "studio.primeminutes.RECORD"
+        /** The widget's / Quick Settings tile's button (see [studio.primeminutes.entry.RecordEntry]):
+         *  stop the live recording like the capture screen's Stop & save, else start one like ACTION_RECORD. */
+        const val ACTION_TOGGLE_RECORDING = "studio.primeminutes.TOGGLE_RECORDING"
         const val ACTION_SUMMARIZE = "studio.primeminutes.SUMMARIZE"
         // Gracefully end live recording and continue into diarization/summary (vs ACTION_STOP,
         // which cancels the whole job).
@@ -334,6 +337,60 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         studio.primeminutes.core.hw.MemoryPressure.onTrim(level)
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        // The widget and the tile follow the recording, whoever started it.
+        studio.primeminutes.entry.RecordEntry.follow(this)
+    }
+
+    /**
+     * ACTION_TOGGLE_RECORDING. A live recording: stop and save it, queued for processing (the capture
+     * screen's ⏹ Stop & save). Otherwise start one through ACTION_RECORD, tagged with the generation
+     * of the session the open screen turns to (or, without a screen, the next free one, which the
+     * screen re-attaches to when the app opens).
+     */
+    private fun toggleRecording(flags: Int, startId: Int): Int {
+        val j = RunRegistry.jobs.value
+        if (j.recordingJobActive && pipelineJob?.isActive == true) {
+            // Arrived through startForegroundService(): the contract holds even for a stop.
+            satisfyForegroundContract()
+            if (j.captureStop == null) {
+                recordingPipeline.requestStop(defer = false, queueOnSave = true)
+                RunRegistry.captureStopping(nextTalk = false)
+            }
+            return START_NOT_STICKY
+        }
+        // Android 14+ refuses a microphone service the app started from the background unless the
+        // start is exempt (a widget tap is; a Quick Settings tile tap is not: SecurityException,
+        // measured on an A53). Become foreground as a microphone service now, or give up cleanly.
+        val micOk = studio.primeminutes.entry.RecordEntry.micGranted(this) &&
+            runCatching { startForegroundTyped(recording = true, text = getString(R.string.svc_preparing)) }
+                .onFailure { Log.w(STOP_TAG, "toggle: microphone service refused from the background", it) }.isSuccess
+        if (!micOk) {
+            // Arrived through startForegroundService(): be foreground (not as a microphone) before bowing out.
+            runCatching { startForegroundTyped(recording = false, text = getString(R.string.svc_preparing)) }
+            if (!pipelineBusy() && !reader.readerBusy() && activeExports == 0) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf(lastStartId)
+            }
+            studio.primeminutes.entry.RecordEntry.refresh(this)
+            // Start it from the app instead (its record button asks for the mic when needed). The
+            // system may refuse to bring the app forward from here; the tile then opens it itself.
+            runCatching { startActivity(studio.primeminutes.entry.RecordEntry.openAppIntent(this)) }
+            return START_NOT_STICKY
+        }
+        val gen = studio.primeminutes.session.SessionViewModel.adoptExternalRecording() ?: run {
+            // No screen to apply the settings: the run takes the saved ones, as the screen would.
+            TranscriptionConfig.Holder.config = studio.primeminutes.core.config.ConfigStore.load(this)
+            maxOf(0, RunRegistry.attach().highestGen + 1)
+        }
+        Log.i(STOP_TAG, "toggle: recording started from outside the app, gen=$gen")
+        return onStartCommand(
+            Intent(this, TranscriptionService::class.java).setAction(ACTION_RECORD).putExtra(EXTRA_RUN_GEN, gen),
+            flags, startId,
+        )
+    }
+
     override fun onDestroy() {
         wakeLock?.let { if (it.isHeld) it.release() }
         // A run that never reached its teardown (a native call deaf to cancellation outlived the
@@ -433,6 +490,7 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         lastStartId = startId
 
         when (intent?.action) {
+            ACTION_TOGGLE_RECORDING -> return toggleRecording(flags, startId)
             ACTION_STOP -> {
                 // Stop in a session aborts that session's own reading (a re-summarize, an import);
                 // Stop on the queue drain aborts its item's reading too (cancelling the generation):

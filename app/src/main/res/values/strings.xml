@@ -859,4 +859,9 @@
     <string name="ask_scope_only">Answers only from these %d items</string>
     <string name="queue_running">Processing · %1$s %2$d%%</string>
     <string name="queue_paused">Paused · %d</string>
+    <!-- Recording from outside the app: launcher shortcut, home-screen widget, Quick Settings tile. -->
+    <string name="rec_entry_start">Start recording</string>
+    <string name="rec_entry_stop">Stop &amp; save</string>
+    <string name="rec_entry_recording">Recording</string>
+    <string name="rec_entry_widget_description">A record button: tap to record, tap again to stop and save</string>
 </resources>

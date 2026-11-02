@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Record widget, idle: a round red record button (white ring for contrast on any wallpaper). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFFFF" />
+            <size android:width="52dp" android:height="52dp" />
+        </shape>
+    </item>
+    <item android:bottom="3dp" android:left="3dp" android:right="3dp" android:top="3dp">
+        <shape android:shape="oval"><solid android:color="#FFE53935" /></shape>
+    </item>
+</layer-list>
