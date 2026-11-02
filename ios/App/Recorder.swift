@@ -137,9 +137,15 @@ final class LevelMeter: @unchecked Sendable {
         lock.withLock {
             for x in c {
                 acc += x * x; n += 1
-                if n == 800 { ring[head] = min(1, sqrt(acc / 800) * 4); head = (head + 1) % Self.capacity; acc = 0; n = 0 }
+                if n == 800 { ring[head] = Self.height(rms: sqrt(acc / 800)); head = (head + 1) % Self.capacity; acc = 0; n = 0 }
             }
         }
+    }
+    /// Bar height from a 50 ms RMS on a dB scale, like Voice Memos: -55 dBFS (room floor) → 0, -10 dBFS → 1.
+    /// The old linear `rms × 4` drew normal speech (-35…-25 dBFS) at 7–22 % of the strip.
+    static func height(rms: Float) -> Float {
+        guard rms > 0 else { return 0 }
+        return min(1, max(0, (20 * log10(rms) + 55) / 45))
     }
     func bars() -> [Float] { lock.withLock { Array(ring[head...] + ring[..<head]) } }
 }
