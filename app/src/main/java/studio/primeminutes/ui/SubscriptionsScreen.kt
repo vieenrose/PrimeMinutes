@@ -244,8 +244,9 @@ private fun ShowList(subs: List<Subscription>, checking: Set<String>, onOpen: (S
 }
 
 /**
- * A channel's page (it replaced the subscription show page): artwork, title, subscription controls, the feed's
- * episodes not in the library yet ("New in feed", subscribed only), then its episodes in the library. [key]: the
+ * A channel's page (it replaced the subscription show page): artwork, title, subscription controls, its episodes in
+ * the library, then the feed's episodes not in the library yet ("New in feed", subscribed only; the 5 newest, the rest
+ * behind "Show all N"). [key]: the
  * channel's group key (its subscription id); [s]: its subscription, null when not subscribed; [src]: the channel
  * snapshot its library items carry.
  */
@@ -260,6 +261,7 @@ private fun ChannelPage(
     val changes by ImportDownloads.changes.collectAsState()
     var index by remember { mutableStateOf<Map<String, SessionLibrary.Entry>>(emptyMap()) }
     var subscribing by remember { mutableStateOf(false) }
+    var feedExpanded by androidx.compose.runtime.saveable.rememberSaveable(key) { mutableStateOf(false) }
     LaunchedEffect(s?.id) { if (s != null) SubscriptionActions.checkIfStale(ctx, s.id) }
     // The "imported" scan: which feed episodes already have a library item (by guid, else audio URL).
     LaunchedEffect(s?.episodes, changes) {
@@ -317,16 +319,28 @@ private fun ChannelPage(
                 Spacer(Modifier.padding(2.dp))
             }
         }
-        if (fresh.isNotEmpty()) {
-            item(key = "h-new") { ChannelSectionLabel(stringResource(R.string.channel_section_new)) }
-            items(fresh, key = { "f-" + it.guid }) { ep -> EpisodeRow(s!!, ep, isNew = ep.guid !in seen, entry = null, onOpenEntry) }
-        }
+        // The library first, then the feed collapsed to its newest few: a long feed no longer hides the library.
         if (library.isNotEmpty()) {
             item(key = "h-lib") { ChannelSectionLabel(stringResource(R.string.channel_section_library)) }
             items(library, key = { "e-" + it.id }) { e -> LibraryEpisodeRow(e, onOpenEntry) }
         }
+        if (fresh.isNotEmpty()) {
+            item(key = "h-new") { ChannelSectionLabel(stringResource(R.string.channel_section_new)) }
+            val shown = if (feedExpanded) fresh else fresh.take(FEED_COLLAPSED)
+            items(shown, key = { "f-" + it.guid }) { ep -> EpisodeRow(s!!, ep, isNew = ep.guid !in seen, entry = null, onOpenEntry) }
+            if (fresh.size > FEED_COLLAPSED) item(key = "f-more") {
+                val rest = fresh.size - FEED_COLLAPSED
+                androidx.compose.material3.TextButton(onClick = { feedExpanded = !feedExpanded }, modifier = Modifier.testTag("sub-feed-more")) {
+                    Text(if (feedExpanded) stringResource(R.string.channel_feed_collapse)
+                        else pluralStringResource(R.plurals.channel_feed_show_all, rest, rest), color = pal.Sky)
+                }
+            }
+        }
     }
 }
+
+/** Feed episodes shown on a channel page before "Show all N". */
+private const val FEED_COLLAPSED = 5
 
 @Composable
 private fun ChannelSectionLabel(text: String) {

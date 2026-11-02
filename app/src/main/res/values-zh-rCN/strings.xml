@@ -710,6 +710,10 @@
     <string name="channel_in_library">场次库有 %d 集</string>
     <string name="channel_section_new">节目新集数</string>
     <string name="channel_section_library">在场次库</string>
+    <string name="channel_feed_collapse">收起</string>
+    <plurals name="channel_feed_show_all">
+        <item quantity="other">显示全部 %d 集</item>
+    </plurals>
     <string name="cd_open_channel">打开节目页</string>
     <string name="cd_channel_group">%1$s，场次库有 %2$d 集</string>
     <string name="cd_filter_sources">按来源筛选</string>

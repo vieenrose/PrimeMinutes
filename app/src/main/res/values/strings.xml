@@ -725,6 +725,11 @@
     <string name="channel_in_library">%d in library</string>
     <string name="channel_section_new">New in feed</string>
     <string name="channel_section_library">In library</string>
+    <string name="channel_feed_collapse">Show fewer</string>
+    <plurals name="channel_feed_show_all">
+        <item quantity="one">Show %d more episode</item>
+        <item quantity="other">Show all %d more episodes</item>
+    </plurals>
     <string name="cd_open_channel">Open the channel page</string>
     <string name="cd_channel_group">%1$s, %2$d in library</string>
     <string name="cd_filter_sources">Filter by source</string>
