@@ -657,6 +657,8 @@
 "channel_in_library" = "%d in library";
 "channel_in_library_header" = "In library";
 "channel_new_in_feed" = "New in feed";
+"channel_feed_show_all" = "Show all (%d more)";
+"channel_feed_show_less" = "Show fewer";
 /* Share v2: one Share sheet (what, then where) */
 "share_title" = "Share";
 "share_what" = "What to share";

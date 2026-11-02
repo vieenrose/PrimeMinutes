@@ -657,6 +657,8 @@
 "channel_in_library" = "資料庫中 %d 集";
 "channel_in_library_header" = "已在資料庫";
 "channel_new_in_feed" = "節目新集數";
+"channel_feed_show_all" = "顯示全部 %d 集";
+"channel_feed_show_less" = "收合";
 /* Share v2: one Share sheet (what, then where) */
 "share_title" = "分享";
 "share_what" = "分享內容";

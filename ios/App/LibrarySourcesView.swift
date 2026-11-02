@@ -196,6 +196,9 @@ struct ChannelPage: View {
     @State private var date: DateScope = .any
     @State private var filters = false
     @State private var asking: String?
+    /// Feed episodes not in the library, folded to the newest `feedFolded` until expanded (same 5 on Android).
+    @State private var feedAll = false
+    private static let feedFolded = 5
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     init(key: String, onOpen: @escaping (UUID) -> Void) {
@@ -287,10 +290,6 @@ struct ChannelPage: View {
                     }.frame(maxWidth: .infinity).padding(.vertical, 12)
                 }
             }
-            if let s = sub, !searching {
-                let fresh = s.episodes.filter { ep in SubscriptionStore.entry(index, ep).map { id in !library.sessions.contains { $0.id == id } } ?? true }
-                if !fresh.isEmpty { Section(L("channel_new_in_feed")) { ForEach(fresh) { ep in episodeRow(s, ep) } } }
-            }
             if !shown.isEmpty {
                 Section {
                     ForEach(shown, id: \.0.id) { s, src in
@@ -307,6 +306,19 @@ struct ChannelPage: View {
                     }
                 } header: { Text(L("channel_in_library_header")) } footer: {
                     if elsewhere > 0 { Button(L("search_in_all_n", elsewhere)) { searchAll() }.font(.footnote).accessibilityIdentifier("search-in-all") }
+                }
+            }
+            // Feed after the library (a long feed buried the episodes already here), folded to the newest few.
+            if let s = sub, !searching {
+                let fresh = s.episodes.filter { ep in SubscriptionStore.entry(index, ep).map { id in !library.sessions.contains { $0.id == id } } ?? true }
+                if !fresh.isEmpty {
+                    Section(L("channel_new_in_feed")) {
+                        ForEach(feedAll ? fresh : Array(fresh.prefix(Self.feedFolded))) { ep in episodeRow(s, ep) }
+                        if fresh.count > Self.feedFolded {
+                            Button(feedAll ? L("channel_feed_show_less") : L("channel_feed_show_all", fresh.count - Self.feedFolded)) { withAnimation { feedAll.toggle() } }
+                                .font(.subheadline).accessibilityIdentifier("channel-feed-more")
+                        }
+                    }
                 }
             }
         }
