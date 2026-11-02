@@ -100,7 +100,8 @@ internal class QueueRunner(
 
             // --- Pass 2: the AI notes worker reads each item with a sidecar, in order, and saves +
             // dequeues it. Awaited one by one; a superseding run cancels only this wait — the worker
-            // still finishes the item it is reading. ---
+            // still finishes the item it is reading. Stop aborts that reading (ACTION_STOP →
+            // abortQueueRead): the item stays queued with its sidecar, so Resume is reader-only. ---
             val toSummarize = ProcessingQueue.ids(ctx)
             if (toSummarize.isEmpty()) continue
             for (id in toSummarize) {

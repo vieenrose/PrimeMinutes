@@ -37,6 +37,15 @@ private const val LIVE_READER_MIN_RAM = 7L * 1024 * 1024 * 1024
 private const val LIVE_FEED_MS = 400L
 
 /**
+ * Whether Stop aborts a reading of generation [gen]. A session's own reading (no library entry: a
+ * re-summarize, an import) always; a queue item's ([TranscriptionService.QUEUE_GEN]) when the queue
+ * drain is what is stopped ([queueStop]) — it stays queued, paused, like a Stop during its
+ * transcription. A finished recording handed to the worker (its own gen, with an entry) keeps going.
+ */
+internal fun stopAbortsRead(gen: Int, hasEntry: Boolean, queueStop: Boolean): Boolean =
+    !hasEntry || (queueStop && gen == TranscriptionService.QUEUE_GEN)
+
+/**
  * The AI notes worker (core/reader), split out of [TranscriptionService]: ONE reader for every
  * meeting, in order.
  *
@@ -178,6 +187,12 @@ internal class ReaderWorker(private val host: Host) {
         val current = synchronized(readLock) { (readCurrent === task).also { if (!it && readTasks.remove(task)) publishTasks() } }
         if (current) readModel?.cancel()
         task.result.completeExceptionally(CancellationException("reading aborted"))
+    }
+
+    /** Stop on the queue drain: its reading is cut short and the item stays queued (paused) with
+     *  its transcript, so Resume reads it again (from the saved notes) without redoing ASR. */
+    fun abortQueueRead() {
+        synchronized(readLock) { readTasks.filter { stopAbortsRead(it.gen, it.entry != null, queueStop = true) } }.forEach(::abortRead)
     }
 
     /** A recording is starting on a device that cannot hold both models: give way. */
@@ -365,6 +380,8 @@ internal class ReaderWorker(private val host: Host) {
         host.emitEvent(TranscriptEvent.SummaryComplete(minutes))
         host.emitEvent(TranscriptEvent.ActionItemsComplete(actions))
         val title = if (task.withTitle) runCatching { lane.title(res.journal) }.getOrNull()?.let(conv) else null
+        // Stopped while the summary or title was written: the cancelled calls returned empty — nothing is saved.
+        if (task.aborted || task.preempted) throw CancellationException("reading stopped")
         title?.let { host.emitEvent(TranscriptEvent.Title(it)) }
         TranscriptionService.events.emit(task.gen to TranscriptEvent.Agent(AgentEvent.State(AgentState.DONE, notes = res.journal.size)))   // the task's gen, like the lane's own agent events
         // The AI notes themselves are saved with the meeting (one journal line each), so reopening

@@ -435,8 +435,11 @@ class TranscriptionService : LifecycleService(), ReaderWorker.Host {
         when (intent?.action) {
             ACTION_STOP -> {
                 // Stop in a session aborts that session's own reading (a re-summarize, an import);
-                // a background queue item or a finished recording being read keeps going.
-                reader.readCurrent?.takeIf { it.entry == null }?.let(reader::abortRead)
+                // Stop on the queue drain aborts its item's reading too (cancelling the generation):
+                // the item stays queued and paused with its transcript, and Resume reads it again
+                // without redoing ASR. A finished recording being read keeps going (stopAbortsRead).
+                reader.readCurrent?.takeIf { stopAbortsRead(it.gen, it.entry != null, queueStop = false) }?.let(reader::abortRead)
+                if (RunRegistry.queueDraining) reader.abortQueueRead()
                 // CANCEL, THEN WAIT, THEN STOP. `cancel()` only REQUESTS cancellation and returns
                 // immediately; calling stopSelf() straight after destroyed the service — and with it
                 // lifecycleScope — before the cancelled pipeline coroutine was ever scheduled again,
