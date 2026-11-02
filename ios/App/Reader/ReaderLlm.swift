@@ -15,10 +15,13 @@ protocol ReaderLlm: AnyObject {
     func generateContinue(maxTokens: Int, stop: String, temp: Float, onToken: (String) -> Void) -> String
     var seqLength: Int { get }
     func reset()
+    /// Stop the running call from another thread (Stop on a job): it returns early, and so does every later call.
+    func cancel()
 }
 
 extension ReaderLlm {
     var template: ChatTemplate { ModelCard.default.template }
+    func cancel() {}
 }
 
 /// A model's chat template as literal pieces (Android `ChatTemplate`): what the model's own template

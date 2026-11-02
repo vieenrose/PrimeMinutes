@@ -35,7 +35,7 @@ final class ReaderWorker: @unchecked Sendable {
     /// Blocks until every queued line has been read.
     func drain(_ tick: (Int, Int) -> Void) {
         lock.lock()
-        while (!queue.isEmpty || busy) && !stopped { lock.broadcast(); lock.wait(until: Date().addingTimeInterval(2)); let p = (done, total); lock.unlock(); tick(p.0, p.1); lock.lock() }
+        while (!queue.isEmpty || busy) && !stopped && !StopFlag.on { lock.broadcast(); lock.wait(until: Date().addingTimeInterval(2)); let p = (done, total); lock.unlock(); tick(p.0, p.1); lock.lock() }
         lock.unlock()
     }
 }
@@ -62,11 +62,14 @@ final class ReaderWorker: @unchecked Sendable {
     func syncQueue() async { waiting = await queue.all; pending = waiting.count }
     /// Android "stop (resumable)": the running job stops at the next chunk and stays queued, parked until resumed.
     @Published var parked: Set<UUID> = []
-    func stopProcessing() { guard activeJob != nil else { return }; StopFlag.on = true; screen.status = L("stopping") }
+    func stopProcessing() { guard activeJob != nil else { return }; StopFlag.on = true; readerCancel?(); screen.status = L("stopping") }
+    /// Cancels the running job's reader generation (Android ReaderLane.cancel): a Stop while the notes are written
+    /// returns at once instead of letting the job finish and save.
+    private var readerCancel: (() -> Void)?
     /// Set by [yieldToSystem]: the stop that follows keeps the job queued instead of parking it.
     private var yielding = false
     /// The background window is over: stop the queued job at its checkpoint; the next window or launch resumes it.
-    func yieldToSystem() { guard activeJob != nil, liveJob == nil else { return }; yielding = true; StopFlag.on = true }
+    func yieldToSystem() { guard activeJob != nil, liveJob == nil else { return }; yielding = true; StopFlag.on = true; readerCancel?() }
     func resume(_ j: Job) { parked.remove(j.id); failed[j.id] = nil; drain() }
     /// The queue bar's "Process all": stopped (parked) jobs are released, then the queue drains (no relaunch needed).
     func processAll() {
@@ -172,6 +175,7 @@ final class ReaderWorker: @unchecked Sendable {
             let r = ReaderFactory.make(dir: Dev.env["VOX_READER_DIR"].map { $0.hasPrefix("/") ? $0 : NSHomeDirectory() + "/" + $0 } ?? stored, model: rm)
             let agentUi = self.screen.agent
             let reader = MeetingReader(llm: r.llm, systemPrompt: r.systemPrompt, events: { e in Task { @MainActor in agentUi.apply(e) } }, budget: rm.budget, card: rm.card)
+            let llm = r.llm; await MainActor.run { self.readerCancel = { llm.cancel() } }
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.screen.status = L("reader_error", "\(error)") }; return }
             Storage.reclaimReplaced()   // the chosen model loads: a model it replaced (kept during a migration) can go
             let conv = TextConv(); let lowRam = ProcessInfo.processInfo.physicalMemory < 4_500_000_000   // 3 GB phones cannot hold ASR + diarizer + E2B at once
@@ -248,8 +252,13 @@ final class ReaderWorker: @unchecked Sendable {
             let silent = !SpeechCheck.hasSpeech(final.map(\.text))
             if silent { worker.stop(); StatusLog.add("trace no speech: AI notes model not run") }
             else { worker.drain { d, t in Task { @MainActor in self.jobProgress = 0.8 + 0.2 * Double(d) / Double(max(t, 1)); guard live || !self.recording else { return }; self.screen.status = L("reading_s", d, t) } } }
+            // Stopped while reading: no title, prose or archive; the complete transcript checkpoint stays, so Resume
+            // runs the reader alone (ResumePlan.readerOnly). Its session is cancelled and dropped with this run.
+            func stoppedReading() -> Bool { guard StopFlag.on else { return false }; StatusLog.add("trace stop while reading: transcript kept, the reader reruns on resume"); return true }
+            if stoppedReading() { return }
             var readError = worker.failure
             if readError == nil && !silent { do { _ = try reader.finish() } catch { readError = error; StatusLog.add("trace reader.finish error: \(error)") } }
+            if stoppedReading() { return }
             // Model guardrail: this job's off-protocol counts, logged (a warning above the card's threshold), shown, saved.
             let rg = reader.guardCounts, gc = rm.card.reader.guardrail, over = rg.exceeds(gc)
             StatusLog.add((over ? "WARNING guard: off-protocol output above \(gc.maxOffProtocolRate): " : "guard: ") + rg.summary)
@@ -270,6 +279,7 @@ final class ReaderWorker: @unchecked Sendable {
             if let job { Checkpoint.remove(job.id); await self.queue.remove(job.id) }
             Stage.set("idle")
         }.value
+        readerCancel = nil
     }
 
     /// DEV (VOX_AUTORUN): the bundled sample through the whole pipeline, not queued.
@@ -329,7 +339,7 @@ final class ReaderWorker: @unchecked Sendable {
                 let enroll = partial.map { SeamEnrollment.plan($0.lines, offset: from) } ?? .none(from)
                 if !enroll.clips.isEmpty { StatusLog.add("trace resume enrollment: \(enroll.clips.count) clips, \(Int(enroll.length)) s") }
                 await process(seconds: secs, job: job, skipper: skipper, resume: partial, offset: from, enroll: enroll) { sink in try AudioPrep.stream(url, skipper: skipper, from: from, clips: enroll.clips, onChunk: sink) }
-                // A stop that came after the transcription (the reader does not check it) finds the job saved and gone.
+                // A stop while reading leaves the job queued like one during transcription; one after the archive finds it gone.
                 let stopped = StopFlag.on, yielded = yielding, queued = await queue.contains(job.id)
                 StopFlag.on = false; yielding = false
                 if stopped && yielded && queued {
