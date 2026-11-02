@@ -1,0 +1,7 @@
+"widget_name" = "錄音";
+"widget_desc" = "開啟 Prime Minutes 並直接開始錄音。";
+"widget_record" = "錄音";
+"control_name" = "錄製會議";
+"control_record" = "錄音";
+"rec_intent_title" = "錄製會議";
+"rec_intent_desc" = "開啟 Prime Minutes 並開始錄音。";

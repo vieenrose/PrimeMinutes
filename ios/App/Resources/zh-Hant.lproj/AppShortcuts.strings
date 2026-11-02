@@ -1,0 +1,3 @@
+"Record with ${applicationName}" = "用 ${applicationName} 錄音";
+"Start recording with ${applicationName}" = "用 ${applicationName} 開始錄音";
+"Record a meeting with ${applicationName}" = "用 ${applicationName} 錄製會議";

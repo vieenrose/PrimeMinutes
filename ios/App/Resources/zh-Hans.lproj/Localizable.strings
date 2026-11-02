@@ -779,3 +779,6 @@
 "cite_preview" = "引用逐字稿预览";
 "cite_preview_full" = "看完整逐字稿 →";
 "cite_preview_close" = "关闭预览";
+"rec_intent_title" = "录制会议";
+"rec_intent_desc" = "打开 Prime Minutes 并开始录音。";
+"rec_shortcut_short" = "录音";

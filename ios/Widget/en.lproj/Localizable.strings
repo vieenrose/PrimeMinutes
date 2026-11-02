@@ -1,0 +1,7 @@
+"widget_name" = "Record";
+"widget_desc" = "Opens Prime Minutes already recording.";
+"widget_record" = "Record";
+"control_name" = "Record a meeting";
+"control_record" = "Record";
+"rec_intent_title" = "Record a meeting";
+"rec_intent_desc" = "Opens Prime Minutes and starts recording.";

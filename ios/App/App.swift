@@ -107,6 +107,13 @@ struct ContentView: View {
     private func openJob(_ id: UUID) {
         if let s = m.library.sessions.first(where: { $0.id == id }) { LibraryView.markSeen(s.id); path = [.session(s)] } else { path = [.job(id)] }
     }
+    /// A pending outside record request: sheets closed (the recording screen is a full-screen cover on this view), then Record.
+    private func startExternalRecord() {
+        guard RecordEntry.take(), !m.capture.recording else { return }
+        let hadSheet = showSettings || showAdd || showPodcast || showSubs || showLicenses || picking
+        showSettings = false; showAdd = false; showPodcast = false; showSubs = false; showLicenses = false; picking = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + (hadSheet ? 0.5 : 0)) { if !m.capture.recording { m.capture.toggleRecord() } }
+    }
     var body: some View {
         NavigationStack(path: $path) {
             LibraryView(m: m, path: $path, onAdd: { showAdd = true }, onSettings: { showSettings = true })
@@ -160,8 +167,12 @@ struct ContentView: View {
             }.preferredColorScheme((Theme(rawValue: theme) ?? .auto).scheme) }
             // A received meeting restores at once (no model needed); plain audio asks for the models first.
             // A YouTube / PeerTube link is no longer imported (removed in 0.55): explained, never fetched.
-            .onOpenURL { u in if !u.isFileURL && VideoLinks.isVideoLink(u.absoluteString) { videoLink = true } else { m.imports.open(u) { a in m.downloads.withModels(a) } } }
+            .onOpenURL { u in if RecordEntry.isRecordURL(u) { RecordEntry.request() } else if !u.isFileURL && VideoLinks.isVideoLink(u.absoluteString) { videoLink = true } else { m.imports.open(u) { a in m.downloads.withModels(a) } } }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mpeg4Audio, UTType(exportedAs: "tw.com.pesi.primeminutes.session")]) { if case .success(let u) = $0 { m.imports.open(u) { a in m.downloads.withModels(a) } } }
+            // Record from outside the app (Siri / Shortcuts / Control Center / widget): the in-app Record button's own path.
+            // Never a stop: a request while recording leaves the recording alone. Cold launch: taken once the screen is up.
+            .onReceive(NotificationCenter.default.publisher(for: RecordEntry.notification)) { _ in startExternalRecord() }
+            .task { startExternalRecord() }
             .onReceive(m.imports.$openRequest) { s in guard let s else { return }; m.imports.openRequest = nil; LibraryView.markSeen(s.id); path = [.session(s)] }
             .alert(L("share_dup_title"), isPresented: Binding(get: { m.imports.duplicate != nil }, set: { if !$0 && m.imports.duplicate != nil { m.imports.resolveDuplicate(keepCopy: false) } }), presenting: m.imports.duplicate) { _ in
                 Button(L("share_dup_open")) { m.imports.resolveDuplicate(keepCopy: false) }

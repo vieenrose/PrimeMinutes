@@ -4,12 +4,12 @@
 	classes = {};
 	objectVersion = 56;
 	objects = {
-		A1 /* Project object */ = {isa = PBXProject; attributes = {LastUpgradeCheck = 2620;}; buildConfigurationList = C1; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = G1; productRefGroup = G2; projectDirPath = ""; projectRoot = ""; targets = (T1); };
-		G1 = {isa = PBXGroup; children = (F2, G2); sourceTree = "<group>";};
-		G2 = {isa = PBXGroup; children = (F1); name = Products; sourceTree = "<group>";};
+		A1 /* Project object */ = {isa = PBXProject; attributes = {LastUpgradeCheck = 2620;}; buildConfigurationList = C1; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, "zh-Hant", "zh-Hans"); mainGroup = G1; productRefGroup = G2; projectDirPath = ""; projectRoot = ""; targets = (T1, T2); };
+		G1 = {isa = PBXGroup; children = (F2, G3, G2); sourceTree = "<group>";};
+		G2 = {isa = PBXGroup; children = (F1, F3); name = Products; sourceTree = "<group>";};
 		F1 /* PrimeMinutes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PrimeMinutes.app; sourceTree = BUILT_PRODUCTS_DIR;};
 		F2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = ../App/Info.plist; sourceTree = "<group>";};
-		T1 /* PrimeMinutes */ = {isa = PBXNativeTarget; buildConfigurationList = C2; buildPhases = (P1); buildRules = (); dependencies = (); name = PrimeMinutes; productName = PrimeMinutes; productReference = F1; productType = "com.apple.product-type.application";};
+		T1 /* PrimeMinutes */ = {isa = PBXNativeTarget; buildConfigurationList = C2; buildPhases = (P1, P2); buildRules = (); dependencies = (D1); name = PrimeMinutes; productName = PrimeMinutes; productReference = F1; productType = "com.apple.product-type.application";};
 		P1 /* Embed prebuilt */ = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Build + embed native bundle"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/bash; shellScript = "bash \"$SRCROOT/embed_prebuilt.sh\"\n"; alwaysOutOfDate = 1;};
 		C1 = {isa = XCConfigurationList; buildConfigurations = (B1, B2); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
 		C2 = {isa = XCConfigurationList; buildConfigurations = (B3, B4); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
@@ -17,6 +17,30 @@
 		B2 = {isa = XCBuildConfiguration; name = Release; buildSettings = {SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0;};};
 		B3 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = tw.com.pesi.primeminutes; CODE_SIGN_ENTITLEMENTS = PrimeMinutes.entitlements; PRODUCT_NAME = PrimeMinutes; INFOPLIST_FILE = ../App/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; ENABLE_USER_SCRIPT_SANDBOXING = NO; SWIFT_VERSION = 5.0;};};
 		B4 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = tw.com.pesi.primeminutes; CODE_SIGN_ENTITLEMENTS = PrimeMinutes.entitlements; PRODUCT_NAME = PrimeMinutes; INFOPLIST_FILE = ../App/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; ENABLE_USER_SCRIPT_SANDBOXING = NO; SWIFT_VERSION = 5.0;};};
+		/* Widget extension: home-screen record widget + iOS 18 Control Center control (ios/Widget). */
+		G3 = {isa = PBXGroup; children = (F4, F5, F6, V1); name = Widget; sourceTree = "<group>";};
+		F3 /* PrimeMinutesWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PrimeMinutesWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR;};
+		F4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PrimeWidgets.swift; path = ../Widget/PrimeWidgets.swift; sourceTree = "<group>";};
+		F5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordIntent.swift; path = ../App/RecordIntent.swift; sourceTree = "<group>";};
+		F6 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = ../Widget/Info.plist; sourceTree = "<group>";};
+		V1 = {isa = PBXVariantGroup; children = (L1, L2, L3); name = Localizable.strings; sourceTree = "<group>";};
+		L1 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = ../Widget/en.lproj/Localizable.strings; sourceTree = "<group>";};
+		L2 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "../Widget/zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>";};
+		L3 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "../Widget/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>";};
+		BF1 = {isa = PBXBuildFile; fileRef = F4;};
+		BF2 = {isa = PBXBuildFile; fileRef = F5;};
+		BF3 = {isa = PBXBuildFile; fileRef = V1;};
+		BF4 = {isa = PBXBuildFile; fileRef = F3; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); };};
+		T2 /* PrimeMinutesWidgets */ = {isa = PBXNativeTarget; buildConfigurationList = C3; buildPhases = (S1, R1, P3); buildRules = (); dependencies = (); name = PrimeMinutesWidgets; productName = PrimeMinutesWidgets; productReference = F3; productType = "com.apple.product-type.app-extension";};
+		S1 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (BF1, BF2); runOnlyForDeploymentPostprocessing = 0;};
+		R1 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (BF3); runOnlyForDeploymentPostprocessing = 0;};
+		P3 /* The extension's versions = the app's (App Store validation) */ = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Copy app version"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/bash; shellScript = "A=\"$SRCROOT/../App/Info.plist\"; P=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\nfor k in CFBundleVersion CFBundleShortVersionString; do /usr/libexec/PlistBuddy -c \"Set :$k $(/usr/libexec/PlistBuddy -c \"Print :$k\" \"$A\")\" \"$P\"; done\n"; alwaysOutOfDate = 1;};
+		P2 /* Embed the widget extension */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (BF4); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0;};
+		D1 = {isa = PBXTargetDependency; target = T2; targetProxy = X1;};
+		X1 = {isa = PBXContainerItemProxy; containerPortal = A1; proxyType = 1; remoteGlobalIDString = T2; remoteInfo = PrimeMinutesWidgets;};
+		C3 = {isa = XCConfigurationList; buildConfigurations = (B5, B6); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		B5 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = tw.com.pesi.primeminutes.widgets; PRODUCT_NAME = PrimeMinutesWidgets; INFOPLIST_FILE = ../Widget/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; TARGETED_DEVICE_FAMILY = 1; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SKIP_INSTALL = YES; APPLICATION_EXTENSION_API_ONLY = YES; SWIFT_VERSION = 5.0; ENABLE_USER_SCRIPT_SANDBOXING = NO; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");};};
+		B6 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = tw.com.pesi.primeminutes.widgets; PRODUCT_NAME = PrimeMinutesWidgets; INFOPLIST_FILE = ../Widget/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; TARGETED_DEVICE_FAMILY = 1; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SKIP_INSTALL = YES; APPLICATION_EXTENSION_API_ONLY = YES; SWIFT_VERSION = 5.0; ENABLE_USER_SCRIPT_SANDBOXING = NO; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");};};
 	};
 	rootObject = A1;
 }
