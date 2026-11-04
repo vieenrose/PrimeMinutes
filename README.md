@@ -28,15 +28,16 @@
 
 第一次開啟會先下載模型（約 2.5 GB 起，可設定只用 Wi‑Fi）。iPhone 更新由 TestFlight 負責。RAM 6 GB 以上最順，也能改用較完整的 E4B 模型；RAM 4 GB 的 iPhone 同樣會邊錄邊整理筆記（使用 E2B 模型）。
 
-RAM 6 GB 以上的機型（iOS 17 以上，最順）：
+RAM 4 GB 以上的機型（iOS 17 以上）：
 
 | | 機型 |
 |---|---|
-| **iPhone（6 GB）** | 12 Pro、12 Pro Max、13 Pro、13 Pro Max、14、14 Plus、14 Pro、14 Pro Max、15、15 Plus |
-| **iPhone（8 GB 以上）** | 15 Pro、15 Pro Max、16、16 Plus、16 Pro、16 Pro Max、16e、17、17 Pro、17 Pro Max、17e、Air |
-| **iPad**（以 iPhone 相容模式執行，尚未實機測試） | iPad（A16）、iPad mini（A17 Pro）、iPad Air（M1 以後）、iPad Pro 11 吋第 2 代以後、iPad Pro 12.9 吋第 4 代以後、iPad Pro（M4 以後） |
+| **iPhone（4 GB）** | XS、XS Max、11、11 Pro、11 Pro Max、12 mini、12、13 mini、13、SE（第 3 代） |
+| **iPhone（6 GB，較順）** | 12 Pro、12 Pro Max、13 Pro、13 Pro Max、14、14 Plus、14 Pro、14 Pro Max、15、15 Plus |
+| **iPhone（8 GB 以上，最順）** | 15 Pro、15 Pro Max、16、16 Plus、16 Pro、16 Pro Max、16e、17、17 Pro、17 Pro Max、17e、Air |
+| **iPad**（以 iPhone 相容模式執行，尚未實機測試） | iPad（第 10 代以後）、iPad mini（第 6 代以後）、iPad Air（第 4 代以後）、iPad Pro 11 吋第 1 代以後、iPad Pro 12.9 吋第 3 代以後 |
 
-RAM 4 GB 的 iPhone（如 iPhone 11、12、13、13 mini、SE 第 3 代）也能使用，記憶體較緊（iPhone 13 已實機測試）；3 GB 機型（如 iPhone XR）無法執行。
+實機測試過 iPhone 13（4 GB）與 iPhone 14 Pro Max；其他機型依記憶體容量列出，XS、XS Max 的晶片（A12）較慢，邊錄邊整理筆記可能跟不上。3 GB 機型（如 iPhone XR）無法執行。
 
 ## 能做什麼
 
