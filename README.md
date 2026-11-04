@@ -24,11 +24,11 @@
 | | 怎麼裝 | 需求 | 掃碼 |
 |---|---|---|:---:|
 | **Android** | 到 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK，App 每天會自動檢查新版 | Android 8.0 以上；RAM 8 GB 以上最順 | <img src="docs/screenshots/qr-android.png" width="100" alt="Android 下載 QR code"> |
-| **iPhone** | 先裝 TestFlight，再開啟[公開測試連結](https://testflight.apple.com/join/saH9YxEA) | iOS 17.0 以上；RAM 6 GB 以上 | <img src="docs/screenshots/qr-ios.png" width="100" alt="iOS TestFlight QR code"> |
+| **iPhone** | 先裝 TestFlight，再開啟[公開測試連結](https://testflight.apple.com/join/saH9YxEA) | iOS 17.0 以上；RAM 4 GB 以上（6 GB 以上最順） | <img src="docs/screenshots/qr-ios.png" width="100" alt="iOS TestFlight QR code"> |
 
-第一次開啟會先下載模型（約 2.5 GB 起，可設定只用 Wi‑Fi）。iPhone 更新由 TestFlight 負責。建議 RAM 6 GB 以上：會邊錄邊整理筆記，也能改用較完整的 E4B 模型。RAM 4 GB 以下的 iPhone 目前不建議使用。
+第一次開啟會先下載模型（約 2.5 GB 起，可設定只用 Wi‑Fi）。iPhone 更新由 TestFlight 負責。RAM 6 GB 以上最順，也能改用較完整的 E4B 模型；RAM 4 GB 的 iPhone 同樣會邊錄邊整理筆記（使用 E2B 模型）。
 
-RAM 6 GB 以上的機型（iOS 17 以上）：
+RAM 6 GB 以上的機型（iOS 17 以上，最順）：
 
 | | 機型 |
 |---|---|
@@ -36,7 +36,7 @@ RAM 6 GB 以上的機型（iOS 17 以上）：
 | **iPhone（8 GB 以上）** | 15 Pro、15 Pro Max、16、16 Plus、16 Pro、16 Pro Max、16e、17、17 Pro、17 Pro Max、17e、Air |
 | **iPad**（以 iPhone 相容模式執行，尚未實機測試） | iPad（A16）、iPad mini（A17 Pro）、iPad Air（M1 以後）、iPad Pro 11 吋第 2 代以後、iPad Pro 12.9 吋第 4 代以後、iPad Pro（M4 以後） |
 
-RAM 4 GB 的 iPhone（如 iPhone 11、12、13、13 mini、SE 第 3 代）錄音時容易被系統中止，目前不建議使用；3 GB 機型（如 iPhone XR）無法執行。
+RAM 4 GB 的 iPhone（如 iPhone 11、12、13、13 mini、SE 第 3 代）也能使用，記憶體較緊（iPhone 13 已實機測試）；3 GB 機型（如 iPhone XR）無法執行。
 
 ## 能做什麼
 
