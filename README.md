@@ -23,7 +23,7 @@
 
 | | 怎麼裝 | 需求 | 掃碼 |
 |---|---|---|:---:|
-| **Android** | 到 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK，App 每天會自動檢查新版 | Android 8.0 以上；RAM 8 GB 以上最順 | <img src="docs/screenshots/qr-android.png" width="100" alt="Android 下載 QR code"> |
+| **Android** | 到 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK，App 每天會自動檢查新版 | Android 8.0 以上；RAM 5 GB 以上（8 GB 以上最順） | <img src="docs/screenshots/qr-android.png" width="100" alt="Android 下載 QR code"> |
 | **iPhone** | 先裝 TestFlight，再開啟[公開測試連結](https://testflight.apple.com/join/saH9YxEA) | iOS 17.0 以上；RAM 4 GB 以上（6 GB 以上最順） | <img src="docs/screenshots/qr-ios.png" width="100" alt="iOS TestFlight QR code"> |
 
 第一次開啟會先下載模型（約 2.5 GB 起，可設定只用 Wi‑Fi）。iPhone 更新由 TestFlight 負責。RAM 6 GB 以上最順，也能改用較完整的 E4B 模型；RAM 4 GB 的 iPhone 同樣會邊錄邊整理筆記（使用 E2B 模型）。
