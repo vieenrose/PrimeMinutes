@@ -9,7 +9,8 @@ final class ReaderWorker: @unchecked Sendable {
     /// `paused`: hold the lines until `resume()` (low-RAM devices read after the transcription, not during it).
     init(_ r: MeetingReader, paused: Bool = false) {
         reader = r; self.paused = paused
-        Thread.detachNewThread { [self] in
+        // Low priority (like the Android reader lane): ASR is the only lane that loses data when it runs late.
+        let t = Thread { [self] in
             while true {
                 // `self.paused`, not the init parameter of the same name: the closure would capture the parameter,
                 // `resume()` could never lift it, and the worker and `drain` woke each other forever.
@@ -24,6 +25,7 @@ final class ReaderWorker: @unchecked Sendable {
                 lock.lock(); snapshot = reader.journal; done += 1; lock.unlock()
             }
         }
+        t.qualityOfService = .utility; t.start()
     }
     func offer(_ l: Line) { lock.lock(); queue.append(l); total += 1; lock.broadcast(); lock.unlock() }
     func resume() { lock.lock(); paused = false; lock.broadcast(); lock.unlock() }

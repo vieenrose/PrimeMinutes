@@ -16,6 +16,9 @@ import Foundation
         check(ReaderGate.forLoad(chosen: "E4B-v2", available: 2_300_000_000, minAvailable: minAvail, fallback: "E2B", fallbackReady: false) == "E4B-v2", "short, E2B not installed: E4B still")
         check(ReaderGate.forLoad(chosen: "E4B-v2", available: 0, minAvailable: minAvail, fallback: nil, fallbackReady: true) == "E4B-v2", "no fallback")
         check(ReaderGate.forLoad(chosen: "E2B", available: 0, minAvailable: 0, fallback: nil, fallbackReady: false) == "E2B", "E2B: no check")
+        check(ReaderGate.readsAfterTranscription(physical: 2_990_000_000), "3 GB phone reads after the transcription")
+        check(!ReaderGate.readsAfterTranscription(physical: 3_900_000_000), "4 GB phone (iPhone 13) reads live")
+        check(!ReaderGate.readsAfterTranscription(physical: 5_910_814_720), "6 GB phone reads live")
         print(fails == 0 ? "reader gate: all passed" : "reader gate: \(fails) failed"); exit(fails == 0 ? 0 : 1)
     }
 }

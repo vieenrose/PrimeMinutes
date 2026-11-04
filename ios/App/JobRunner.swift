@@ -139,7 +139,7 @@ import os
             let llm = r.llm; await MainActor.run { self.readerCancel = { llm.cancel() } }
             do { try reader.start() } catch { Prefs.reportReadFailure(); await MainActor.run { self.screen.status = L("reader_error", "\(error)") }; return }
             Storage.reclaimReplaced()   // the chosen model loads: a model it replaced (kept during a migration) can go
-            let conv = TextConv(); let lowRam = ProcessInfo.processInfo.physicalMemory < 4_500_000_000   // 3 GB phones cannot hold ASR + diarizer + E2B at once
+            let conv = TextConv(); let lowRam = ReaderGate.readsAfterTranscription(physical: ProcessInfo.processInfo.physicalMemory)   // only 3 GB phones cannot hold ASR + diarizer + E2B at once
             let worker = ReaderWorker(reader, paused: lowRam && cached == nil)
             defer { worker.stop() }
             let sk = skipper ?? SilenceSkipper()   // nothing skipped → identity
