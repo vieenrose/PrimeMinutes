@@ -23,8 +23,8 @@
 
 | | 怎麼裝 | 需求 | 掃碼 |
 |---|---|---|:---:|
-| **Android** | 到 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK，App 每天會自動檢查新版 | Android 8.0 以上、約 2019 年後的處理器（ARMv8.2）；RAM 8 GB 以上最順 | <img src="docs/screenshots/qr-android.png" width="100" alt="Android 下載 QR code"> |
-| **iPhone** | 先裝 TestFlight，再開啟[公開測試連結](https://testflight.apple.com/join/saH9YxEA) | iOS 17.0 以上；RAM 6 GB 以上最順 | <img src="docs/screenshots/qr-ios.png" width="100" alt="iOS TestFlight QR code"> |
+| **Android** | 到 [Releases](https://github.com/vieenrose/PrimeMinutes/releases/latest) 下載 APK，App 每天會自動檢查新版 | Android 8.0 以上、約 2019 年後的處理器（ARMv8.2）；RAM 6 GB 以上（8 GB 以上最順） | <img src="docs/screenshots/qr-android.png" width="100" alt="Android 下載 QR code"> |
+| **iPhone** | 先裝 TestFlight，再開啟[公開測試連結](https://testflight.apple.com/join/saH9YxEA) | iOS 17.0 以上；RAM 4 GB 以上（6 GB 以上最順） | <img src="docs/screenshots/qr-ios.png" width="100" alt="iOS TestFlight QR code"> |
 
 Android 安裝時如果被擋：Play 安全防護跳出警告，點「更多詳細資料 → 仍要安裝」；小米／HyperOS 在安全提示中選擇允許即可（[#6](https://github.com/vieenrose/PrimeMinutes/issues/6)）。
 
