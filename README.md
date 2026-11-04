@@ -35,7 +35,6 @@ RAM 4 GB 以上的機型（iOS 17 以上）：
 | **iPhone（4 GB）** | XS、XS Max、11、11 Pro、11 Pro Max、12 mini、12、13 mini、13、SE（第 3 代） |
 | **iPhone（6 GB，較順）** | 12 Pro、12 Pro Max、13 Pro、13 Pro Max、14、14 Plus、14 Pro、14 Pro Max、15、15 Plus |
 | **iPhone（8 GB 以上，最順）** | 15 Pro、15 Pro Max、16、16 Plus、16 Pro、16 Pro Max、16e、17、17 Pro、17 Pro Max、17e、Air |
-| **iPad**（以 iPhone 相容模式執行，尚未實機測試） | iPad（第 10 代以後）、iPad mini（第 6 代以後）、iPad Air（第 4 代以後）、iPad Pro 11 吋第 1 代以後、iPad Pro 12.9 吋第 3 代以後 |
 
 實機測試過 iPhone 13（4 GB）與 iPhone 14 Pro Max；其他機型依記憶體容量列出，XS、XS Max 的晶片（A12）較慢，邊錄邊整理筆記可能跟不上。3 GB 機型（如 iPhone XR）無法執行。
 
