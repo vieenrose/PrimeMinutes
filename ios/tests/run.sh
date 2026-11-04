@@ -41,3 +41,5 @@ swiftc -parse-as-library -O $D/../App/OpenCC.swift $D/../App/ScreenScript.swift 
 VOX_OPENCC_DIR=$D/../App/Resources/opencc $O/screen-script-tests
 swiftc -parse-as-library -O $D/../App/QueueResume.swift $D/QueueResumeTests.swift -o $O/queue-resume-tests && $O/queue-resume-tests
 swiftc -parse-as-library -O $D/../App/ShareCore.swift $D/../App/CiteWindow.swift $D/CiteWindowTests.swift -o $O/cite-window-tests && $O/cite-window-tests
+swiftc -parse-as-library -O $R/ModelCard.swift $R/MeetingReader.swift $R/ReaderLlm.swift $R/ReaderProtocol.swift $R/ReaderWorker.swift $D/ReaderWorkerTests.swift -o $O/reader-worker-tests
+VOX_MODEL_CARDS=$D/../App/Resources/model_cards $O/reader-worker-tests
