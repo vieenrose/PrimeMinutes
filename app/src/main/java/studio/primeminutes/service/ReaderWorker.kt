@@ -29,10 +29,11 @@ import studio.primeminutes.core.reader.mapText
 import studio.primeminutes.core.text.OpenCcConverter
 import java.io.File
 
-/** Total RAM from which ASR + diarization and the reader run concurrently (integration note §6
- *  gates live mode at "8 GB"). An 8 GB phone reports ~7.4 GiB of totalMem (the OPPO Reno7:
- *  7,728,400 kB), so the gate is 7 GiB: every 8 GB phone passes, 6 GB phones do not. */
-private const val LIVE_READER_MIN_RAM = 7L * 1024 * 1024 * 1024
+/** Total RAM from which ASR + diarization and the reader run concurrently. A 5 GB phone reports
+ *  ~4.5 GiB of totalMem, so the gate is 4 GiB: 5 GB phones and up pass, 4 GB phones (~3.6 GiB) do
+ *  not. Validated 2026-11-04 on a Galaxy A53 (7.2 GiB) with 2.9 GB of hot ballast (~4.3 GiB left):
+ *  a 6 min import ran live to the end (app ~1.25 GB PSS, no kill, guard clean). */
+private const val LIVE_READER_MIN_RAM = 4L * 1024 * 1024 * 1024
 /** How often a live reading picks up the newest transcript snapshot. */
 private const val LIVE_FEED_MS = 400L
 
@@ -446,7 +447,7 @@ internal class ReaderWorker(private val host: Host) {
     /**
      * Live mode: ASR + diarization and the reader run at the same time, so the minutes are ready
      * about a minute after the meeting ends (integration note §2). It holds both models resident,
-     * so it needs the RAM: below ~8 GB the reader runs after transcription instead (same protocol,
+     * so it needs the RAM: below ~5 GB the reader runs after transcription instead (same protocol,
      * faster than real time since nothing waits for speech).
      */
     fun liveReaderCapable(): Boolean {

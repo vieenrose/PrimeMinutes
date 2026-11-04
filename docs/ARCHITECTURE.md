@@ -44,7 +44,7 @@ as a `Flow` from a **foreground service** and collected by Compose. Incremental 
 
 ## Three concurrent lanes
 
-With ~8 GB of RAM (`LIVE_READER_MIN_RAM` = 7 GiB of `totalMem`), recording and imports run three
+With 5 GB of RAM or more (`LIVE_READER_MIN_RAM` = 4 GiB of `totalMem`), recording and imports run three
 lanes at once:
 
 ```
