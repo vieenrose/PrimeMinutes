@@ -28,6 +28,16 @@
 
 第一次開啟會先下載模型（約 2.5 GB 起，可設定只用 Wi‑Fi）。iPhone 更新由 TestFlight 負責。RAM 4.5 GB 以上會邊錄邊整理筆記，6 GB 以上能改用較完整的 E4B 模型；較小的 iPhone 在錄完後才整理，3 GB 機型（如 iPhone XR）無法執行。
 
+RAM 6 GB 以上的機型（iOS 17 以上）：
+
+| | 機型 |
+|---|---|
+| **iPhone（6 GB）** | 12 Pro、12 Pro Max、13 Pro、13 Pro Max、14、14 Plus、14 Pro、14 Pro Max、15、15 Plus |
+| **iPhone（8 GB 以上）** | 15 Pro、15 Pro Max、16、16 Plus、16 Pro、16 Pro Max、16e、17、17 Pro、17 Pro Max、17e、Air |
+| **iPad**（以 iPhone 相容模式執行，尚未實機測試） | iPad（A16）、iPad mini（A17 Pro）、iPad Air（M1 以後）、iPad Pro 11 吋第 2 代以後、iPad Pro 12.9 吋第 4 代以後、iPad Pro（M4 以後） |
+
+其他 iPhone（如 iPhone 11、12、13、13 mini、SE 第 3 代，RAM 4 GB）可以用，但只能錄完後再整理筆記。
+
 ## 能做什麼
 
 | 邊錄邊出字 | 自動整理筆記 | 摘要點了就聽原話 |
