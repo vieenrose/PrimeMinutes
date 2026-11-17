@@ -108,7 +108,6 @@ struct SessionView: View {
     let openAt: Double?
     init(session: Session, save: @escaping (Session) -> Void, rerun: @escaping (Session, Bool) -> Void = { _, _ in }, openAt: Double? = nil, busy: Bool = false) {
         _s = State(initialValue: session); self.save = save; self.rerun = rerun; self.openAt = openAt; self.busy = busy
-        if openAt != nil { _tab = State(initialValue: 1) }
         // A run saved while watched (LiveJobView): the meeting opens on the tab the user was on, once.
         if let h = Self.handoffTab, h.id == session.id { _tab = State(initialValue: h.tab); Self.handoffTab = nil }
         if let t = Dev.env["VOX_TAB"].flatMap(Int.init) { _tab = State(initialValue: t) }
@@ -180,15 +179,15 @@ struct SessionView: View {
         return MeetingSearch.results(sq, lines: v.lines.map { MeetingSearch.Line(start: $0.start, text: $0.text, speaker: $0.speaker) },
                                      notes: v.notes.map { MeetingSearch.NoteIn(ts: $0.ts, text: $0.text) }, dense: semantic ? semPassages : [])
     }
-    /// A result tapped: the list folds, the transcript shows the line, the player is parked there (paused).
+    /// A result tapped: the list folds and the citation preview opens on that line (as a summary pill).
     private func pick(_ r: MeetingSearch.Result) {
         resultsOpen = false; searchFocus = false
         guard s.lines.indices.contains(r.line) else { return }
         let l = s.lines[r.line]
         if let i = hits.firstIndex(where: { $0.id == l.id }) { match = i }
-        jumpTo = nil; DispatchQueue.main.async { jumpTo = l.id }
-        // At the line's start: a note's whole-second time is before its line, which made the line above the playing one.
-        if player.available { player.seek(l.start) }
+        // Same as a summary pill: the citation preview at the line's start (a note's whole-second time is before its
+        // line); 「在逐字稿中查看」 then scrolls the transcript there.
+        openCite(l.start)
     }
     private var resultsList: some View { sessionResultsList }
     private func resultsHeader(_ t: String, _ n: Int) -> some View {
@@ -250,7 +249,7 @@ struct SessionView: View {
         let g = citeGen
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { if citeGen == g { closeCite() } }
     }
-    /// 「看完整逐字稿 →」: the 逐字稿 segment scrolled to the cited line; the player keeps going.
+    /// 「在逐字稿中查看」: the 逐字稿 segment scrolled to the cited line; the player keeps going.
     private func citeFull(_ id: UUID) {
         closeCite(); tab = 1; jumpTo = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { jumpTo = id }
@@ -549,12 +548,12 @@ struct SessionView: View {
             firstHitId: hits.first?.id, resultsOpen: resultsOpen, hasResults: !meetingResults.isEmpty,
             onFollow: { proxy.scrollTo($0, anchor: .center) })
     }
-    /// openAt deep-link: scroll to the line at t and park the player there.
+    /// openAt deep-link (a library search hit, a library Ask citation): the citation preview on the line at t, as a
+    /// summary pill; 「在逐字稿中查看」 goes on to the transcript.
     private func openAtSeek(_ t: Double, _ proxy: ScrollViewProxy) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             let i = MeetingSearch.lineAt(starts: s.lines.map(\.start), t)
-            if s.lines.indices.contains(i) { withAnimation { proxy.scrollTo(s.lines[i].id, anchor: .center) } }
-            if player.available { player.seek(s.lines.indices.contains(i) ? s.lines[i].start : t) }
+            openCite(s.lines.indices.contains(i) ? s.lines[i].start : t)
         }
     }
 

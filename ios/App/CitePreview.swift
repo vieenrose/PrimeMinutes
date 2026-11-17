@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A citation tapped (summary pill, 筆記 核對, in-meeting Ask): the cited second and its turn.
+/// A citation tapped (summary pill, 筆記 核對, in-meeting Ask, a search result): the cited second and its turn.
 struct CiteTarget: Equatable {
     let sec: Double
     let turn: Int
@@ -8,7 +8,7 @@ struct CiteTarget: Equatable {
 
 /// The citation transcript preview: a small panel just above the compact player with the lines around the cited turn
 /// (CiteWindow), the cited one marked; while playing, the mark follows the playhead. Closes on ✕, a swipe down,
-/// 「看完整逐字稿 →」 (the 逐字稿 segment at that line) or by itself a few seconds after the cited passage; the player
+/// 「在逐字稿中查看」 (the 逐字稿 segment at that line) or by itself a few seconds after the cited passage; the player
 /// keeps playing. At most ~30 % of the screen, scrolls inside when the lines are long.
 struct CitePreviewPanel: View {
     @ObservedObject var player: Player
@@ -29,7 +29,7 @@ struct CitePreviewPanel: View {
             Capsule().fill(Vox.ink3.opacity(0.5)).frame(width: 36, height: 4).padding(.top, 6).accessibilityHidden(true)
             HStack {
                 Button { if lines.indices.contains(cite.turn) { onFull(lines[cite.turn].id) } } label: {
-                    Text(L("cite_preview_full")).font(Vox.fontGroup).foregroundStyle(Vox.accent).frame(minHeight: 36)
+                    Text(L("cite_preview_in_transcript")).font(Vox.fontGroup).foregroundStyle(Vox.accent).frame(minHeight: 36)
                 }.buttonStyle(.plain)
                 Spacer()
                 Button { onClose() } label: { Image(systemName: "xmark").font(.footnote.weight(.semibold)).foregroundStyle(Vox.ink2).tapTarget() }

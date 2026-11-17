@@ -777,7 +777,7 @@
 "ask_scope_collection" = "This collection";
 "ask_scope_note" = "Answers only from: %@";
 "cite_preview" = "Cited transcript preview";
-"cite_preview_full" = "See full transcript →";
+"cite_preview_in_transcript" = "See in transcript";
 "cite_preview_close" = "Close preview";
 "rec_intent_title" = "Record a meeting";
 "rec_intent_desc" = "Opens Prime Minutes and starts recording.";

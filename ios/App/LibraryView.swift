@@ -337,9 +337,9 @@ struct LibraryView: View {
         // Native search in the nav-bar drawer: the large title collapses as the list scrolls.
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(L(askReady ? "search_or_ask_hint" : EmbedHost.ready ? "studio_search_hint" : "search_sessions")))
         .searchSuggestions { if askReady { LibraryAskSuggestion(query: query.trimmingCharacters(in: .whitespaces)) { asking = query.trimmingCharacters(in: .whitespaces) } } }
-        .submitLabel(askReady ? .send : .search)
+        .submitLabel(.search)
         .autocorrectionDisabled()
-        .onSubmit(of: .search) { if askReady, !query.trimmingCharacters(in: .whitespaces).isEmpty { asking = query } }
+        // Return only closes the keyboard and keeps the results; Ask starts from the suggestion row alone.
         .onChange(of: query) { _, _ in runSearch() }
         // Redesign: Ask lives in the search pill (its suggestion row, and the keyboard's Send), not in the nav bar.
         // A meeting that finished processing lands in the library: confirm it by touch (a removal stays silent).

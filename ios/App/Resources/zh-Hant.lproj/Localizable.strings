@@ -777,7 +777,7 @@
 "ask_scope_collection" = "此合集";
 "ask_scope_note" = "只根據「%@」回答";
 "cite_preview" = "引用逐字稿預覽";
-"cite_preview_full" = "看完整逐字稿 →";
+"cite_preview_in_transcript" = "在逐字稿中查看";
 "cite_preview_close" = "關閉預覽";
 "rec_intent_title" = "錄製會議";
 "rec_intent_desc" = "開啟 Prime Minutes 並開始錄音。";
