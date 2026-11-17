@@ -898,7 +898,9 @@ private fun TranscribeScreen(
     var citeWindow by remember { mutableStateOf(IntRange.EMPTY) }
     var citeGen by remember { mutableIntStateOf(0) }
     var citeSec by remember { mutableIntStateOf(0) }
-    fun closeCite() { citeTarget = -1; citeWindow = IntRange.EMPTY }
+    // The load a search hit opened its preview for (the close-on-load effect spares it).
+    var citeOwner by remember { mutableStateOf<Pair<Any?, Int>?>(null) }
+    fun closeCite() { citeTarget = -1; citeWindow = IntRange.EMPTY; citeOwner = null }
     // Semantic search model (EmbeddingGemma): presence, download progress, meetings being indexed.
     var searchModelReady by remember { mutableStateOf(EmbedHost.ready(context)) }
     // Ask's models (the AI notes model, and the search model its excerpts come from): re-checked when
@@ -1391,13 +1393,14 @@ private fun TranscribeScreen(
         if (s.opening || !s.transcriptReady || s.utterances.isEmpty()) return@LaunchedEffect
         pendingSeekSec = null
         val idx = studio.primeminutes.core.embed.MeetingSearch.lineAt(s.utterances, t).coerceAtLeast(0)
-        sessTab = 2
-        // The transcript list is composed only once its tab shows: an animated scroll issued before its
-        // first layout did nothing, so the meeting opened at 0:00. Wait for the items, then jump.
-        kotlinx.coroutines.withTimeoutOrNull(3_000) {
-            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > headerCount + idx }
-        }
-        runCatching { listState.scrollToItem(headerCount + idx, scrollOffset = -120) }
+        // A search hit opens the same citation preview as a summary anchor (the tab stays); its
+        // "View in transcript" button goes to the line. Set before any suspension (the effect's own key
+        // change cancels it), and owned by this load so the close-on-load effect leaves it open.
+        citeOwner = s.sessionGen to s.utterances.size
+        citeTarget = idx
+        citeSec = s.utterances.getOrNull(idx)?.startSec?.toInt() ?: t.toInt()
+        citeWindow = studio.primeminutes.core.cite.CiteWindow.around(idx, s.utterances.size)
+        citeGen++
         // The player waits there too (paused), as on iOS: Play starts at the passage, not at 0:00. At the
         // line's start rounded up: a truncated 65.3337 s (or a note's whole 3:22 before a line at 202.4 s)
         // made the line above the playing one.
@@ -1519,7 +1522,7 @@ private fun TranscribeScreen(
         if (s.audioUri != null) { lastUserScrollNanos = 0L; seekAndPlay(ms) }
     }
     // Another meeting, or a transcript rewritten under it: the preview's indices mean nothing any more.
-    LaunchedEffect(s.sessionGen, s.utterances.size) { closeCite() }
+    LaunchedEffect(s.sessionGen, s.utterances.size) { if (citeOwner != (s.sessionGen to s.utterances.size)) closeCite() }
     // While playing, the highlight follows playback inside the panel (the window moves on once it leaves).
     LaunchedEffect(activeIndex, isPlaying) {
         if (citeTarget >= 0 && isPlaying) citeWindow = studio.primeminutes.core.cite.CiteWindow.follow(citeWindow, activeIndex, s.utterances.size)

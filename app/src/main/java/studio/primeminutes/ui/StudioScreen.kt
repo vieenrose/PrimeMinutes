@@ -449,6 +449,8 @@ fun StudioScreen(
     // A suggestion card (≥ 3 meetings with the same title once numbers and dates are removed), on the plain library only.
     val suggestion = remember(entries, collections) { LibraryCollections.suggestion(entries, collections) }
     fun askLevels() = LibraryCollections.askLevels(entries, collections, openKey, sourceFilter.category())
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     fun ask(q: String) { onAsk?.invoke(q, askLevels()) }
     // Source counts over the whole library; a source chip shows only when there are two sources or more.
     val sourceCounts = remember(entries) { entries.groupingBy { it.category }.eachCount() }
@@ -579,8 +581,8 @@ fun StudioScreen(
                 inputField = {
                     SearchBarDefaults.InputField(
                         query = query, onQueryChange = { query = it },
-                        // The keyboard's action asks the query when Ask is on (it was Send before).
-                        onSearch = { if (it.isNotBlank()) ask(it) },
+                        // The keyboard's action only closes the keyboard: the results stay; Ask is its own button.
+                        onSearch = { keyboard?.hide(); focusManager.clearFocus() },
                         expanded = false, onExpandedChange = {},
                         placeholder = {
                             Text(when {
