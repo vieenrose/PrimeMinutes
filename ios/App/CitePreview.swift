@@ -75,7 +75,6 @@ struct CitePreviewPanel: View {
         }
         .padding(.vertical, 6).padding(.horizontal, Vox.insetTight).frame(maxWidth: .infinity, alignment: .leading)
         .background(i == marked ? Vox.accent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: Vox.radiusMD))
-        .overlay(alignment: .leading) { if i == cite.turn { Capsule().fill(Vox.accent).frame(width: 3).padding(.vertical, 6) } }
         .id(i)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(i == marked ? .isSelected : [])
